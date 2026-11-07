@@ -60,7 +60,18 @@ QString override_label(const QString& attr, const QString& nice) {
                                                 {"overrideShading", "Shading"},           {"overrideTexturing", "Texturing"},      {"overridePlayback", "Playback"},
                                                 {"overrideVisibility", "Visible"},        {"hideOnPlayback", "Hide on Playback"},  {"overrideRGBColors", "Enable RGB Colors"},
                                                 {"overrideColor", "Color"},               {"overrideColorRGB", "Color RGB"}};
-    return labels.value(attr, nice);
+    if (labels.contains(attr)) return labels.value(attr);
+    // Harold's attributes keep the ai prefix of the files they come from; the frames they sit in say whose they are.
+    static const QHash<QString, QString> harold{{"aiSubdivType", "Type"}, {"aiSubdivIterations", "Iterations"}, {"aiSubdivAdaptiveMetric", "Adaptive Metric"},
+                                                {"aiSubdivPixelError", "Adaptive Error"}, {"aiSubdivUvSmoothing", "UV Smoothing"}, {"aiSubdivSmoothDerivs", "Smooth Tangents"},
+                                                {"aiDispHeight", "Height"}, {"aiDispZeroValue", "Scalar Zero Value"}, {"aiDispPadding", "Bounds Padding"}, {"aiDispAutobump", "Auto Bump"},
+                                                {"aiVisibleInDiffuseReflection", "Diffuse Reflection"}, {"aiVisibleInSpecularReflection", "Specular Reflection"},
+                                                {"aiVisibleInDiffuseTransmission", "Diffuse Transmission"}, {"aiVisibleInSpecularTransmission", "Specular Transmission"},
+                                                {"aiVisibleInVolume", "Volume"}, {"aiSss", "SSS"}, {"aiAov", "AOV Light Group"}, {"aiSssSetname", "SSS Set Name"},
+                                                {"aiCastVolumetricShadows", "Volumetric Shadows"}, {"aiTranslator", "Light Shape"}, {"aiFilename", "Photometry File"}, {"fStop", "F Stop"}};
+    if (harold.contains(attr)) return harold.value(attr);
+    if (attr.startsWith("ai") && attr.size() > 2 && attr[2].isUpper() && nice.startsWith("Ai ")) return nice.mid(3);
+    return nice;
 }
 
 // Harold's frames on lights, shapes and cameras.

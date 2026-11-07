@@ -1,4 +1,5 @@
 // Icons for rendering, on the same 32 unit canvas as icons.cpp: the Rendering shelf, the Render View's toolbar.
+#include <QHash>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPolygonF>
@@ -81,7 +82,11 @@ void circular_arrows(QPainter& p, QPointF c, double r, const QColor& col) {
 
 } // namespace
 
-bool draw_render_icon(const QString& name, QPainter& p) {
+bool draw_render_icon(const QString& name_in, QPainter& p) {
+    // The outliner names icons by node type: Harold's lights draw as their shelf buttons.
+    static const QHash<QString, QString> alias{{"aiSkyDomeLight", "skyDome"}, {"aiAreaLight", "haroldAreaLight"}, {"aiMeshLight", "meshLight"},
+                                               {"aiPhotometricLight", "photometricLight"}, {"aiAtmosphereVolume", "atmosphere"}, {"aiStandardSurface", "standardSurface"}};
+    const QString name = alias.value(name_in, name_in);
     if (name == "renderFrame") {
         // Render: a picture with a spark at its corner.
         picture(p, QRectF(3, 7, 22, 18));

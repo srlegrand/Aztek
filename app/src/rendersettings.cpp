@@ -274,9 +274,9 @@ private:
         frames[0] = real(f, "Start frame", QString(kGlobals) + ".startFrame", -100000, 100000, 2, 1);
         frames[1] = real(f, "End frame", QString(kGlobals) + ".endFrame", -100000, 100000, 2, 1);
         frames[2] = real(f, "By frame", QString(kGlobals) + ".byFrameStep", 0.01, 10000, 2, 1);
-        connect(ext_, &QComboBox::currentIndexChanged, this, [frames](int i) {
-            for (QWidget* w : frames) w->setEnabled(i != 0);
-        });
+        readers_ << [this, frames] {
+            for (QWidget* w : frames) w->setEnabled(ext_->currentIndex() != 0);
+        };
         whole(f, "Frame padding", QString(kGlobals) + ".extensionPadding", 1, 10);
 
         f = frame(v, body, "Renderable Cameras");

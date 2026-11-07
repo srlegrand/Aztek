@@ -570,6 +570,16 @@ private:
                 key_ = key;
                 force_ = false;
                 QImage img = fetch(aov, -1, exposure_->value(), gamma_->value());
+                // A region render fills only its box: keep the last image around it, as the render view does.
+                QRect r = view_->region;
+                if (!img.isNull() && region_on_->isChecked() && !r.isEmpty() && view_->a.size() == img.size()) {
+                    QImage keep = view_->a;
+                    QPainter p(&keep);
+                    p.setCompositionMode(QPainter::CompositionMode_Source);
+                    p.drawImage(r.topLeft(), img, r);
+                    p.end();
+                    img = keep;
+                }
                 if (!img.isNull() || !st["running"].toBool()) view_->a = img;
                 if (denoised) denoise_clock_.restart();
                 view_->update();
