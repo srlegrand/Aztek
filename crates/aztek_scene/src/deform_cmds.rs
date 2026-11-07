@@ -45,7 +45,33 @@ fn maker(ty: &str) -> Option<(&'static str, Option<&str>)> {
     })
 }
 
+/// A plug-in's deformer on the objects named or selected: one node per mesh, the first the leader, as for any deformer.
+fn create_plugin(s: &mut Session, a: &Args, ty: &str) -> CmdResult {
+    let mut targets = deform::targets(s, a)?;
+    let names: Vec<String> = named_geometry(a);
+    if !names.is_empty() {
+        targets.extend(deform::named_targets(&mut s.graph, &names)?);
+    }
+    if targets.is_empty() {
+        fail!("deformer: nothing to deform");
+    }
+    let name = a.string("name", ty);
+    let g = &mut s.graph;
+    let (mesh, pts) = targets.remove(0);
+    let n = deform::insert_at(g, mesh, ty, &name, deform::Place::from_args(a))?;
+    if let Some(input) = input_mesh(g, n) {
+        deform::limit_to(g, n, input.point_capacity(), &pts)?;
+    }
+    for (m, p) in targets {
+        deform::add_geometry(g, n, m, &p)?;
+    }
+    Ok(json!([g.path(n)]))
+}
+
 fn create(s: &mut Session, a: &Args, ty: &str) -> CmdResult {
+    if crate::scripted::is_plugin_deformer(ty) {
+        return create_plugin(s, a, ty);
+    }
     let Some((cmd, kind)) = maker(ty) else {
         fail!("deformer: can't make a {ty} (ffd, cluster, softMod, deltaMush, tension, wrap, wire, blendShape, sculpt, jiggle, shrinkWrap, morph, wrinkle, proximityWrap, solidify, pointOnCurve, textureDeformer, curveWarp or a nonlinear type)")
     };

@@ -1,6 +1,7 @@
 //! Node types defined by a script plugin. The scene knows nothing of the language: computing calls a hook the host sets.
 
 use std::any::Any;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, RwLock};
 
 use glam::{DMat4, DVec3};
@@ -87,7 +88,7 @@ pub fn value_to_json(v: &PlugValue) -> Value {
 
 /// An attr from {name, short, type, default, input, keyable, storable, hidden, array, color, min, max, softMin, softMax,
 /// enum, nice}: type is bool, int, float, vec3, matrix, string, enum or mesh.
-fn attr_from_json(j: &Value) -> AttrDef {
+pub fn attr_from_json(j: &Value) -> AttrDef {
     let text = |k: &str| j.get(k).and_then(Value::as_str).unwrap_or("").to_string();
     let on = |k: &str, d: bool| j.get(k).and_then(Value::as_bool).unwrap_or(d);
     let num = |k: &str| j.get(k).and_then(Value::as_f64);
@@ -163,9 +164,61 @@ pub fn register_type(name: &str, owner: &str, attrs: &[Value]) -> Result<()> {
         create: Some(Arc::new(move || Box::new(ScriptedNode { type_name: type_name.clone(), id: NO_NODE, name: String::new() }))),
         ..Default::default()
     })?;
+    TYPE_OWNERS.write().unwrap().insert(name.to_string(), owner.to_string());
     Ok(())
 }
 
 pub fn deregister_type(name: &str) {
     types::unregister_type(name);
+    DEFORMERS.write().unwrap().remove(name);
+    TYPE_OWNERS.write().unwrap().remove(name);
 }
+
+/// Plug-in deformer types.
+static DEFORMERS: RwLock<BTreeSet<String>> = RwLock::new(BTreeSet::new());
+/// Every plug-in node type and the plug-in it came from, for the file's requires lines.
+static TYPE_OWNERS: RwLock<BTreeMap<String, String>> = RwLock::new(BTreeMap::new());
+/// Plug-in versions, as they say in their requires lines.
+static VERSIONS: RwLock<BTreeMap<String, String>> = RwLock::new(BTreeMap::new());
+
+/// Adds a node type from a compiled plug-in, whose behaviour the host supplies: a deformer type goes on geometryFilter.
+pub fn register_native_type(name: &str, owner: &str, attrs: &[Value], deformer: bool, create: crate::node::CreateFn) -> Result<()> {
+    let base = if deformer { types::find("geometryFilter") } else { None };
+    types::register_type(NodeType {
+        name: name.to_string(),
+        owner: owner.to_string(),
+        base,
+        doc: format!("A node from the plug-in {owner}."),
+        own_attrs: attrs.iter().map(attr_from_json).collect(),
+        create: Some(create),
+        ..Default::default()
+    })?;
+    TYPE_OWNERS.write().unwrap().insert(name.to_string(), owner.to_string());
+    if deformer {
+        DEFORMERS.write().unwrap().insert(name.to_string());
+    }
+    Ok(())
+}
+
+pub fn is_plugin_deformer(name: &str) -> bool {
+    DEFORMERS.read().unwrap().contains(name)
+}
+
+/// The plug-in a node type came from.
+pub fn plugin_of_type(name: &str) -> Option<String> {
+    TYPE_OWNERS.read().unwrap().get(name).cloned()
+}
+
+pub fn set_plugin_version(owner: &str, version: &str) {
+    VERSIONS.write().unwrap().insert(owner.to_string(), version.to_string());
+}
+
+pub fn plugin_version(owner: &str) -> String {
+    VERSIONS.read().unwrap().get(owner).cloned().unwrap_or_else(|| "Unknown".to_string())
+}
+
+/// A deformer's per-point weights: none means 1 everywhere.
+pub fn deformer_weights(d: &NodeData) -> Option<&[f64]> {
+    crate::deform::floats_of(d, crate::deform::WEIGHTS).map(|f| f.0.as_slice())
+}
+

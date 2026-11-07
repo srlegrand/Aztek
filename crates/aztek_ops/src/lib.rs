@@ -194,6 +194,8 @@ pub struct CommandDef<C> {
     pub examples: Vec<String>,
     /// Registered from Python at runtime, whatever its owner.
     pub scripted: bool,
+    /// Takes everything as positional arguments in order, flags included: a plug-in command with no syntax.
+    pub raw_args: bool,
 }
 
 impl<C> Clone for CommandDef<C> {
@@ -209,6 +211,7 @@ impl<C> Clone for CommandDef<C> {
             adjustable: self.adjustable,
             examples: self.examples.clone(),
             scripted: self.scripted,
+            raw_args: self.raw_args,
         }
     }
 }
@@ -230,6 +233,7 @@ impl<C> CommandDef<C> {
             adjustable: false,
             examples: Vec::new(),
             scripted: false,
+            raw_args: false,
         }
     }
     pub fn positional(mut self, doc: &str) -> Self {

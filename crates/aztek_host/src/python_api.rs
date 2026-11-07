@@ -160,6 +160,10 @@ fn closest_on_triangle(p: DVec3, [a, b, c]: [DVec3; 3]) -> DVec3 {
 }
 
 /// A JSON query from Python.
+pub fn out_mesh_of(core: &mut Core, id: NodeId) -> Result<Option<MeshPtr>, String> {
+    out_mesh(&mut core.s.graph, id).map(|x| x.1)
+}
+
 pub fn query(core: &mut Core, op: &str, a: &Value) -> Result<Value, String> {
     let g = &mut core.s.graph;
     Ok(match op {
@@ -360,8 +364,13 @@ pub struct MeshArrays {
 
 pub fn mesh_arrays(core: &mut Core, id: NodeId) -> Result<MeshArrays, String> {
     let (shape, m) = out_mesh(&mut core.s.graph, id)?;
-    let mut o = MeshArrays { shape, ..Default::default() };
-    let Some(m) = m else { return Ok(o) };
+    let Some(m) = m else { return Ok(MeshArrays { shape, ..Default::default() }) };
+    Ok(MeshArrays { shape, ..arrays_of(&m) })
+}
+
+/// The arrays of a mesh that needn't be in the scene.
+pub fn arrays_of(m: &Mesh) -> MeshArrays {
+    let mut o = MeshArrays::default();
     let mut point_at = vec![INVALID; m.point_capacity() as usize];
     let mut next: Index = 0;
     for p in 0..m.point_capacity() {
@@ -381,15 +390,15 @@ pub fn mesh_arrays(core: &mut Core, id: NodeId) -> Result<MeshArrays, String> {
             o.edges.extend([point_at[m.edge_point(e, 0) as usize] as i64, point_at[m.edge_point(e, 1) as usize] as i64]);
         }
     }
-    let normals = corner_normals(&m, &CornerNormalOptions::default());
-    let smooth = point_normals(&m, NormalWeight::Angle);
+    let normals = corner_normals(m, &CornerNormalOptions::default());
+    let smooth = point_normals(m, NormalWeight::Angle);
     for p in 0..m.point_capacity() {
         if m.point_valid(p) {
             let n = smooth[p as usize];
             o.point_normals.extend([n.x as f64, n.y as f64, n.z as f64]);
         }
     }
-    let topo = aztek_scene::uv_ops::topo(&m);
+    let topo = aztek_scene::uv_ops::topo(m);
     o.has_uvs = m.corner_attrs().has(aztek_scene::uv_ops::UV);
     let uv = m.corner_attrs().get::<[f32; 2]>(aztek_scene::uv_ops::UV);
     for corners in &topo.maps {
@@ -415,5 +424,5 @@ pub fn mesh_arrays(core: &mut Core, id: NodeId) -> Result<MeshArrays, String> {
         o.edge_ids = (0..m.edge_capacity()).filter(|&e| m.edge_valid(e)).map(|e| e as i64).collect();
         o.face_ids = (0..m.face_capacity()).filter(|&f| m.face_valid(f)).map(|f| f as i64).collect();
     }
-    Ok(o)
+    o
 }

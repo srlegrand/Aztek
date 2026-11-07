@@ -16,7 +16,7 @@ pub mod option_boxes;
 pub mod panel_cmds;
 #[cfg(feature = "python")]
 mod python;
-#[cfg(feature = "python")]
+mod native_plugin;
 mod python_api;
 pub mod query;
 mod render;

@@ -264,7 +264,7 @@ fn compute(type_name: &str, id: NodeId, name: &str, time: f64, d: &mut NodeData)
     }
 }
 
-fn plugin_command(s: &mut Session, method: &'static str, a: &Args) -> CmdResult {
+pub(crate) fn plugin_command(s: &mut Session, method: &'static str, a: &Args) -> CmdResult {
     ensure().map_err(CommandError::new)?;
     let input = json!({"args": a.positional, "flags": a.flags}).to_string();
     answer(nested(s, || {
@@ -468,6 +468,11 @@ fn ensure() -> Result<(), String> {
             r
         })
         .clone()
+}
+
+/// Whether the interpreter has been started: no Python plug-in can be loaded before that.
+pub(crate) fn started() -> bool {
+    STARTED.get().is_some()
 }
 
 /// MEL's python("..."): a lone expression's value comes back as JSON, statements give null. An exception is the error.

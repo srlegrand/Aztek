@@ -84,11 +84,11 @@ impl Core {
         c.ensure_defaults();
         #[cfg(feature = "python")]
         crate::python::register_commands(&mut c.s);
+        crate::native_plugin::register_commands(&mut c.s);
         c
     }
 
     /// A core around a session moved here while Python is called back from inside a command: no UI commands of its own.
-    #[cfg(feature = "python")]
     pub(crate) fn nested(s: Session) -> Core {
         Core { s, log: Vec::new(), log_read: 0, version: 1, preview: Vec::new(), mel_state: Default::default(), in_idle: false, node_manip: Default::default() }
     }
@@ -227,6 +227,9 @@ impl Core {
     fn drain_captured(&mut self) {
         #[cfg(feature = "python")]
         for (t, k) in crate::python::take_deferred() {
+            self.push(t, k);
+        }
+        for (t, k) in crate::native_plugin::take_deferred() {
             self.push(t, k);
         }
         let lines: Vec<(log::Level, String)> = CAPTURED.lock().map(|mut c| std::mem::take(&mut *c)).unwrap_or_default();
@@ -422,6 +425,16 @@ impl Core {
         }
         let al = mel::alias(typed);
         let name = al.map(|a| a.target.to_string()).unwrap_or(typed.to_string());
+        if self.s.commands.find(&name).is_some_and(|d| d.raw_args) {
+            for (k, v) in kwargs {
+                args.push(json!(format!("-{k}")));
+                match v {
+                    Value::Array(list) => args.extend(list),
+                    v => args.push(v),
+                }
+            }
+            return self.exec_silent(&name, json!({ "args": args }));
+        }
         let def_flags: Vec<(String, String, aztek_ops::ArgType)> = match self.s.commands.find(&name) {
             Some(d) => d.flags.iter().map(|f| (f.name.clone(), f.short_name.clone(), f.ty)).collect(),
             None => return Err(format!("Cannot find procedure \"{typed}\".")),

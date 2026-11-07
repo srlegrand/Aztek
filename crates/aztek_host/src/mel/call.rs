@@ -280,6 +280,10 @@ pub fn build(cmds: &Commands<Session>, typed: &str, toks: &[Tok]) -> Result<(Str
     let al = alias(typed);
     let name = al.map(|a| a.target.to_string()).unwrap_or(typed.to_string());
     let def = cmds.find(&name).ok_or_else(|| format!("Cannot find procedure \"{typed}\"."))?;
+    if def.raw_args {
+        let args: Vec<Value> = toks.iter().map(scalar).collect();
+        return Ok((name, json!({ "args": args })));
+    }
     let mut flags = Map::new();
     let mut args = Vec::new();
     let own_query = def.flags.iter().any(|d| d.name == "query");

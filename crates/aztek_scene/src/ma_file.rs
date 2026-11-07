@@ -19,7 +19,7 @@ mod lights;
 mod shading;
 mod nurbs;
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt::Write as _;
 use std::sync::Arc;
 
@@ -365,6 +365,8 @@ struct RefLine {
 
 #[derive(Debug)]
 struct Doc {
+    /// Plug-ins the file's requires lines name.
+    requires: Vec<String>,
     nodes: Vec<MaNode>,
     by_name: HashMap<String, Vec<usize>>,
     conns: Vec<Conn>,
@@ -476,7 +478,7 @@ impl Doc {
     }
 
     fn parse(text: &str) -> Doc {
-        let mut d = Doc { light_set: Vec::new(), relationships: Vec::new(), nodes: Vec::new(), by_name: HashMap::new(), conns: Vec::new(), lin: 1.0, ang: 1.0, fps: None, warnings: Vec::new(), refs: Vec::new(), ref_load: Vec::new(), instances: Vec::new(), ref_conns: Vec::new(), up_z: false };
+        let mut d = Doc { light_set: Vec::new(), relationships: Vec::new(), nodes: Vec::new(), by_name: HashMap::new(), conns: Vec::new(), lin: 1.0, ang: 1.0, fps: None, warnings: Vec::new(), refs: Vec::new(), ref_load: Vec::new(), instances: Vec::new(), ref_conns: Vec::new(), up_z: false, requires: Vec::new() };
         let mut lex = Lexer::new(text);
         let mut st = Vec::new();
         let mut current: Option<usize> = None;
@@ -485,6 +487,12 @@ impl Doc {
             let Some(cmd) = st.first().and_then(Tok::text).map(str::to_string) else { continue };
             match cmd.as_str() {
                 "createNode" => current = d.create_node(&st).or(current),
+                "requires" => {
+                    let plain = plain_args(&st, &[]);
+                    if let Some(name) = plain.first().filter(|n| **n != "maya") {
+                        d.requires.push(name.to_string());
+                    }
+                }
                 "relationship" => {
                     if let [_, Some(kind), _, Some(object), Some(light)] = st.iter().map(Tok::text).collect::<Vec<_>>().as_slice() {
                         d.relationships.push((kind.to_string(), object.to_string(), light.to_string()));
@@ -1185,7 +1193,7 @@ fn scales(n: &MaNode) -> bool {
 }
 
 fn is_plain_node(ty: &str) -> bool {
-    ty == "animLayer" || ty.starts_with("animBlendNode") || ty.starts_with("HIK") || ty == "CustomRigRetargeterNode" || ty == "expression" || ty == crate::script_node::TYPE || (ty != "unitConversion" && crate::utility_nodes::classification(ty).is_some()) || PLAIN_NODES.contains(&ty) || PLAIN_SHAPES.contains(&ty)
+    crate::scripted::plugin_of_type(ty).is_some_and(|_| !crate::deform::is_deformer(ty)) || ty == "animLayer" || ty.starts_with("animBlendNode") || ty.starts_with("HIK") || ty == "CustomRigRetargeterNode" || ty == "expression" || ty == crate::script_node::TYPE || (ty != "unitConversion" && crate::utility_nodes::classification(ty).is_some()) || PLAIN_NODES.contains(&ty) || PLAIN_SHAPES.contains(&ty)
 }
 /// Matrices a file connection may read: they are never set, so they are no channels to write.
 const MATRIX_OUTPUTS: &[&str] = &["matrix", "inverseMatrix", "xformMatrix", "worldMatrix", "worldInverseMatrix", "parentMatrix", "parentInverseMatrix"];
@@ -3213,6 +3221,19 @@ pub fn read_text(s: &mut Session, text: &str, import: bool) -> Vec<String> {
     let dyn_warnings = dynamics::translate(&mut doc);
     doc.warnings.extend(dyn_warnings);
     let mut before = Vec::new();
+    // The plug-ins the file names, before its nodes. One that can't be found only matters if the file holds a type nobody knows.
+    if s.commands.find("loadPlugin").is_some() {
+        for name in &doc.requires {
+            let loaded = s.run("loadPlugin", json!({"args": [name], "quiet": true}));
+            let found = loaded.as_ref().is_ok_and(|v| v.as_array().is_some_and(|l| !l.is_empty()));
+            if !found && doc.nodes.iter().any(|n| types::find(&n.ty).is_none()) {
+                match loaded {
+                    Err(e) => before.push(format!("plug-in {name} did not load: {e}")),
+                    Ok(_) => before.push(format!("plug-in {name} was not found on the plug-in path")),
+                }
+            }
+        }
+    }
     crate::references::begin_read(s, &doc.reference_edits_text(), &doc.ref_load, &mut before);
     for r in &doc.refs {
         if let Err(e) = crate::references::from_ma(s, r) {
@@ -4621,6 +4642,16 @@ pub fn write_text(s: &mut Session, file_name: &str, only: Option<&[NodeId]>) -> 
     // The reference reads the file, keeping these nodes as unknown ones from a plug-in it does not have.
     if w.s.graph.nodes().iter().any(|&id| w.keep.contains(&id) && w.s.graph.node(id).is_some_and(|n| crate::dynamics::is_dynamics_type(&n.ty().name))) {
         let _ = writeln!(w.out, "requires \"aztekDynamics\" \"1.0\";");
+    }
+    // The plug-ins whose nodes this file holds, as the reference lists them; reading loads them first.
+    let mut plugins: BTreeSet<String> = BTreeSet::new();
+    for &id in &w.keep {
+        if let Some(p) = w.s.graph.node(id).and_then(|n| crate::scripted::plugin_of_type(&n.ty().name)) {
+            plugins.insert(p);
+        }
+    }
+    for p in plugins {
+        let _ = writeln!(w.out, "requires {} {};", quoted(&p), quoted(&crate::scripted::plugin_version(&p)));
     }
     let _ = writeln!(w.out, "currentUnit -l centimeter -a degree -t {};", time_unit_name(fps));
     let _ = writeln!(w.out, "fileInfo \"application\" \"aztek\";");

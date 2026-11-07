@@ -29,6 +29,10 @@ stacker = "0.1"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "tga", "bmp", "tiff"] }
 pyo3 = { version = "0.30", optional = true }
 zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+libloading = "0.8"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 [features]
 default = ["python"]
