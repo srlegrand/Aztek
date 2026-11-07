@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Aztek
+GenericName=3D Modelling and Animation
+Comment=Modelling, UVs, rigging and animation
+Exec=aztek %f
+Icon=aztek
+Terminal=false
+Categories=Graphics;3DGraphics;
+StartupWMClass=aztek

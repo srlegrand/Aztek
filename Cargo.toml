@@ -1,0 +1,24 @@
+[workspace]
+resolver = "2"
+members = ["crates/aztek_core", "crates/aztek_undo", "crates/aztek_ops", "crates/aztek_geo", "crates/aztek_scene", "crates/aztek_uv", "crates/aztek_host", "crates/aztek_usd"]
+
+[workspace.package]
+version = "1.0.0"
+edition = "2021"
+license = "MIT-0"
+publish = false
+
+[workspace.dependencies]
+glam = { version = "0.29", features = ["serde"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+rayon = "1"
+thiserror = "2"
+log = "0.4"
+sysinfo = { version = "0.33", default-features = false, features = ["system"] }
+
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+opt-level = 2
+debug = false

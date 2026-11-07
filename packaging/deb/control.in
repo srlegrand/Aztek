@@ -1,0 +1,14 @@
+Package: aztek
+Version: @VERSION@
+Section: graphics
+Priority: optional
+Architecture: @ARCH@
+Installed-Size: @SIZE@
+Maintainer: Simon Legrand <srlegrand@users.noreply.github.com>
+Homepage: https://github.com/srlegrand/AKA-Crest-Aztek
+Depends: @SHLIBS@, libvulkan1, qt6-qpa-plugins, hicolor-icon-theme
+Recommends: mesa-vulkan-drivers
+Description: Modelling, UV, rigging and animation application
+ Aztek is a modelling, UV, rigging and animation application, with MEL and
+ Python scripting and .ma files. The viewport needs a Vulkan driver: the NVIDIA
+ driver's own, or Mesa's.

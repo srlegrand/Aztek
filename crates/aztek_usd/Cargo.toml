@@ -1,0 +1,21 @@
+[package]
+name = "aztek_usd"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+aztek_core = { path = "../aztek_core" }
+aztek_geo = { path = "../aztek_geo" }
+aztek_ops = { path = "../aztek_ops" }
+aztek_scene = { path = "../aztek_scene" }
+aztek_undo = { path = "../aztek_undo" }
+glam.workspace = true
+serde_json.workspace = true
+log.workspace = true
+openusd = "0.8.0"
+openusd-schemas = { version = "0.8.0", features = ["geom", "shade", "skel", "lux"] }
+
+[dev-dependencies]
+openusd = "0.8.0"
+openusd-schemas = { version = "0.8.0", features = ["geom"] }

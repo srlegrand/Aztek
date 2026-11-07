@@ -1,0 +1,8 @@
+<RCC>
+  <qresource prefix="/">
+    <file>style.qss</file>
+    <file alias="aztek-icon.png">../icons/aztek-icon.png</file>
+    <file alias="aztek-logo.png">../icons/aztek-logo.png</file>
+    <file alias="aztek-splash.png">../icons/aztek-splash.png</file>
+  </qresource>
+</RCC>

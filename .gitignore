@@ -1,0 +1,7 @@
+target/
+build/
+*.aztek.bak
+.vscode/
+.idea/
+.claude/
+_site/

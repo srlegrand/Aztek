@@ -1,0 +1,16 @@
+[package]
+name = "aztek_geo"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+glam.workspace = true
+rayon.workspace = true
+bytemuck = { version = "1", features = ["derive"] }
+half = "2"
+mikktspace = { version = "0.3", default-features = false, features = ["glam"] }
+
+[dev-dependencies]
+rand_mt = "4"

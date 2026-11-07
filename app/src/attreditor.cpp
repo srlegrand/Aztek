@@ -1,0 +1,692 @@
+// The Attribute Editor: a tab per node in the chain, sections by node type, sliders on ranged attributes, a Notes box, and
+// Select, Load Attributes and Copy Tab along the bottom.
+#include "panels.h"
+#include "colorchooser.h"
+#include "host.h"
+#include "icons.h"
+
+#include <QApplication>
+#include <QCheckBox>
+#include <QColorDialog>
+#include <QFileDialog>
+#include <QFileInfo>
+#include <QMenu>
+#include <QComboBox>
+#include <QFormLayout>
+#include <QHash>
+#include <QHBoxLayout>
+#include <QJsonArray>
+#include <QLabel>
+#include <QLineEdit>
+#include <QPlainTextEdit>
+#include <QPushButton>
+#include <QScrollArea>
+#include <QSlider>
+#include <QTabBar>
+#include <QTabWidget>
+#include <QToolButton>
+#include <QVBoxLayout>
+#include <cmath>
+
+namespace az {
+
+namespace {
+
+QJsonObject args(const QJsonArray& a) {
+    QJsonObject o;
+    o["args"] = a;
+    return o;
+}
+
+QString fmt3(double v) {
+    QString s = QString::number(v, 'f', 3);
+    return s == "-0.000" ? "0.000" : s;
+}
+
+void set_plug(const QString& plug, const QJsonValue& v, const QString& type) {
+    QJsonObject call = args(QJsonArray{plug, v});
+    if (type == "string") call["type"] = "string";
+    exec("setAttr", call);
+}
+
+// Which section an attribute falls in, by node type, in the order sections come. Anything else goes to Extra Attributes.
+struct Section { const char* title; const char* attrs; };
+
+// In the order the Attribute Editor lists them under Display.
+const char* const kDrawingOverrides = "overrideEnabled overrideDisplayType overrideLevelOfDetail overrideShading overrideTexturing overridePlayback overrideVisibility hideOnPlayback overrideRGBColors overrideColor overrideColorRGB";
+
+QString override_label(const QString& attr, const QString& nice) {
+    static const QHash<QString, QString> labels{{"overrideEnabled", "Enable Overrides"},  {"overrideDisplayType", "Display Type"}, {"overrideLevelOfDetail", "Level of Detail"},
+                                                {"overrideShading", "Shading"},           {"overrideTexturing", "Texturing"},      {"overridePlayback", "Playback"},
+                                                {"overrideVisibility", "Visible"},        {"hideOnPlayback", "Hide on Playback"},  {"overrideRGBColors", "Enable RGB Colors"},
+                                                {"overrideColor", "Color"},               {"overrideColorRGB", "Color RGB"}};
+    return labels.value(attr, nice);
+}
+
+const QList<Section>& sections_for(const QString& type) {
+    static const QList<Section> xf{
+        {"Transform Attributes", "translate rotate rotateOrder scale shear rotateAxis inheritsTransform"},
+        {"Pivots", "rotatePivot scalePivot rotatePivotTranslate scalePivotTranslate displayRotatePivot displayScalePivot"},
+        {"Limit Information", "minTransLimit maxTransLimit minRotLimit maxRotLimit minScaleLimit maxScaleLimit"},
+        {"Display", "visibility template displayHandle displayLocalAxis intermediateObject useObjectColor objectColor wireColorRGB useOutlinerColor outlinerColor hiddenInOutliner"},
+        {"Drawing Overrides", kDrawingOverrides},
+        {"Node Behaviour", "caching nodeState frozen"}};
+    static const QList<Section> joint{
+        {"Transform Attributes", "translate rotate rotateOrder scale shear inheritsTransform"},
+        {"Joint", "jointOrient jointType segmentScaleCompensate preferredAngle stiffness radius drawStyle side type otherType"},
+        {"Limit Information", "minRotLimit maxRotLimit minTransLimit maxTransLimit"},
+        {"Display", "visibility template displayLocalAxis useObjectColor objectColor wireColorRGB useOutlinerColor outlinerColor hiddenInOutliner"},
+        {"Drawing Overrides", kDrawingOverrides},
+        {"Node Behaviour", "caching nodeState frozen"}};
+    static const QList<Section> mesh{
+        {"Mesh Component Display", "displayVertices displayEdges displayBorders displayNormal normalSize backfaceCulling"},
+        {"Smooth Mesh", "displaySmoothMesh smoothLevel smoothPreview"},
+        {"Symmetry", "symmetry symmetryPlane"},
+        {"Display", "visibility template intermediateObject useObjectColor objectColor wireColorRGB useOutlinerColor outlinerColor hiddenInOutliner"},
+        {"Drawing Overrides", kDrawingOverrides},
+        {"Node Behaviour", "caching nodeState frozen"}};
+    static const QList<Section> camera{
+        {"Camera Attributes", "focalLength lensSqueezeRatio cameraScale nearClipPlane farClipPlane centerOfInterest"},
+        {"Film Back", "horizontalFilmAperture verticalFilmAperture filmFit filmFitOffset horizontalFilmOffset verticalFilmOffset"},
+        {"Orthographic Views", "orthographic orthographicWidth"},
+        {"Display Options", "displayFilmGate displayResolution displayGateMask overscan"},
+        {"Display", "visibility"}};
+    static const QList<Section> ambient{
+        {"Ambient Light Attributes", "color intensity ambientShade"},
+        {"Shadows", "shadowColor useRayTraceShadows shadowRays rayDepthLimit castSoftShadows shadowRadius receiveShadows"},
+        {"Display", "visibility locatorScale"},
+        {"Node Behaviour", "caching nodeState frozen"}};
+    static const QList<Section> directional{
+        {"Directional Light Attributes", "color intensity emitDiffuse emitSpecular"},
+        {"Shadows", "shadowColor useDepthMapShadows useRayTraceShadows lightAngle shadowRays rayDepthLimit dmapResolution dmapFilterSize dmapBias"},
+        {"Display", "visibility locatorScale"},
+        {"Node Behaviour", "caching nodeState frozen"}};
+    static const QList<Section> point{
+        {"Point Light Attributes", "color intensity emitDiffuse emitSpecular decayRate"},
+        {"Light Effects", "fogType fogRadius fogIntensity"},
+        {"Shadows", "shadowColor useDepthMapShadows useRayTraceShadows lightRadius shadowRays rayDepthLimit dmapResolution dmapFilterSize dmapBias"},
+        {"Display", "visibility locatorScale"},
+        {"Node Behaviour", "caching nodeState frozen"}};
+    static const QList<Section> spot{
+        {"Spot Light Attributes", "color intensity emitDiffuse emitSpecular decayRate coneAngle penumbraAngle dropoff"},
+        {"Light Effects", "fogSpread fogIntensity barnDoors leftBarnDoor rightBarnDoor topBarnDoor bottomBarnDoor useDecayRegions startDistance1 endDistance1 startDistance2 endDistance2 startDistance3 endDistance3"},
+        {"Shadows", "shadowColor useDepthMapShadows useRayTraceShadows lightRadius shadowRays rayDepthLimit dmapResolution dmapFilterSize dmapBias"},
+        {"Display", "visibility locatorScale"},
+        {"Node Behaviour", "caching nodeState frozen"}};
+    static const QList<Section> area{
+        {"Area Light Attributes", "color intensity emitDiffuse emitSpecular decayRate normalize"},
+        {"Shadows", "shadowColor useDepthMapShadows useRayTraceShadows shadowRays rayDepthLimit dmapResolution dmapFilterSize dmapBias"},
+        {"Display", "visibility locatorScale"},
+        {"Node Behaviour", "caching nodeState frozen"}};
+    static const QList<Section> volume{
+        {"Volume Light Attributes", "color intensity lightShape volumeLightDir arc coneEndRadius emitAmbient emitDiffuse emitSpecular"},
+        {"Shadows", "shadowColor useRayTraceShadows lightRadius shadowRays rayDepthLimit"},
+        {"Display", "visibility locatorScale"},
+        {"Node Behaviour", "caching nodeState frozen"}};
+    static const QList<Section> curve{
+        {"NURBS Curve History", "degree form spans"},
+        {"Component Display", "dispCV dispEP dispHull lineWidth"},
+        {"Display", "visibility template intermediateObject useObjectColor objectColor wireColorRGB useOutlinerColor outlinerColor hiddenInOutliner"},
+        {"Drawing Overrides", kDrawingOverrides},
+        {"Node Behaviour", "caching nodeState frozen"}};
+    static const QList<Section> skin{
+        {"Skin Cluster Attributes", "envelope skinningMethod useComponents maxInfluences maintainMaxInfluences normalizeWeights weightDistribution deformUserNormals"},
+        {"Node Behaviour", "caching nodeState frozen"}};
+    static const QList<Section> material{
+        {"Common Material Attributes", "color outColor transparency outTransparency ambientColor incandescence normalCamera diffuse translucence translucenceDepth translucenceFocus baseColor base metalness opacity"},
+        {"Specular Shading", "cosinePower eccentricity specularRollOff angle spreadX spreadY roughness highlightSize whiteness specularColor specular specularRoughness reflectivity reflectedColor reflectionLimit fresnelRefractiveIndex"},
+        {"Special Effects", "hideSource glowIntensity emission emissionColor outGlowColor"},
+        {"Matte Opacity", "matteOpacityMode matteOpacity outMatteOpacity"},
+        {"Raytrace Options", "refractions refractiveIndex refractionLimit lightAbsorbance surfaceThickness shadowAttenuation chromaticAberration reflectionSpecularity"}};
+    static const QList<Section> file{
+        {"File Attributes", "fileTextureName colorSpace ignoreColorSpaceFileRules filterType filter filterOffset useFrameExtension frameExtension frameOffset uvTilingMode"},
+        {"Color Balance", "defaultColor colorGain colorOffset alphaGain alphaOffset alphaIsLuminance invert exposure"},
+        {"Effects", "fileHasAlpha"},
+        {"2d Texture Placement", "coverage translateFrame rotateFrame mirrorU mirrorV wrapU wrapV stagger repeatUV offset rotateUV noiseUV"}};
+    static const QList<Section> place{{"2d Texture Placement Attributes", "coverage translateFrame rotateFrame mirrorU mirrorV wrapU wrapV stagger repeatUV offset rotateUV noiseUV"}};
+    static const QList<Section> group{{"Shading Group Attributes", "surfaceShader volumeShader displacementShader imageShader renderableOnlySet annotation"}};
+    static const QList<Section> other{{"Node Behaviour", "caching nodeState frozen"}};
+    static const QList<Section> shape{
+        {"Display", "visibility template intermediateObject useObjectColor objectColor wireColorRGB useOutlinerColor outlinerColor hiddenInOutliner"},
+        {"Drawing Overrides", kDrawingOverrides},
+        {"Node Behaviour", "caching nodeState frozen"}};
+    static const QSet<QString> shapes{"nurbsSurface", "lattice", "baseLattice", "deformHandle", "softModHandle", "follicle", "distanceDimShape", "annotationShape", "motionTrailShape", "ikEffector"};
+    if (shapes.contains(type)) return shape;
+    static const QSet<QString> materials{"lambert", "blinn", "phong", "phongE", "anisotropic", "surfaceShader", "standardSurface"};
+    if (materials.contains(type)) return material;
+    if (type == "file") return file;
+    if (type == "place2dTexture") return place;
+    if (type == "shadingEngine") return group;
+    if (type == "transform" || type == "ikHandle" || type == "locator") return xf;
+    if (type == "joint") return joint;
+    if (type == "mesh") return mesh;
+    if (type == "camera") return camera;
+    if (type == "ambientLight") return ambient;
+    if (type == "directionalLight") return directional;
+    if (type == "pointLight") return point;
+    if (type == "spotLight") return spot;
+    if (type == "areaLight") return area;
+    if (type == "volumeLight") return volume;
+    if (type == "nurbsCurve") return curve;
+    if (type == "skinCluster") return skin;
+    return other;
+}
+
+// A number with a slider beside it, when the attribute has a range.
+QWidget* ranged_field(const QJsonObject& a, double lo, double hi, QWidget* parent) {
+    QString plug = a["plug"].toString(), type = a["type"].toString();
+    auto* row = new QWidget(parent);
+    auto* h = new QHBoxLayout(row);
+    h->setContentsMargins(0, 0, 0, 0);
+    h->setSpacing(4);
+    auto* e = new QLineEdit(type == "int" ? QString::number(a["value"].toInteger()) : fmt3(a["value"].toDouble()), row);
+    e->setFixedWidth(64);
+    auto* s = new QSlider(Qt::Horizontal, row);
+    s->setRange(0, 1000);
+    auto to_pos = [lo, hi](double v) { return int(qBound(0.0, (v - lo) / qMax(1e-9, hi - lo), 1.0) * 1000); };
+    s->setValue(to_pos(a["value"].toDouble()));
+    bool ro = a["output"].toBool() || a["connected"].toBool();
+    e->setReadOnly(ro);
+    s->setEnabled(!ro);
+    bool is_int = type == "int";
+    auto value_of = [lo, hi, is_int](int p) {
+        double v = lo + (hi - lo) * p / 1000.0;
+        return is_int ? QJsonValue(qint64(std::round(v))) : QJsonValue(v);
+    };
+    QObject::connect(s, &QSlider::sliderMoved, e, [e, value_of, plug, is_int](int p) {
+        QJsonValue v = value_of(p);
+        e->setText(is_int ? QString::number(v.toInteger()) : fmt3(v.toDouble()));
+        exec_quiet("setAttr", args(QJsonArray{plug, v}));
+        Host::get()->poke();
+    });
+    QObject::connect(s, &QSlider::sliderReleased, e, [s, value_of, plug] { exec("setAttr", args(QJsonArray{plug, value_of(s->value())})); });
+    QObject::connect(e, &QLineEdit::textEdited, e, [e] { e->setProperty("editing", true); });
+    QObject::connect(e, &QLineEdit::editingFinished, e, [e, plug, is_int] {
+        if (!e->property("editing").toBool()) return;
+        e->setProperty("editing", false);
+        exec("setAttr", args(QJsonArray{plug, is_int ? QJsonValue(qint64(e->text().toDouble())) : QJsonValue(e->text().toDouble())}));
+    });
+    h->addWidget(e);
+    h->addWidget(s, 1);
+    return row;
+}
+
+// A linear colour as the swatch shows it.
+QColor swatch_color(const QJsonArray& v) {
+    auto enc = [](double x) { return qBound(0, int(std::pow(qBound(0.0, x, 1.0), 1.0 / 2.2) * 255.0 + 0.5), 255); };
+    return QColor(enc(v.at(0).toDouble()), enc(v.at(1).toDouble()), enc(v.at(2).toDouble()));
+}
+
+// The usual network behind a slot: a file node, its placement, the image, and its connection.
+void make_file_texture(const QString& plug, const QString& path) {
+    QString file = exec("shadingNode", QJsonObject{{"args", QJsonArray{"file"}}, {"asTexture", true}}).toString();
+    QString place = exec("shadingNode", QJsonObject{{"args", QJsonArray{"place2dTexture"}}, {"asUtility", true}}).toString();
+    if (file.isEmpty() || place.isEmpty()) return;
+    exec("defaultNavigation", QJsonObject{{"connectToExisting", true}, {"source", place}, {"destination", file}});
+    set_plug(file + ".fileTextureName", path, "string");
+    exec("defaultNavigation", QJsonObject{{"connectToExisting", true}, {"source", file}, {"destination", plug}});
+}
+
+const char* kImageFilter = "Images (*.png *.jpg *.jpeg *.tga *.bmp *.tif *.tiff);;All Files (*)";
+
+// A colour: its swatch, and the slot a texture goes in.
+QWidget* color_field(const QJsonObject& a, QWidget* parent) {
+    QString plug = a["plug"].toString();
+    bool ro = a["output"].toBool() || a["connected"].toBool();
+    auto* w = new QWidget(parent);
+    auto* h = new QHBoxLayout(w);
+    h->setContentsMargins(0, 0, 0, 0);
+    h->setSpacing(3);
+    auto* swatch = new QPushButton(w);
+    swatch->setFixedSize(56, 18);
+    bool stored = a["displayColor"].toBool();
+    QJsonArray value = a["value"].toArray();
+    QColor shown = stored ? QColor::fromRgbF(value.at(0).toDouble(), value.at(1).toDouble(), value.at(2).toDouble()) : swatch_color(value);
+    swatch->setStyleSheet(QString("background-color: %1; border: 1px solid #222;").arg(shown.name()));
+    swatch->setEnabled(!ro);
+    swatch->setObjectName("colorSwatch");
+    QObject::connect(swatch, &QPushButton::clicked, swatch, [swatch, plug, shown, stored] {
+        QColor c = QColorDialog::getColor(shown, swatch, "Color");
+        if (!c.isValid()) return;
+        auto dec = [stored](int x) { return stored ? x / 255.0 : std::pow(x / 255.0, 2.2); };
+        exec("setAttr", QJsonObject{{"args", QJsonArray{plug, dec(c.red()), dec(c.green()), dec(c.blue())}}, {"type", "double3"}});
+    });
+    h->addWidget(swatch);
+    if (a["mappable"].toBool()) {
+        QString source = a["source"].toString();
+        auto* slot = new QToolButton(w);
+        slot->setObjectName("textureSlot");
+        slot->setText(source.isEmpty() ? QString::fromUtf8("\u25a6") : QString("\u2192 ") + source);
+        slot->setToolTip(source.isEmpty() ? "Map a file texture" : "Go to " + source + ". Right click to break the connection.");
+        slot->setContextMenuPolicy(Qt::CustomContextMenu);
+        QObject::connect(slot, &QToolButton::clicked, slot, [slot, plug, source] {
+            if (!source.isEmpty()) {
+                exec("select", args(QJsonArray{source}));
+                return;
+            }
+            QString path = QFileDialog::getOpenFileName(slot, "Choose an image", QString(), kImageFilter);
+            if (!path.isEmpty()) make_file_texture(plug, path);
+        });
+        QObject::connect(slot, &QToolButton::customContextMenuRequested, slot, [slot, plug, source](const QPoint& at) {
+            if (source.isEmpty()) return;
+            QMenu m;
+            m.addAction("Break Connection", [plug] {
+                QJsonArray from = ask("listConnections", QJsonObject{{"args", QJsonArray{plug}}, {"plugs", true}, {"destination", false}}).toArray();
+                if (!from.isEmpty()) exec("disconnectAttr", args(QJsonArray{from.at(0), plug}));
+            });
+            m.exec(slot->mapToGlobal(at));
+        });
+        h->addWidget(slot);
+    }
+    h->addStretch(1);
+    return w;
+}
+
+// A file node's path: what is written, a browse button, and where it was found.
+QWidget* file_field(const QJsonObject& a, QWidget* parent) {
+    QString plug = a["plug"].toString();
+    auto* w = new QWidget(parent);
+    auto* v = new QVBoxLayout(w);
+    v->setContentsMargins(0, 0, 0, 0);
+    v->setSpacing(2);
+    auto* row = new QHBoxLayout();
+    row->setSpacing(3);
+    auto* e = new QLineEdit(a["value"].toString(), w);
+    QObject::connect(e, &QLineEdit::textEdited, e, [e] { e->setProperty("editing", true); });
+    QObject::connect(e, &QLineEdit::editingFinished, e, [e, plug] {
+        if (!e->property("editing").toBool()) return;
+        e->setProperty("editing", false);
+        set_plug(plug, e->text(), "string");
+    });
+    auto* browse = new QToolButton(w);
+    browse->setIcon(icon("open", 16));
+    browse->setToolTip("Browse for an image");
+    QObject::connect(browse, &QToolButton::clicked, browse, [browse, plug] {
+        QString path = QFileDialog::getOpenFileName(browse, "Choose an image", QString(), kImageFilter);
+        if (!path.isEmpty()) set_plug(plug, path, "string");
+    });
+    row->addWidget(e, 1);
+    row->addWidget(browse);
+    v->addLayout(row);
+    QJsonObject where = query("texturePath", plug.section('.', 0, 0)).toObject();
+    QString found = where["resolved"].toString();
+    QString written = where["written"].toString();
+    if (!written.isEmpty()) {
+        auto* note = new QLabel(found.isEmpty() ? QString("Not found") : found == written ? QString() : "Found: " + found, w);
+        note->setWordWrap(true);
+        if (!note->text().isEmpty()) v->addWidget(note);
+    }
+    return w;
+}
+
+// The override colour's index: its swatch, which opens the palette, and a slider through the 32 entries.
+QWidget* color_index_field(const QJsonObject& a, QWidget* parent) {
+    QString plug = a["plug"].toString();
+    bool ro = a["output"].toBool() || a["connected"].toBool();
+    int index = a["value"].toInt();
+    auto* w = new QWidget(parent);
+    auto* h = new QHBoxLayout(w);
+    h->setContentsMargins(0, 0, 0, 0);
+    h->setSpacing(4);
+    auto* swatch = new QPushButton(w);
+    swatch->setObjectName("colorSwatch");
+    swatch->setFixedSize(36, 18);
+    swatch->setStyleSheet(QString("background-color: %1; border: 1px solid #222;").arg(palette_color(index).name()));
+    swatch->setEnabled(!ro);
+    QObject::connect(swatch, &QPushButton::clicked, swatch, [swatch, plug, index] {
+        ColorChoice c = choose_display_color(swatch, "Color", index, false, Qt::red);
+        if (!c.accepted) return;
+        if (c.use_rgb) {
+            QString node = plug.left(plug.lastIndexOf('.'));
+            set_plug(node + ".overrideRGBColors", true, "bool");
+            exec("setAttr", QJsonObject{{"args", QJsonArray{node + ".overrideColorRGB", c.rgb.redF(), c.rgb.greenF(), c.rgb.blueF()}}, {"type", "double3"}});
+        } else {
+            set_plug(plug, c.index, "int");
+        }
+    });
+    auto* s = new QSlider(Qt::Horizontal, w);
+    s->setRange(0, 31);
+    s->setValue(index);
+    s->setEnabled(!ro);
+    auto* number = new QLabel(QString::number(index), w);
+    number->setFixedWidth(20);
+    QObject::connect(s, &QSlider::sliderMoved, number, [number, swatch](int v) {
+        number->setText(QString::number(v));
+        swatch->setStyleSheet(QString("background-color: %1; border: 1px solid #222;").arg(palette_color(v).name()));
+    });
+    QObject::connect(s, &QSlider::sliderReleased, s, [s, plug] { set_plug(plug, s->value(), "int"); });
+    h->addWidget(swatch);
+    h->addWidget(number);
+    h->addWidget(s, 1);
+    return w;
+}
+
+QWidget* attr_field(const QJsonObject& a, QWidget* parent) {
+    QString type = a["type"].toString(), plug = a["plug"].toString();
+    bool ro = a["output"].toBool() || a["connected"].toBool();
+    if (a["attr"].toString() == "overrideColor") return color_index_field(a, parent);
+    if (type == "vec3" && a["color"].toBool()) return color_field(a, parent);
+    if (type == "string" && a["file"].toBool() && !ro) return file_field(a, parent);
+    if (type == "bool") {
+        auto* cb = new QCheckBox(parent);
+        cb->setChecked(a["value"].toBool());
+        cb->setEnabled(!ro);
+        QObject::connect(cb, &QCheckBox::toggled, cb, [plug](bool on) { set_plug(plug, on, "bool"); });
+        return cb;
+    }
+    if (type == "enum") {
+        auto* box = new QComboBox(parent);
+        for (const QJsonValue& n : a["enum"].toArray()) box->addItem(n.toString());
+        box->setCurrentIndex(a["value"].toInt());
+        box->setEnabled(!ro);
+        QObject::connect(box, &QComboBox::activated, box, [plug](int i) { set_plug(plug, i, "int"); });
+        return box;
+    }
+    if (type == "vec3") {
+        auto* w = new QWidget(parent);
+        auto* h = new QHBoxLayout(w);
+        h->setContentsMargins(0, 0, 0, 0);
+        h->setSpacing(3);
+        QJsonArray v = a["value"].toArray();
+        QJsonArray kids = a["children"].toArray();
+        for (int k = 0; k < (a["pair"].toBool() ? 2 : 3); ++k) {
+            auto* e = new QLineEdit(fmt3(v.at(k).toDouble()), w);
+            e->setReadOnly(ro);
+            QString child = kids.at(k).toString();
+            if (child.isEmpty()) child = a["attr"].toString() + QString("XYZ")[k];
+            QString cp = plug.left(plug.lastIndexOf('.')) + "." + child;
+            QObject::connect(e, &QLineEdit::textEdited, e, [e] { e->setProperty("editing", true); });
+            QObject::connect(e, &QLineEdit::editingFinished, e, [e, cp] {
+                if (!e->property("editing").toBool()) return;
+                e->setProperty("editing", false);
+                set_plug(cp, e->text().toDouble(), "float");
+            });
+            h->addWidget(e);
+        }
+        return w;
+    }
+    if (type == "float" || type == "int") {
+        if (a["min"].isDouble() && a["max"].isDouble() && a["max"].toDouble() > a["min"].toDouble()) return ranged_field(a, a["min"].toDouble(), a["max"].toDouble(), parent);
+        auto* e = new QLineEdit(type == "int" ? QString::number(a["value"].toInteger()) : fmt3(a["value"].toDouble()), parent);
+        e->setReadOnly(ro);
+        bool is_int = type == "int";
+        QObject::connect(e, &QLineEdit::textEdited, e, [e] { e->setProperty("editing", true); });
+        QObject::connect(e, &QLineEdit::editingFinished, e, [e, plug, is_int] {
+            if (!e->property("editing").toBool()) return;
+            e->setProperty("editing", false);
+            set_plug(plug, is_int ? QJsonValue(qint64(e->text().toDouble())) : QJsonValue(e->text().toDouble()), "float");
+        });
+        return e;
+    }
+    if (type == "string") {
+        auto* e = new QLineEdit(a["value"].toString(), parent);
+        e->setReadOnly(ro);
+        QObject::connect(e, &QLineEdit::textEdited, e, [e] { e->setProperty("editing", true); });
+        QObject::connect(e, &QLineEdit::editingFinished, e, [e, plug] {
+            if (!e->property("editing").toBool()) return;
+            e->setProperty("editing", false);
+            set_plug(plug, e->text(), "string");
+        });
+        return e;
+    }
+    return new QLabel(type == "matrix" ? "(matrix)" : "", parent);
+}
+
+// A collapsible section header, remembered per title across refreshes.
+QSet<QString>& closed_sections() {
+    static QSet<QString> s{"Node Behaviour", "Limit Information", "Extra Attributes"};
+    return s;
+}
+
+QFormLayout* add_section(QVBoxLayout* v, QWidget* parent, const QString& title) {
+    auto* head = new QToolButton(parent);
+    head->setObjectName("aeSectionButton");
+    head->setText(title);
+    head->setCheckable(true);
+    bool open = !closed_sections().contains(title);
+    head->setChecked(open);
+    head->setArrowType(open ? Qt::DownArrow : Qt::RightArrow);
+    head->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    head->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    v->addWidget(head);
+    auto* box = new QWidget(parent);
+    auto* f = new QFormLayout(box);
+    f->setLabelAlignment(Qt::AlignRight);
+    f->setContentsMargins(8, 2, 2, 6);
+    f->setVerticalSpacing(3);
+    box->setVisible(open);
+    v->addWidget(box);
+    QObject::connect(head, &QToolButton::toggled, box, [box, head, title](bool on) {
+        box->setVisible(on);
+        head->setArrowType(on ? Qt::DownArrow : Qt::RightArrow);
+        if (on) closed_sections().remove(title);
+        else closed_sections().insert(title);
+    });
+    return f;
+}
+
+} // namespace
+
+AttributeEditor::AttributeEditor(QWidget* parent, const QString& pinned) : Panel(parent), pinned_(pinned) {
+    auto* lay = new QVBoxLayout(this);
+    lay->setContentsMargins(2, 2, 2, 2);
+    lay->setSpacing(2);
+    // List, Selected, Focus, Attributes, as a row of buttons above the tabs.
+    auto* top = new QHBoxLayout();
+    auto* back = new QToolButton(this);
+    back->setArrowType(Qt::LeftArrow);
+    back->setToolTip("The node before this one in the chain");
+    auto* fwd = new QToolButton(this);
+    fwd->setArrowType(Qt::RightArrow);
+    fwd->setToolTip("The node after this one in the chain");
+    connect(back, &QToolButton::clicked, this, [this] { tabs_->setCurrentIndex(qMax(0, tabs_->currentIndex() - 1)); });
+    connect(fwd, &QToolButton::clicked, this, [this] { tabs_->setCurrentIndex(qMin(tabs_->count() - 1, tabs_->currentIndex() + 1)); });
+    top->addWidget(back);
+    top->addWidget(fwd);
+    top->addStretch(1);
+    lay->addLayout(top);
+    tabs_ = new QTabWidget(this);
+    tabs_->setDocumentMode(true);
+    tabs_->setUsesScrollButtons(true);
+    lay->addWidget(tabs_, 1);
+    connect(tabs_, &QTabWidget::currentChanged, this, [this](int i) {
+        if (i >= 0) current_tab_ = tabs_->tabText(i);
+    });
+    auto* bottom = new QHBoxLayout();
+    auto* sel = new QPushButton("Select", this);
+    auto* load = new QPushButton("Load Attributes", this);
+    auto* copy = new QPushButton("Copy Tab", this);
+    bottom->addWidget(sel);
+    bottom->addWidget(load);
+    bottom->addWidget(copy);
+    lay->addLayout(bottom);
+    connect(sel, &QPushButton::clicked, this, [this] {
+        QWidget* w = tabs_->currentWidget();
+        if (w) exec("select", args(QJsonArray{w->property("nodePath").toString()}));
+    });
+    connect(load, &QPushButton::clicked, this, [this] { refresh(); });
+    connect(copy, &QPushButton::clicked, this, [this] {
+        QWidget* w = tabs_->currentWidget();
+        if (!w) return;
+        // A window of its own that stays on this node.
+        auto* win = new AttributeEditor(nullptr, w->property("nodePath").toString());
+        win->setAttribute(Qt::WA_DeleteOnClose);
+        win->setWindowFlag(Qt::Window);
+        win->setWindowTitle(tabs_->tabText(tabs_->currentIndex()));
+        win->resize(380, 560);
+        win->show();
+    });
+}
+
+void AttributeEditor::refresh() {
+    QJsonObject ae = query("attributeEditor", pinned_).toObject();
+    QString keep = current_tab_;
+    tabs_->blockSignals(true);
+    while (tabs_->count()) {
+        QWidget* w = tabs_->widget(0);
+        tabs_->removeTab(0);
+        w->deleteLater();
+    }
+    int select = 0;
+    for (const QJsonValue& tv : ae["tabs"].toArray()) {
+        QJsonObject t = tv.toObject();
+        QString node_type = t["type"].toString();
+        auto* scroll = new QScrollArea();
+        scroll->setWidgetResizable(true);
+        scroll->setFrameShape(QFrame::NoFrame);
+        auto* body = new QWidget();
+        auto* v = new QVBoxLayout(body);
+        v->setContentsMargins(6, 6, 6, 6);
+        v->setSpacing(2);
+        auto* head = new QHBoxLayout();
+        head->addWidget(new QLabel(QString("<b>%1:</b>").arg(node_type), body));
+        auto* name = new QLineEdit(t["name"].toString(), body);
+        QString path = t["path"].toString();
+        scroll->setProperty("nodePath", path);
+        connect(name, &QLineEdit::editingFinished, name, [name, path] {
+            if (name->text().trimmed() != path.section('|', -1)) exec("rename", args(QJsonArray{path, name->text().trimmed()}));
+        });
+        head->addWidget(name, 1);
+        auto* focus = new QToolButton(body);
+        focus->setIcon(icon("frameSel", 16));
+        focus->setToolTip("Focus: select this node");
+        connect(focus, &QToolButton::clicked, focus, [path] { exec("select", args(QJsonArray{path})); });
+        head->addWidget(focus);
+        v->addLayout(head);
+        // A light's type, which swaps the shape, and whether it is in the default light set.
+        static const QStringList light_types{"ambientLight", "directionalLight", "pointLight", "spotLight", "areaLight", "volumeLight"};
+        if (light_types.contains(node_type)) {
+            auto* form = add_section(v, body, "Light");
+            auto* kind = new QComboBox(body);
+            for (const QString& lt : {"Ambient", "Directional", "Point", "Spot", "Area", "Volume"}) kind->addItem(lt);
+            kind->setCurrentIndex(light_types.indexOf(node_type));
+            connect(kind, QOverload<int>::of(&QComboBox::activated), kind, [path](int i) {
+                exec("aztekChangeLightType", args(QJsonArray{path, light_types.at(i)}));
+            });
+            form->addRow("Type", kind);
+            auto* by_default = new QCheckBox(body);
+            QString shape = path;
+            by_default->setChecked(ask("aztekIlluminatesByDefault", args(QJsonArray{shape})).toBool());
+            connect(by_default, &QCheckBox::toggled, by_default, [shape](bool on) {
+                exec("aztekIlluminatesByDefault", QJsonObject{{"args", QJsonArray{shape}}, {"set", on}});
+            });
+            form->addRow("Illuminates by Default", by_default);
+        }
+
+        QJsonArray attrs = t["attrs"].toArray();
+        QSet<QString> used;
+        // A script's AE<type>Template lays the tab out: what it does not name shows only under -addExtraControls.
+        QJsonArray layout = query("aeTemplate", node_type + " " + path).toArray();
+        bool extra = layout.isEmpty();
+        QFormLayout* current = nullptr;
+        for (const QJsonValue& iv : layout) {
+            QJsonObject item = iv.toObject();
+            QString kind = item["kind"].toString();
+            if (kind == "beginLayout") {
+                current = add_section(v, body, item["title"].toString());
+            } else if (kind == "endLayout") {
+                current = nullptr;
+            } else if (kind == "separator") {
+                auto* line = new QFrame(body);
+                line->setFrameShape(QFrame::HLine);
+                if (current) current->addRow(line);
+                else v->addWidget(line);
+            } else if (kind == "suppress") {
+                used.insert(item["attr"].toString());
+            } else if (kind == "extraControls") {
+                extra = true;
+            } else if (kind == "control") {
+                const QString n = item["attr"].toString();
+                for (const QJsonValue& av : attrs) {
+                    QJsonObject a = av.toObject();
+                    if (a["attr"].toString() != n) continue;
+                    if (!current) current = add_section(v, body, node_type);
+                    used.insert(n);
+                    QWidget* field = attr_field(a, body);
+                    field->setToolTip(item.contains("annotation") ? item["annotation"].toString() : a["doc"].toString());
+                    current->addRow(item.contains("label") ? item["label"].toString() : a["nice"].toString(), field);
+                }
+            }
+        }
+        // Drawing overrides do nothing until they are enabled, and show the index or RGB colour that is in use.
+        bool overrides_on = false, overrides_rgb = false;
+        for (const QJsonValue& av : attrs) {
+            QJsonObject a = av.toObject();
+            if (a["attr"].toString() == "overrideEnabled") overrides_on = a["value"].toBool();
+            if (a["attr"].toString() == "overrideRGBColors") overrides_rgb = a["value"].toBool();
+        }
+        for (const Section& sec : layout.isEmpty() ? sections_for(node_type) : QList<Section>()) {
+            QStringList names = QString(sec.attrs).split(' ');
+            QFormLayout* f = nullptr;
+            bool drawing = QString(sec.title) == "Drawing Overrides";
+            for (const QString& n : names)
+                for (const QJsonValue& av : attrs) {
+                    QJsonObject a = av.toObject();
+                    if (a["attr"].toString() != n || a["type"].toString() == "matrix") continue;
+                    if (!f) f = add_section(v, body, sec.title);
+                    used.insert(n);
+                    if (drawing && n == (overrides_rgb ? "overrideColor" : "overrideColorRGB")) continue;
+                    QWidget* field = attr_field(a, body);
+                    field->setToolTip(a["doc"].toString());
+                    if (drawing && n != "overrideEnabled") field->setEnabled(overrides_on);
+                    f->addRow(override_label(n, a["nice"].toString()), field);
+                }
+        }
+        // The rest grouped by their own category, then Extra Attributes.
+        QMap<QString, QFormLayout*> forms;
+        QJsonValue notes;
+        QString notes_plug = path + ".notes";
+        for (const QJsonValue& av : attrs) {
+            QJsonObject a = av.toObject();
+            QString n = a["attr"].toString();
+            if (n == "notes") {
+                notes = a["value"];
+                continue;
+            }
+            if (used.contains(n) || a["type"].toString() == "matrix" || !extra) continue;
+            QString cat = a["category"].toString();
+            if (cat.isEmpty()) cat = sections_for(node_type).size() > 1 ? QString("Extra Attributes") : QString("%1 Attributes").arg(node_type.left(1).toUpper() + node_type.mid(1));
+            if (!forms.contains(cat)) forms[cat] = add_section(v, body, cat);
+            QWidget* field = attr_field(a, body);
+            field->setToolTip(a["doc"].toString());
+            forms[cat]->addRow(a["nice"].toString(), field);
+        }
+        // Notes: a string attribute added the first time it's written.
+        auto* note_head = new QLabel("Notes: " + t["name"].toString(), body);
+        note_head->setObjectName("aeSection");
+        v->addWidget(note_head);
+        auto* note = new QPlainTextEdit(notes.toString(), body);
+        note->setFixedHeight(70);
+        note->setProperty("editing", false);
+        bool had = !notes.isUndefined();
+        connect(note, &QPlainTextEdit::textChanged, note, [note] { note->setProperty("editing", true); });
+        note->installEventFilter(this);
+        note->setProperty("notesPlug", notes_plug);
+        note->setProperty("notesNode", path);
+        note->setProperty("notesHad", had);
+        v->addWidget(note);
+        v->addStretch(1);
+        scroll->setWidget(body);
+        int idx = tabs_->addTab(scroll, t["name"].toString());
+        if (t["name"].toString() == keep) select = idx;
+    }
+    tabs_->setCurrentIndex(select);
+    tabs_->blockSignals(false);
+}
+
+bool AttributeEditor::eventFilter(QObject* o, QEvent* e) {
+    if (e->type() == QEvent::FocusOut) {
+        auto* note = qobject_cast<QPlainTextEdit*>(o);
+        if (note && note->property("editing").toBool()) {
+            note->setProperty("editing", false);
+            if (!note->property("notesHad").toBool()) {
+                exec("addAttr", QJsonObject{{"args", QJsonArray{note->property("notesNode").toString()}}, {"longName", "notes"}, {"dataType", "string"}});
+                note->setProperty("notesHad", true);
+            }
+            set_plug(note->property("notesPlug").toString(), note->toPlainText(), "string");
+        }
+    }
+    return Panel::eventFilter(o, e);
+}
+
+} // namespace az

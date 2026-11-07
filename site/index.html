@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aztek</title>
+<meta name="description" content="Aztek: modelling, UVs, rigging and animation with the industry-standard commands, hotkeys, menus and file format. Free under MIT-0, for Linux and Windows.">
+<meta property="og:title" content="Aztek">
+<meta property="og:description" content="Modelling, UVs, rigging and animation with the industry-standard commands, hotkeys and menus. MIT-0, Linux and Windows.">
+<meta property="og:image" content="https://srlegrand.github.io/Aztek/img/social-preview.png">
+<link rel="icon" type="image/png" href="img/aztek-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="top">
+  <a class="brand" href="#"><img src="img/aztek-icon.png" alt="" width="28" height="28"><span>Aztek</span></a>
+  <nav>
+    <a href="#features">Features</a>
+    <a href="#feedback">Feedback</a>
+    <a href="#works">In the works</a>
+    <a href="#download">Download</a>
+    <a href="#licence">Licence</a>
+    <a href="https://github.com/srlegrand/Aztek">GitHub</a>
+  </nav>
+</header>
+
+<section class="hero">
+  <img class="splash" src="img/splash.png" alt="Aztek splash screen" width="1200" height="700">
+  <div class="hero-text">
+    <h1>Modelling, UVs, rigging and animation, the way you already work.</h1>
+    <p>Same commands, flags, hotkeys, menus and marking menus. MEL and Python scripts run, <code>.ma</code> files open and save,
+      and production rigs pose. Free and open source under MIT-0, for Linux and Windows.</p>
+    <div class="buttons">
+      <a class="btn primary" id="dl-main" href="#download">Download</a>
+      <a class="btn" href="#download">Other platforms &darr;</a>
+      <a class="btn" href="https://github.com/srlegrand/Aztek">Source on GitHub</a>
+      <a class="btn" href="https://github.com/srlegrand/Aztek/fork">Fork it on GitHub</a>
+    </div>
+    <p class="build-line" id="build-line"></p>
+  </div>
+</section>
+
+<div class="fret" aria-hidden="true"></div>
+
+<section class="showcase">
+  <figure>
+    <img src="img/production-rig.png" alt="A production character rig opened in Aztek and posed" loading="lazy">
+    <figcaption>A production character rig, opened from its <code>.ma</code> file and posed: 414 joints,
+      37 skinClusters, 17 blendShapes, 82 IK handles, follicles, ribbons and wires. It opens in about 3 seconds and responds
+      in 13 to 44 ms per change.</figcaption>
+  </figure>
+</section>
+
+<section class="feedback" id="feedback">
+  <div class="fb-copy">
+    <span class="fb-pill">This doesn't feel right!</span>
+    <h2>Anything off? One button.</h2>
+    <p>Aztek should feel like second nature to anyone who has spent years in a 3D package. If something doesn't work, or
+      works but doesn't feel quite right (a hotkey, a drag, a default, a menu in the wrong place), press the orange button
+      at the right of the shelf bar.</p>
+    <p>Say what you did and what you expected; that's the whole report. Add a screenshot you can draw on, or a copy of the
+      scene, if it helps. It opens a filled-in GitHub issue in your browser, so every rough edge anyone notices ends up in
+      one <a href="https://github.com/srlegrand/Aztek/issues">public list</a>. Nothing is sent until you press Submit there.</p>
+  </div>
+  <img src="img/feedback.png" alt="The This doesn't feel right! window over the main window" loading="lazy">
+</section>
+
+<div class="fret" aria-hidden="true"></div>
+
+<section class="features" id="features">
+  <h2>What's in it</h2>
+
+  <article class="feature">
+    <div class="copy">
+      <h3>Polygon modelling</h3>
+      <p>The standard polygon commands with construction history. Quad Draw, Multi-Cut, Insert and Offset Edge Loop, Target Weld,
+        Slide Edge, Crease, Create and Append Polygon; symmetry, soft selection, eighteen sculpting brushes.</p>
+    </div>
+    <img src="img/modelling.png" alt="Component editing with construction history and the move manipulator" loading="lazy">
+  </article>
+
+  <article class="feature">
+    <div class="copy">
+      <h3>Soft selection and Quad Draw</h3>
+      <p>B toggles soft selection, with the falloff shown on the vertices. Quad Draw retopologises on a live surface.</p>
+    </div>
+    <div class="pair">
+      <img src="img/soft-select.png" alt="Soft selection falloff on a plane" loading="lazy">
+      <img src="img/quad-draw.png" alt="Quad Draw on a live surface" loading="lazy">
+    </div>
+  </article>
+
+  <article class="feature">
+    <div class="copy">
+      <h3>NURBS</h3>
+      <p>Curves (CV and EP tools, rebuild, attach, detach, offset, fillets, projection, trims) and surfaces (primitives, loft,
+        revolve, extrude, boundary, birail, <code>nurbsToPoly</code>), with CVs, edit points and isoparms as components.</p>
+    </div>
+    <img src="img/nurbs.png" alt="NURBS surfaces and curves" loading="lazy">
+  </article>
+
+  <article class="feature">
+    <div class="copy">
+      <h3>UVs</h3>
+      <p>Planar, cylindrical, spherical and automatic projections, unfold, layout, cut and sew in the UV Editor, by UV, shell,
+        edge or face.</p>
+    </div>
+    <img src="img/uv-editor.png" alt="The UV Editor after automatic projection and layout" loading="lazy">
+  </article>
+
+  <article class="feature">
+    <div class="copy">
+      <h3>Materials and textures</h3>
+      <p>lambert, blinn, phong, phongE and surfaceShader with file textures and place2dTexture, assigned to objects or faces.
+        Textured mode (6) in the viewport and the Hypershade.</p>
+    </div>
+    <img src="img/materials.png" alt="Materials and file textures in the viewport" loading="lazy">
+  </article>
+
+  <article class="feature">
+    <div class="copy">
+      <h3>Rigging</h3>
+      <p>Joints (orient, mirror, insert, segment scale compensate), RP, SC and spline IK, every constraint, smooth skin with
+        weight painting, mirror and copy, dual quaternion; a HumanIK subset (skeleton, definition, control rig, retargeting).</p>
+    </div>
+    <img src="img/quadruped-rig.png" alt="A quadruped skeleton posed with the rotate tool" loading="lazy">
+  </article>
+
+  <article class="feature">
+    <div class="copy">
+      <h3>Skinning and deformers</h3>
+      <p>Paint Skin Weights with the influence list in Tool Settings. blendShape in full (Shape Editor, in-betweens, live
+        targets), lattice, wrap, wire, delta mush, softMod, clusters, nonlinears, sculpt, jiggle, shrinkWrap, proximityWrap,
+        curveWarp and more.</p>
+    </div>
+    <div class="pair">
+      <img src="img/rigging.png" alt="Joints, smooth skin and an RP IK handle" loading="lazy">
+      <img src="img/paint-weights.png" alt="Paint Skin Weights" loading="lazy">
+    </div>
+  </article>
+
+  <article class="feature">
+    <div class="copy">
+      <h3>Animation</h3>
+      <p>Keys with weighted tangents and infinities, Graph Editor, Dope Sheet, set driven keys, breakdowns, copy and paste
+        keys, baking, motion paths, animation layers, character sets and clips, playblast.</p>
+    </div>
+    <div class="pair">
+      <img src="img/graph-editor.png" alt="Graph Editor" loading="lazy">
+      <img src="img/dope-sheet.png" alt="Dope Sheet with a breakdown" loading="lazy">
+    </div>
+  </article>
+
+  <article class="feature">
+    <div class="copy">
+      <h3><code>.ma</code> files</h3>
+      <p>Read and written in the standard layout: deformer chains, constraints, utility nodes, expressions, materials, NURBS,
+        drawing overrides and references with their edits; namespaces, instances, locked nodes, Z up.</p>
+    </div>
+    <img src="img/rig-file.png" alt="A character rig opened from a .ma file" loading="lazy">
+  </article>
+
+  <article class="feature">
+    <div class="copy">
+      <h3>Scripting</h3>
+      <p>MEL (procedures, arrays, control flow, backticks, expressions) and Python with <code>aztek.cmds</code>,
+        compatibility modules so existing scripts import unchanged, and an API 2.0 subset. Python plug-ins with <code>MPxCommand</code> and
+        <code>MPxNode</code>; <code>scriptJob</code>, <code>scriptNode</code>, <code>evalDeferred</code>.</p>
+<pre><code>from aztek import cmds
+cube = cmds.polyCube(w=2)[0]
+cmds.setKeyframe(cube, at='ty', t=1, v=0)
+cmds.setKeyframe(cube, at='ty', t=24, v=5)</code></pre>
+    </div>
+    <img src="img/scripting.gif" alt="A MEL script in the Script Editor building cubes with expressions, then playing them" loading="lazy">
+  </article>
+
+  <article class="feature">
+    <div class="copy">
+      <h3>Script-built interface</h3>
+      <p><code>window</code>, layouts, controls, menus and dialogs from MEL or Python become Qt widgets. Attribute-bound
+        controls, <code>AE&lt;type&gt;Template</code> procedures, <code>workspaceControl</code> docking, editors and panels
+        created by script.</p>
+    </div>
+    <img src="img/script-window.png" alt="A window built from MEL" loading="lazy">
+  </article>
+
+  <article class="feature">
+    <div class="copy">
+      <h3>The interface you know</h3>
+      <p>Menu sets, shelves, hotkeys, marking menus, the hotbox, channel box, outliner, Attribute Editor, Node Editor, Tool
+        Settings and panel layouts, where your hands expect them.</p>
+    </div>
+    <div class="pair">
+      <img src="img/marking-menu.png" alt="Marking menu" loading="lazy">
+      <img src="img/node-editor.png" alt="Node Editor" loading="lazy">
+    </div>
+  </article>
+</section>
+
+<section class="works" id="works">
+  <h2>In the works</h2>
+  <div class="works-grid">
+    <div><h3>Dynamics</h3><p>One solver for cloth, particles and rigid bodies, in place of several overlapping systems.
+      Files that use any of the older systems load into it.</p></div>
+    <div><h3>Bicurious</h3><p>Liquids, smoke, fire and procedural graphs inside that same solver, colliding with and pushing
+      cloth, particles and rigid bodies.</p></div>
+    <div><h3>Harold</h3><p>Aztek's own renderer.</p></div>
+    <div><h3>C++ plug-in kit</h3><p>Rebuild a plug-in from its source against Aztek's headers.</p></div>
+  </div>
+</section>
+
+<div class="fret" aria-hidden="true"></div>
+
+<section class="download" id="download">
+  <h2>Download</h2>
+  <p>Fresh packages from GitHub Actions at least every hour while the main branch moves.</p>
+  <div class="dl-grid">
+    <a class="dl" id="dl-windows" data-asset="setup-x64.exe" href="#download" aria-disabled="true">
+      <span class="os">Windows installer</span><span class="file">setup .exe, 64 bit</span>
+    </a>
+    <a class="dl" data-asset="windows-x86_64.zip" href="#download" aria-disabled="true">
+      <span class="os">Windows zip</span><span class="file">no install needed</span>
+    </a>
+    <a class="dl" id="dl-rocky9" data-asset="el9.x86_64.rpm" href="#download" aria-disabled="true">
+      <span class="os">Rocky Linux 9</span><span class="file">.rpm</span>
+    </a>
+    <a class="dl" data-asset="el8.x86_64.rpm" href="#download" aria-disabled="true">
+      <span class="os">Rocky Linux 8</span><span class="file">.rpm, with its own Qt</span>
+    </a>
+    <a class="dl" id="dl-linux" data-asset="ubuntu24.04" href="#download" aria-disabled="true">
+      <span class="os">Ubuntu 24.04</span><span class="file">.deb</span>
+    </a>
+    <a class="dl" data-asset="ubuntu22.04" href="#download" aria-disabled="true">
+      <span class="os">Ubuntu 22.04</span><span class="file">.deb</span>
+    </a>
+    <a class="dl" data-asset="linux-x86_64.tar.gz" href="#download" aria-disabled="true">
+      <span class="os">Linux</span><span class="file">.tar.gz, needs Qt 6</span>
+    </a>
+    <a class="dl" href="https://github.com/srlegrand/Aztek">
+      <span class="os">Source</span><span class="file">github.com/srlegrand/Aztek</span>
+    </a>
+  </div>
+  <p class="small">Windows: run the installer, or unzip and run <code>aztek.exe</code>. Rocky Linux: <code>sudo dnf install ./aztek-*.rpm</code> (Rocky 9 needs EPEL for Qt). Ubuntu: <code>sudo apt install ./aztek_*.deb</code>. All need a Vulkan driver. All builds:
+    <a href="https://github.com/srlegrand/Aztek/releases">Releases</a>.</p>
+
+  <h3>Build from source</h3>
+<pre><code>git clone https://github.com/srlegrand/Aztek.git
+cd Aztek
+./build.sh --deps --run      # Linux
+build.bat -Run               # Windows</code></pre>
+  <p class="small">Needs Rust, CMake, Ninja, Qt 6.4+, Python 3 and, on Windows, Visual Studio 2022 with the C++ workload.
+    Details in the <a href="https://github.com/srlegrand/Aztek#build">README</a>.</p>
+</section>
+
+<section class="licence" id="licence">
+  <h2>Licence</h2>
+  <p>Aztek is free and open source under <a href="https://github.com/srlegrand/Aztek/blob/main/LICENSE">MIT-0</a>.
+    Use, copy, change, sell and redistribute it however you like, with no attribution required. It comes with no
+    warranty of any kind.</p>
+</section>
+
+<section class="docs-links">
+  <a href="https://github.com/srlegrand/Aztek/blob/main/docs/COMMANDS.md"><strong>Command reference</strong><span>Every command and flag</span></a>
+  <a href="https://github.com/srlegrand/Aztek/blob/main/PARITY.md"><strong>Parity</strong><span>What matches the reference and what doesn't yet</span></a>
+  <a href="https://github.com/srlegrand/Aztek/issues"><strong>Issues</strong><span>Report a difference or a bug</span></a>
+</section>
+
+<footer>
+  <img src="img/logo.png" alt="Aztek" width="160">
+</footer>
+
+<script>
+(function () {
+  var isWin = /Windows/i.test(navigator.userAgent);
+  var isLinux = /Linux/i.test(navigator.userAgent) && !/Android/i.test(navigator.userAgent);
+  var main = document.getElementById('dl-main');
+  if (isWin) {
+    main.dataset.from = 'dl-windows';
+    main.href = document.getElementById('dl-windows').href;
+    main.textContent = 'Download for Windows';
+    document.getElementById('dl-windows').classList.add('mine');
+  } else if (isLinux) {
+    main.dataset.from = 'dl-linux';
+    main.href = document.getElementById('dl-linux').href;
+    main.textContent = 'Download for Linux';
+    document.getElementById('dl-linux').classList.add('mine');
+  }
+  // Each button goes straight to its file, from the newest release that has it. One that no release has yet says so,
+  // and goes nowhere.
+  var links = document.querySelectorAll('a[data-asset]');
+  function unavailable(link) {
+    link.classList.add('missing');
+    link.setAttribute('aria-disabled', 'true');
+    link.href = '#download';
+    var f = link.querySelector('.file');
+    if (f) f.textContent = 'not built yet';
+  }
+  fetch('https://api.github.com/repos/srlegrand/Aztek/releases?per_page=30')
+    .then(function (r) { return r.ok ? r.json() : []; })
+    .then(function (list) {
+      list = (list || []).filter(function (x) { return !x.draft; });
+      list.sort(function (a, b) { return new Date(b.published_at) - new Date(a.published_at); });
+      links.forEach(function (link) {
+        var hit = null, from = null;
+        for (var i = 0; i < list.length && !hit; i++) {
+          hit = (list[i].assets || []).find(function (x) { return x.name.indexOf(link.dataset.asset) >= 0; });
+          from = list[i];
+        }
+        if (!hit) return unavailable(link);
+        link.href = hit.browser_download_url;
+        link.removeAttribute('aria-disabled');
+        link.title = hit.name + ' (' + from.name + ')';
+      });
+      if (main.dataset.from) {
+        var mine = document.getElementById(main.dataset.from);
+        if (mine.classList.contains('missing')) {
+          main.textContent = 'Not built yet for this system';
+          main.href = '#download';
+        } else {
+          main.href = mine.href;
+        }
+      }
+      if (list[0] && list[0].name) document.getElementById('build-line').textContent = list[0].name + ', built ' + new Date(list[0].published_at).toISOString().slice(0, 10).split('-').reverse().join('/');
+    })
+    .catch(function () { links.forEach(unavailable); });
+})();
+</script>
+</body>
+</html>

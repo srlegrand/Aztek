@@ -1,0 +1,30 @@
+[package]
+name = "aztek_app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "aztek"
+path = "src/main.rs"
+
+[dependencies]
+aztek_core = { path = "../aztek_core" }
+aztek_geo = { path = "../aztek_geo" }
+aztek_ops = { path = "../aztek_ops" }
+aztek_scene = { path = "../aztek_scene" }
+glam.workspace = true
+serde_json.workspace = true
+log.workspace = true
+ash = "0.38"
+ash-window = "0.13"
+raw-window-handle = "0.6"
+winit = "0.30"
+egui = "0.36"
+egui-winit = { version = "0.36", default-features = false, features = ["clipboard", "links", "wayland", "x11"] }
+egui-ash-renderer = { version = "0.13", features = ["gpu-allocator"] }
+gpu-allocator = { version = "0.28", default-features = false, features = ["vulkan"] }
+naga = { version = "27", features = ["glsl-in", "spv-out"] }
+env_logger = "0.11"
+bytemuck = { version = "1", features = ["derive"] }
