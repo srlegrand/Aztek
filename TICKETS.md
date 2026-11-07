@@ -6,11 +6,11 @@ Requests waiting or in progress, newest detail kept. Move to Done with the date 
 - Deformation speed: viewport staleness fixed; root control on Lou still about 115 ms a change; smooth preview subdivides from scratch each deformation.
 
 - Unified dynamics: cloth, particles, rigid bodies in one solver (agent).
-- Harold renderer (agent).
 - C++ plug-in kit (agent).
 
 ## Waiting
 - Shift+click on an expand arrow fully expands (and collapses) everything below it, in every hierarchy: Outliner, Hypershade, Reference Editor, Node Editor lists, Graph Editor and Dope Sheet outlines, layer editors, Attribute Editor sections.
+- Harold: render layers and render setup; hair and curves; quieter subsurface; USD stages in renders; an evicting texture tile cache; vector displacement and autobump; denoiser off the interface thread.
 - Bicurious: something like Bifrost built into the dynamics, not a separate system. Liquids, smoke, fire and procedural graphs share the one solver, colliding with and affecting cloth, particles and rigid bodies. Start after the unified solver merges.
 - README screenshots refreshed as features land.
 - UV and Vertex Face component modes; Multi mixing kinds in one selection.
@@ -40,6 +40,7 @@ Requests waiting or in progress, newest detail kept. Move to Done with the date 
 
 
 ## Done
+- 07/11/2026 Harold renderer, first parts: path tracer, standard surface, every material and light translated, Render View with IPR, Render Settings, AOVs to EXR, batch rendering; see docs/HAROLD.md for what is shallower.
 - 07/11/2026 History from every route: Smooth, Mirror, Reduce, Extract no longer wipe it; `G` after each; Hypergraph shows the whole chain.
 - 07/11/2026 Smooth Preview wire as asked.
 - 07/11/2026 First class USD, priorities 1 to 8 with the gaps above.

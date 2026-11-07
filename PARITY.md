@@ -1,7 +1,8 @@
 # Aztek: behaviour target
 
 Aztek follows the reference application's behaviour for modelling, UVs, rigging and animation, plus viewport navigation,
-manipulators, the script editor and preferences. The product carries none of the reference's names, icons or branding.
+manipulators, the script editor and preferences, and renders with Harold, its own path tracer, in place of every renderer
+the reference carries. The product carries none of the reference's names, icons or branding.
 
 ## Reference and checks
 
@@ -844,3 +845,36 @@ Still not done:
 - Global reaches meshes only, not NURBS. Object mode has no colours in the view.
 - A World symmetry mesh moved after symmetry was set keeps its pairs from before. Set symmetry again after moving it.
 - UV Pin, Proximity Pin, Interactive Bind Skin, Split UVs, 3D Cut and Sew, Unsmooth, Slice, Hole Punch, Cut Out, Deform > Edit other than Lattice, Prune Membership, Relationship Editors, IK/FK Keys, Audio, Cache, a top level Visualize.
+
+## Harold renderer (07/11/2026)
+
+One renderer, named Harold everywhere in the interface: a CPU path tracer in Rust (`crates/aztek_render`), translated
+from the scene by `aztek_scene::harold`, with its commands, Render View, Render Settings, Attribute Editor frames,
+Create > Harold, a Rendering shelf and batch rendering with no display. [docs/HAROLD.md](docs/HAROLD.md) has what it does,
+the checks with their numbers, and timings. Nothing was compared with a running Maya or any other renderer: the furnace,
+point and quad light, clamp and Cornell box checks compare against closed forms and against Harold's own high sample
+renders.
+
+Settings use the node and attribute names files hold (`defaultRenderGlobals`, `defaultResolution`,
+`defaultArnoldRenderOptions` as `aiOptions`, `aiAOVFilter`, `aiAOVDriver`, `aiAOV`) and save with the scene; the shared
+nodes are written with `createNode -s`. The shape attributes (`aiSubdivType`, `primaryVisibility`, ...) save on meshes
+and NURBS surfaces. `render`, `hrender` with `arnoldRender` as a second name, `renderSettings`, `renderWindowEditor`.
+
+From older renderers, not honoured (each named in a warning when a scene uses it):
+
+- lambert family: ambient colour, translucence, glow, reflected colour; Maya's highlight shapes are approximated by a
+  roughness (blinn's eccentricity, phong's cosine power, phongE's roughness, anisotropic's spreads).
+- rampShader: its colour, specular and transparency ramps.
+- layeredShader: textures as layers, glow.
+- mia_material and its variants: the custom reflection curve (brdf_*), translucency.
+- Lights: Maya's `decayRate` (Harold's falloff is physical; `aiDecayType` constant turns it off), depth map shadows and
+  their settings, `useRayTraceShadows` (shadows are always traced, `aiCastShadows` turns them off), light glow and
+  optical effects, volume light shapes other than a sphere and their ramps.
+- Settings of other renderers in `defaultRenderGlobals.currentRenderer`: read and ignored, with a warning.
+- Render layers and render setup: not read; the master layer renders.
+
+Shallower than the brief, ranked by what a user would notice: render layers; hair and curves not rendered;
+subsurface noisier than it should be at default samples; USD stages not rendered; whole-image texture loading with a
+memory limit rather than an evicting tile cache; no vector displacement or autobump; a simple non-local means
+denoiser run on the interface thread; light group AOVs by the light that started the light, mesh lights' direct light
+seen in reflections counted as indirect; rough metal at roughness 1 keeps 90% of the light (99.9% at 0.6).

@@ -68,7 +68,7 @@ filled in with. GitHub takes files up to 25 MB and images up to 10 MB.
 - **NURBS:** curves (CV and EP tools, rebuild, attach, detach, offset) and surfaces (primitives, loft, revolve, extrude,
   boundary, birail, `nurbsToPoly`), with CVs as components.
 - **UVs:** projections, unfold, layout, cut and sew, UV Editor.
-- **Materials and textures:** lambert, blinn, phong, phongE and surfaceShader with file textures and place2dTexture, assigned to objects or faces; Textured mode (6) in the viewport; Hypershade lists; the image behind the UV Editor.
+- **Materials and textures:** a physically based standard surface, and lambert, blinn, phong, phongE and surfaceShader with file textures and place2dTexture, assigned to objects or faces; Textured mode (6) in the viewport; Hypershade lists; the image behind the UV Editor.
 
   ![Materials and a file texture in Textured mode](docs/materials.png)
 - **Rigging:** joints (orient, mirror, insert, segment scale compensate), RP, SC and spline IK, every constraint, smooth
@@ -81,7 +81,14 @@ filled in with. GitHub takes files up to 25 MB and images up to 10 MB.
   copy and paste keys, baking, motion paths, animation layers with their editor (additive, override, passthrough, merge, extract), character sets and clips.
 - **Deformers:** blendShape in full (Shape Editor, in-between and live targets), sculpt, jiggle, shrinkWrap, proximityWrap,
   curveWarp, wrinkle, morph and more; deformer weights painted with the Paint Attribute tool or exported.
-- **Lights:** ambient, directional, point, spot, area and volume lights with their icons, attributes and `.ma` layout; Use All Lights (7), Use Selected Lights, flat and no lights in the viewport, with decay, spot cones, blinn and phong highlights and light linking. No shadows yet.
+- **Lights:** ambient, directional, point, spot, area and volume lights with their icons, attributes and `.ma` layout; Use All Lights (7), Use Selected Lights, flat and no lights in the viewport, with decay, spot cones, blinn and phong highlights and light linking; shadows in renders.
+- **Rendering:** Harold, a physically based path tracer on the CPU: the standard surface with subsurface, coat, sheen,
+  transmission and thin film; area, sky dome with HDR images, mesh and photometric lights; subdivision, displacement,
+  motion blur and depth of field; light and data AOVs into multi-layer EXR; interactive rendering in the Render View as
+  the scene changes, Render Settings, and batch rendering with no display (`aztek -render`). Every material and light
+  in a scene renders through it. See [docs/HAROLD.md](docs/HAROLD.md).
+
+  ![Two rigs and a row of materials rendered with Harold](docs/harold.png)
 - **Files:** `.ma` read and written in the standard layout, deformer chains, constraints, utility nodes, expressions, materials,
   NURBS and references with their edits included; namespaces, instances, locked nodes, Z up.
 
@@ -111,6 +118,8 @@ Real production rigs, opened from their `.ma` files with their textures and cont
 
 ![Four production rigs](docs/rigs.png)
 
+The Harold image above shows Toph and Lou, rendered with a sky and a key light added.
+
 Left to right: a Venom rig, whose download names no author; Toph, a fan art rig by Ninjin Studios of the character from Nickelodeon's The Last Airbender; Lou, model by Dmitry Danilov and rig by Boris Klimov; the Waitress, model by François Boquet. They're used here as test rigs under their authors' terms and aren't part of this repository.
 
 ## In the works
@@ -124,7 +133,7 @@ Left to right: a Venom rig, whose download names no author; Toph, a fan art rig 
 
 ## Examples
 
-File > Examples opens scenes from the `examples` folder: modelling history, materials and textures, a small coloured and keyed arm rig, and nested references with their edits, and all the default lights. `examples/tools/make_examples.mel` writes them.
+File > Examples opens scenes from the `examples` folder: modelling history, materials and textures, a small coloured and keyed arm rig, and nested references with their edits, all the default lights, glass and metal spheres under a sky image, and a Cornell box for rendering. `examples/tools/make_examples.mel` writes them.
 
 ## Screens
 
@@ -286,7 +295,8 @@ with `loadPlugin`. C++ plug-ins can't load.
 
 Existing scripts, habits and `.ma` files carry over: a production rig opens, poses and saves (see "A real rig" in
 [PARITY.md](PARITY.md)). Behaviour comes from published references, so expect differences in details; PARITY.md lists
-the known ones. `.mb` files and C++ plug-ins are not supported yet.
+the known ones. `.mb` files and C++ plug-ins are not supported yet. Materials and render settings from other renderers in a file are
+read and rendered with Harold, with a warning naming what isn't honoured.
 
 ## Licence
 

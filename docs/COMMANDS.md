@@ -3,7 +3,7 @@
 Generated from the command registry by `cargo run -p aztek_host --example gen_commands`; do not edit by hand.
 Commands take the reference's flags, long or short, in MEL and in Python (`aztek.cmds` or `maya.cmds`).
 
-1075 commands.
+1080 commands.
 
 ## AL_usdmaya_LayerCreateLayer
 
@@ -806,6 +806,23 @@ Arguments: a curve (the selection when none)
 | Flag | Short | Description |
 | --- | --- | --- |
 | `constructionHistory` | `ch` | Accepted for existing scripts. |
+
+## arnoldRender
+
+hrender under the name other scripts use.
+
+Arguments: camera
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `camera` | `cam` | Camera to render through. |
+| `width` | `w` | Image width. |
+| `height` | `h` | Image height. |
+| `region` | `reg` | x0 y0 x1 y1, pixels from the top left. |
+| `seq` | `seq` | Frames: "1 10", "1 10 2" or one frame. |
+| `batch` | `b` | Render the frames the render settings name and write them. |
+| `ipr` | `ipr` | start, stop, refresh or pause interactive rendering. |
+| `async` | `as` | Start the current frame and return at once; the render view shows it as it refines. |
 
 ## arrayCenter
 
@@ -7050,6 +7067,23 @@ The annotation of the nameCommand a key is bound to, or an empty string: -k the 
 | `keyString` | `k` | The key. |
 | `keyUp` | `kup` | On release. |
 | `optionModifier` | `opt` | With Option: as Alt here. |
+
+## hrender
+
+Renders with Harold: the current frame, a sequence (-seq), every frame the settings name (-batch), or interactively (-ipr start).
+
+Arguments: camera
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `camera` | `cam` | Camera to render through. |
+| `width` | `w` | Image width. |
+| `height` | `h` | Image height. |
+| `region` | `reg` | x0 y0 x1 y1, pixels from the top left. |
+| `seq` | `seq` | Frames: "1 10", "1 10 2" or one frame. |
+| `batch` | `b` | Render the frames the render settings name and write them. |
+| `ipr` | `ipr` | start, stop, refresh or pause interactive rendering. |
+| `async` | `as` | Start the current frame and return at once; the render view shows it as it refines. |
 
 ## hudButton
 
@@ -16299,6 +16333,55 @@ Arguments: [object] newName
 renameAttr('node.attr', 'newName'): renames an attribute added with addAttr.
 
 Arguments: plug newName
+
+## render
+
+Renders the current frame and returns the image's path.
+
+Arguments: camera
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `camera` | `cam` | Camera to render through. |
+| `width` | `w` | Image width. |
+| `height` | `h` | Image height. |
+| `region` | `reg` | x0 y0 x1 y1, pixels from the top left. |
+| `batch` | `b` | Render the frames the render settings name. |
+
+## renderSettings
+
+Output file names the render settings give.
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `query` | `q` | Query mode. |
+| `edit` | `e` | Edit mode. |
+| `firstImageName` | `fin` | The first frame's file name. |
+| `lastImageName` | `lin` | The last frame's file name. |
+| `imageGenericName` | `ign` | The file name with # for the frame. |
+| `fullPath` | `fp` | With the images folder. |
+| `fullPathTemp` | `fpt` | The folder of images the render view keeps. |
+| `camera` | `cam` | For this camera. |
+| `layer` | `lyr` | For this render layer. |
+
+## renderWindowEditor
+
+The render view's images: write, keep, remove, exposure and gamma.
+
+Arguments: editor
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `query` | `q` | Query mode. |
+| `edit` | `e` | Edit mode. |
+| `writeImage` | `wi` | Write the current image to a file. |
+| `snapShot` | `snp` | Keep the current image. |
+| `removeAllImages` | `ra` | Forget kept images. |
+| `removeImage` | `ri` | Forget one kept image. |
+| `nbImages` | `nim` | How many images are kept. |
+| `exposure` | `exp` | Display exposure, stops. |
+| `gamma` | `ga` | Display gamma. |
+| `currentCamera` | `crc` | The camera rendered through. |
 
 ## reorder
 

@@ -27,6 +27,12 @@ released by Simon (srlegrand) at https://github.com/srlegrand/Aztek. PARITY.md h
 - `crates/aztek_core` prefs, paths. `aztek_undo` undo stack. `aztek_ops` command layer (CommandDef, flags, execute).
 - `crates/aztek_geo` mesh (half-edge style corners, attributes; UVs are per-corner `uv0`, seams edge `seam`), ops.
 - `crates/aztek_uv` charts, unwrap (LSCM, SLIM, BFF), layout helpers, projections.
+- `crates/aztek_render` Harold, the renderer, with no scene dependency: BVH, geometry and instances, camera, textures,
+  shading networks, the standard surface's BSDF, lights, path tracer (`integrator.rs`, `path.rs`, `first_hit.rs`), AOV
+  film, progressive job (`render.rs`), image output, denoiser. `aztek_scene/src/harold/` translates the scene into it and
+  holds the render commands; `harold_nodes.rs` the settings, shader and light node types; `aztek_host/src/harold_view.rs`
+  the render view's C functions and `aztek -render`; `app/src/renderview.cpp`, `rendersettings.cpp` the windows.
+  docs/HAROLD.md.
 - `crates/aztek_scene` the scene: graph, nodes, plugs, DAG (transform over shape: pCube1 / pCubeShape1),
   construction history (`history.rs`: one node per edit, polyTweak for point moves), components, mesh edits,
   `anim_layer*.rs` (animLayer, blends, merge), `anim.rs` (animCurveTL/TA/TU, setKeyframe, keyframe, cutKey, keyTangent, playbackOptions, currentTime in frames,
