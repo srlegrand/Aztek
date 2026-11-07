@@ -52,7 +52,7 @@ scene holds is rendered by it; there is no choice of renderer.
   normal, colour, IOR and the affect colour and roughness controls; emission; opacity; bump and normal maps. Layers
   combine by albedo scaling.
 - **Lights.** Point (sphere at `aiRadius`), spot (cone, penumbra, dropoff, radius), directional (`aiAngle`), area (quad,
-  disc, cylinder; normalised by area unless `aiNormalize` is off; `aiSpread`), Maya's ambient (light from all around,
+  disc, cylinder; normalised by area unless `aiNormalize` is off; `aiSpread`), the reference's ambient (light from all around,
   unshadowed, and `ambientShade` of it from its position) and volume (light from its centre fading to nothing at the
   volume's edge), sky dome (colour or a latitude-longitude image, importance sampled), mesh lights, photometric with
   IES files, and every glowing surface sampled as a light. Colour times intensity times two to `aiExposure`, quadratic
