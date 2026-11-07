@@ -17,6 +17,7 @@
 #include <QDir>
 #include <QDoubleSpinBox>
 #include <QElapsedTimer>
+#include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
@@ -770,6 +771,11 @@ private:
         if (!QFileInfo::exists(file_)) {
             say("Could not write the scene for rendering.");
             return;
+        }
+        // Each frame gets its number in the file name, even when the settings say a single frame.
+        {
+            QFile f(file_);
+            if (f.open(QIODevice::Append | QIODevice::Text)) f.write("setAttr \"defaultRenderGlobals.animation\" yes;\n");
         }
         QDir().mkpath(dir_->text());
         done_ = 0;

@@ -92,12 +92,21 @@ public:
         v->setSpacing(0);
         auto* bar = new QToolBar(this);
         auto* create = new QMenu(this);
-        create->addSection("Harold");
+        // Headings: plain disabled items, since the style draws sections as bare lines.
+        auto heading = [create](const QString& t) {
+            if (!create->isEmpty()) create->addSeparator();
+            QAction* a = create->addAction(t);
+            a->setEnabled(false);
+            QFont f = a->font();
+            f.setBold(true);
+            a->setFont(f);
+        };
+        heading("Harold");
         for (const auto& m : kHaroldMaterials) {
             QString type = m.second;
             create->addAction(m.first, [type] { new_material(type); })->setToolTip(type);
         }
-        create->addSection("Textures");
+        heading("Textures");
         for (const auto& m : kHaroldTextures) {
             QString type = m.second;
             create->addAction(m.first, [type] { exec("shadingNode", QJsonObject{{"args", QJsonArray{type}}, {"asTexture", true}}); })->setToolTip(type);
@@ -111,13 +120,13 @@ public:
             exec("defaultNavigation", QJsonObject{{"connectToExisting", true}, {"source", place}, {"destination", file}});
             exec("setAttr", QJsonObject{{"args", QJsonArray{file + ".fileTextureName", path}}, {"type", "string"}});
         });
-        create->addSection("Utilities");
+        heading("Utilities");
         create->addAction("2D Placement", [] { exec("shadingNode", QJsonObject{{"args", QJsonArray{"place2dTexture"}}, {"asUtility", true}}); });
         for (const auto& m : kHaroldUtilities) {
             QString type = m.second;
             create->addAction(m.first, [type] { exec("shadingNode", QJsonObject{{"args", QJsonArray{type}}, {"asUtility", true}}); })->setToolTip(type);
         }
-        create->addSection("Legacy");
+        heading("Legacy");
         for (const auto& m : kLegacyMaterials) {
             QString type = m.second;
             create->addAction(m.first, [type] { new_material(type); })->setToolTip(type);
