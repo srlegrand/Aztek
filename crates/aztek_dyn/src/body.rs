@@ -238,6 +238,8 @@ pub struct Body {
     pub reset_pending: bool,
     /// Average polygon edge at rest.
     pub mean_edge: f64,
+    /// Rigid bodies: each particle's radius.
+    pub radii: Vec<f64>,
     /// A closed collider's outside: +1 along its normals, -1 when they point in. None for an open mesh, whose
     /// sides each particle learns.
     pub outside: Option<f64>,

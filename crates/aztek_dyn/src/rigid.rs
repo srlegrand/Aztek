@@ -10,6 +10,8 @@ use crate::solver::Solver;
 pub struct Samples {
     pub points: Vec<DVec3>,
     pub radius: f64,
+    /// Each point's own radius: the filling's, or smaller for the mesh's own corners on the surface.
+    pub radii: Vec<f64>,
 }
 
 /// Fills the body's shape with particles, in world space.
@@ -22,7 +24,9 @@ pub fn sample(body: &Body, matrix: DMat4) -> Samples {
     let longest = size.max_element();
     if !(longest > 1e-9) || !inv.is_finite() {
         let r = body.settings.radius.max(1e-3);
-        return Samples { points: if world.is_empty() { vec![matrix.w_axis.truncate()] } else { world.clone() }, radius: r };
+        let points = if world.is_empty() { vec![matrix.w_axis.truncate()] } else { world.clone() };
+        let radii = vec![r; points.len()];
+        return Samples { points, radius: r, radii };
     }
     let res = body.settings.resolution.clamp(2, 40) as f64;
     let spacing = longest / res;
@@ -65,7 +69,22 @@ pub fn sample(body: &Body, matrix: DMat4) -> Samples {
     if pts.is_empty() {
         pts.push(matrix.w_axis.truncate());
     }
-    Samples { points: pts, radius: r }
+    let mut radii = vec![r; pts.len()];
+    // The shape's own corners, so edges and corners outside the filling still collide. A mesh's vertices, a few
+    // thousand at most; a box's eight corners.
+    let corners: Vec<DVec3> = match body.settings.shape {
+        RigidShape::Mesh => {
+            let step = (world.len() / 2000).max(1);
+            world.iter().step_by(step).copied().collect()
+        }
+        RigidShape::Box => (0..8).map(|k| matrix.transform_point3(DVec3::new(if k & 1 == 0 { b.lo.x } else { b.hi.x }, if k & 2 == 0 { b.lo.y } else { b.hi.y }, if k & 4 == 0 { b.lo.z } else { b.hi.z }))).collect(),
+        _ => Vec::new(),
+    };
+    for c in corners {
+        pts.push(c);
+        radii.push(r * 0.25);
+    }
+    Samples { points: pts, radius: r, radii }
 }
 
 /// The rotation nearest to A, starting from q: Müller et al., A Robust Method to Extract the Rotational Part of

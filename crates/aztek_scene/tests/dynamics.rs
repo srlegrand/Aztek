@@ -189,3 +189,21 @@ fn larger_drape_stays_on_the_ball() {
         assert!(inside > 0.95, "frame {f}: a point {inside} from the ball's centre");
     }
 }
+
+#[test]
+fn a_tilted_box_lands_on_its_corners_not_through_them() {
+    let mut s = Session::new();
+    run(&mut s, "playbackOptions", json!({"minTime": 1, "maxTime": 120}));
+    run(&mut s, "polyPlane", json!({"name": "floor", "width": 12, "height": 12}));
+    run(&mut s, "collider", json!({"args": ["floor"]}));
+    run(&mut s, "polyCube", json!({"name": "crate"}));
+    run(&mut s, "move", json!({"args": [0, 3, 0, "crate"]}));
+    run(&mut s, "rotate", json!({"args": [20, 10, 30, "crate"]}));
+    run(&mut s, "rigidBody", json!({"args": ["crate"], "active": true, "standInObject": 1}));
+    for f in 1..=72 {
+        frame(&mut s, f as f64);
+    }
+    let bb = run(&mut s, "xform", json!({"args": ["crate"], "query": true, "worldSpace": true, "boundingBox": true}));
+    let low = bb[1].as_f64().unwrap();
+    assert!(low > -0.03 && low < 0.1, "the lowest corner at {low}");
+}

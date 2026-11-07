@@ -320,6 +320,7 @@ impl Solver {
             rigid: None,
             reset_pending: true,
             mean_edge: 1.0,
+            radii: Vec::new(),
             outside: None,
             next_id: 0,
             pending: Vec::new(),
@@ -368,6 +369,7 @@ impl Solver {
         body.anim_prev = samples.points.clone();
         body.anim = samples.points;
         body.settings.radius = samples.radius;
+        body.radii = samples.radii;
         body.rigid = Some(RigidData { matrix0: matrix, rot: glam::DQuat::IDENTITY, ..Default::default() });
         b
     }
@@ -535,7 +537,7 @@ impl Solver {
                         let mass = if body.kind == BodyKind::Rigid { s.mass / n.max(1) as f64 } else { s.mass * body.map(&s.mass_map, l, 1.0) };
                         let pinned = body.map(&s.pin_map, l, 0.0) >= 0.5;
                         let inv = if mass > 0.0 && mass.is_finite() && !pinned { 1.0 / mass } else { 0.0 };
-                        let radius = if body.kind == BodyKind::Rigid { s.radius } else { s.thickness };
+                        let radius = if body.kind == BodyKind::Rigid { body.radii.get(l).copied().unwrap_or(s.radius) } else { s.thickness };
                         let v0 = if body.kind == BodyKind::Rigid {
                             s.initial_velocity + s.initial_spin.cross(body.anim[l] - body.anim.iter().sum::<DVec3>() / n as f64)
                         } else {
