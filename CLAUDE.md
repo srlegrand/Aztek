@@ -19,7 +19,8 @@ released by Simon (srlegrand) at https://github.com/srlegrand/Aztek. PARITY.md h
   no credits in files, READMEs or comments.
 - Pushing to `origin main` is allowed when tests pass. Every push builds and releases through GitHub Actions, so a push also carries the README, docs and website's download links up to date. No `git pull`; merge what's on origin with `git merge --ff-only`. Commit only what you mean to: check for stray files before `git add`.
 - Writing style in docs and comments: dry and plain, no em dashes, dates as DD/MM/YYYY.
-- Licence: MIT-0 (LICENSE). Keep the README, website, Cargo.toml and packaging saying the same.
+- Licence: MIT-0 (LICENSE). Keep the README, website, Cargo.toml and packaging saying the same. Copies of the repo on any
+  other host are welcome: the README, the website and the About box say so; keep them saying it.
 
 ## Layout
 

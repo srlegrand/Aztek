@@ -3,8 +3,15 @@
 <p align="center">
   <a href="https://github.com/srlegrand/Aztek/releases/latest"><img src="https://img.shields.io/badge/Download-Windows%20%7C%20Linux-white?style=for-the-badge" alt="Download"></a>
   <a href="https://github.com/srlegrand/Aztek/fork"><img src="https://img.shields.io/badge/Fork%20it%20on%20GitHub-white?style=for-the-badge&logo=github&logoColor=black" alt="Fork it on GitHub"></a>
+  <a href="#copy-it-anywhere"><img src="https://img.shields.io/badge/Copy%20it%20anywhere-white?style=for-the-badge" alt="Copy it anywhere"></a>
   <a href="https://srlegrand.github.io/Aztek/"><img src="https://img.shields.io/badge/Website-white?style=for-the-badge" alt="Website"></a>
 </p>
+
+## Why
+
+The tools we build our work on shouldn't belong to whoever bought them last. Too many of them were bought, left to stand still, and kept on subscription while bugs older than some of the people using them went unfixed. Aztek works the way you already work, and it belongs to everyone who uses it: no account, no subscription, no owner who can sell it, shelve it or switch it off.
+
+**Back it up, clone it, fork it.** As long as one copy exists somewhere, nobody can take it away. See [Copy it anywhere](#copy-it-anywhere).
 
 [![Build](https://github.com/srlegrand/Aztek/actions/workflows/build.yml/badge.svg)](https://github.com/srlegrand/Aztek/actions/workflows/build.yml)
 
@@ -19,6 +26,17 @@ Website: [srlegrand.github.io/Aztek](https://srlegrand.github.io/Aztek/). Downlo
 
 A production character rig, opened from its `.ma` file and posed: 414 joints, 37 skinClusters, 17
 blendShapes, 82 IK handles, follicles, ribbons and wires. It opens in about 3 seconds and responds in 13 to 44 ms per change.
+
+## Copy it anywhere
+
+Copying Aztek somewhere else is welcome. Clone it, fork it, mirror it or re-host it on any git server or other version
+control: Codeberg, GitLab, a forge in your country, a server at your studio, a drive in your pocket. With or without
+changes, under your own name or none. There is nothing to ask and no one to credit: the licence is [MIT-0](LICENSE).
+Every extra copy makes the project harder to lose.
+
+    git clone --mirror https://github.com/srlegrand/Aztek.git
+    cd Aztek.git
+    git push --mirror <your repository's URL>
 
 ## This doesn't feel right!
 
@@ -272,5 +290,5 @@ the known ones. `.mb` files and C++ plug-ins are not supported yet.
 
 ## Licence
 
-[MIT-0](LICENSE): use, copy, change, sell and redistribute it however you like, with no attribution required. It comes with
-no warranty of any kind.
+[MIT-0](LICENSE): use, copy, change, sell, re-host and redistribute it however you like, with no attribution required.
+Copies on any other host are welcome (see [Copy it anywhere](#copy-it-anywhere)). It comes with no warranty of any kind.
