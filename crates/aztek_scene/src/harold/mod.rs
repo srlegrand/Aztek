@@ -341,6 +341,7 @@ pub fn translate(s: &mut Session, tr: &mut Translator, req: &Request) -> Result<
         let mut nb = NetBuilder { g, net: &mut net, built: HashMap::new(), warnings: Vec::new(), scene_path: scene_path.clone(), project: project.clone(), ignore_textures: opts.ignore_textures, textures: scene.textures.clone() };
         let mut mb = materials::MatBuilder { nb: &mut nb, materials: &mut mats, names: &mut names, built: HashMap::new() };
         let mid = times.len() / 2;
+        let mut instance_shapes: Vec<NodeId> = Vec::new();
         let ignore_subdiv = mb.nb.g.find(settings::OPTIONS).ok().flatten().is_some_and(|o| get_b(mb.nb.g, o, "ignoreSubdivision", false));
         let ignore_disp = mb.nb.g.find(settings::OPTIONS).ok().flatten().is_some_and(|o| get_b(mb.nb.g, o, "ignoreDisplacement", false));
         for (k, &shape) in shapes.iter().enumerate() {
@@ -414,6 +415,7 @@ pub fn translate(s: &mut Session, tr: &mut Translator, req: &Request) -> Result<
             inst.opaque = opaque_attr && all_opaque;
             let _ = k;
             scene.geo.instances.push(inst);
+            instance_shapes.push(shape);
         }
         // Atmosphere: what the options node's atmosphere plug connects.
         let opts_node = mb.nb.g.find(settings::OPTIONS).ok().flatten();
@@ -430,7 +432,18 @@ pub fn translate(s: &mut Session, tr: &mut Translator, req: &Request) -> Result<
         // Lights after materials: mesh lights need their instances.
         let mut lw = Vec::new();
         let light_list = lights::translate(&mut mb, &mut scene, &mut lw);
-        scene.lights = light_list;
+        // Light linking: a light breaks off from the shapes the link table says it doesn't light.
+        let table = crate::light_cmds::LinkTable::read(mb.nb.g);
+        if !table.is_empty() {
+            for (k, (_, light_shape)) in light_list.iter().enumerate().take(64) {
+                for (inst, &shape) in scene.geo.instances.iter_mut().zip(&instance_shapes) {
+                    if !table.lights(mb.nb.g, *light_shape, shape) {
+                        inst.light_mask &= !(1u64 << k);
+                    }
+                }
+            }
+        }
+        scene.lights = light_list.into_iter().map(|(l, _)| l).collect();
         warnings.extend(lw);
         warnings.extend(std::mem::take(&mut mb.nb.warnings));
     }

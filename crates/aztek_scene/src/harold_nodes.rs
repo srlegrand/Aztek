@@ -21,6 +21,10 @@ fn base(name: &str, short: &str, ty: PlugType, default: PlugValue, fl: u32) -> A
 pub fn f(name: &str, short: &str, d: f64) -> AttrDef {
     base(name, short, PlugType::Float, PlugValue::Float(d), IN)
 }
+/// A float that is stored but not keyable: settings, not animation channels.
+pub fn fs(name: &str, short: &str, d: f64) -> AttrDef {
+    base(name, short, PlugType::Float, PlugValue::Float(d), STORE)
+}
 pub fn i(name: &str, short: &str, d: i64) -> AttrDef {
     base(name, short, PlugType::Int, PlugValue::Int(d), STORE)
 }
@@ -388,7 +392,7 @@ pub fn shape_render_attrs() -> Vec<AttrDef> {
         e("aiSubdivType", "aisubdiv_type", 0, &["none", "catclark", "linear"]),
         ranged(i("aiSubdivIterations", "aisubdiv_iterations", 1), 0.0, 6.0),
         e("aiSubdivAdaptiveMetric", "aisubdiv_adaptive_metric", 0, &["auto", "edge_length", "flatness"]),
-        f("aiSubdivPixelError", "aisubdiv_pixel_error", 0.0),
+        fs("aiSubdivPixelError", "aisubdiv_pixel_error", 0.0),
         e("aiSubdivUvSmoothing", "aisubdiv_uv_smoothing", 0, &["pin_corners", "pin_borders", "linear", "smooth"]),
         b("aiSubdivSmoothDerivs", "aisubdiv_smooth_derivs", false),
         b("aiOpaque", "aiopaque", true),
@@ -399,9 +403,9 @@ pub fn shape_render_attrs() -> Vec<AttrDef> {
         b("aiVisibleInDiffuseTransmission", "aivisible_in_diffuse_transmission", true),
         b("aiVisibleInSpecularTransmission", "aivisible_in_specular_transmission", true),
         b("aiVisibleInVolume", "aivisible_in_volume", true),
-        f("aiDispHeight", "aidisp_height", 1.0),
-        f("aiDispZeroValue", "aidisp_zero_value", 0.0),
-        f("aiDispPadding", "aidisp_padding", 0.0),
+        fs("aiDispHeight", "aidisp_height", 1.0),
+        fs("aiDispZeroValue", "aidisp_zero_value", 0.0),
+        fs("aiDispPadding", "aidisp_padding", 0.0),
         b("aiDispAutobump", "aidisp_autobump", false),
         s("aiTraceSets", "aitrace_sets", ""),
         s("aiSssSetname", "aisss_setname", ""),
@@ -416,29 +420,29 @@ pub fn shape_render_attrs() -> Vec<AttrDef> {
 /// What renders read on every light, beside Maya's own attributes.
 pub fn light_render_attrs() -> Vec<AttrDef> {
     vec![
-        f("aiExposure", "ai_exposure", 0.0),
+        fs("aiExposure", "ai_exposure", 0.0),
         ranged(i("aiSamples", "ai_samples", 1), 0.0, 10.0),
-        f("aiRadius", "ai_radius", 0.0),
-        f("aiAngle", "ai_angle", 0.0),
+        fs("aiRadius", "ai_radius", 0.0),
+        fs("aiAngle", "ai_angle", 0.0),
         b("aiNormalize", "ai_normalize", true),
         b("aiCastShadows", "ai_cast_shadows", true),
-        f("aiShadowDensity", "ai_shadow_density", 1.0),
+        fs("aiShadowDensity", "ai_shadow_density", 1.0),
         b("aiCastVolumetricShadows", "ai_cast_volumetric_shadows", true),
-        f("aiDiffuse", "ai_diffuse", 1.0),
-        f("aiSpecular", "ai_specular", 1.0),
-        f("aiSss", "ai_sss", 1.0),
-        f("aiIndirect", "ai_indirect", 1.0),
-        f("aiVolume", "ai_volume", 1.0),
-        f("aiTransmission", "ai_transmission", 1.0),
+        fs("aiDiffuse", "ai_diffuse", 1.0),
+        fs("aiSpecular", "ai_specular", 1.0),
+        fs("aiSss", "ai_sss", 1.0),
+        fs("aiIndirect", "ai_indirect", 1.0),
+        fs("aiVolume", "ai_volume", 1.0),
+        fs("aiTransmission", "ai_transmission", 1.0),
         i("aiMaxBounces", "ai_max_bounces", 999),
         ranged(i("aiVolumeSamples", "ai_volume_samples", 2), 0.0, 10.0),
         s("aiAov", "ai_aov", "default"),
-        f("aiSpread", "ai_spread", 1.0),
-        f("aiRoundness", "ai_roundness", 0.0),
-        f("aiSoftEdge", "ai_soft_edge", 0.0),
+        fs("aiSpread", "ai_spread", 1.0),
+        fs("aiRoundness", "ai_roundness", 0.0),
+        fs("aiSoftEdge", "ai_soft_edge", 0.0),
         i("aiResolution", "ai_resolution", 512),
         e("aiDecayType", "ai_decay_type", 1, &["constant", "quadratic"]),
-        f("aiCamera", "ai_camera", 0.0),
+        fs("aiCamera", "ai_camera", 0.0),
     ]
 }
 

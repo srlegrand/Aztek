@@ -303,3 +303,19 @@ fn subdivision_at_render() {
     set(&mut s, "boxShape.aiSubdivIterations", json!(2));
     assert_eq!(tris(&mut s), 6 * 16 * 2);
 }
+
+/// A light whose link to a shape is broken doesn't light it.
+#[test]
+fn light_linking_is_honoured() {
+    let mut s = scene();
+    let plane = run(&mut s, "polyPlane", json!({"width": 40, "height": 40}))[0].as_str().unwrap().to_string();
+    run(&mut s, "pointLight", json!({"position": [0.0, 2.0, 0.0], "name": "key"}));
+    small(&mut s, 1);
+    set(&mut s, "topShape.orthographicWidth", json!(0.2));
+    set(&mut s, "defaultArnoldRenderOptions.GIDiffuseDepth", json!(0));
+    let (lit, _) = render(&mut s, "top");
+    assert!(centre(&lit).x > 0.01);
+    run(&mut s, "lightlink", json!({"b": true, "light": "key", "object": plane}));
+    let (dark, _) = render(&mut s, "top");
+    assert!(centre(&dark).x < 1e-5, "{}", centre(&dark));
+}

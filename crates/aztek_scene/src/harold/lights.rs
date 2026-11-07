@@ -42,7 +42,7 @@ fn dome_image(mb: &mut MatBuilder, id: NodeId) -> Option<TextureKey> {
     Some(TextureKey { path: resolved.display().to_string(), space })
 }
 
-pub fn translate(mb: &mut MatBuilder, scene: &mut Scene, warnings: &mut Vec<String>) -> Vec<Light> {
+pub fn translate(mb: &mut MatBuilder, scene: &mut Scene, warnings: &mut Vec<String>) -> Vec<(Light, NodeId)> {
     let mut out = Vec::new();
     let shapes = crate::lights::all_shapes(mb.nb.g);
     for shape in shapes {
@@ -112,7 +112,7 @@ pub fn translate(mb: &mut MatBuilder, scene: &mut Scene, warnings: &mut Vec<Stri
                 let mut l = Light::new(&name, Shape::Dome { to_local: Mat4::from_quat(r.inverse()), image, dist: None }, dome_color);
                 fill_common(g, shape, &mut l, scene);
                 l.camera = get_f(g, shape, "camera", 1.0) as f32;
-                out.push(l);
+                out.push((l, shape));
                 continue;
             }
             "aiPhotometricLight" => {
@@ -124,7 +124,7 @@ pub fn translate(mb: &mut MatBuilder, scene: &mut Scene, warnings: &mut Vec<Stri
                 let mut l = Light::new(&name, Shape::Spot { pos, radius, frame: Frame::from_n(fwd), cos_outer: -1.0, cos_inner: -1.0, dropoff: 0.0 }, color);
                 l.ies = ies;
                 fill_common(g, shape, &mut l, scene);
-                out.push(l);
+                out.push((l, shape));
                 continue;
             }
             "aiMeshLight" => {
@@ -151,7 +151,7 @@ pub fn translate(mb: &mut MatBuilder, scene: &mut Scene, warnings: &mut Vec<Stri
                 }
                 let mut l = Light::new(&name, Shape::Mesh { inst: inst as u32, tris: Vec::new(), cdf: Vec::new(), area: 0.0 }, Vec3::ONE);
                 fill_common(g, shape, &mut l, scene);
-                out.push(l);
+                out.push((l, shape));
                 continue;
             }
             _ => continue,
@@ -168,7 +168,7 @@ pub fn translate(mb: &mut MatBuilder, scene: &mut Scene, warnings: &mut Vec<Stri
         if ty == "areaLight" || ty == "aiAreaLight" {
             l.camera = get_f(g, shape, "camera", 0.0) as f32;
         }
-        out.push(l);
+        out.push((l, shape));
     }
     out
 }
