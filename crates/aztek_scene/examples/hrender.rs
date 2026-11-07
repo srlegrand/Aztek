@@ -26,7 +26,8 @@ fn main() {
     }
     let t = Instant::now();
     let mut tr = Translator::default();
-    let (scene, _) = harold::translate(&mut s, &mut tr, &Request { camera, width: w, height: h, ..Default::default() }).expect("translate");
+    let aovs: Vec<String> = std::env::var("HAROLD_AOVS").map(|v| v.split(',').map(str::to_string).collect()).unwrap_or_default();
+    let (scene, _) = harold::translate(&mut s, &mut tr, &Request { camera, width: w, height: h, aovs, ..Default::default() }).expect("translate");
     let tris: usize = scene.geo.instances.iter().map(|i| scene.geo.meshes[i.mesh as usize].tris.len()).sum();
     eprintln!("translate {:.2}s: {} instances, {} triangles, {} lights, {} materials, camera {}", t.elapsed().as_secs_f64(), scene.geo.instances.len(), tris, scene.lights.len(), scene.materials.len(), scene.camera.name);
     for w in &scene.warnings {

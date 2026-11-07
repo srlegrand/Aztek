@@ -287,3 +287,19 @@ fn render_attributes_round_trip() {
     assert_eq!(get(&mut b, "keyShape.aiAov"), json!("rim"));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// Catmull-Clark at render: Arnold's subdivision settings, or smooth preview's.
+#[test]
+fn subdivision_at_render() {
+    let mut s = scene();
+    run(&mut s, "polyCube", json!({"name": "box"}));
+    let tris = |s: &mut Session| {
+        let mut tr = Translator::default();
+        let (scene, _) = harold::translate(s, &mut tr, &Request::default()).unwrap();
+        scene.geo.meshes[scene.geo.instances[0].mesh as usize].tris.len()
+    };
+    assert_eq!(tris(&mut s), 12);
+    set(&mut s, "boxShape.aiSubdivType", json!(1));
+    set(&mut s, "boxShape.aiSubdivIterations", json!(2));
+    assert_eq!(tris(&mut s), 6 * 16 * 2);
+}

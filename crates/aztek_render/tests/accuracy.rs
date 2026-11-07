@@ -275,3 +275,33 @@ fn last_bounce_is_lit() {
     let c = mean(&img, |_| true);
     assert!(c.x > 0.1, "the floor sees the lit ceiling: {c}");
 }
+
+/// A dome image with a small, very bright sun lights a plane evenly: sampling the sun from the image and from the
+/// surface agree, so no pixel stands far above the rest.
+#[test]
+fn sun_in_dome_makes_no_fireflies() {
+    let dir = std::env::temp_dir().join(format!("harold_sun_{}", std::process::id()));
+    let path = dir.join("sun.exr");
+    let (w, h) = (64u32, 32u32);
+    let mut px = vec![Vec4::new(0.5, 0.5, 0.5, 1.0); (w * h) as usize];
+    // The sun: one texel, high in the sky.
+    px[(6 * w + 20) as usize] = Vec4::new(5000.0, 5000.0, 5000.0, 1.0);
+    aztek_render::output::write_exr(&path, w, h, &[("RGBA".to_string(), px)], false).unwrap();
+    let mut s = Scene::new(opts(12, 12, 4));
+    s.options.diffuse_depth = 0;
+    let mut cam = Camera::looking(Vec3::new(0.0, 1.0, 0.0), Vec3::ZERO, 50.0);
+    cam.xforms = vec![Mat4::look_at_rh(Vec3::new(0.0, 1.0, 0.0), Vec3::ZERO, Vec3::Z).inverse()];
+    cam.orthographic = true;
+    cam.ortho_width = 1.0;
+    s.camera = cam;
+    s.geo.meshes.push(Arc::new(quad(Vec3::new(-10.0, 0.0, 10.0), Vec3::new(10.0, 0.0, 10.0), Vec3::new(10.0, 0.0, -10.0), Vec3::new(-10.0, 0.0, -10.0))));
+    let m = s.add_material("white", white(0.0));
+    s.geo.instances.push(Instance::new("floor", 0, Mat4::IDENTITY, vec![m]));
+    let img = s.textures.image(path.to_str().unwrap(), aztek_render::texture::ColorSpace::Linear);
+    s.lights.push(Light::new("sky", Shape::Dome { to_local: Mat4::IDENTITY, image: img, dist: None }, Vec3::ONE));
+    let (_, out) = render(s);
+    let mean_v = mean(&out, |_| true).x;
+    let max = out.iter().map(|p| p.x).fold(0.0f32, f32::max);
+    assert!(max < mean_v * 1.6, "max {max} mean {mean_v}");
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -277,14 +277,30 @@ pub fn dome_radiance(to_local: &Mat4, image: &Option<Arc<Image>>, color: Vec3, d
 pub fn dome_distribution(img: &Image) -> Distribution2d {
     let w = img.width.clamp(8, 512) as usize;
     let h = (w / 2).max(4);
-    let mut f = vec![0.0; w * h];
+    let mut lum = vec![0.0f32; w * h];
     for y in 0..h {
         let v = (y as f32 + 0.5) / h as f32;
-        let s = (v * PI).sin();
         for x in 0..w {
             let u = (x as f32 + 0.5) / w as f32;
             let c = img.sample(Vec2::new(u, 1.0 - v), 1.0 / w as f32).truncate();
-            f[y * w + x] = (crate::math::luminance(c).max(0.0) + 1e-4) * s;
+            lum[y * w + x] = crate::math::luminance(c).max(0.0);
+        }
+    }
+    // Each cell takes the brightest of its neighbours: radiance is looked up between texels, and a dim cell beside the
+    // sun must not be sampled too rarely for the light that spills into it.
+    let mut f = vec![0.0; w * h];
+    for y in 0..h {
+        let s = ((y as f32 + 0.5) / h as f32 * PI).sin();
+        for x in 0..w {
+            let mut m = 0.0f32;
+            for dy in -1i32..=1 {
+                let yy = (y as i32 + dy).clamp(0, h as i32 - 1) as usize;
+                for dx in -1i32..=1 {
+                    let xx = (x as i32 + dx).rem_euclid(w as i32) as usize;
+                    m = m.max(lum[yy * w + xx]);
+                }
+            }
+            f[y * w + x] = (m + 1e-4) * s;
         }
     }
     Distribution2d::new(f, w, h)

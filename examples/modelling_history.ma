@@ -723,6 +723,10 @@ createNode mesh -n "coneShape" -p "cone";
 		f 3 -4 122 -121 mu 0 3 0 3 116 
 		f 3 -59 123 -123 mu 0 3 3 35 116 
 		f 3 -99 -122 -124 mu 0 3 35 12 116 ;
+createNode aiOptions -s -n "defaultArnoldRenderOptions";
+createNode aiAOVFilter -s -n "defaultArnoldFilter";
+createNode aiAOVDriver -s -n "defaultArnoldDriver";
+createNode aiAOVDriver -s -n "defaultArnoldDisplayDriver";
 createNode script -n "sceneConfigurationScriptNode";
 	setAttr ".b" -type "string" "playbackOptions -min 1 -max 120 -ast 1 -aet 200 ";
 	setAttr ".st" 6;

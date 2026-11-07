@@ -561,6 +561,10 @@ createNode mesh -n "lampShape" -p "lamp";
 		f 3 -757 778 -778 mu 0 3 415 416 436 
 		f 3 -759 779 -779 mu 0 3 416 417 437 
 		f 3 -760 -762 -780 mu 0 3 417 418 438 ;
+createNode aiOptions -s -n "defaultArnoldRenderOptions";
+createNode aiAOVFilter -s -n "defaultArnoldFilter";
+createNode aiAOVDriver -s -n "defaultArnoldDriver";
+createNode aiAOVDriver -s -n "defaultArnoldDisplayDriver";
 createNode script -n "sceneConfigurationScriptNode";
 	setAttr ".b" -type "string" "playbackOptions -min 1 -max 60 -ast 1 -aet 200 ";
 	setAttr ".st" 6;

@@ -172,6 +172,10 @@ createNode mesh -n "groundShape" -p "ground";
 		f 4 -195 214 215 -213 mu 0 4 106 107 118 117 
 		f 4 -197 216 217 -215 mu 0 4 107 108 119 118 
 		f 4 -199 218 219 -217 mu 0 4 108 109 120 119 ;
+createNode aiOptions -s -n "defaultArnoldRenderOptions";
+createNode aiAOVFilter -s -n "defaultArnoldFilter";
+createNode aiAOVDriver -s -n "defaultArnoldDriver";
+createNode aiAOVDriver -s -n "defaultArnoldDisplayDriver";
 createNode reference -n "nearRN";
 	setAttr ".ed" -type "dataReferenceEdits" 
 		"nearRN"
