@@ -139,7 +139,7 @@ fn settings_round_trip_through_a_file() {
     set(&mut s, "defaultArnoldRenderOptions.GIDiffuseDepth", json!(3));
     set(&mut s, "defaultResolution.width", json!(1280));
     set(&mut s, "defaultRenderGlobals.imageFilePrefix", json!("shots/<Scene>"));
-    aztek_scene::ma_file::save_scene(&mut s, path.to_str().unwrap(), aztek_scene::ma_file::Format::Ma).unwrap();
+    aztek_scene::ma_file::save_scene(&mut s, path.to_str().unwrap(), aztek_scene::ma_file::Format::of_path(path.to_str().unwrap())).unwrap();
     let text = std::fs::read_to_string(&path).unwrap();
     assert!(text.contains("createNode aiOptions -s -n \"defaultArnoldRenderOptions\";"), "{text}");
     let mut b = scene();
@@ -274,7 +274,7 @@ fn render_attributes_round_trip() {
     run(&mut s, "pointLight", json!({"name": "key"}));
     set(&mut s, "keyShape.aiExposure", json!(3.5));
     set(&mut s, "keyShape.aiAov", json!("rim"));
-    aztek_scene::ma_file::save_scene(&mut s, path.to_str().unwrap(), aztek_scene::ma_file::Format::Ma).unwrap();
+    aztek_scene::ma_file::save_scene(&mut s, path.to_str().unwrap(), aztek_scene::ma_file::Format::of_path(path.to_str().unwrap())).unwrap();
     let mut b = scene();
     aztek_scene::ma_file::open_scene(&mut b, path.to_str().unwrap()).unwrap();
     let get = |s: &mut Session, p: &str| run(s, "getAttr", json!({"args": [p]}));

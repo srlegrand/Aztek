@@ -1203,6 +1203,14 @@ pub fn draw_material(g: &mut Graph, sg: NodeId, scene: Option<&str>, project: Op
     if t.name == "standardSurface" || t.name == "aiStandardSurface" {
         transparency = DVec3::ONE - transparency;
         color *= value_f(g, material, "base").unwrap_or(1.0);
+        // Glass: drawn in its transmission colour, partly see-through, rather than as its (black) base.
+        let snake = t.name == "aiStandardSurface";
+        let trans = value_f(g, material, "transmission").unwrap_or(0.0).clamp(0.0, 1.0);
+        if trans > 0.0 {
+            let tc = value_v(g, material, if snake { "transmission_color" } else { "transmissionColor" }).unwrap_or(DVec3::ONE);
+            color = color * (1.0 - trans) + tc * trans * 0.6;
+            transparency = transparency.max(DVec3::splat(0.6 * trans));
+        }
     }
     let color_map = file_feeding(g, material, color_attr).map(|f| texture_ref(g, f, scene, project));
     let alpha_map = file_feeding(g, material, trans_attr).map(|f| texture_ref(g, f, scene, project));
