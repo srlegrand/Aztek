@@ -2958,6 +2958,8 @@ pub fn rig_items(g: &Graph) -> Vec<RigItem> {
                 (c - DVec3::Z * k, c + DVec3::Z * k),
             ];
             out.push(rig_item(g, id, id, "ikHandle", [200, 200, 255, 255], segs));
+        } else if let Some(items) = crate::dyn_draw::glyph(g, id) {
+            out.extend(items);
         } else if ty.is_a("locator") {
             let lp = n.data().vec3(Locator::LOCAL_POSITION);
             let ls = n.data().vec3(Locator::LOCAL_SCALE);
@@ -2971,6 +2973,7 @@ pub fn rig_items(g: &Graph) -> Vec<RigItem> {
         }
         let _ = Transform::TRANSLATE;
     }
+    out.extend(crate::dyn_draw::cloth_marks(g));
     out
 }
 

@@ -166,3 +166,26 @@ fn presets_and_old_command_names() {
     let count = run(&mut s, "particle", json!({"args": [made[1].clone()], "query": true, "count": true}));
     assert_eq!(count, json!(2));
 }
+
+#[test]
+fn larger_drape_stays_on_the_ball() {
+    let mut s = Session::new();
+    run(&mut s, "playbackOptions", json!({"minTime": 1, "maxTime": 120}));
+    run(&mut s, "polySphere", json!({"name": "ball", "radius": 1, "sx": 32, "sy": 16}));
+    run(&mut s, "polyPlane", json!({"name": "sheet", "width": 4, "height": 4, "sx": 40, "sy": 40}));
+    run(&mut s, "move", json!({"args": [0, 2, 0, "sheet"]}));
+    frame(&mut s, 1.0);
+    run(&mut s, "createCloth", json!({"args": ["sheet"]}));
+    run(&mut s, "collider", json!({"args": ["ball"]}));
+    run(&mut s, "clothPreset", json!({"args": ["sheet"], "preset": "cotton"}));
+    for f in 1..=40 {
+        frame(&mut s, f as f64);
+        let p = points(&mut s, "sheet");
+        let inside = p.iter().map(|q| q.length()).fold(f64::INFINITY, f64::min);
+        let info = run(&mut s, "dynInfo", json!({}));
+        if std::env::var("TRACE").is_ok() {
+            eprintln!("{f} inside {inside:.3} top {:.3} {}", p.iter().map(|q| q.y).fold(f64::NEG_INFINITY, f64::max), info);
+        }
+        assert!(inside > 0.95, "frame {f}: a point {inside} from the ball's centre");
+    }
+}

@@ -38,7 +38,7 @@ void MainWindow::build_status_line() {
     tb->setMovable(false);
     tb->setIconSize(QSize(20, 20));
     menu_set_ = new QComboBox(tb);
-    menu_set_->addItems({"Modeling", "Rigging", "Animation", "Rendering"});
+    menu_set_->addItems({"Modeling", "Rigging", "Animation", "Dynamics", "Rendering"});
     menu_set_->setToolTip("Menu set");
     connect(menu_set_, &QComboBox::currentTextChanged, this, &MainWindow::build_menu_set);
     tb->addWidget(menu_set_);

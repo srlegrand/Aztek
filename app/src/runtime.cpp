@@ -314,6 +314,12 @@ void MainWindow::build_runtime() {
     r("MenuSetModeling", "Menus", "Modeling menus", [this] { menu_set_->setCurrentText("Modeling"); });
     r("MenuSetRigging", "Menus", "Rigging menus", [this] { menu_set_->setCurrentText("Rigging"); });
     r("MenuSetRendering", "Menus", "Rendering menus", [this] { menu_set_->setCurrentText("Rendering"); });
+    r("MenuSetDynamics", "Menus", "Dynamics menus", [this] { menu_set_->setCurrentText("Dynamics"); });
+    // Plays every frame, looping, so the solver sees each one while things are moved in the view.
+    r("InteractivePlayback", "Dynamics", "Play every frame and keep solving while objects are moved", [this] {
+        exec("playbackOptions", QJsonObject{{"playbackSpeed", 0}, {"loop", "continuous"}});
+        toggle_play(1);
+    });
     r("TogglePivotMode", "Tools", "Move the pivot rather than the object", [this] {
         pivot_mode_ = !pivot_mode_;
         for (ViewportWidget* v : panels_->views()) v->set("pivotMode", pivot_mode_ ? "true" : "false");
@@ -429,7 +435,7 @@ QList<HotkeyBinding> MainWindow::default_hotkeys() const {
         {"E", C, "Extrude", ""}, {"B", C, "Bevel", ""}, {">", 0, "GrowSelection", ""}, {"<", 0, "ShrinkSelection", ""},
         {"Up", 0, "PickWalkUp", ""}, {"Down", 0, "PickWalkDown", ""}, {"Left", 0, "PickWalkLeft", ""}, {"Right", 0, "PickWalkRight", ""},
         {"Up", A, "NudgeUp", ""}, {"Down", A, "NudgeDown", ""}, {"Left", A, "NudgeLeft", ""}, {"Right", A, "NudgeRight", ""},
-        {"F2", 0, "MenuSetAnimation", ""}, {"F3", 0, "MenuSetModeling", ""}, {"F4", 0, "MenuSetRigging", ""}, {"F6", 0, "MenuSetRendering", ""}, {"F8", 0, "ToggleSelectMode", ""},
+        {"F2", 0, "MenuSetAnimation", ""}, {"F3", 0, "MenuSetModeling", ""}, {"F4", 0, "MenuSetRigging", ""}, {"F5", 0, "MenuSetDynamics", ""}, {"F6", 0, "MenuSetRendering", ""}, {"F8", 0, "ToggleSelectMode", ""},
         {"F9", 0, "SelectVertexMask", ""}, {"F10", 0, "SelectEdgeMask", ""}, {"F11", 0, "SelectFacetMask", ""}, {"F12", 0, "UVEditor", ""},
         {"F9", C, "ConvertSelectionToVertices", ""}, {"F10", C, "ConvertSelectionToEdges", ""}, {"F11", C, "ConvertSelectionToFaces", ""},
         {"1", 0, "SmoothPreviewOff", ""}, {"2", 0, "SmoothPreviewCage", ""}, {"3", 0, "SmoothPreviewSmooth", ""}, {"4", 0, "WireframeView", ""}, {"5", 0, "ShadedView", ""}, {"6", 0, "TexturedView", ""}, {"7", 0, "DisplayLight", ""},

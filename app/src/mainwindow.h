@@ -82,6 +82,7 @@ private:
     QMenu* skeleton_menu();
     QMenu* skin_menu();
     QMenu* constrain_menu();
+    QList<QMenu*> dynamics_menus();
     QMenu* control_menu();
     QMenu* key_menu();
     QMenu* playback_menu();

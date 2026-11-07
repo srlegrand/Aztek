@@ -93,11 +93,16 @@ QJsonArray ShelfBar::defaults() {
     QJsonArray uv{
         item("UV Editor", "uvEditor", "UVEditor;"), item("Automatic", "uvAuto", "polyAutoProjection;"), item("Planar", "uvPlanar", "polyProjection -type \"planar\";"),
         item("Unfold", "uvUnfold", "u3dUnfold;"), item("Layout", "uvLayout", "u3dLayout;"), item("Cut", "uvCut", "polyMapCut;"), item("Sew", "uvSew", "polyMapSew;")};
+    QJsonArray dyn{
+        item("Cloth", "cloth", "createCloth;"), item("Collider", "collider", "collider;"), item("Particles", "particles", "particle -p 0 0 0;"),
+        item("Emitter", "emitter", "emitter -type omni;"), item("Active Rigid Body", "rigid", "rigidBody -active;"), item("Passive Rigid Body", "rigidPassive", "rigidBody -passive;"),
+        item("Gravity", "gravity", "gravity;"), item("Turbulence", "turbulence", "turbulence;"), item("Air", "air", "air;"),
+        item("Create Cache", "cache", "dynCache -create;"), item("Interactive Playback", "playDyn", "InteractivePlayback;")};
     QJsonArray general{
         item("Locator", "locator", "spaceLocator;"), item("Group", "group", "group;"), item("Delete History", "history", "DeleteHistory;"), item("Freeze", "transform", "freezeTransforms;"),
         item("Center Pivot", "frameSel", "centerPivot;"), item("New Layer", "layer", "createDisplayLayer;")};
     return QJsonArray{shelf("Poly Modeling", poly), shelf("Curves / Surfaces", curves), shelf("Sculpting", sculpt), shelf("Rigging", rig), shelf("Animation", anim),
-                      shelf("UV Editing", uv), rendering_shelf(), shelf("General", general), shelf("Custom", QJsonArray())};
+                      shelf("UV Editing", uv), shelf("Dynamics", dyn), rendering_shelf(), shelf("General", general), shelf("Custom", QJsonArray())};
 }
 
 // One shelf's buttons: takes dropped scripts, and buttons dragged with the middle button.

@@ -1,6 +1,7 @@
 //! The host library the Qt shell links: a C interface over the session, script history, scene snapshots and the
 //! Vulkan model panels. Strings are UTF-8; strings returned are freed with aztek_free. Main thread only.
 
+pub mod dyn_draw;
 pub mod axis_orient;
 pub mod camera;
 mod core;

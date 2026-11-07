@@ -71,6 +71,7 @@ add_executable(aztek WIN32
   app/src/shelves.cpp
   app/src/panelmenus.cpp
   app/src/appmenus.cpp
+  app/src/dynmenus.cpp
   app/src/prefswindow.cpp
   app/src/feedback.cpp
   app/src/editors.cpp

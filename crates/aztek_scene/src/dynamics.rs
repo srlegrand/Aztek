@@ -540,3 +540,13 @@ pub fn particle_state(g: &crate::graph::Graph, shape: crate::plug::NodeId) -> Op
     let n = g.node(shape)?.behavior().as_any().downcast_ref::<ParticlesNode>()?;
     Some(n.state.lock().unwrap().clone())
 }
+
+/// The mesh shape a cloth drives.
+pub fn cloth_mesh(g: &crate::graph::Graph, cloth: crate::plug::NodeId) -> Option<crate::plug::NodeId> {
+    crate::deform::mesh_fed_by(g, cloth)
+}
+
+/// The cloth nodes in the scene.
+pub fn cloths(g: &crate::graph::Graph) -> Vec<crate::plug::NodeId> {
+    g.nodes().into_iter().filter(|&id| g.node(id).is_some_and(|n| n.ty().name == CLOTH)).collect()
+}

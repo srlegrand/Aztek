@@ -783,6 +783,8 @@ void MainWindow::build_menu_set(const QString& set) {
         menus << mesh_menu() << edit_mesh_menu() << mesh_tools_menu() << mesh_display_menu() << curves_menu() << surfaces_menu() << uv_menu() << deform_menu();
     else if (set == "Rigging")
         menus << skeleton_menu() << skin_menu() << deform_menu() << constrain_menu() << control_menu();
+    else if (set == "Dynamics")
+        menus << dynamics_menus() << playback_menu();
     else if (set == "Rendering")
         menus << render_menu(this) << harold_menu(this);
     else
