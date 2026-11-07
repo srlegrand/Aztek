@@ -445,7 +445,9 @@ impl Build<'_> {
             }
             let (sn, sa) = self.real_source(c);
             let plain_dst = plain_attr(&c.dst_attr);
-            if matches!(plain_dst.as_str(), "bw" | "baseWire" | "dw" | "deformedWire" | "ip.ig" | "ip.gi" | "input.inputGeometry" | "input.groupId" | "i" | "inMesh" | "dd" | "deformerData" | "gm" | "geomMatrix") || (matches!(plain_attr(&sa).as_str(), "og" | "outputGeometry" | "msg" | "message") && !crate::rig_extra::is_flexor_type(&doc.nodes[sn].ty)) {
+            // A solver's or field's link to a cloth is a message connection that means something.
+            let dyn_link = matches!(plain_dst.as_str(), "slv" | "solver" | "ifc" | "inputForce");
+            if matches!(plain_dst.as_str(), "bw" | "baseWire" | "dw" | "deformedWire" | "ip.ig" | "ip.gi" | "input.inputGeometry" | "input.groupId" | "i" | "inMesh" | "dd" | "deformerData" | "gm" | "geomMatrix") || (!dyn_link && matches!(plain_attr(&sa).as_str(), "og" | "outputGeometry" | "msg" | "message") && !crate::rig_extra::is_flexor_type(&doc.nodes[sn].ty)) {
                 continue;
             }
             let Some(src) = self.id(sn) else { continue };

@@ -106,7 +106,7 @@ fn body_common() -> Vec<AttrDef> {
         b("isDynamic", "isd", true, "Off: it takes no part in the solve."),
         s("diskCache", "dkc", "A cache file the body plays from instead of being solved, where it has the frame."),
         s("fileType", "fty", "The type the node had in the file it was read from, when that was another system's."),
-        AttrDef { flags: STORED_FLAGS | flags::HIDDEN, ..s("fileAttributes", "fat", "What the file set on it that is not used here, kept to be written back.") },
+        s("fileAttributes", "fat", "What the file set on it that is not used here, kept to be written back."),
     ]
 }
 
@@ -197,7 +197,7 @@ pub(crate) fn register_types() {
                 fr("timeScale", "tisc", 1.0, "Speeds the simulation up or slows it down.", 0.0, None),
                 fr("maxVelocity", "mxv", 200.0, "No point moves faster, in scene units per second.", 1e-6, None),
                 s("fileType", "fty", "The type the node had in the file it was read from, when that was another system's."),
-                AttrDef { flags: STORED_FLAGS | flags::HIDDEN, ..s("fileAttributes", "fat", "What the file set on it that is not used here, kept to be written back.") },
+                s("fileAttributes", "fat", "What the file set on it that is not used here, kept to be written back."),
                 out_int("outOfSimulation", "oos", "Vertices out of the simulation now, over every body."),
                 out_float("solveTime", "slt", "Milliseconds the last frame took."),
             ],
@@ -309,7 +309,7 @@ pub(crate) fn register_types() {
                 f("aroundAxis", "ara", 0.0, "Volume axis: push around the axis."),
                 b("applyToAll", "ata", false, "Acts on every body in every solver, connected or not."),
                 s("fileType", "fty", "The type the node had in the file it was read from, when that was another system's."),
-                AttrDef { flags: STORED_FLAGS | flags::HIDDEN, ..s("fileAttributes", "fat", "What the file set on it that is not used here, kept to be written back.") },
+                s("fileAttributes", "fat", "What the file set on it that is not used here, kept to be written back."),
             ],
             create: Some(Arc::new(|| Box::<Glyph>::default())),
             ..Default::default()
@@ -333,7 +333,7 @@ pub(crate) fn register_types() {
                 crate::deform::matrix_in("inputMatrix", "imx", "Surface: the mesh's world matrix."),
                 i("seed", "rsd", 0, "Random seed.", 0),
                 s("fileType", "fty", "The type the node had in the file it was read from, when that was another system's."),
-                AttrDef { flags: STORED_FLAGS | flags::HIDDEN, ..s("fileAttributes", "fat", "What the file set on it that is not used here, kept to be written back.") },
+                s("fileAttributes", "fat", "What the file set on it that is not used here, kept to be written back."),
             ],
             create: Some(Arc::new(|| Box::<Glyph>::default())),
             ..Default::default()
@@ -353,7 +353,20 @@ pub(crate) fn register_types() {
                 s("members", "mbr", "Components held, as a selection: pCube1.vtx[0:3] cloth mesh points, or rigid objects."),
                 s("targets", "tgt", "What they are held to: components, a surface mesh, or empty for where they are."),
                 s("fileType", "fty", "The type the node had in the file it was read from, when that was another system's."),
-                AttrDef { flags: STORED_FLAGS | flags::HIDDEN, ..s("fileAttributes", "fat", "What the file set on it that is not used here, kept to be written back.") },
+                s("fileAttributes", "fat", "What the file set on it that is not used here, kept to be written back."),
+            ],
+            create: Some(Arc::new(|| Box::<Plainly>::default())),
+            ..Default::default()
+        });
+        register(NodeType {
+            name: "heldNode".into(),
+            icon: "archive".into(),
+            doc: "A node of another dynamics system that is not simulated here, held as the file had it and written back.".into(),
+            own_attrs: vec![
+                s("fileType", "fty", "Its type in the file."),
+                s("fileAttributes", "fat", "Its setAttr lines."),
+                s("fileParent", "fpr", "Its parent in the file."),
+                s("fileConnections", "fcn", "Its connectAttr lines."),
             ],
             create: Some(Arc::new(|| Box::<Plainly>::default())),
             ..Default::default()

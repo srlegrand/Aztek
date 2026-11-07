@@ -14,6 +14,7 @@
 //! units (radians on angle curves); tangent codes in .kit and .kot are the file's own (see `tangent_code`).
 
 mod deformers;
+mod dynamics;
 mod lights;
 mod shading;
 mod nurbs;
@@ -231,6 +232,8 @@ struct SetAttr {
     path: Vec<Seg>,
     lock: Option<bool>,
     values: Vec<Tok>,
+    /// The -type given, when one was.
+    ty: Option<String>,
 }
 
 #[derive(Debug, Default)]
@@ -708,6 +711,7 @@ impl Doc {
     fn set_attr(&mut self, st: &[Tok], current: Option<usize>) {
         let mut plug = None;
         let mut lock = None;
+        let mut ty = None;
         let mut values = Vec::with_capacity(st.len().saturating_sub(2));
         let mut k = 1;
         while k < st.len() {
@@ -728,6 +732,7 @@ impl Doc {
                         }
                     }
                     Some("-type") | Some("-typ") => {
+                        ty = st.get(k + 1).and_then(Tok::text).map(str::to_string);
                         k += 1;
                     }
                     Some(p) if !t.is_flag() && plug.is_none() => plug = Some(p.to_string()),
@@ -748,7 +753,7 @@ impl Doc {
             }
         };
         let Some(node) = node else { return };
-        self.nodes[node].sets.push(SetAttr { path: parse_path(&attr), lock, values });
+        self.nodes[node].sets.push(SetAttr { path: parse_path(&attr), lock, values, ty });
     }
 
     fn add_attr(&mut self, st: &[Tok], current: Option<usize>) {
@@ -1151,9 +1156,9 @@ const DRAW_CHANNELS: &[&str] = &[
 ];
 
 /// Rigging and animation nodes that are all attributes and connections.
-const PLAIN_NODES: &[&str] = &["blendWeighted", "makeNurbCircle", "makeNurbPlane", "makeNurbsSquare", "motionPath", "ramp", "extrude", "reverseSurface", "transformGeometry", "pointOnCurveInfo", "curveInfo", "nearestPointOnCurve", "container", "controller", "timeWarp", "hierarchyTreeNode", "curveFromMeshEdge", "characterMap", "keyingGroup"];
+const PLAIN_NODES: &[&str] = &["collider", "rigidBody", "dynamicConstraint", "heldNode", "blendWeighted", "makeNurbCircle", "makeNurbPlane", "makeNurbsSquare", "motionPath", "ramp", "extrude", "reverseSurface", "transformGeometry", "pointOnCurveInfo", "curveInfo", "nearestPointOnCurve", "container", "controller", "timeWarp", "hierarchyTreeNode", "curveFromMeshEdge", "characterMap", "keyingGroup"];
 /// The same under a transform.
-const PLAIN_SHAPES: &[&str] = &["follicle", "distanceDimShape", "paramDimension", "annotationShape", "dropoffLocator", "lattice", "baseLattice", "softModHandle", "mayaUsdProxyShape", "AL_usdmaya_ProxyShape", "ProxyUsdGeomCamera"];
+const PLAIN_SHAPES: &[&str] = &["solver", "particles", "field", "emitter", "follicle", "distanceDimShape", "paramDimension", "annotationShape", "dropoffLocator", "lattice", "baseLattice", "softModHandle", "mayaUsdProxyShape", "AL_usdmaya_ProxyShape", "ProxyUsdGeomCamera"];
 
 /// Nodes written and read attribute by attribute, with their connections: utility nodes and expressions.
 /// What a file's unitConversion does here, where angles are degrees: the reference's factors between radians and degrees come out as 1, and what
@@ -3118,6 +3123,7 @@ fn build(s: &mut Session, doc: &Doc, import: bool) -> Vec<String> {
     b.channel_connections();
     b.read_lattices();
     b.deformer_connections();
+    b.read_dynamics();
 
     // The time before anything that reads world matrices at this frame.
     if !import {
@@ -3203,7 +3209,9 @@ fn playback_from_script(s: &mut Session, script: &MaNode) {
 /// Reads .ma text into the session. `import` adds to the scene; otherwise the scene should already be empty.
 pub fn read_text(s: &mut Session, text: &str, import: bool) -> Vec<String> {
     register_types();
-    let doc = Doc::parse(text);
+    let mut doc = Doc::parse(text);
+    let dyn_warnings = dynamics::translate(&mut doc);
+    doc.warnings.extend(dyn_warnings);
     let mut before = Vec::new();
     crate::references::begin_read(s, &doc.reference_edits_text(), &doc.ref_load, &mut before);
     for r in &doc.refs {
@@ -4242,6 +4250,9 @@ impl Writer<'_> {
 
     /// A utility node or expression: its type, name and every stored value that isn't the default or driven.
     fn write_plain(&mut self, id: NodeId) {
+        if self.s.graph.node(id).is_some_and(|n| n.ty().name == "heldNode") {
+            return self.write_held(id);
+        }
         let g = &self.s.graph;
         let n = g.node(id).unwrap();
         let mut text = format!("createNode {} -n {};\n", n.ty().name, quoted(&g.path(id)));
@@ -4607,6 +4618,10 @@ pub fn write_text(s: &mut Session, file_name: &str, only: Option<&[NodeId]>) -> 
     let _ = writeln!(w.out, "//Name: {name}");
     let _ = writeln!(w.out, "//Codeset: UTF-8");
     let _ = writeln!(w.out, "requires maya \"2024\";");
+    // The reference reads the file, keeping these nodes as unknown ones from a plug-in it does not have.
+    if w.s.graph.nodes().iter().any(|&id| w.keep.contains(&id) && w.s.graph.node(id).is_some_and(|n| crate::dynamics::is_dynamics_type(&n.ty().name))) {
+        let _ = writeln!(w.out, "requires \"aztekDynamics\" \"1.0\";");
+    }
     let _ = writeln!(w.out, "currentUnit -l centimeter -a degree -t {};", time_unit_name(fps));
     let _ = writeln!(w.out, "fileInfo \"application\" \"aztek\";");
     let _ = writeln!(w.out, "fileInfo \"version\" \"{}\";", env!("CARGO_PKG_VERSION"));

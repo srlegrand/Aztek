@@ -359,6 +359,11 @@ fn connect_dynamic(s: &mut Session, a: &Args) -> CmdResult {
     let mut done = Vec::new();
     for name in a.named() {
         let Some(b) = resolve(g, &name, &[dy::CLOTH, dy::PARTICLES, dy::RIGID]) else { fail!("connectDynamic: {name} is not a dynamic body") };
+        // A body from a system with no solver node joins one.
+        if solver_of(g, b).is_none() {
+            let sv = solver_for(g, a)?;
+            join(g, b, sv)?;
+        }
         for fname in list(a, "fields") {
             let Some(fl) = resolve(g, &fname, &[dy::FIELD]) else { fail!("connectDynamic: {fname} is not a field") };
             if delete {
@@ -568,7 +573,8 @@ pub fn register(c: &mut Commands<Session>) {
             .flag(f("fields", "f", ArgType::List, "Fields."))
             .flag(f("emitters", "em", ArgType::List, "Emitters."))
             .flag(f("collisions", "c", ArgType::List, "Colliders."))
-            .flag(f("delete", "d", ArgType::Bool, "Disconnect instead.")),
+            .flag(f("delete", "d", ArgType::Bool, "Disconnect instead."))
+            .flag(f("solver", "sv", ArgType::String, "The solver a body with none joins.")),
     );
     c.register(
         Cmd::new("getParticleAttr", "Per particle values: -at position -a true gives every one; without -a, the mean then the spread.", get_particle_attr)

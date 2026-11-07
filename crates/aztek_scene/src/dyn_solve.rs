@@ -155,8 +155,16 @@ fn world_mesh(g: &mut Graph, id: NodeId, kind: Kind) -> Option<(Vec<DVec3>, Vec<
             (m, pulled(g, id, "inputMatrix").map_or(DMat4::IDENTITY, |v| v.as_matrix()))
         }
         Kind::Rigid | Kind::Passive => {
-            let m = pulled(g, id, "inputMesh")?.as_mesh()?.clone();
             let xf = rigid_transform(g, id)?;
+            // Read from a file, it holds no mesh: the object's own.
+            let m = match pulled(g, id, "inputMesh").and_then(|v| v.as_mesh().cloned()) {
+                Some(m) => m,
+                None => {
+                    let shape = crate::components::as_mesh(g, xf)?;
+                    let out = g.node(shape)?.ty().attr_index("outMesh")?;
+                    g.value(&PlugRef::new(shape, out as i32)).ok()?.as_mesh()?.clone()
+                }
+            };
             (m, crate::rig::world(g, xf))
         }
         Kind::Particles => return None,
@@ -476,6 +484,12 @@ fn current_key(g: &mut Graph, s: NodeId) -> Vec<(NodeId, Kind, usize, u64)> {
         let Some(kind) = kind_of(g, id) else { continue };
         if kind == Kind::Particles {
             k.push((id, kind, 0, 0));
+            continue;
+        }
+        if matches!(kind, Kind::Rigid | Kind::Passive) {
+            if let Some((points, _, topo, _)) = world_mesh(g, id, kind) {
+                k.push((id, kind, points.len(), topo));
+            }
             continue;
         }
         let mesh = match kind {
