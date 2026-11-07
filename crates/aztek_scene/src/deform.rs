@@ -102,7 +102,7 @@ pub(crate) const BASE_COUNT: usize = 8;
 pub const NONLINEAR: &[&str] = &["bend", "twist", "squash", "flare", "sine", "wave"];
 
 pub fn is_deformer(type_name: &str) -> bool {
-    NONLINEAR.contains(&type_name) || matches!(type_name, "cluster" | "blendShape" | "ffd" | "softMod" | "deltaMush" | "tension" | "wrap" | "wire") || crate::deform_extra::TYPES.contains(&type_name)
+    NONLINEAR.contains(&type_name) || matches!(type_name, "cluster" | "blendShape" | "ffd" | "softMod" | "deltaMush" | "tension" | "wrap" | "wire") || crate::deform_extra::TYPES.contains(&type_name) || matches!(type_name, "cloth" | "nCloth")
 }
 
 /// Heavy per-point data: weights, rest points, lattice mappings, wrap bindings. A flat list of numbers.
@@ -362,6 +362,7 @@ pub fn register_types() {
         crate::deform_wire::register_types(gf.clone());
         crate::deform_blend::register_types(gf.clone());
         crate::deform_extra::register_types(gf.clone());
+        crate::dynamics::register_cloth(gf.clone());
         let nl = types::register_type(NodeType { name: "nonLinear".into(), base: Some(gf.clone()), icon: "wave-sine".into(), doc: "A nonlinear deformer.".into(), ..Default::default() }).expect("nonLinear");
         let specs: [(&str, [(&str, &str, f64); 6]); 6] = [
             ("bend", [("curvature", "cur", 0.0), ("unusedB", "ub", 0.0), ("unusedC", "uc", 0.0), ("lowBound", "lb", -1.0), ("highBound", "hb", 1.0), ("unusedD", "ud", 0.0)]),

@@ -372,6 +372,19 @@ impl Solver {
         b
     }
 
+    /// Builds a cloth's constraints again, after its pins or tearing changed.
+    pub fn rebuild_cloth(&mut self, b: usize) {
+        if self.bodies.get(b).is_some_and(|x| x.kind == BodyKind::Cloth) {
+            self.build_cloth(b);
+        }
+    }
+
+    /// Lays the particles out again now: particles added with `add_particles_now` appear at once.
+    pub fn layout_now(&mut self) {
+        self.layout(true, 0.0);
+        self.learn_all_sides();
+    }
+
     /// Rebuilds the cloth constraints from the body's rest positions.
     pub(crate) fn build_cloth(&mut self, b: usize) {
         let body = &self.bodies[b];
@@ -492,15 +505,15 @@ impl Solver {
         for l in &mut self.links {
             l.broken = false;
         }
-        self.layout(true);
+        self.layout(true, 0.0);
         self.learn_all_sides();
     }
 
     /// Rebuilds the particle arrays: bodies in order, particle bodies with their living particles and new ones.
-    pub(crate) fn layout(&mut self, reset: bool) {
+    /// `dt` is the frame being solved, for emitters.
+    pub(crate) fn layout(&mut self, reset: bool, dt: f64) {
         let old = std::mem::take(&mut self.pt);
         let mut pt = Particles::default();
-        let dt = self.settings.max_frame_time;
         let seed = self.settings.seed;
         for (bi, body) in self.bodies.iter_mut().enumerate() {
             let start = pt.len();
@@ -616,7 +629,7 @@ impl Solver {
                     self.pt.age[i] += dt;
                 }
             }
-            self.layout(false);
+            self.layout(false, dt);
             if any_reset {
                 self.learn_all_sides();
             }

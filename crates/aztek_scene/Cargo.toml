@@ -12,6 +12,7 @@ aztek_ops = { path = "../aztek_ops" }
 aztek_geo = { path = "../aztek_geo" }
 aztek_uv = { path = "../aztek_uv" }
 aztek_render = { path = "../aztek_render" }
+aztek_dyn = { path = "../aztek_dyn" }
 glam.workspace = true
 serde_json.workspace = true
 rayon.workspace = true

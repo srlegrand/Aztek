@@ -148,6 +148,7 @@ name = "aztek_scene"
 version = "1.0.0"
 dependencies = [
  "aztek_core",
+ "aztek_dyn",
  "aztek_geo",
  "aztek_ops",
  "aztek_render",

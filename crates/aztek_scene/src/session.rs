@@ -177,6 +177,8 @@ impl Session {
         crate::model_extra::register(&mut s.commands);
         crate::shading::register(&mut s.commands);
         crate::light_cmds::register(&mut s.commands);
+        crate::dyn_cmds::register(&mut s.commands);
+        crate::dyn_particles::register(&mut s.commands);
         // Last: history node types take their attributes from the commands registered above.
         crate::history::register(&mut s.commands);
         crate::instancing::install(&mut s.graph);
@@ -184,6 +186,7 @@ impl Session {
         crate::anim::install(&mut s.graph);
         crate::deform_wire::install(&mut s.graph);
         crate::rig::install(&mut s.graph);
+        crate::dyn_solve::install(&mut s.graph);
         s.load_naming_policy();
         s
     }

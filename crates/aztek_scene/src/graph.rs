@@ -3425,6 +3425,10 @@ impl Graph {
     pub fn set_sampling(&mut self, on: bool) {
         self.sampling = on;
     }
+    /// Whether the graph is being sampled at other times (bakes, trails): simulations hold rather than step.
+    pub fn sampling(&self) -> bool {
+        self.sampling
+    }
     pub fn set_active_frame_fn(&mut self, f: ActiveFrameFn) {
         self.active_frame = Some(f);
     }
