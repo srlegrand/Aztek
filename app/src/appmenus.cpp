@@ -1,6 +1,7 @@
 // The menus every menu set has (File, Edit, Select, Modify, Display, Windows), the marking menus, workspaces and the small
 // actions they share.
 #include "mainwindow.h"
+#include "renderui.h"
 #include "aztek.h"
 #include "colorchooser.h"
 #include "editors.h"
@@ -845,6 +846,8 @@ QMenu* MainWindow::windows_menu() {
     if (has_command_named("expression")) named(anim_ed, "Expression Editor", "expressionEditor");
     else todo(anim_ed, "Expression Editor");
     QMenu* render_ed = m->addMenu("Rendering Editors");
+    render_ed->addAction(icon("renderView", 16), "Render View", [this] { show_render_view(this); });
+    render_ed->addAction(icon("renderSettings", 16), "Render Settings...", [this] { show_render_settings(this); });
     render_ed->addAction("Hypershade", this, &MainWindow::show_hypershade);
     QMenu* rig_ed = m->addMenu("Rigging Editors");
     rig_ed->addAction("Node Editor", this, &MainWindow::show_node_editor);

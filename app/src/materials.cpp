@@ -26,7 +26,14 @@ namespace az {
 
 namespace {
 
-const QList<QPair<QString, QString>> kMaterials{{"Lambert", "lambert"}, {"Blinn", "blinn"}, {"Phong", "phong"}, {"Phong E", "phongE"}, {"Anisotropic", "anisotropic"}, {"Surface Shader", "surfaceShader"}, {"Standard Surface", "standardSurface"}};
+const QList<QPair<QString, QString>> kMaterials{{"Standard Surface", "standardSurface"}, {"Lambert", "lambert"}, {"Blinn", "blinn"}, {"Phong", "phong"}, {"Phong E", "phongE"}, {"Anisotropic", "anisotropic"}, {"Surface Shader", "surfaceShader"}};
+
+// The Hypershade's Create menu: Harold's materials first, then textures and utilities, the older materials last.
+const QList<QPair<QString, QString>> kHaroldMaterials{{"Standard Surface", "standardSurface"}, {"Flat", "aiFlat"}, {"Mix", "aiMixShader"}, {"Shadow Matte", "aiShadowMatte"},
+                                                      {"Utility", "aiUtility"}, {"Ambient Occlusion", "aiAmbientOcclusion"}, {"Layered Shader", "layeredShader"}, {"Ramp Shader", "rampShader"}};
+const QList<QPair<QString, QString>> kHaroldTextures{{"Image", "aiImage"}, {"Checker", "checker"}, {"Noise", "noise"}, {"Layered Texture", "layeredTexture"}, {"Curvature", "aiCurvature"}};
+const QList<QPair<QString, QString>> kHaroldUtilities{{"Normal Map", "aiNormalMap"}, {"Bump 2D", "aiBump2d"}, {"Atmosphere Volume", "aiAtmosphereVolume"}};
+const QList<QPair<QString, QString>> kLegacyMaterials{{"Lambert", "lambert"}, {"Blinn", "blinn"}, {"Phong", "phong"}, {"Phong E", "phongE"}, {"Anisotropic", "anisotropic"}, {"Surface Shader", "surfaceShader"}, {"Architectural (mia_material_x)", "mia_material_x"}};
 
 QJsonObject one(const QString& a) {
     return QJsonObject{{"args", QJsonArray{a}}};
@@ -85,11 +92,16 @@ public:
         v->setSpacing(0);
         auto* bar = new QToolBar(this);
         auto* create = new QMenu(this);
-        for (const auto& m : kMaterials) {
+        create->addSection("Harold");
+        for (const auto& m : kHaroldMaterials) {
             QString type = m.second;
-            create->addAction(m.first, [type] { new_material(type); });
+            create->addAction(m.first, [type] { new_material(type); })->setToolTip(type);
         }
-        create->addSeparator();
+        create->addSection("Textures");
+        for (const auto& m : kHaroldTextures) {
+            QString type = m.second;
+            create->addAction(m.first, [type] { exec("shadingNode", QJsonObject{{"args", QJsonArray{type}}, {"asTexture", true}}); })->setToolTip(type);
+        }
         create->addAction("File Texture...", [this] {
             QString path = QFileDialog::getOpenFileName(this, "Choose an image", QString(), "Images (*.png *.jpg *.jpeg *.tga *.bmp *.tif *.tiff);;All Files (*)");
             if (path.isEmpty()) return;
@@ -99,7 +111,18 @@ public:
             exec("defaultNavigation", QJsonObject{{"connectToExisting", true}, {"source", place}, {"destination", file}});
             exec("setAttr", QJsonObject{{"args", QJsonArray{file + ".fileTextureName", path}}, {"type", "string"}});
         });
+        create->addSection("Utilities");
         create->addAction("2D Placement", [] { exec("shadingNode", QJsonObject{{"args", QJsonArray{"place2dTexture"}}, {"asUtility", true}}); });
+        for (const auto& m : kHaroldUtilities) {
+            QString type = m.second;
+            create->addAction(m.first, [type] { exec("shadingNode", QJsonObject{{"args", QJsonArray{type}}, {"asUtility", true}}); })->setToolTip(type);
+        }
+        create->addSection("Legacy");
+        for (const auto& m : kLegacyMaterials) {
+            QString type = m.second;
+            create->addAction(m.first, [type] { new_material(type); })->setToolTip(type);
+        }
+        create->setToolTipsVisible(true);
         QAction* c = bar->addAction("Create");
         c->setMenu(create);
         connect(c, &QAction::triggered, this, [create] { create->exec(QCursor::pos()); });

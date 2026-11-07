@@ -164,6 +164,7 @@ impl Session {
         crate::ref_attrs::register(&mut s.commands);
         crate::ref_xforms::register(&mut s.commands);
         crate::ref_scene::register(&mut s.commands);
+        crate::harold::commands::register(&mut s.commands);
         crate::system_cmds::register(&mut s.commands);
         crate::references::register(&mut s.commands);
         crate::rig_misc::register(&mut s.commands);

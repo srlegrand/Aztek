@@ -47,6 +47,14 @@ QJsonObject shelf(const char* name, const QJsonArray& items) {
 const char* kMoveMime = "application/x-aztek-shelf-move";
 const char* kLangMime = "application/x-aztek-script-language";
 
+QJsonObject rendering_shelf() {
+    QJsonArray items{
+        item("Render", "renderFrame", "RenderIntoNewWindow;"), item("IPR", "renderIpr", "IPRRenderIntoNewWindow;"), item("Render Settings", "renderSettings", "RenderGlobalsWindow;"),
+        item("Render View", "renderView", "RenderViewWindow;"), item("Sky Dome Light", "skyDome", "shadingNode -asLight aiSkyDomeLight;"),
+        item("Area Light", "haroldAreaLight", "shadingNode -asLight aiAreaLight;"), item("Standard Surface", "standardSurface", "shadingNode -asShader standardSurface;")};
+    return shelf("Rendering", items);
+}
+
 } // namespace
 
 QJsonArray ShelfBar::defaults() {
@@ -89,7 +97,7 @@ QJsonArray ShelfBar::defaults() {
         item("Locator", "locator", "spaceLocator;"), item("Group", "group", "group;"), item("Delete History", "history", "DeleteHistory;"), item("Freeze", "transform", "freezeTransforms;"),
         item("Center Pivot", "frameSel", "centerPivot;"), item("New Layer", "layer", "createDisplayLayer;")};
     return QJsonArray{shelf("Poly Modeling", poly), shelf("Curves / Surfaces", curves), shelf("Sculpting", sculpt), shelf("Rigging", rig), shelf("Animation", anim),
-                      shelf("UV Editing", uv), shelf("General", general), shelf("Custom", QJsonArray())};
+                      shelf("UV Editing", uv), rendering_shelf(), shelf("General", general), shelf("Custom", QJsonArray())};
 }
 
 // One shelf's buttons: takes dropped scripts, and buttons dragged with the middle button.
@@ -193,6 +201,19 @@ ShelfBar::ShelfBar(std::function<void(const QString&, const QString&)> run, QWid
     QSettings s;
     QJsonDocument d = QJsonDocument::fromJson(s.value("shelves/json").toByteArray());
     shelves_ = d.isArray() && !d.array().isEmpty() ? d.array() : defaults();
+    // Shelves saved before there was a Rendering shelf get it once, before General; removing it afterwards sticks.
+    if (!s.value("shelves/hasRendering", false).toBool()) {
+        bool there = false;
+        int at = shelves_.size();
+        for (int k = 0; k < shelves_.size(); ++k) {
+            QString n = shelves_.at(k).toObject()["name"].toString();
+            if (n == "Rendering") there = true;
+            if (n == "General" && at == shelves_.size()) at = k;
+        }
+        if (!there) shelves_.insert(at, rendering_shelf());
+        s.setValue("shelves/hasRendering", true);
+        if (!there && d.isArray() && !d.array().isEmpty()) save();
+    }
     rebuild();
     tabs_->setCurrentIndex(s.value("shelves/current", 0).toInt());
     connect(tabs_, &QTabWidget::currentChanged, this, [](int i) { QSettings().setValue("shelves/current", i); });

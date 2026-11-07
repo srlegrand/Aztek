@@ -63,6 +63,36 @@ QString override_label(const QString& attr, const QString& nice) {
     return labels.value(attr, nice);
 }
 
+// Harold's frames on lights, shapes and cameras.
+const char* const kHaroldLight = "aiExposure aiSamples aiRadius aiAngle aiSpread aiRoundness aiSoftEdge aiResolution aiNormalize aiCastShadows aiShadowDensity aiCastVolumetricShadows aiDiffuse aiSpecular aiSss aiIndirect aiVolume aiTransmission aiMaxBounces aiVolumeSamples aiDecayType aiAov";
+const char* const kRenderStats = "castsShadows receiveShadows primaryVisibility visibleInReflections visibleInRefractions doubleSided smoothShading motionBlur";
+const char* const kHaroldShape = "aiOpaque aiMatte aiSelfShadows aiVisibleInDiffuseReflection aiVisibleInSpecularReflection aiVisibleInDiffuseTransmission aiVisibleInSpecularTransmission aiVisibleInVolume aiTraceSets aiSssSetname";
+const char* const kHaroldSubdiv = "aiSubdivType aiSubdivIterations aiSubdivAdaptiveMetric aiSubdivPixelError aiSubdivUvSmoothing aiSubdivSmoothDerivs";
+const char* const kHaroldDisp = "aiDispHeight aiDispZeroValue aiDispPadding aiDispAutobump";
+
+// The standard surface's groups, as its specification orders them; snake case for the file name aiStandardSurface.
+QList<Section> standard_sections(bool snake) {
+    static QList<QByteArray> keep;
+    auto s = [snake](const char* camel, const char* sn) {
+        keep.append(QByteArray(snake ? sn : camel));
+        return keep.last().constData();
+    };
+    return {
+        {"Base", s("base baseColor diffuseRoughness metalness", "base base_color diffuse_roughness metalness")},
+        {"Specular", s("specular specularColor specularRoughness specularIOR specularAnisotropy specularRotation", "specular specular_color specular_roughness specular_IOR specular_anisotropy specular_rotation")},
+        {"Transmission", s("transmission transmissionColor transmissionDepth transmissionScatter transmissionScatterAnisotropy transmissionDispersion transmissionExtraRoughness",
+                           "transmission transmission_color transmission_depth transmission_scatter transmission_scatter_anisotropy transmission_dispersion transmission_extra_roughness")},
+        {"Subsurface", s("subsurface subsurfaceColor subsurfaceRadius subsurfaceScale subsurfaceAnisotropy subsurfaceType", "subsurface subsurface_color subsurface_radius subsurface_scale subsurface_anisotropy subsurface_type")},
+        {"Coat", s("coat coatColor coatRoughness coatAnisotropy coatRotation coatIOR coatNormal coatAffectColor coatAffectRoughness",
+                   "coat coat_color coat_roughness coat_anisotropy coat_rotation coat_IOR coat_normal coat_affect_color coat_affect_roughness")},
+        {"Sheen", s("sheen sheenColor sheenRoughness", "sheen sheen_color sheen_roughness")},
+        {"Emission", s("emission emissionColor", "emission emission_color")},
+        {"Thin Film", s("thinFilmThickness thinFilmIOR", "thin_film_thickness thin_film_IOR")},
+        {"Geometry", s("opacity thinWalled normalCamera tangentUCamera", "opacity thin_walled normalCamera tangent")},
+        {"Advanced", s("caustics internalReflections exitToBackground indirectDiffuse indirectSpecular", "caustics internal_reflections exit_to_background indirect_diffuse indirect_specular")},
+        {"Node Behaviour", "caching nodeState frozen"}};
+}
+
 const QList<Section>& sections_for(const QString& type) {
     static const QList<Section> xf{
         {"Transform Attributes", "translate rotate rotateOrder scale shear rotateAxis inheritsTransform"},
@@ -82,6 +112,10 @@ const QList<Section>& sections_for(const QString& type) {
         {"Mesh Component Display", "displayVertices displayEdges displayBorders displayNormal normalSize backfaceCulling"},
         {"Smooth Mesh", "displaySmoothMesh smoothLevel smoothPreview"},
         {"Symmetry", "symmetry symmetryPlane"},
+        {"Render Stats", kRenderStats},
+        {"Harold", kHaroldShape},
+        {"Harold Subdivision", kHaroldSubdiv},
+        {"Harold Displacement", kHaroldDisp},
         {"Display", "visibility template intermediateObject useObjectColor objectColor wireColorRGB useOutlinerColor outlinerColor hiddenInOutliner"},
         {"Drawing Overrides", kDrawingOverrides},
         {"Node Behaviour", "caching nodeState frozen"}};
@@ -89,38 +123,45 @@ const QList<Section>& sections_for(const QString& type) {
         {"Camera Attributes", "focalLength lensSqueezeRatio cameraScale nearClipPlane farClipPlane centerOfInterest"},
         {"Film Back", "horizontalFilmAperture verticalFilmAperture filmFit filmFitOffset horizontalFilmOffset verticalFilmOffset"},
         {"Orthographic Views", "orthographic orthographicWidth"},
+        {"Harold", "renderable depthOfField fStop focusDistance focusRegionScale shutterAngle motionBlur"},
         {"Display Options", "displayFilmGate displayResolution displayGateMask overscan"},
         {"Display", "visibility"}};
     static const QList<Section> ambient{
         {"Ambient Light Attributes", "color intensity ambientShade"},
         {"Shadows", "shadowColor useRayTraceShadows shadowRays rayDepthLimit castSoftShadows shadowRadius receiveShadows"},
+        {"Harold", kHaroldLight},
         {"Display", "visibility locatorScale"},
         {"Node Behaviour", "caching nodeState frozen"}};
     static const QList<Section> directional{
         {"Directional Light Attributes", "color intensity emitDiffuse emitSpecular"},
         {"Shadows", "shadowColor useDepthMapShadows useRayTraceShadows lightAngle shadowRays rayDepthLimit dmapResolution dmapFilterSize dmapBias"},
+        {"Harold", kHaroldLight},
         {"Display", "visibility locatorScale"},
         {"Node Behaviour", "caching nodeState frozen"}};
     static const QList<Section> point{
         {"Point Light Attributes", "color intensity emitDiffuse emitSpecular decayRate"},
         {"Light Effects", "fogType fogRadius fogIntensity"},
         {"Shadows", "shadowColor useDepthMapShadows useRayTraceShadows lightRadius shadowRays rayDepthLimit dmapResolution dmapFilterSize dmapBias"},
+        {"Harold", kHaroldLight},
         {"Display", "visibility locatorScale"},
         {"Node Behaviour", "caching nodeState frozen"}};
     static const QList<Section> spot{
         {"Spot Light Attributes", "color intensity emitDiffuse emitSpecular decayRate coneAngle penumbraAngle dropoff"},
         {"Light Effects", "fogSpread fogIntensity barnDoors leftBarnDoor rightBarnDoor topBarnDoor bottomBarnDoor useDecayRegions startDistance1 endDistance1 startDistance2 endDistance2 startDistance3 endDistance3"},
         {"Shadows", "shadowColor useDepthMapShadows useRayTraceShadows lightRadius shadowRays rayDepthLimit dmapResolution dmapFilterSize dmapBias"},
+        {"Harold", kHaroldLight},
         {"Display", "visibility locatorScale"},
         {"Node Behaviour", "caching nodeState frozen"}};
     static const QList<Section> area{
         {"Area Light Attributes", "color intensity emitDiffuse emitSpecular decayRate normalize"},
         {"Shadows", "shadowColor useDepthMapShadows useRayTraceShadows shadowRays rayDepthLimit dmapResolution dmapFilterSize dmapBias"},
+        {"Harold", kHaroldLight},
         {"Display", "visibility locatorScale"},
         {"Node Behaviour", "caching nodeState frozen"}};
     static const QList<Section> volume{
         {"Volume Light Attributes", "color intensity lightShape volumeLightDir arc coneEndRadius emitAmbient emitDiffuse emitSpecular"},
         {"Shadows", "shadowColor useRayTraceShadows lightRadius shadowRays rayDepthLimit"},
+        {"Harold", kHaroldLight},
         {"Display", "visibility locatorScale"},
         {"Node Behaviour", "caching nodeState frozen"}};
     static const QList<Section> curve{
@@ -150,9 +191,46 @@ const QList<Section>& sections_for(const QString& type) {
         {"Display", "visibility template intermediateObject useObjectColor objectColor wireColorRGB useOutlinerColor outlinerColor hiddenInOutliner"},
         {"Drawing Overrides", kDrawingOverrides},
         {"Node Behaviour", "caching nodeState frozen"}};
+    static const QList<Section> surface{
+        {"Render Stats", kRenderStats},
+        {"Harold", kHaroldShape},
+        {"Harold Subdivision", kHaroldSubdiv},
+        {"Harold Displacement", kHaroldDisp},
+        {"Display", "visibility template intermediateObject useObjectColor objectColor wireColorRGB useOutlinerColor outlinerColor hiddenInOutliner"},
+        {"Drawing Overrides", kDrawingOverrides},
+        {"Node Behaviour", "caching nodeState frozen"}};
+    if (type == "nurbsSurface") return surface;
+    static const QList<Section> standard = standard_sections(false);
+    static const QList<Section> ai_standard = standard_sections(true);
+    if (type == "standardSurface") return standard;
+    if (type == "aiStandardSurface") return ai_standard;
+    static const QList<Section> sky{
+        {"Sky Dome Light Attributes", "color intensity aiExposure shadowColor resolution aiResolution format camera aiCamera"},
+        {"Harold", kHaroldLight},
+        {"Display", "visibility locatorScale"},
+        {"Node Behaviour", "caching nodeState frozen"}};
+    static const QList<Section> ai_area{
+        {"Area Light Attributes", "color intensity aiExposure shadowColor aiTranslator aiSpread aiRoundness aiSoftEdge"},
+        {"Harold", kHaroldLight},
+        {"Display", "visibility locatorScale"},
+        {"Node Behaviour", "caching nodeState frozen"}};
+    static const QList<Section> mesh_light{
+        {"Mesh Light Attributes", "color intensity aiExposure shadowColor lightVisible"},
+        {"Harold", kHaroldLight},
+        {"Display", "visibility locatorScale"},
+        {"Node Behaviour", "caching nodeState frozen"}};
+    static const QList<Section> photometric{
+        {"Photometric Light Attributes", "color intensity aiExposure shadowColor aiFilename"},
+        {"Harold", kHaroldLight},
+        {"Display", "visibility locatorScale"},
+        {"Node Behaviour", "caching nodeState frozen"}};
+    if (type == "aiSkyDomeLight") return sky;
+    if (type == "aiAreaLight") return ai_area;
+    if (type == "aiMeshLight") return mesh_light;
+    if (type == "aiPhotometricLight") return photometric;
     static const QSet<QString> shapes{"nurbsSurface", "lattice", "baseLattice", "deformHandle", "softModHandle", "follicle", "distanceDimShape", "annotationShape", "motionTrailShape", "ikEffector"};
     if (shapes.contains(type)) return shape;
-    static const QSet<QString> materials{"lambert", "blinn", "phong", "phongE", "anisotropic", "surfaceShader", "standardSurface"};
+    static const QSet<QString> materials{"lambert", "blinn", "phong", "phongE", "anisotropic", "surfaceShader"};
     if (materials.contains(type)) return material;
     if (type == "file") return file;
     if (type == "place2dTexture") return place;

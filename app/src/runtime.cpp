@@ -10,6 +10,7 @@
 #include "usdui.h"
 #include "markingmenu.h"
 #include "panels.h"
+#include "renderui.h"
 #include "scriptui.h"
 #include "shelves.h"
 #include "toolsettings.h"
@@ -166,6 +167,14 @@ void MainWindow::build_runtime() {
     r("SetDrivenKeyOptions", "Windows", "Set Driven Key", [this] { show_set_driven_key(); });
     r("UVEditor", "Windows", "UV Editor", [this] { show_uv_editor(); });
     r("HypershadeWindow", "Windows", "Hypershade", [this] { show_hypershade(); });
+    r("RenderViewWindow", "Windows", "Harold RenderView", [this] { show_render_view(this); });
+    r("RenderGlobalsWindow", "Windows", "Render Settings", [this] { show_render_settings(this); });
+    r("RenderIntoNewWindow", "Rendering", "Render the current frame", [this] { render_current_frame(this); });
+    r("RenderCurrentFrame", "Rendering", "Render the current frame", [this] { render_current_frame(this); });
+    r("IPRRenderIntoNewWindow", "Rendering", "IPR render the current frame", [this] { render_ipr(this); });
+    r("RedoPreviousRender", "Rendering", "Redo the previous render", [this] { redo_previous_render(this); });
+    r("RenderSequence", "Rendering", "Render a sequence of frames", [this] { render_sequence_dialog(this); });
+    r("RenderSequenceOptions", "Rendering", "Render a sequence of frames", [this] { render_sequence_dialog(this); });
     r("TextureViewWindow", "Windows", "UV Editor", [this] { show_uv_editor(); });
     r("PreferencesWindow", "Windows", "Preferences", [this] { show_preferences(); });
     r("HotkeyPreferencesWindow", "Windows", "Hotkey Editor", [this] { show_hotkey_editor(); });
@@ -304,6 +313,7 @@ void MainWindow::build_runtime() {
     r("MenuSetAnimation", "Menus", "Animation menus", [this] { menu_set_->setCurrentText("Animation"); });
     r("MenuSetModeling", "Menus", "Modeling menus", [this] { menu_set_->setCurrentText("Modeling"); });
     r("MenuSetRigging", "Menus", "Rigging menus", [this] { menu_set_->setCurrentText("Rigging"); });
+    r("MenuSetRendering", "Menus", "Rendering menus", [this] { menu_set_->setCurrentText("Rendering"); });
     r("TogglePivotMode", "Tools", "Move the pivot rather than the object", [this] {
         pivot_mode_ = !pivot_mode_;
         for (ViewportWidget* v : panels_->views()) v->set("pivotMode", pivot_mode_ ? "true" : "false");
@@ -419,7 +429,7 @@ QList<HotkeyBinding> MainWindow::default_hotkeys() const {
         {"E", C, "Extrude", ""}, {"B", C, "Bevel", ""}, {">", 0, "GrowSelection", ""}, {"<", 0, "ShrinkSelection", ""},
         {"Up", 0, "PickWalkUp", ""}, {"Down", 0, "PickWalkDown", ""}, {"Left", 0, "PickWalkLeft", ""}, {"Right", 0, "PickWalkRight", ""},
         {"Up", A, "NudgeUp", ""}, {"Down", A, "NudgeDown", ""}, {"Left", A, "NudgeLeft", ""}, {"Right", A, "NudgeRight", ""},
-        {"F2", 0, "MenuSetAnimation", ""}, {"F3", 0, "MenuSetModeling", ""}, {"F4", 0, "MenuSetRigging", ""}, {"F8", 0, "ToggleSelectMode", ""},
+        {"F2", 0, "MenuSetAnimation", ""}, {"F3", 0, "MenuSetModeling", ""}, {"F4", 0, "MenuSetRigging", ""}, {"F6", 0, "MenuSetRendering", ""}, {"F8", 0, "ToggleSelectMode", ""},
         {"F9", 0, "SelectVertexMask", ""}, {"F10", 0, "SelectEdgeMask", ""}, {"F11", 0, "SelectFacetMask", ""}, {"F12", 0, "UVEditor", ""},
         {"F9", C, "ConvertSelectionToVertices", ""}, {"F10", C, "ConvertSelectionToEdges", ""}, {"F11", C, "ConvertSelectionToFaces", ""},
         {"1", 0, "SmoothPreviewOff", ""}, {"2", 0, "SmoothPreviewCage", ""}, {"3", 0, "SmoothPreviewSmooth", ""}, {"4", 0, "WireframeView", ""}, {"5", 0, "ShadedView", ""}, {"6", 0, "TexturedView", ""}, {"7", 0, "DisplayLight", ""},

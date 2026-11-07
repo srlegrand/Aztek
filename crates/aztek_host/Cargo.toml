@@ -15,6 +15,7 @@ aztek_ops = { path = "../aztek_ops" }
 aztek_scene = { path = "../aztek_scene" }
 aztek_undo = { path = "../aztek_undo" }
 aztek_usd = { path = "../aztek_usd" }
+aztek_render = { path = "../aztek_render" }
 glam.workspace = true
 serde_json.workspace = true
 log.workspace = true

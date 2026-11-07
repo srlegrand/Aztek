@@ -42,6 +42,13 @@ void aztek_idle(void);
 unsigned char* aztek_image_load(const char* path, int* width, int* height);
 void aztek_image_free(unsigned char* data, int width, int height);
 
+// Harold, the renderer: the render view's status JSON (an interactive render restarts here after an edit), an AOV or a
+// kept snapshot (index >= 0) as RGBA after exposure and gamma (free with aztek_image_free), and batch rendering from
+// the command line with no display (`aztek -render ...`), returning the exit code.
+char* aztek_render_status(void);
+unsigned char* aztek_render_image(const char* aov, int snapshot, double exposure, double gamma, int* width, int* height);
+int aztek_render_batch(int argc, const char* const* argv);
+
 enum { AZTEK_XCB = 1, AZTEK_XLIB = 2, AZTEK_WIN32 = 3, AZTEK_WAYLAND = 4 };
 
 int aztek_view_create(int platform, void* display, uint64_t window, void* extra, int width, int height, double dpr,

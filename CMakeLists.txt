@@ -79,6 +79,9 @@ add_executable(aztek WIN32
   app/src/scripteditor.cpp
   app/src/outlinerpanel.cpp
   app/src/icons_more.cpp
+  app/src/icons_render.cpp
+  app/src/renderview.cpp
+  app/src/rendersettings.cpp
   app/src/scriptui.cpp
   app/src/resources.qrc
   $<$<PLATFORM_ID:Windows>:app/icons/aztek.rc>)

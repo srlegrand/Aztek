@@ -1,0 +1,13 @@
+[package]
+name = "aztek_dyn"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+glam.workspace = true
+rayon.workspace = true
+
+[dev-dependencies]
+rayon.workspace = true

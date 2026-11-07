@@ -294,6 +294,7 @@ pub mod types {
             crate::utility_nodes::register_types();
             crate::shading::register_types();
             crate::lights::register_types();
+            crate::harold_nodes::register_types();
             crate::expression::register_types();
         });
     }

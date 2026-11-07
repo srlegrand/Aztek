@@ -1,8 +1,10 @@
 // Aztek: Qt shell over the Rust host library.
+#include "aztek.h"
 #include "host.h"
 #include "mainwindow.h"
 
 #include <QApplication>
+#include <cstring>
 #include <QIcon>
 #include <QSplashScreen>
 #include "widgets.h"
@@ -42,6 +44,9 @@ void apply_style(QApplication& app) {
 } // namespace
 
 int main(int argc, char** argv) {
+    // Batch rendering needs no display: handled before Qt starts.
+    for (int i = 1; i < argc; ++i)
+        if (std::strcmp(argv[i], "-render") == 0) return aztek_render_batch(argc, argv);
 #ifdef Q_OS_LINUX
     // The viewport draws into X11 windows; on a Wayland session Qt runs through XWayland.
     if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM")) qputenv("QT_QPA_PLATFORM", "xcb");

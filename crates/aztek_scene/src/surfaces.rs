@@ -1162,7 +1162,10 @@ pub fn register_types() {
                 store_bool("dispGeometry", true, "Show the surface."),
                 crate::shading::inst_obj_groups(),
                 crate::shading::object_groups(),
-            ],
+            ]
+            .into_iter()
+            .chain(crate::harold_nodes::shape_render_attrs())
+            .collect(),
             create: Some(Arc::new(|| Box::<SurfaceShape>::default())),
             ..Default::default()
         });

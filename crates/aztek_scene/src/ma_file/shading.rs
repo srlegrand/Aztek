@@ -230,11 +230,27 @@ impl Writer<'_> {
         }
     }
 
+    /// The renderer's shared settings nodes, in a fixed order, as `createNode type -s -n name`.
+    pub(super) fn write_render_settings(&mut self) {
+        for (name, ty) in crate::harold_nodes::DEFAULT_NODES {
+            if !crate::harold_nodes::is_shared_node(name) {
+                continue;
+            }
+            // A scene that never made them still gets them, as a scene from Maya has them.
+            let lines = self.s.graph.find(name).ok().flatten().map(|id| self.plain_attr_lines(id)).unwrap_or_default();
+            let _ = write!(self.out, "createNode {ty} -s -n {};\n{lines}", quoted(name));
+        }
+    }
+
     /// A shading group or a default node, in the scene's list of nodes. False for anything else.
     pub(super) fn write_shading_node(&mut self, id: NodeId) -> bool {
         let g = &self.s.graph;
         let n = g.node(id).unwrap();
         let (name, ty) = (n.name().to_string(), n.ty().name.clone());
+        if crate::harold_nodes::is_shared_node(&name) {
+            // Written together by write_render_settings, in a fixed order.
+            return true;
+        }
         if shading::is_default_node(&name) {
             let lines = self.plain_attr_lines(id);
             if !lines.is_empty() && !shading::is_shading_group(&self.s.graph, id) {

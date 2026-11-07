@@ -19,7 +19,7 @@ const STORE: u32 = flags::INPUT | flags::STORABLE;
 const SAMPLED: u32 = flags::INPUT | flags::HIDDEN;
 const OUT: u32 = flags::OUTPUT | flags::HIDDEN;
 
-pub const TYPES: &[&str] = &["ambientLight", "directionalLight", "pointLight", "spotLight", "areaLight", "volumeLight"];
+pub const TYPES: &[&str] = &["ambientLight", "directionalLight", "pointLight", "spotLight", "areaLight", "volumeLight", "aiSkyDomeLight", "aiAreaLight", "aiMeshLight", "aiPhotometricLight"];
 pub const DEFAULT_SET: &str = "defaultLightSet";
 /// Holds a volume light's colorRange and penumbra ramps as the file wrote them: Aztek has no multi compounds to hold them.
 pub const RAMP_LINES: &str = "aztekRampLines";
@@ -36,6 +36,7 @@ pub fn classification(ty: &str) -> Option<&'static str> {
         "spotLight" => "light:drawdb/light/spotLight",
         "areaLight" => "light:drawdb/light/areaLight",
         "volumeLight" => "light:drawdb/light/volumeLight",
+        "aiSkyDomeLight" | "aiAreaLight" | "aiMeshLight" | "aiPhotometricLight" => "light:rendernode/arnold/light",
         _ => return None,
     })
 }
@@ -269,6 +270,11 @@ pub fn register_types() {
             ("areaLight", "nonExtendedLightShapeNode", "Light from one side of a rectangle two units across.", area_attrs(), true),
             ("volumeLight", "pointLight", "Light inside a box, sphere, cylinder or cone.", volume_attrs(), true),
         ];
+        let mut table = table;
+        table[0].3.extend(crate::harold_nodes::light_render_attrs());
+        for (name, doc, attrs) in crate::harold_nodes::ai_lights() {
+            table.push((name, "renderLight", doc, attrs, true));
+        }
         for (name, parent, doc, own_attrs, concrete) in table {
             types::register_type(NodeType {
                 name: name.into(),

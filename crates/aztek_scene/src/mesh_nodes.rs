@@ -175,7 +175,10 @@ impl MeshNode {
                 ),
                 crate::shading::inst_obj_groups(),
                 crate::shading::object_groups(),
-            ],
+            ]
+            .into_iter()
+            .chain(crate::harold_nodes::shape_render_attrs())
+            .collect(),
             create: Some(Arc::new(|| Box::new(MeshNode))),
             ..Default::default()
         }

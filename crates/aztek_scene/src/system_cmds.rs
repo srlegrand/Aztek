@@ -42,6 +42,8 @@ pub struct Extras {
     pub references: crate::references::RefTable,
     /// The state of general_cmds and its neighbours.
     pub more: crate::general_cmds::MoreState,
+    /// The renderer's running render, interactive state and kept images.
+    pub harold: crate::harold::commands::State,
 }
 
 /// What a query asks for: the first flag -q names.

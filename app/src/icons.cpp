@@ -12,6 +12,7 @@ bool draw_sculpt_icon(QPainter& p, const QString& tool);
 
 
 bool draw_more(const QString& name, QPainter& p);
+bool draw_render_icon(const QString& name, QPainter& p);
 
 namespace {
 
@@ -517,6 +518,8 @@ QPixmap draw(const QString& name, int size) {
         p.drawEllipse(QPointF(16, 16), 3.5, 3.5);
     } else if (draw_more(name, p)) {
         // Drawn in icons_more.cpp.
+    } else if (draw_render_icon(name, p)) {
+        // Drawn in icons_render.cpp.
     } else {
         // Fallback: the name's initials in a box.
         p.setBrush(QColor(80, 80, 80));

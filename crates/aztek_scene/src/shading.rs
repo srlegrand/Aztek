@@ -296,7 +296,7 @@ fn table() -> Vec<Spec> {
         Spec("phongE", "reflect", "A phong with a rough highlight.", vec![fl01("roughness", "rn", 0.5), fl01("highlightSize", "hs", 0.5), col("whiteness", "wn", ["wnr", "wng", "wnb"], 0.5)], Some(pass_color)),
         Spec("anisotropic", "reflect", "A material with a stretched highlight.", vec![fl("angle", "a", 0.0), fl("spreadX", "sx", 13.0), fl("spreadY", "sy", 3.0), fl01("roughness", "rn", 0.7), fl("fresnelRefractiveIndex", "fri", 6.0)], Some(pass_color)),
         Spec("surfaceShader", "", "A flat colour, not lit.", vec![col("outColor", "oc", ["ocr", "ocg", "ocb"], 0.0), col("outTransparency", "ot", ["otr", "otg", "otb"], 0.0), col("outGlowColor", "ogc", ["ogr", "ogg", "ogb"], 0.0), col("outMatteOpacity", "omo", ["omor", "omog", "omob"], 1.0), message()], Some(no_compute)),
-        Spec("standardSurface", "", "A physically based material; the viewport draws its base colour.", vec![fl01("base", "b", 1.0), col("baseColor", "bc", ["bcr", "bcg", "bcb"], 0.8), fl01("metalness", "m", 0.0), fl01("specular", "s", 1.0), col("specularColor", "sc", ["sr", "sg", "sb"], 1.0), fl01("specularRoughness", "sr2", 0.2), fl01("emission", "e", 0.0), col("emissionColor", "ec", ["ecr", "ecg", "ecb"], 1.0), col("opacity", "op", ["opr", "opg", "opb"], 1.0), vector("normalCamera", "n", ["nx", "ny", "nz"], IN), col_out("outColor", "oc", ["ocr", "ocg", "ocb"]), col_out("outTransparency", "ot", ["otr", "otg", "otb"]), message()], Some(standard_surface)),
+        Spec("standardSurface", "", "A physically based material; the viewport draws its base colour.", crate::harold_nodes::standard_attrs(false), Some(standard_surface)),
         Spec("file", "", "An image on disk as a texture.", file, Some(file_out)),
         Spec("place2dTexture", "", "Where a 2D texture sits in UV space: repeat, offset, rotation, coverage.", place, Some(place_out)),
         Spec("bump2d", "", "Turns a texture into a bump. The viewport doesn't draw it.", vec![fl("bumpValue", "bv", 0.0), fl("bumpDepth", "bd", 1.0), base("bumpInterp", "bi", PlugType::Int, PlugValue::Int(0), STORE), vector("normalCamera", "n", ["nx", "ny", "nz"], IN), vector("outNormal", "o", ["ox", "oy", "oz"], OUT), message()], Some(bump_out)),
@@ -311,16 +311,16 @@ pub fn classification(type_name: &str) -> Option<&'static str> {
         "file" => Some("texture/2d"),
         "place2dTexture" | "bump2d" => Some("utility/general"),
         "materialInfo" => Some("utility/shading"),
-        _ => None,
+        _ => crate::harold_nodes::classification(type_name),
     }
 }
 
 pub fn is_material_type(t: &NodeType) -> bool {
-    t.is_a("lambert") || matches!(t.name.as_str(), "surfaceShader" | "standardSurface")
+    t.is_a("lambert") || matches!(t.name.as_str(), "surfaceShader" | "standardSurface") || crate::harold_nodes::classification(&t.name) == Some("shader/surface")
 }
 
 pub fn is_texture_type(t: &NodeType) -> bool {
-    t.name == "file"
+    t.name == "file" || crate::harold_nodes::classification(&t.name) == Some("texture/2d")
 }
 
 pub fn register_types() {
@@ -347,7 +347,7 @@ pub fn register_types() {
         own_attrs: vec![
             col("surfaceShader", "ss", ["ssr", "ssg", "ssb"], 0.0),
             col("volumeShader", "vs", ["vsr", "vsg", "vsb"], 0.0),
-            col("displacementShader", "ds", ["dsr", "dsg", "dsb"], 0.0),
+            fl("displacementShader", "ds", 0.0),
             col("imageShader", "is", ["isr", "isg", "isb"], 0.0),
             slots("dagSetMembers", "dsm"),
             slots("dnSetMembers", "dnsm"),
@@ -374,6 +374,7 @@ pub fn register_types() {
 /// lambert1 and initialShadingGroup, in every scene. Off the undo stack.
 pub fn make_defaults(g: &mut Graph) {
     types::register_builtins();
+    g.without_undo(crate::harold_nodes::make_defaults);
     if g.find(INITIAL_SG).ok().flatten().is_some() {
         return;
     }
@@ -397,7 +398,7 @@ pub fn make_defaults(g: &mut Graph) {
 
 /// Whether a node is one every scene has, which a file names but doesn't create and nothing may delete.
 pub fn is_default_node(name: &str) -> bool {
-    matches!(name, DEFAULT_MATERIAL | INITIAL_SG | INITIAL_INFO)
+    matches!(name, DEFAULT_MATERIAL | INITIAL_SG | INITIAL_INFO) || crate::harold_nodes::is_default_node(name)
 }
 
 fn plug_named(g: &Graph, id: NodeId, attr: &str) -> Option<PlugRef> {
@@ -1087,6 +1088,13 @@ fn draw_specular(g: &mut Graph, material: NodeId, ty: &str) -> Option<DrawSpecul
             let (c, e) = (color(g, "specularColor"), num(g, "roughness", 0.7) * 0.5);
             blinn(c, e, 1.0)
         }
+        "aiStandardSurface" => {
+            let (mut c, k, rough) = (color(g, "specular_color"), num(g, "specular", 1.0), num(g, "specular_roughness", 0.2));
+            for x in &mut c {
+                *x *= k;
+            }
+            blinn(c, rough, 1.0)
+        }
         "standardSurface" => {
             let (mut c, k, rough) = (color(g, "specularColor"), num(g, "specular", 1.0), num(g, "specularRoughness", 0.2));
             for x in &mut c {
@@ -1187,11 +1195,12 @@ pub fn draw_material(g: &mut Graph, sg: NodeId, scene: Option<&str>, project: Op
     let (color_attr, trans_attr, unlit) = match t.name.as_str() {
         "surfaceShader" => ("outColor", "outTransparency", true),
         "standardSurface" => ("baseColor", "opacity", false),
+        "aiStandardSurface" => ("base_color", "opacity", false),
         _ => ("color", "transparency", false),
     };
     let mut color = value_v(g, material, color_attr).unwrap_or(DVec3::splat(0.5));
     let mut transparency = value_v(g, material, trans_attr).unwrap_or(DVec3::ZERO);
-    if t.name == "standardSurface" {
+    if t.name == "standardSurface" || t.name == "aiStandardSurface" {
         transparency = DVec3::ONE - transparency;
         color *= value_f(g, material, "base").unwrap_or(1.0);
     }

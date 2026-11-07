@@ -62,6 +62,8 @@ pub mod ref_attrs;
 pub mod ref_core;
 pub mod ref_scene;
 pub mod ref_xforms;
+pub mod harold;
+pub mod harold_nodes;
 pub mod mesh_boolean;
 pub mod mesh_data;
 pub mod mesh_edit;

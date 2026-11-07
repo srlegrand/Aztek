@@ -1,0 +1,15 @@
+[package]
+name = "aztek_render"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Harold: a physically based path tracer. Pure Rust, CPU, no scene dependency."
+
+[dependencies]
+glam.workspace = true
+rayon.workspace = true
+log.workspace = true
+serde_json.workspace = true
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "tga", "bmp", "tiff", "hdr"] }
+exr = "1.72"

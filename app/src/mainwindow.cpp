@@ -1,5 +1,6 @@
 #include <QWidgetAction>
 #include "mainwindow.h"
+#include "renderui.h"
 #include "aztek.h"
 #include "feedback.h"
 #include "host.h"
@@ -238,6 +239,7 @@ QMenu* MainWindow::create_menu() {
     cmd(lights, "Spot Light", "CreateSpotLight", {}, QString(), true);
     cmd(lights, "Area Light", "CreateAreaLight", {}, QString(), true);
     cmd(lights, "Volume Light", "CreateVolumeLight", {}, QString(), true);
+    harold_create_menu(m, this);
     QMenu* curves = m->addMenu("Curve Tools");
     curves->addAction("CV Curve Tool", [this] { set_tool("curveCv"); });
     curves->addAction("EP Curve Tool", [this] { set_tool("curveEp"); });
@@ -781,6 +783,8 @@ void MainWindow::build_menu_set(const QString& set) {
         menus << mesh_menu() << edit_mesh_menu() << mesh_tools_menu() << mesh_display_menu() << curves_menu() << surfaces_menu() << uv_menu() << deform_menu();
     else if (set == "Rigging")
         menus << skeleton_menu() << skin_menu() << deform_menu() << constrain_menu() << control_menu();
+    else if (set == "Rendering")
+        menus << render_menu(this) << harold_menu(this);
     else
         menus << key_menu() << playback_menu() << deform_menu() << constrain_menu();
     for (QMenu* m : menus) {

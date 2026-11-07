@@ -1224,6 +1224,9 @@ fn channels_of(t: &NodeType) -> Vec<&'static str> {
     if t.is_a("mesh") || t.is_a("nurbsCurve") || t.is_a("nurbsSurface") {
         v.extend(["visibility", "intermediateObject"]);
     }
+    if t.is_a("mesh") || t.is_a("nurbsSurface") {
+        v.extend(crate::harold_nodes::SHAPE_RENDER_NAMES);
+    }
     if let Some(attrs) = creator_attrs(&t.name) {
         v.extend(attrs.iter().map(|(_, a)| *a));
     }
@@ -4682,6 +4685,7 @@ pub fn write_text(s: &mut Session, file_name: &str, only: Option<&[NodeId]>) -> 
     }
 
     w.write_light_links();
+    w.write_render_settings();
     w.write_lights();
     w.write_connections();
     w.out.push_str(&ref_tail);
