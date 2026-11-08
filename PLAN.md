@@ -36,7 +36,8 @@ fix below is another guess.
 - [ ] 0.2 `crates/aztek_scene/tests/reference_fixtures.rs`: one harness that loads a fixture, runs the same calls in
   Aztek and reports every mismatch, grouped by command. Until fixtures land, it runs on the hand-written expectations
   below and skips missing files with a message, not a pass.
-- [ ] 0.3 Basics suite: `tests/basics.rs` turning the review's probe into tests. Transforms, pivots, freeze and
+- [x] 0.3 (08/11/2026: `crates/aztek_host/tests/basics.rs` and `basics_python.rs`; 15 pass, 18 phase 1 checks ignored and
+  failing until their items land; found 1.14) Basics suite: `tests/basics.rs` turning the review's probe into tests. Transforms, pivots, freeze and
   reset, duplicate and instance, group and parent, names, undo, units, keys, files, selection, attributes. It
   should fail today on everything listed in phase 1.
 - [ ] 0.4 A `--batch` mode (no window, no Vulkan) that runs `--script` and exits with the script's status, so the
@@ -75,6 +76,10 @@ Each was reproduced on 08/11/2026 through `maya.cmds` in the built app.
   and the rest of the reference's attribute names, so `.ma` files open smoothed and `displaySmoothness -q -po` answers.
   Keep `smoothPreview` as an alias for old Aztek files.
 - [ ] 1.13 `shadingNode -isColorManaged`, `hyperShade -listUpstreamShaderNodes` and the other `hyperShade` flags.
+- [ ] 1.14 Found by the basics suite (08/11/2026): an instance is its own shape node joined to the source by a
+  connection, so `listRelatives -ap` on the shape lists one parent and attributes set on one instance's shape don't
+  reach the other. The reference has one shape under several parents. Also `duplicate` keeps the source's shape name
+  under the new transform (`pCube2|pCubeShape1`) where the reference names it `pCubeShape2`: in 1.5.
 
 ## Phase 2: missing basics
 
@@ -159,7 +164,8 @@ What studio tools need before they run at all.
   arrays, several UV sets, `MRampAttribute`, shear on `MFnTransform`.
 - [ ] 5.4 Check that `pip install pymel` imports and runs a common set of calls against the shims; fix the shim where
   pymel's import-time introspection fails.
-- [ ] 5.5 C++ plug-in kit (in progress): keep going, but after 5.1 to 5.3, since most studio tools are Python.
+- [~] 5.5 (08/11/2026: in are the ABI, loading, commands, nodes, deformers, data blocks, plugs, DAG and transform
+  function sets, modifiers, CMake package and three samples; MFnMesh and iterators were under way, paused) C++ plug-in kit (in progress): keep going, but after 5.1 to 5.3, since most studio tools are Python.
 
 ## Phase 6: speed
 
