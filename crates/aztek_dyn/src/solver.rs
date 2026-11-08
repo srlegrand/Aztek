@@ -460,9 +460,10 @@ impl Solver {
         }
         if body.settings.tear_ratio <= 0.0 {
             let (path, start, rest_len) = crate::topology::stretch_paths(t, rest);
-            c.path = path;
-            c.path_start = start;
-            c.path_rest = rest_len;
+            c.limit = (0..rest_len.len()).map(|k| [path[start[k] as usize], path[start[k + 1] as usize - 1]]).collect();
+            c.limit_edges = (0..rest_len.len()).map(|k| (start[k + 1] - start[k]) as f64 - 1.0).collect();
+            c.limit_rest = rest_len;
+            c.limit_colour = colour(&mut c.limit, &mut [&mut c.limit_rest, &mut c.limit_edges], n);
         }
         let anchors: Vec<u32> = (0..n).filter(|&l| body.map(&body.settings.pin_map, l, 0.0) >= 0.5).map(|l| l as u32).collect();
         if !anchors.is_empty() && body.settings.tear_ratio <= 0.0 {

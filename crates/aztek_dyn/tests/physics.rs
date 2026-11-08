@@ -125,3 +125,32 @@ fn rigid_stack_stays_standing() {
         assert!(m.y_axis.truncate().normalize().y > 0.98, "box {k} tipped");
     }
 }
+
+#[test]
+fn fine_cloth_holds_its_length_over_a_ball() {
+    // Ten thousand points of cotton over a ball: the fine edges alone carry the hanging weight only a few edges a
+    // pass, and the cloth on the ball stretched by 7% on average before the long range limits.
+    let mut s = Solver::new(SolverSettings::default());
+    let n = 100;
+    let (pts, faces) = grid(n, 2.0, 1.0);
+    let c = s.add_cloth("cloth", pts, &faces, BodySettings { self_collide: false, ..cloth_settings(2.0 / n as f64 * 0.3) });
+    let (sp, sf) = sphere(0.5, DVec3::ZERO, 32, 16);
+    s.add_collider("ball", sp, &sf, BodySettings { thickness: 0.0, friction: 0.3, ..Default::default() });
+    s.reset();
+    for _ in 0..36 {
+        s.step(DT);
+    }
+    let body = &s.bodies[c];
+    let x = s.positions(c);
+    let (mut sum, mut count) = (0.0, 0);
+    for e in &body.topo.edges {
+        let (a, b) = (x[e[0] as usize], x[e[1] as usize]);
+        if a.length() < 0.55 || b.length() < 0.55 {
+            sum += (a - b).length() / (body.rest[e[0] as usize] - body.rest[e[1] as usize]).length();
+            count += 1;
+        }
+    }
+    let mean = sum / count as f64;
+    assert!(count > 1000, "only {count} edges on the ball");
+    assert!(mean < 1.04, "edges on the ball stretched {mean} on average");
+}

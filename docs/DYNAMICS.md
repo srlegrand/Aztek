@@ -96,9 +96,10 @@ contacts, and takes the velocity from what moved. Small steps rather than many i
 
 - **Cloth:** stretch and compression (separate stiffness), dihedral bending, optional area, attraction to the input
   mesh with a per point map, pins, stretch limits and long range attachments. Stretch limits hold vertices several
-  edges apart (3, 9, 27...) no further apart than the path between them along the rest mesh; long range attachments
-  keep every vertex within its distance along the rest mesh from the nearest pin. Neither acts on folds, only on
-  stretch, and they carry tension across a fine mesh in one step.
+  edges apart (3, 9, 27...) no further apart than the path between them along the rest mesh, as stiff as that
+  path's edges in a row, solved with the edges in every pass; long range attachments keep every vertex within its
+  distance along the rest mesh from the nearest pin. Neither acts on folds, only on stretch, and they carry tension
+  across a fine mesh in one step.
 - **Parallel and repeatable:** constraints are coloured so the constraints of one colour share no particle and solve
   at once; contacts are summed per particle in a fixed order. The result is the same, bit for bit, on any number of
   threads.
@@ -126,7 +127,8 @@ contacts, and takes the velocity from what moved. Small steps rather than many i
 
 What the solve cannot place, it does not force. After each frame every vertex is checked for: left through a
 collider by more than half the thickness, pushed through deeper than it can be brought back, pressed into its
-thickness from opposite sides at once, stretched past the stretch limit (3 times rest), swinging back and forth faster
+thickness from opposite sides at once, stretched past the stretch limit (3 times rest, an edge shorter than the mean judged as if it were the mean, so
+seam slivers count only when they open as far as an ordinary edge would), swinging back and forth faster
 than its thickness each frame, or a value that stopped being finite. Each adds to a trouble score that decays by 0.6 a
 frame; at 2 the vertex leaves the simulation.
 
@@ -179,13 +181,13 @@ Measured on 32 threads, release build.
 | Cloth drape on a sphere (`drape` example, grid 30) | 961 | 13 |
 | Free cloth, no contacts (grid 141) | 20,164 | about 100 (60 of it constraints) |
 | The same falling onto a sphere, self collision on | 20,164 | about 100, at most 115 |
-| Shirt on a skinned character, self collision, gentle swing | 3,018 against 15,277 | 52 to 81 solving |
-| The same shirt smoothed once | 12,153 against 15,277 | 260 to 1,050 solving |
+| Shirt on a skinned character, self collision, gentle swing | 3,018 against 15,277 | 55 to 77 solving |
+| The same shirt smoothed once | 12,153 against 15,277 | 610 on average, at most 910, solving |
 
 Where the time goes on the character: cloth constraints, the contact search (cloth against itself) and resolving
 collider contacts about a third each. The skinned body's own evaluation adds about 25 ms a frame outside the solver.
-The smoothed shirt is slow while many of its vertices are out of the simulation, most for stretching at contacts:
-still open.
+The smoothed shirt keeps all its vertices in the simulation now and is slow for its self contacts: a million pairs a
+search, about 80 a point, where its 2 mm thickness is more than half its edges. Still open.
 `cargo run --release -p aztek_scene --example cloth_rig -- file.ma garment body control` prints it per frame for a
 rig; `dynInfo` shows it per part.
 

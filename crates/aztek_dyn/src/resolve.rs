@@ -78,9 +78,10 @@ fn score(s: &Solver, i: usize, dt: f64) -> f64 {
     if body.kind == BodyKind::Cloth {
         let l = s.pt.local[i] as usize;
         let rest = if body.settings.rest_from_input { &body.anim } else { &body.rest };
-        // Against a length of at least a quarter of the mean edge: a modelled garment has seam edges a fraction of a
-        // millimetre long, which any motion would count as stretched many times over.
-        let floor = body.mean_edge * 0.25;
+        // Against a length of at least the mean edge: a modelled garment has seam edges a fraction of a millimetre
+        // long, which any motion would count as stretched many times over, and a sliver beside a stretched triangle
+        // opens as far as that triangle's edges do.
+        let floor = body.mean_edge;
         let mut worst = 0.0f64;
         for &k in &body.topo.neighbours[l] {
             let r = (rest[l] - rest[k as usize]).length();
@@ -104,6 +105,7 @@ pub(crate) fn end_frame(s: &mut Solver, dt: f64) {
     let scores: Vec<f64> = (0..n).map(|i| score(s, i, dt)).collect();
     if std::env::var("DYN_WHY").is_ok() {
         let (mut nan, mut deep, mut pen, mut sq, mut st, mut osc) = (0, 0, 0, 0, 0, 0);
+        let mut st_short = 0;
         for i in 0..n {
             let g = &s.pt.sig[i];
             nan += g.nan as usize;
@@ -113,14 +115,17 @@ pub(crate) fn end_frame(s: &mut Solver, dt: f64) {
             let body = &s.bodies[s.pt.body[i] as usize];
             if body.kind == BodyKind::Cloth {
                 let l = s.pt.local[i] as usize;
-                let floor = body.mean_edge * 0.25;
-                let worst = body.topo.neighbours[l].iter().map(|&k| { let r = (body.rest[l] - body.rest[k as usize]).length(); 1.0 + ((s.pt.x[i] - s.pt.x[body.start + k as usize]).length() - r) / r.max(floor).max(1e-12) }).fold(0.0, f64::max);
-                st += (worst > body.settings.stretch_limit) as usize;
+                let floor = body.mean_edge;
+                let (worst, wr) = body.topo.neighbours[l].iter().map(|&k| { let r = (body.rest[l] - body.rest[k as usize]).length(); (1.0 + ((s.pt.x[i] - s.pt.x[body.start + k as usize]).length() - r) / r.max(floor).max(1e-12), r) }).fold((0.0, 0.0), |m, v| if v.0 > m.0 { v } else { m });
+                if worst > body.settings.stretch_limit {
+                    st += 1;
+                    if wr < floor { st_short += 1; }
+                }
             }
             let (v, vp) = (s.pt.v[i], s.pt.v_prev_frame.get(i).copied().unwrap_or(DVec3::ZERO));
             osc += (v.length() * dt > s.pt.radius[i] * 2.0 && vp.length() * dt > s.pt.radius[i] * 2.0 && v.dot(vp) < -0.5 * v.length() * vp.length()) as usize;
         }
-        eprintln!("why: nan {nan} deep {deep} pen {pen} squeeze {sq} stretch {st} oscillate {osc}; jumps {:?}", s.jumps);
+        eprintln!("why: nan {nan} deep {deep} pen {pen} squeeze {sq} stretch {st} ({st_short} on edges under the floor) oscillate {osc}; jumps {:?}", s.jumps);
         s.jumps.clear();
     }
     let mut relearn = Vec::new();
