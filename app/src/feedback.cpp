@@ -375,6 +375,8 @@ void show_in_folder(const QString& folder, const QString& file) {
                               "org.freedesktop.FileManager1.ShowItems", "array:string:" + QUrl::fromLocalFile(path).toString(), "string:"});
         if (p.waitForFinished(1500) && p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0) return;
     }
+#elif defined(Q_OS_MACOS)
+    if (!file.isEmpty() && QProcess::startDetached("open", {"-R", path})) return;
 #else
     Q_UNUSED(path);
 #endif

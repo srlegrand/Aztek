@@ -86,6 +86,9 @@ void ViewportWidget::ensure() {
     } else {
         log("// Error: viewport: run on X11 (QT_QPA_PLATFORM=xcb) //", 2);
     }
+#elif defined(Q_OS_MACOS)
+    // winId() is the widget's NSView; Vulkan draws to a Metal layer on it through MoltenVK.
+    id_ = aztek_view_create(AZTEK_APPKIT, nullptr, quint64(winId()), nullptr, w, h, dpr, cam.constData());
 #endif
     if (id_) {
         for (auto it = pending_.begin(); it != pending_.end(); ++it) aztek_view_set(id_, it.key().section(':', 0, 0).toUtf8().constData(), it.value().toUtf8().constData());

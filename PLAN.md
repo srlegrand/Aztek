@@ -210,7 +210,7 @@ What studio tools need before they run at all.
 ## Phase 10: rendering, dynamics, platform
 
 Keep working the existing tickets for Harold (render layers and render setup first), the unified dynamics and
-Bicurious in their own order; this plan doesn't reorder them. macOS build when the phases above are done.
+Bicurious in their own order; this plan doesn't reorder them. macOS: CI builds an early Apple-silicon package that no release waits on; checking it on a Mac (viewport, Cmd and Option) comes after the phases above.
 
 ## Not planned
 

@@ -22,7 +22,7 @@ target and status, including known differences; [docs/COMMANDS.md](docs/COMMANDS
 
 Website: [srlegrand.github.io/Aztek](https://srlegrand.github.io/Aztek/). Licence: [MIT-0](LICENSE).
 
-**Download** from the [latest release](https://github.com/srlegrand/Aztek/releases/latest): Windows installer or zip, Rocky Linux 9 and 8 `.rpm`, Ubuntu 24.04 and 22.04 `.deb`, Linux `.tar.gz`. Install steps are under [Install](#install).
+**Download** from the [latest release](https://github.com/srlegrand/Aztek/releases/latest): Windows installer or zip, Rocky Linux 9 and 8 `.rpm`, Ubuntu 24.04 and 22.04 `.deb`, Linux `.tar.gz`, and an early macOS build for Apple silicon. Install steps are under [Install](#install).
 
 | Modelling history | Cloth, rendered with Harold | Rigid bodies on cloth |
 | --- | --- | --- |
@@ -240,8 +240,10 @@ Packages are on the [releases page](https://github.com/srlegrand/Aztek/releases)
 | Rocky Linux 9 | `aztek-<version>-1.el9.x86_64.rpm` | `sudo dnf install epel-release`, then `sudo dnf install ./aztek-*.el9.x86_64.rpm` |
 | Ubuntu 22.04, 24.04 | `aztek_<version>-1_ubuntu22.04_amd64.deb`, `..._ubuntu24.04_...` | `sudo apt install ./aztek_*.deb` |
 | Windows 10 and 11 | `aztek-<version>-setup-x64.exe`, or the zip | Run it. It isn't signed, so SmartScreen asks first |
+| macOS 14+, Apple silicon (early) | `aztek-macos-arm64.zip` | `brew install python@3.12`, unzip, then right-click Aztek.app and Open the first time: it isn't notarized |
 
-The viewport needs a Vulkan driver: NVIDIA's own driver has one, and Mesa's `mesa-vulkan-drivers` covers AMD and Intel.
+The viewport needs a Vulkan driver: NVIDIA's own driver has one, and Mesa's `mesa-vulkan-drivers` covers AMD and Intel. On macOS it
+draws through MoltenVK, which comes inside Aztek.app.
 [docs/PACKAGING.md](docs/PACKAGING.md) has the details, and how the packages are built.
 
 ## Build
@@ -253,6 +255,13 @@ Linux:
 `--deps` installs the build dependencies (apt, dnf or pacman) and only needs running once; `--run` starts Aztek
 afterwards; `--install` puts it in `~/.local` with a menu entry and icon; `--debug` builds into `build-debug/`. Rust comes from [rustup](https://rustup.rs). An active conda
 environment is fine: the script builds against the system Python and ignores conda's libraries.
+
+macOS, with [Homebrew](https://brew.sh):
+
+    ./build.sh --deps --run
+
+`--deps` installs CMake, Ninja, Qt, Python 3.12 and MoltenVK with Homebrew. The build is `build/aztek.app`. macOS is
+new: the viewport, menus and shortcuts haven't been checked there yet.
 
 Windows, from PowerShell or a command prompt:
 

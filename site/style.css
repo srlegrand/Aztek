@@ -102,7 +102,7 @@ h1 { font: 700 clamp(34px, 5vw, 58px)/1.02 "Barlow Condensed", sans-serif; margi
 .dl-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .dl-head h2 { margin: 0; color: var(--navy); }
 .build-line { margin: 0; color: var(--muted); font-size: 14px; }
-.dl-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; margin: 18px auto; }
+.dl-grid { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 10px; margin: 18px auto; }
 .dl {
   display: flex; flex-direction: column; gap: 2px;
   padding: 14px 12px 12px;
@@ -117,6 +117,7 @@ h1 { font: 700 clamp(34px, 5vw, 58px)/1.02 "Barlow Condensed", sans-serif; margi
 .dl.rocky { border-top-color: #10b981; }
 .dl.ubuntu { border-top-color: #e95420; }
 .dl.linux { border-top-color: #4c5564; }
+.dl.mac { border-top-color: #9aa3ad; }
 .dl:hover { border-top-color: var(--orange); }
 .dl .os { font-size: 20px; font-weight: 700; color: var(--navy); line-height: 1.1; }
 .dl .file { color: var(--muted); font-size: 13px; }

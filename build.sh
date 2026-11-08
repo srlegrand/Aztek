@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Builds Aztek on Linux: ./build.sh [--deps] [--debug] [--run]
-#   --deps   install the build dependencies first (apt, dnf or pacman)
+# Builds Aztek on Linux and macOS: ./build.sh [--deps] [--debug] [--run]
+#   --deps   install the build dependencies first (apt, dnf, pacman, or Homebrew on macOS)
 #   --debug  debug build in build-debug/
 #   --run    start Aztek when the build is done
 #   --install  install to ~/.local: the binary, a menu entry and the icon
@@ -18,8 +18,15 @@ for a in "$@"; do
   esac
 done
 
+MAC=0
+[ "$(uname -s)" = Darwin ] && MAC=1
+
 if [ "$DEPS" = 1 ]; then
-  if command -v apt >/dev/null; then
+  # macOS first: its /usr/bin/apt is a stub for an old Java tool, not a package manager.
+  if [ "$MAC" = 1 ]; then
+    command -v brew >/dev/null || { echo "Install Homebrew first: https://brew.sh"; exit 1; }
+    brew install cmake ninja qt python@3.12 molten-vk
+  elif command -v apt >/dev/null; then
     sudo apt install -y build-essential cmake ninja-build qt6-base-dev libvulkan-dev mesa-vulkan-drivers python3-dev
   elif command -v dnf >/dev/null; then
     sudo dnf install -y gcc-c++ cmake ninja-build qt6-qtbase-devel vulkan-loader-devel mesa-vulkan-drivers python3-devel
@@ -40,13 +47,22 @@ done
 
 # Conda's Python and libraries shadow the system's: build against the system Python.
 EXTRA=()
-if [ -n "${CONDA_PREFIX:-}" ] && [ -x /usr/bin/python3 ]; then
+if [ "$MAC" = 1 ] && command -v brew >/dev/null; then
+  # Homebrew's Python and Qt, not Xcode's Python or a conda one.
+  PY="$(brew --prefix python@3.12 2>/dev/null)/bin/python3.12"
+  [ -x "$PY" ] && EXTRA+=(-DPython3_EXECUTABLE="$PY")
+  QTP="$(brew --prefix qt 2>/dev/null)"
+  [ -d "$QTP" ] && EXTRA+=(-DCMAKE_PREFIX_PATH="$QTP")
+  [ -n "${CONDA_PREFIX:-}" ] && EXTRA+=(-DCMAKE_IGNORE_PREFIX_PATH="$CONDA_PREFIX")
+elif [ -n "${CONDA_PREFIX:-}" ] && [ -x /usr/bin/python3 ]; then
   EXTRA+=(-DPython3_EXECUTABLE=/usr/bin/python3 -DCMAKE_IGNORE_PREFIX_PATH="$CONDA_PREFIX")
 fi
 
 cmake -B "$DIR" -G Ninja -DCMAKE_BUILD_TYPE="$TYPE" "${EXTRA[@]}"
 cmake --build "$DIR"
-echo "Built $DIR/aztek"
+BIN="$DIR/aztek"
+[ "$MAC" = 1 ] && BIN="$DIR/aztek.app/Contents/MacOS/aztek"
+echo "Built $BIN"
 
 if [ "$INSTALL" = 1 ]; then
   cmake --install "$DIR" --prefix "$HOME/.local"
@@ -55,5 +71,5 @@ if [ "$INSTALL" = 1 ]; then
 fi
 
 if [ "$RUN" = 1 ]; then
-  exec "$DIR/aztek"
+  exec "$BIN"
 fi

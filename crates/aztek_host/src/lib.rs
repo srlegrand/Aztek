@@ -445,6 +445,7 @@ pub const PLATFORM_XCB: i32 = 1;
 pub const PLATFORM_XLIB: i32 = 2;
 pub const PLATFORM_WIN32: i32 = 3;
 pub const PLATFORM_WAYLAND: i32 = 4;
+pub const PLATFORM_APPKIT: i32 = 5;
 
 fn handles(platform: i32, display: *mut c_void, window: u64, extra: *mut c_void) -> Option<(RawDisplayHandle, RawWindowHandle)> {
     use raw_window_handle::*;
@@ -465,6 +466,11 @@ fn handles(platform: i32, display: *mut c_void, window: u64, extra: *mut c_void)
         PLATFORM_WAYLAND => (
             RawDisplayHandle::Wayland(WaylandDisplayHandle::new(NonNull::new(display)?)),
             RawWindowHandle::Wayland(WaylandWindowHandle::new(NonNull::new(extra)?)),
+        ),
+        // window is the NSView.
+        PLATFORM_APPKIT => (
+            RawDisplayHandle::AppKit(AppKitDisplayHandle::new()),
+            RawWindowHandle::AppKit(AppKitWindowHandle::new(NonNull::new(window as usize as *mut c_void)?)),
         ),
         _ => return None,
     })

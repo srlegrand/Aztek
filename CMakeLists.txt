@@ -87,6 +87,13 @@ add_executable(aztek WIN32
   app/src/resources.qrc
   $<$<PLATFORM_ID:Windows>:app/icons/aztek.rc>)
 add_dependencies(aztek aztek_host_build)
+if(APPLE)
+  # Aztek.app: macdeployqt adds Qt, the release build adds MoltenVK and the icon.
+  set_target_properties(aztek PROPERTIES MACOSX_BUNDLE TRUE
+    MACOSX_BUNDLE_BUNDLE_NAME Aztek
+    MACOSX_BUNDLE_GUI_IDENTIFIER io.github.srlegrand.aztek
+    MACOSX_BUNDLE_ICON_FILE aztek.icns)
+endif()
 file(STRINGS ${CMAKE_SOURCE_DIR}/Cargo.toml AZTEK_VERSION_LINE REGEX "^version *= *\"")
 string(REGEX REPLACE "^version *= *\"([^\"]*)\".*" "\\1" AZTEK_VERSION "${AZTEK_VERSION_LINE}")
 # What a user reads: 1.N and the commit it was built from, so any build traces back to its change.
@@ -116,12 +123,17 @@ if(WIN32)
   target_link_libraries(aztek PRIVATE ws2_32 userenv bcrypt ntdll advapi32 user32 kernel32 ole32 oleaut32 shell32
                         synchronization dbghelp psapi pdh powrprof iphlpapi netapi32 secur32 crypt32 ncrypt
                         wbemuuid propsys uuid winmm gdi32 comdlg32 version runtimeobject)
+elseif(APPLE)
+  # What the Rust standard library, ash-window's Metal layer and the other crates link on macOS.
+  target_link_libraries(aztek PRIVATE "-framework Foundation" "-framework CoreFoundation" "-framework AppKit"
+                        "-framework QuartzCore" "-framework Metal" "-framework CoreGraphics" "-framework IOKit"
+                        "-framework Security" "-framework SystemConfiguration" objc iconv dl pthread m)
 else()
   target_link_libraries(aztek PRIVATE dl pthread m)
 endif()
 
 # Install: the binary, and on Linux its desktop entry and icon (cmake --install build --prefix ~/.local).
-install(TARGETS aztek RUNTIME DESTINATION bin)
+install(TARGETS aztek RUNTIME DESTINATION bin BUNDLE DESTINATION .)
 if(UNIX AND NOT APPLE)
   install(FILES app/aztek.desktop DESTINATION share/applications)
   install(FILES app/icons/aztek-icon.svg DESTINATION share/icons/hicolor/scalable/apps RENAME aztek.svg)

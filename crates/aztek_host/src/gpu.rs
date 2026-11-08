@@ -34,11 +34,42 @@ pub struct Shared {
 
 type Res<T> = Result<T, Box<dyn std::error::Error>>;
 
+/// The Vulkan library. On macOS that is MoltenVK: the copy inside Aztek.app first, then a Vulkan loader on the library
+/// path (the Vulkan SDK), then Homebrew's. dlopen doesn't look in Homebrew's folders by itself.
+unsafe fn load_vulkan() -> Result<ash::Entry, ash::LoadingError> {
+    #[cfg(target_os = "macos")]
+    {
+        let mut tries: Vec<std::path::PathBuf> = Vec::new();
+        if let Some(dir) = std::env::current_exe().ok().and_then(|e| e.parent().map(|p| p.to_path_buf())) {
+            tries.push(dir.join("../Frameworks/libMoltenVK.dylib"));
+            tries.push(dir.join("../Frameworks/libvulkan.1.dylib"));
+        }
+        for p in &tries {
+            if p.exists() {
+                if let Ok(e) = ash::Entry::load_from(p) {
+                    return Ok(e);
+                }
+            }
+        }
+        if let Ok(e) = ash::Entry::load() {
+            return Ok(e);
+        }
+        for p in ["/opt/homebrew/lib/libMoltenVK.dylib", "/usr/local/lib/libMoltenVK.dylib", "/opt/homebrew/lib/libvulkan.1.dylib", "/usr/local/lib/libvulkan.1.dylib"] {
+            if std::path::Path::new(p).exists() {
+                if let Ok(e) = ash::Entry::load_from(p) {
+                    return Ok(e);
+                }
+            }
+        }
+    }
+    ash::Entry::load()
+}
+
 impl Shared {
     /// display: the windowing system's display, for the instance's surface extensions. probe: a window of that display,
     /// so the chosen queue can present to it.
     pub unsafe fn new(display: RawDisplayHandle, probe: RawWindowHandle) -> Res<Arc<Shared>> {
-        let entry = ash::Entry::load()?;
+        let entry = load_vulkan()?;
         let app_name = c"Aztek";
         let app_info =
             vk::ApplicationInfo::default().application_name(app_name).engine_name(app_name).api_version(vk::make_api_version(0, 1, 2, 0));

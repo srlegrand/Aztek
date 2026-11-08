@@ -90,11 +90,13 @@ the exe on Windows.
 
 ## macOS
 
-Not built. See the list below for what it would take.
+Early. The `macos` job builds `aztek-macos-arm64.zip` on a `macos-14` runner (Apple silicon). It isn't a condition of a
+release yet: when it fails, the other packages still go out.
 
-- `aztek_view_create` needs an AppKit case (`RawWindowHandle::AppKit` with the `NSView` from `winId()`) and `viewport.cpp`
-  a matching branch. `ash_window` makes the Metal layer, and `gpu.rs` already asks for the portability extensions.
-- MoltenVK and the Vulkan loader have to be found: `ash` opens `libvulkan.dylib`, which an app bundle has to carry.
-- `CMakeLists.txt` needs the frameworks the Rust crates link, and a bundle with `macdeployqt`.
-- Mouse and key handling assume Alt and Ctrl as on Linux and Windows; Cmd and Option need deciding.
-- None of it can be tried without a Mac or a `macos-14` runner, and the viewport can only be judged on a real Mac.
+- `Aztek.app` carries Qt (`macdeployqt`) and `libMoltenVK.dylib` in `Contents/Frameworks`, with an ad-hoc signature.
+  It isn't notarized: the first start is a right-click and Open.
+- Python is Homebrew's `python@3.12`, linked from `/opt/homebrew`: `brew install python@3.12` before starting it.
+- `gpu.rs` loads MoltenVK from the bundle first, then a Vulkan loader on the library path, then Homebrew's folders.
+  The viewport draws through `AZTEK_APPKIT`: the widget's `NSView`, with a Metal layer from `ash_window`.
+- `./build.sh --deps` installs the build dependencies with Homebrew; the build is `build/aztek.app`.
+- Not checked yet: the viewport on a real Mac, and whether Ctrl and Alt in mouse and key handling should be Cmd and Option.

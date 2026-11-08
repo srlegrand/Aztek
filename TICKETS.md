@@ -21,7 +21,7 @@ Requests waiting or in progress, newest detail kept. Move to Done with the date 
 - Menus still missing: UV Pin, Proximity Pin, Interactive Bind Skin, Split UVs, 3D Cut and Sew, Unsmooth, Slice, Hole Punch, Cut Out, Deform Edit submenus, Prune Membership, Relationship Editors, IK/FK Keys, Audio, Cache, Visualize.
 - World symmetry: an object moved after symmetry was set keeps its old pairs.
 - `.mb` files read (low priority).
-- macOS build, if it's little trouble.
+- macOS: the early Apple-silicon build has to be tried on a Mac (viewport through MoltenVK, Cmd and Option in mouse and key handling), then made a condition of a release.
 - Lou: `poseInterpolator`, blendShape on a lattice.
 - Reference gaps: `exportEdits`, `-shd`, painted weights and tweaks on referenced meshes as edits; second reference of a large rig loads slower than the first.
 - `conversionFactor` written normalised (0.0436 saves as 2.5), which the reference would read differently.
