@@ -653,4 +653,21 @@ mod tests {
         assert_eq!(std::mem::size_of::<LightBlock>(), 64 + 16 + 7 * 16 * MAX_LIGHTS);
         assert!(MATERIAL_FS.contains("Light lights[16]") && MAX_LIGHTS == 16);
     }
+
+    /// The shader's lighting is `aztek_scene::lights::viewport_diffuse` in GLSL, and the renderer is tested against that
+    /// (tests/light_parity.rs). These are the lines that formula mirrors: change one side, change the other.
+    #[test]
+    fn the_shader_lights_as_the_shared_formula() {
+        for line in [
+            "return rate < 0.5 ? 1.0 : 1.0 / pow(max(d, 0.001), rate);",
+            "diff += c * (1.0 - par.x);",
+            "float edge = clamp((cone - par.x) / max(par.y - par.x, 0.00001), 0.0, 1.0);",
+            "c *= decay(dir.w, d) * edge * pow(max(cone, 0.0), par.z);",
+            "c *= decay(dir.w, d) * max(dot(-l, dir.xyz), 0.0);",
+            "float fade = clamp(1.0 - reach, 0.0, 1.0);",
+            "diff += c * nl;",
+        ] {
+            assert!(MATERIAL_FS.contains(line), "the viewport's lighting changed: {line}");
+        }
+    }
 }

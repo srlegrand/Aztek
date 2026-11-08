@@ -51,7 +51,8 @@ fn centre(film: &aztek_render::film::Film) -> glam::Vec4 {
     sum / 16.0
 }
 
-/// A plane under a point light, seen from above: lambert1's albedo (0.8 x 0.5) over pi, times I / d^2.
+/// A plane under a point light with no decay, seen from above: lambert1's diffuse times colour (0.8 x 0.5) times the
+/// light, as the viewport lights it.
 #[test]
 fn lambert_under_a_point_light() {
     let mut s = scene();
@@ -62,7 +63,7 @@ fn lambert_under_a_point_light() {
     set(&mut s, "defaultArnoldRenderOptions.GIDiffuseDepth", json!(0));
     let (film, _) = render(&mut s, "top");
     let c = centre(&film);
-    let expect = 0.8 * 0.5 / std::f32::consts::PI * 1.0 / 4.0;
+    let expect = 0.8 * 0.5 * 1.0;
     assert!((c.x - expect).abs() / expect < 0.03, "{} vs {expect}", c.x);
     assert!((c.w - 1.0).abs() < 1e-4, "covered: alpha {}", c.w);
 }
@@ -210,7 +211,7 @@ fn glowing_surface_keeps_the_default_light() {
     set(&mut s, &format!("{m}.incandescence"), json!([0.5, 0.5, 0.5]));
     let mut tr = Translator::default();
     let (scene, _) = harold::translate(&mut s, &mut tr, &Request::default()).unwrap();
-    assert_eq!(scene.lights.len(), 2, "the default light and the glow");
+    assert_eq!(scene.lights.len(), 6, "the default lighting's five and the glow");
     assert!(scene.warnings.iter().any(|w| w.contains("default light")));
 }
 

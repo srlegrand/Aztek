@@ -142,6 +142,8 @@ pub struct Options {
     /// Light group names, by group index; 0 is "default".
     pub light_groups: Vec<String>,
     pub texture_max_memory_mb: usize,
+    /// What camera rays that meet nothing see, where no sky dome is.
+    pub background: Vec3,
 }
 
 impl Default for Options {
@@ -187,6 +189,7 @@ impl Default for Options {
             aovs: Vec::new(),
             light_groups: vec!["default".into()],
             texture_max_memory_mb: 4096,
+            background: Vec3::ZERO,
         }
     }
 }

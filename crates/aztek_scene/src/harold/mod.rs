@@ -455,13 +455,31 @@ pub fn translate(s: &mut Session, tr: &mut Translator, req: &Request) -> Result<
     let no_lights = scene.lights.is_empty();
     lights::emissive(&mut scene);
     if no_lights && default_light_on(&mut s.graph) {
-        let dir = scene.camera.xforms[0].transform_vector3(Vec3::new(0.3, 0.4, 1.0)).normalize();
-        scene.lights.push(aztek_render::lights::Light::new("defaultLight", aztek_render::lights::Shape::Distant { dir, cos_half: 1.0 }, Vec3::ONE * std::f32::consts::PI));
-        warnings.push("no lights: rendered with a default light from the camera".into());
+        let cam = scene.camera.xforms[0];
+        scene.lights.extend(default_lights(&cam));
+        warnings.push("no lights: rendered with the viewport's default lighting".into());
     }
     scene.prepare();
     scene.warnings = warnings;
     Ok((scene, common))
+}
+
+/// The viewport's default lighting, which follows the camera: a key and a fill each lighting both ways (the viewport
+/// takes the absolute cosine), and a little all round. Unshadowed, as the viewport's.
+pub fn default_lights(camera: &Mat4) -> Vec<aztek_render::lights::Light> {
+    use aztek_render::lights::{Light, Shape};
+    let pi = std::f32::consts::PI;
+    let key = camera.transform_vector3(Vec3::new(-0.45, 0.6, 0.65).normalize()).normalize();
+    let fill = camera.transform_vector3(Vec3::new(0.6, -0.2, 0.75).normalize()).normalize();
+    let mut out = Vec::new();
+    for (name, dir, k) in [("defaultKey", key, 0.95 * 0.75), ("defaultKeyBack", -key, 0.95 * 0.75), ("defaultFill", fill, 0.95 * 0.3), ("defaultFillBack", -fill, 0.95 * 0.3)] {
+        let mut l = Light::new(name, Shape::Distant { dir, cos_half: 1.0 }, Vec3::splat(pi * k));
+        l.cast_shadows = false;
+        out.push(l);
+    }
+    let pos = camera.transform_point3(Vec3::ZERO);
+    out.push(Light::new("defaultAmbient", Shape::Ambient { pos, shade: 0.0 }, Vec3::splat(pi * 0.12)));
+    out
 }
 
 fn default_light_on(g: &mut Graph) -> bool {

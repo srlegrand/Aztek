@@ -116,6 +116,7 @@ pub fn read(g: &mut Graph, warnings: &mut Vec<String>) -> (Options, Common, Moti
         o.ignore_dof = get_b(g, a, "ignoreDof", false);
         o.ignore_motion_blur = get_b(g, a, "ignoreMotionBlur", false);
         o.denoise = get_b(g, a, "denoiseBeauty", false);
+        o.background = super::network::get_v(g, a, "background", glam::Vec3::ZERO);
         let threads = get_f(g, a, "threads", 0.0) as i64;
         if !get_b(g, a, "threads_autodetect", true) && threads > 0 {
             o.threads = threads as usize;

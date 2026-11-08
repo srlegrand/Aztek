@@ -354,6 +354,7 @@ fn settings_table() -> Vec<(&'static str, &'static str, Vec<AttrDef>)> {
                 s("log_filename", "log_filename", ""),
                 b("aovMode", "aovMode", true),
                 b("denoiseBeauty", "denoiseBeauty", false),
+                b("physicalLights", "physicalLights", false),
                 c("background", "background", [0.0; 3], IN),
                 hidden(slots("atmosphere", "atmosphere")),
                 hidden(slots("aovList", "aovs")),
