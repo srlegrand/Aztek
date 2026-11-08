@@ -104,6 +104,12 @@ fn body_common() -> Vec<AttrDef> {
         link("solver", "slv", false, "The solver it belongs to."),
         link("inputForce", "ifc", true, "The fields acting on it."),
         b("isDynamic", "isd", true, "Off: it takes no part in the solve."),
+    ]
+}
+
+/// Last on every body: its cache, and what a file from another system gave it.
+fn body_file() -> Vec<AttrDef> {
+    vec![
         s("diskCache", "dkc", "A cache file the body plays from instead of being solved, where it has the frame."),
         s("fileType", "fty", "The type the node had in the file it was read from, when that was another system's."),
         s("fileAttributes", "fat", "What the file set on it that is not used here, kept to be written back."),
@@ -155,6 +161,7 @@ pub(crate) fn register_cloth(gf: Arc<NodeType>) {
         data_attr("pinPerVertex", "pnpv", "Per point pins: 1 follows the incoming mesh exactly."),
     ]);
     own.extend(resolve_attrs());
+    own.extend(body_file());
     register(NodeType {
         name: CLOTH.into(),
         base: Some(gf),
@@ -231,6 +238,7 @@ pub(crate) fn register_types() {
             out_int("count", "cnt", "How many particles there are."),
         ]);
         own.extend(resolve_attrs());
+        own.extend(body_file());
         register(NodeType {
             name: PARTICLES.into(),
             base: Some(shape.clone()),
@@ -259,6 +267,7 @@ pub(crate) fn register_types() {
             out_vec("outTranslate", "otr", "Where the object is, for its translate."),
             out_vec("outRotate", "oro", "How it is turned, for its rotate (degrees, xyz)."),
         ]);
+        own.extend(body_file());
         register(NodeType {
             name: RIGID.into(),
             icon: "cube".into(),
@@ -276,6 +285,7 @@ pub(crate) fn register_types() {
             fr("friction", "fron", 0.1, "Friction.", 0.0, None),
             b("collide", "cold", true, "Off: nothing hits it."),
         ]);
+        own.extend(body_file());
         register(NodeType {
             name: COLLIDER.into(),
             icon: "shield".into(),

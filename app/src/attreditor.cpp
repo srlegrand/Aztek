@@ -662,6 +662,20 @@ void AttributeEditor::refresh() {
             form->addRow("Illuminates by Default", by_default);
         }
 
+        // Cloth: material presets.
+        if (node_type == "cloth") {
+            auto* form = add_section(v, body, "Presets");
+            auto* preset = new QComboBox(body);
+            preset->addItem("Choose a material...");
+            for (const char* p : {"Silk", "Cotton", "Leather", "Heavy Denim", "Rubber"}) preset->addItem(p);
+            connect(preset, QOverload<int>::of(&QComboBox::activated), preset, [path, preset](int i) {
+                static const QStringList names{"", "silk", "cotton", "leather", "heavyDenim", "rubber"};
+                if (i > 0) exec("clothPreset", QJsonObject{{"args", QJsonArray{path}}, {"preset", names.at(i)}});
+                preset->setCurrentIndex(0);
+            });
+            form->addRow("Material", preset);
+        }
+
         QJsonArray attrs = t["attrs"].toArray();
         QSet<QString> used;
         // A script's AE<type>Template lays the tab out: what it does not name shows only under -addExtraControls.
