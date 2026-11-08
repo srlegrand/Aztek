@@ -330,7 +330,7 @@ MItGeometry::MItGeometry(const std::shared_ptr<MeshData>& mesh, const MMatrix& w
     const AzMeshArrays& a = mesh_->get();
     for (size_t i = 0; i < n; ++i) {
         size_t id = a.point_id_count ? (size_t)a.point_ids[i] : i;
-        // Points outside the deformer's set have weight 0 here: they aren't visited, as Maya leaves them out.
+        // Points outside the deformer's set have weight 0 here: they aren't visited, as the reference leaves them out.
         if (w && (id >= wn || w[id] == 0.0)) continue;
         order_.push_back((int)i);
     }

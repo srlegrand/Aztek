@@ -270,7 +270,7 @@ impl NativeNode {
 }
 
 impl NativeNode {
-    /// The plug-in's object for the node: made when the node gets its id, on the thread making the node, as Maya makes
+    /// The plug-in's object for the node: made when the node gets its id, on the thread making the node, as the reference makes
     /// it with the node. Creators aren't known to be thread-safe, so under the global lock.
     fn make(&mut self) {
         if !self.inst.is_null() || self.id == NO_NODE || self.entry.crashed.load(Ordering::Relaxed) {

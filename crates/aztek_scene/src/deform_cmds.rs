@@ -55,7 +55,7 @@ fn create_plugin(s: &mut Session, a: &Args, ty: &str) -> CmdResult {
     if targets.is_empty() {
         fail!("deformer: nothing to deform");
     }
-    // Named as Maya names a new node: the type and a number.
+    // Named as the reference names a new node: the type and a number.
     let name = a.string("name", &format!("{ty}1"));
     let g = &mut s.graph;
     let (mesh, pts) = targets.remove(0);

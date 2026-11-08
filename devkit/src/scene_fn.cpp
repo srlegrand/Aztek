@@ -28,7 +28,7 @@ static Json nodeInfo(int64_t id, MStatus* st = 0) {
 static int64_t idNamed(const Json& name) { return name.isArray() ? nodeNamed(name[(size_t)0].text()) : nodeNamed(name.text()); }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Modifiers: edits queued until doIt, undone in reverse by undoIt. Nodes are made at once, as Maya makes them, and go
+// Modifiers: edits queued until doIt, undone in reverse by undoIt. Nodes are made at once, as the reference makes them, and go
 // again on undoIt; the MObject given out follows the node when redone.
 
 MDGModifier::MDGModifier() : done_(0) {}
@@ -66,7 +66,7 @@ MObject MDGModifier::azCreate(const std::string& type, int64_t parent, MStatus* 
     if (st) *st = s;
     if (!s) return MObject();
     int64_t made_id = idNamed(made);
-    // A shape made with no parent comes under a new transform, and that is what is given back, as Maya does.
+    // A shape made with no parent comes under a new transform, and that is what is given back, as the reference does.
     if (parent < 0) {
         Json info = nodeInfo(made_id);
         int64_t up = info["parent"].integer(0);

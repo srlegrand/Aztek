@@ -205,7 +205,7 @@ MString operator+(const char* a, const MString& b);
 std::ostream& operator<<(std::ostream& os, const MString& s);
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Arrays: each Maya array class is a class of its own over one template, so plug-ins may forward-declare them.
+// Arrays: each array class of the reference is a class of its own over one template, so plug-ins may forward-declare them.
 
 namespace az {
 template <typename T>
