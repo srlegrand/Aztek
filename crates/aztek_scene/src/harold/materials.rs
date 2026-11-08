@@ -152,7 +152,15 @@ impl MatBuilder<'_, '_> {
             s.emission = Input::c(1.0);
             s.emission_color = inc;
         }
-        for (a, label) in [("ambientColor", "ambient colour"), ("translucence", "translucence"), ("glowIntensity", "glow")] {
+        // Ambient colour: the surface's colour times it, given to itself, as the viewport adds it.
+        if get_v(nb.g, id, "ambientColor", Vec3::ZERO).max_element() > 0.0 || !nb.input(id, "ambientColor").is_const() {
+            let (color, amb) = (nb.input(id, "color"), nb.input(id, "ambientColor"));
+            s.ambient = match (color, amb) {
+                (Input::Const(a), Input::Const(b)) => Input::Const(a * b),
+                _ => Input::Link(nb.net.add(Node::MultiplyDivide { op: aztek_render::shader::MathOp::Multiply, a: color, b: amb }), Out::Rgb),
+            };
+        }
+        for (a, label) in [("translucence", "translucence"), ("glowIntensity", "glow")] {
             let v = get_v(nb.g, id, a, Vec3::ZERO);
             if v.max_element() > 0.0 {
                 skipped.push(label);

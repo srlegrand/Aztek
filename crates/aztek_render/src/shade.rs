@@ -180,6 +180,10 @@ pub fn params(scene: &Scene, s: &Standard, ctx: &ShadeCtx, ao: f32) -> Params {
         thin_film_thickness: f(s.thin_film_thickness),
         thin_film_ior: f(s.thin_film_ior),
         emission: v(s.emission_color).max(Vec3::ZERO) * f(s.emission),
+        ambient: match s.ambient {
+            Input::Const(x) if x.max_element() <= 0.0 => Vec3::ZERO,
+            i => v(i).max(Vec3::ZERO),
+        },
         opacity: v(s.opacity).clamp(Vec3::ZERO, Vec3::ONE),
         thin_walled: s.thin_walled,
         n,

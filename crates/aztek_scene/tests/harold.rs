@@ -98,10 +98,10 @@ fn legacy_materials_translate_with_warnings() {
     run(&mut s, "sets", json!({"renderable": true, "noSurfaceShader": true, "empty": true, "name": "blinnSG"}));
     run(&mut s, "connectAttr", json!({"args": [format!("{b}.outColor"), "blinnSG.surfaceShader"], "force": true}));
     run(&mut s, "sets", json!({"args": [plane], "edit": true, "forceElement": "blinnSG"}));
-    set(&mut s, &format!("{b}.ambientColor"), json!([0.2, 0.2, 0.2]));
+    set(&mut s, &format!("{b}.translucence"), json!(0.3));
     set(&mut s, &format!("{b}.color"), json!([0.0, 1.0, 0.0]));
     let (film, warnings) = render(&mut s, "top");
-    assert!(warnings.iter().any(|w| w.contains("ambient colour") && w.contains("not honoured")), "{warnings:?}");
+    assert!(warnings.iter().any(|w| w.contains("translucence") && w.contains("not honoured")), "{warnings:?}");
     let c = centre(&film);
     assert!(c.y > c.x * 3.0, "green: {c}");
 }
@@ -319,4 +319,21 @@ fn light_linking_is_honoured() {
     run(&mut s, "lightlink", json!({"b": true, "light": "key", "object": plane}));
     let (dark, _) = render(&mut s, "top");
     assert!(centre(&dark).x < 1e-5, "{}", centre(&dark));
+}
+
+/// Ambient colour adds the surface's colour times it, unlit, as the viewport adds it: with no lights at all (and the
+/// default lighting off) a lambert shows exactly that.
+#[test]
+fn ambient_colour_as_the_viewport() {
+    let mut s = scene();
+    run(&mut s, "polyPlane", json!({"width": 40, "height": 40}));
+    small(&mut s, 1);
+    set(&mut s, "topShape.orthographicWidth", json!(0.2));
+    set(&mut s, "lambert1.color", json!([0.5, 0.6, 0.8]));
+    set(&mut s, "lambert1.ambientColor", json!([0.5, 0.5, 0.25]));
+    set(&mut s, "defaultRenderGlobals.enableDefaultLight", json!(false));
+    let (film, warnings) = render(&mut s, "top");
+    assert!(!warnings.iter().any(|w| w.contains("ambient")), "{warnings:?}");
+    let c = centre(&film);
+    assert!((c.x - 0.25).abs() < 1e-3 && (c.y - 0.3).abs() < 1e-3 && (c.z - 0.2).abs() < 1e-3, "{c}");
 }
