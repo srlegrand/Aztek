@@ -16,6 +16,9 @@ Solver menus, and the Dynamics shelf the common items.
 - **Cloth.** Select a mesh, Cloth > Create Cloth. The mesh as it comes in (skinned, keyed, deformed) is where the
   cloth starts and what it can be drawn to; the simulated mesh goes out to the shape. Material presets (silk, cotton,
   leather, heavy denim, rubber) are in the Cloth menu and at the top of the cloth's Attribute Editor tab.
+- **Painted maps.** With the cloth's mesh selected, the Paint Attributes tool paints `cloth.cloth1.inputAttractPerVertex`
+  (how strongly each point follows the incoming mesh), `massPerVertex` and `pinPerVertex` (1 holds a point to the
+  incoming mesh).
 - **Colliders.** Select a mesh, Cloth > Create Collider. It may be animated or skinned.
 - **Particles.** Particles > Create Emitter makes an emitter and the particles it feeds; with a mesh selected,
   Emit from Object emits off its surface. Particles draw as points, spheres or blobs (`particleRenderType`).
