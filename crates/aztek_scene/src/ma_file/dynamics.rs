@@ -165,6 +165,14 @@ pub(super) fn translate(doc: &mut Doc) -> Vec<String> {
             }
         }
         kept.push(string_set("fty", &old));
+        // The old solvers count a unit as a metre unless told otherwise; read so, the file plays as it did. Their cloth
+        // weighs by the point.
+        if old == "nucleus" && !kept.iter().any(|s| matches!(s.path[0].name.as_str(), "spsc" | "spaceScale")) {
+            kept.push(num_set("spsc", 1.0));
+        }
+        if old == "nCloth" {
+            kept.push(num_set("dens", 0.0));
+        }
         if !lines.is_empty() {
             kept.push(string_set("fat", &lines.join("\n")));
             warnings.push(format!("{name} ({old}): read as {ours}; not used here, kept: {}", names.join(", ")));

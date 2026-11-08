@@ -32,7 +32,7 @@ pub struct SolverSettings {
     pub gravity: DVec3,
     pub wind: DVec3,
     pub air_density: f64,
-    /// No particle moves faster, world units per second.
+    /// No particle moves faster, metres per second.
     pub max_velocity: f64,
     /// A frame longer than this is solved as this long.
     pub max_frame_time: f64,
@@ -53,7 +53,7 @@ impl Default for SolverSettings {
             gravity: DVec3::new(0.0, -9.8, 0.0),
             wind: DVec3::ZERO,
             air_density: 1.0,
-            max_velocity: 200.0,
+            max_velocity: 50.0,
             max_frame_time: 1.0 / 12.0,
             ground: false,
             ground_height: 0.0,
@@ -263,6 +263,7 @@ pub struct Solver {
     pub time: f64,
     pub frame: u64,
     pub(crate) frame_data: crate::contacts::FrameData,
+    pub(crate) bvh: crate::contacts::BvhCache,
     /// Effective inverse masses this substep: base times the simulation weight.
     pub(crate) im: Vec<f64>,
     /// Animated positions this substep.
@@ -294,6 +295,7 @@ impl Solver {
             time: 0.0,
             frame: 0,
             frame_data: Default::default(),
+            bvh: Default::default(),
             im: Vec::new(),
             anim_now: Vec::new(),
             has_anim: Vec::new(),
@@ -397,12 +399,40 @@ impl Solver {
         let rest = &body.rest;
         let n = rest.len();
         let mut c = ClothData { dist: t.edges.clone(), ..Default::default() };
+        // Each triangle's area, shared out to its corners and its edges.
+        let mut point_area = vec![0.0; n];
+        let mut edge_area: std::collections::HashMap<(u32, u32), f64> = std::collections::HashMap::new();
+        for tr in &t.triangles {
+            let a = crate::constraints::area(rest, tr);
+            if !a.is_finite() {
+                continue;
+            }
+            for k in 0..3 {
+                point_area[tr[k] as usize] += a / 3.0;
+                let (p, q) = (tr[k], tr[(k + 1) % 3]);
+                *edge_area.entry((p.min(q), p.max(q))).or_default() += a / 3.0;
+            }
+        }
+        c.point_area = point_area;
         c.dist_rest = c.dist.iter().map(|e| (rest[e[0] as usize] - rest[e[1] as usize]).length()).collect();
-        c.dist_colour = colour(&mut c.dist, &mut [&mut c.dist_rest], n);
+        // An edge's stiffness is the material's times its share of the surface over its length squared: the same cloth
+        // stretches the same at any resolution.
+        c.dist_geo = c.dist.iter().zip(&c.dist_rest).map(|(e, &l)| if l > 1e-12 { edge_area.get(&(e[0], e[1])).copied().unwrap_or(0.0) / (l * l) } else { 0.0 }).collect();
+        c.dist_colour = colour(&mut c.dist, &mut [&mut c.dist_rest, &mut c.dist_geo], n);
         c.bend = t.bends.clone();
         c.bend_rest = c.bend.iter().map(|s| crate::constraints::dihedral_angle(rest, s)).collect();
-        c.bend_colour = colour(&mut c.bend, &mut [&mut c.bend_rest], n);
-        if body.settings.area_compliance.is_some() {
+        // A hinge's stiffness from the bending stiffness: 3 |e|^2 / (A1 + A2), as for discrete shells.
+        c.bend_geo = c
+            .bend
+            .iter()
+            .map(|s| {
+                let e = (rest[s[0] as usize] - rest[s[1] as usize]).length_squared();
+                let a = crate::constraints::area(rest, &[s[0], s[1], s[2]]) + crate::constraints::area(rest, &[s[0], s[1], s[3]]);
+                if a > 1e-18 && e.is_finite() { 3.0 * e / a } else { 0.0 }
+            })
+            .collect();
+        c.bend_colour = colour(&mut c.bend, &mut [&mut c.bend_rest, &mut c.bend_geo], n);
+        if body.settings.area_stiffness.is_some() {
             c.area = t.triangles.clone();
             c.area_rest = c.area.iter().map(|tr| crate::constraints::area(rest, tr)).collect();
             c.area_colour = colour(&mut c.area, &mut [&mut c.area_rest], n);
@@ -537,7 +567,14 @@ impl Solver {
                     for l in 0..n {
                         let keep = !fresh && was.len() == n;
                         let i = was.start + l;
-                        let mass = if body.kind == BodyKind::Rigid { s.mass / n.max(1) as f64 } else { s.mass * body.map(&s.mass_map, l, 1.0) };
+                        let mass = if body.kind == BodyKind::Rigid {
+                            s.mass / n.max(1) as f64
+                        } else if s.density > 0.0 {
+                            // Areal density over the point's share of the surface.
+                            s.density * body.cloth.point_area.get(l).copied().unwrap_or(0.0).max(1e-12) * body.map(&s.mass_map, l, 1.0)
+                        } else {
+                            s.mass * body.map(&s.mass_map, l, 1.0)
+                        };
                         let pinned = body.map(&s.pin_map, l, 0.0) >= 0.5;
                         let inv = if mass > 0.0 && mass.is_finite() && !pinned { 1.0 / mass } else { 0.0 };
                         let radius = if body.kind == BodyKind::Rigid { body.radii.get(l).copied().unwrap_or(s.radius) } else { s.thickness };
@@ -657,7 +694,8 @@ impl Solver {
                 // Contacts found again over the next few substeps: short motion keeps the search small.
                 let t = std::time::Instant::now();
                 let span = every.min(substeps - s);
-                self.frame_data = crate::contacts::FrameData::build(self, h * span as f64, a0);
+                let a_end = (s + span) as f64 / substeps as f64;
+                self.frame_data = crate::contacts::FrameData::build(self, h * span as f64, a0, a_end);
                 self.stats.pairs = self.stats.pairs.max(self.frame_data.pairs());
                 self.stats.ms_prepare += t.elapsed().as_secs_f64() * 1e3;
             }

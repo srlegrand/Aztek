@@ -33,9 +33,10 @@ fn lowest(p: &[DVec3]) -> f64 {
 fn drape_scene() -> Session {
     let mut s = Session::new();
     run(&mut s, "playbackOptions", json!({"minTime": 1, "maxTime": 60}));
-    run(&mut s, "polySphere", json!({"name": "ball", "radius": 0.5, "sx": 24, "sy": 12}));
-    run(&mut s, "polyPlane", json!({"name": "sheet", "width": 2, "height": 2, "sx": 16, "sy": 16}));
-    run(&mut s, "move", json!({"args": [0, 1, 0, "sheet"]}));
+    // In centimetres: a 2 m sheet a metre up, over a ball 1 m across.
+    run(&mut s, "polySphere", json!({"name": "ball", "radius": 50, "sx": 24, "sy": 12}));
+    run(&mut s, "polyPlane", json!({"name": "sheet", "width": 200, "height": 200, "sx": 16, "sy": 16}));
+    run(&mut s, "move", json!({"args": [0, 100, 0, "sheet"]}));
     frame(&mut s, 1.0);
     let cloth = run(&mut s, "createCloth", json!({"args": ["sheet"]}));
     assert!(cloth[0].as_str().unwrap().starts_with("cloth"), "{cloth}");
@@ -49,7 +50,7 @@ fn cloth_falls_onto_a_collider_and_rests_on_it() {
     let mut s = drape_scene();
     frame(&mut s, 1.0);
     let start = points(&mut s, "sheet");
-    assert!((lowest(&start) - 1.0).abs() < 1e-9, "at the start frame the cloth is its input");
+    assert!((lowest(&start) - 100.0).abs() < 1e-9, "at the start frame the cloth is its input");
     for f in 2..=48 {
         frame(&mut s, f as f64);
     }
@@ -57,9 +58,9 @@ fn cloth_falls_onto_a_collider_and_rests_on_it() {
     assert!(end.iter().all(|p| p.is_finite()));
     assert!(lowest(&end) < 0.0, "the corners hang below the ball: {}", lowest(&end));
     let inside = end.iter().map(|p| p.length()).fold(f64::INFINITY, f64::min);
-    assert!(inside > 0.45, "a point went into the ball, {inside} from its centre");
+    assert!(inside > 45.0, "a point went into the ball, {inside} from its centre");
     let top = end.iter().map(|p| p.y).fold(f64::NEG_INFINITY, f64::max);
-    assert!(top > 0.45 && top < 0.7, "the middle rests on top: {top}");
+    assert!(top > 49.0 && top < 60.0, "the middle rests on top: {top}");
     let oos = run(&mut s, "dynInfo", json!({"outOfSimulation": true}));
     assert_eq!(oos, json!(0), "nothing out of the simulation in a plain drape");
 }
@@ -79,7 +80,7 @@ fn scrubbing_back_shows_solved_frames_and_the_start_frame_starts_again() {
     assert_eq!(points(&mut s, "sheet"), at20);
     // Back to the start: the input again, and solving again from there gives the same frames.
     frame(&mut s, 1.0);
-    assert!((lowest(&points(&mut s, "sheet")) - 1.0).abs() < 1e-9);
+    assert!((lowest(&points(&mut s, "sheet")) - 100.0).abs() < 1e-9);
     for f in 2..=20 {
         frame(&mut s, f as f64);
     }
@@ -97,9 +98,9 @@ fn jumping_ahead_solves_one_frame() {
     let two = points(&mut s, "sheet");
     frame(&mut s, 40.0);
     let jumped = points(&mut s, "sheet");
-    // One frame further, not forty: it has barely moved.
+    // One frame further, not forty: a few centimetres, where forty frames would have dropped it a metre.
     let moved = jumped.iter().zip(&two).map(|(a, b)| (*a - *b).length()).fold(0.0, f64::max);
-    assert!(moved < 0.05, "a jump solved {moved} worth of motion");
+    assert!(moved < 10.0, "a jump solved {moved} worth of motion");
 }
 
 #[test]
@@ -110,7 +111,7 @@ fn undo_takes_the_cloth_away() {
     for f in 1..=10 {
         frame(&mut s, f as f64);
     }
-    assert!((lowest(&points(&mut s, "sheet")) - 1.0).abs() < 1e-9, "without cloth the sheet stays put");
+    assert!((lowest(&points(&mut s, "sheet")) - 100.0).abs() < 1e-9, "without cloth the sheet stays put");
 }
 
 #[test]
@@ -129,7 +130,7 @@ fn emitted_particles_fall_under_gravity() {
     let count = run(&mut s, "particle", json!({"args": [particles.clone()], "query": true, "count": true}));
     assert!((40..=50).contains(&count.as_i64().unwrap()), "48 a second for a second: {count}");
     let mean = run(&mut s, "getParticleAttr", json!({"args": [particles.clone()], "attribute": "position"}));
-    assert!(mean[1].as_f64().unwrap() < -0.5, "the particles fell: {mean}");
+    assert!(mean[1].as_f64().unwrap() < -50.0, "the particles fell: {mean}");
     let all = run(&mut s, "getParticleAttr", json!({"args": [particles], "attribute": "velocity", "array": true}));
     assert_eq!(all.as_array().unwrap().len() as i64, count.as_i64().unwrap() * 3);
 }
@@ -138,8 +139,8 @@ fn emitted_particles_fall_under_gravity() {
 fn rigid_body_lands_on_the_ground_plane() {
     let mut s = Session::new();
     run(&mut s, "playbackOptions", json!({"minTime": 1, "maxTime": 120}));
-    run(&mut s, "polyCube", json!({"name": "box"}));
-    run(&mut s, "move", json!({"args": [0, 3, 0, "box"]}));
+    run(&mut s, "polyCube", json!({"name": "box", "width": 100, "height": 100, "depth": 100}));
+    run(&mut s, "move", json!({"args": [0, 300, 0, "box"]}));
     let r = run(&mut s, "rigidBody", json!({"args": ["box"], "active": true, "standInObject": 1}));
     let solver = s.graph.nodes().into_iter().find(|&id| s.graph.node(id).unwrap().ty().name == "solver").unwrap();
     let path = s.graph.path(solver);
@@ -148,7 +149,7 @@ fn rigid_body_lands_on_the_ground_plane() {
         frame(&mut s, f as f64);
     }
     let ty = run(&mut s, "getAttr", json!({"args": ["box.translateY"]})).as_f64().unwrap();
-    assert!((ty - 0.5).abs() < 0.1, "resting on the ground: {ty} ({r})");
+    assert!((ty - 50.0).abs() < 10.0, "resting on the ground: {ty} ({r})");
     let rx = run(&mut s, "getAttr", json!({"args": ["box.rotateX"]})).as_f64().unwrap();
     assert!(rx.abs() < 5.0, "it stays upright: {rx}");
 }
@@ -158,7 +159,7 @@ fn presets_and_old_command_names() {
     let mut s = drape_scene();
     run(&mut s, "clothPreset", json!({"args": ["sheet"], "preset": "leather"}));
     let b = run(&mut s, "getAttr", json!({"args": ["cloth1.bendResistance"]}));
-    assert_eq!(b, json!(2.0));
+    assert_eq!(b, json!(10.0));
     run(&mut s, "polyPlane", json!({"name": "flag"}));
     let made = run(&mut s, "nCloth", json!({"args": ["flag"]}));
     assert!(made[0].as_str().unwrap().starts_with("cloth"));
@@ -171,9 +172,9 @@ fn presets_and_old_command_names() {
 fn larger_drape_stays_on_the_ball() {
     let mut s = Session::new();
     run(&mut s, "playbackOptions", json!({"minTime": 1, "maxTime": 120}));
-    run(&mut s, "polySphere", json!({"name": "ball", "radius": 1, "sx": 32, "sy": 16}));
-    run(&mut s, "polyPlane", json!({"name": "sheet", "width": 4, "height": 4, "sx": 40, "sy": 40}));
-    run(&mut s, "move", json!({"args": [0, 2, 0, "sheet"]}));
+    run(&mut s, "polySphere", json!({"name": "ball", "radius": 100, "sx": 32, "sy": 16}));
+    run(&mut s, "polyPlane", json!({"name": "sheet", "width": 400, "height": 400, "sx": 40, "sy": 40}));
+    run(&mut s, "move", json!({"args": [0, 200, 0, "sheet"]}));
     frame(&mut s, 1.0);
     run(&mut s, "createCloth", json!({"args": ["sheet"]}));
     run(&mut s, "collider", json!({"args": ["ball"]}));
@@ -186,7 +187,7 @@ fn larger_drape_stays_on_the_ball() {
         if std::env::var("TRACE").is_ok() {
             eprintln!("{f} inside {inside:.3} top {:.3} {}", p.iter().map(|q| q.y).fold(f64::NEG_INFINITY, f64::max), info);
         }
-        assert!(inside > 0.95, "frame {f}: a point {inside} from the ball's centre");
+        assert!(inside > 95.0, "frame {f}: a point {inside} from the ball's centre");
     }
 }
 
@@ -194,10 +195,10 @@ fn larger_drape_stays_on_the_ball() {
 fn a_tilted_box_lands_on_its_corners_not_through_them() {
     let mut s = Session::new();
     run(&mut s, "playbackOptions", json!({"minTime": 1, "maxTime": 120}));
-    run(&mut s, "polyPlane", json!({"name": "floor", "width": 12, "height": 12}));
+    run(&mut s, "polyPlane", json!({"name": "floor", "width": 1200, "height": 1200}));
     run(&mut s, "collider", json!({"args": ["floor"]}));
-    run(&mut s, "polyCube", json!({"name": "crate"}));
-    run(&mut s, "move", json!({"args": [0, 3, 0, "crate"]}));
+    run(&mut s, "polyCube", json!({"name": "crate", "width": 100, "height": 100, "depth": 100}));
+    run(&mut s, "move", json!({"args": [0, 300, 0, "crate"]}));
     run(&mut s, "rotate", json!({"args": [20, 10, 30, "crate"]}));
     run(&mut s, "rigidBody", json!({"args": ["crate"], "active": true, "standInObject": 1}));
     for f in 1..=72 {
@@ -205,29 +206,42 @@ fn a_tilted_box_lands_on_its_corners_not_through_them() {
     }
     let bb = run(&mut s, "xform", json!({"args": ["crate"], "query": true, "worldSpace": true, "boundingBox": true}));
     let low = bb[1].as_f64().unwrap();
-    assert!(low > -0.03 && low < 0.1, "the lowest corner at {low}");
+    assert!(low > -3.0 && low < 10.0, "the lowest corner at {low}");
 }
 
 #[test]
 fn painted_pins_hold_the_cloth_where_painted() {
     let mut s = Session::new();
     run(&mut s, "playbackOptions", json!({"minTime": 1, "maxTime": 60}));
-    run(&mut s, "polyPlane", json!({"name": "flag", "width": 2, "height": 2, "sx": 8, "sy": 8}));
+    run(&mut s, "polyPlane", json!({"name": "flag", "width": 200, "height": 200, "sx": 8, "sy": 8}));
     frame(&mut s, 1.0);
     run(&mut s, "createCloth", json!({"args": ["flag"]}));
     run(&mut s, "select", json!({"args": ["flag"]}));
     let list = run(&mut s, "artAttrCtx", json!({"query": true, "queried": ["paintableAttrs"]}));
     assert!(list.to_string().contains("cloth.cloth1.pinPerVertex"), "{list}");
     // Pins painted at one corner only.
-    run(&mut s, "artAttrCtx", json!({"edit": true, "attrSelected": "cloth.cloth1.pinPerVertex", "value": 1.0, "radius": 0.3, "selectedattroper": "absolute", "stampProfile": "solid"}));
-    let stamped = run(&mut s, "attrPaintStamp", json!({"args": ["flag"], "position": [-1.0, 0.0, -1.0]}));
+    run(&mut s, "artAttrCtx", json!({"edit": true, "attrSelected": "cloth.cloth1.pinPerVertex", "value": 1.0, "radius": 30.0, "selectedattroper": "absolute", "stampProfile": "solid"}));
+    let stamped = run(&mut s, "attrPaintStamp", json!({"args": ["flag"], "position": [-100.0, 0.0, -100.0]}));
     assert!(stamped.as_i64().unwrap() > 0, "{stamped}");
     let start = points(&mut s, "flag");
-    let pinned = (0..start.len()).min_by(|&a, &b| (start[a] - DVec3::new(-1.0, 0.0, -1.0)).length().total_cmp(&(start[b] - DVec3::new(-1.0, 0.0, -1.0)).length())).unwrap();
+    let pinned = (0..start.len()).min_by(|&a, &b| (start[a] - DVec3::new(-100.0, 0.0, -100.0)).length().total_cmp(&(start[b] - DVec3::new(-100.0, 0.0, -100.0)).length())).unwrap();
     for f in 1..=24 {
         frame(&mut s, f as f64);
     }
     let p = points(&mut s, "flag");
     assert!((p[pinned] - start[pinned]).length() < 1e-6, "the pinned corner holds: {} from {}", p[pinned], start[pinned]);
-    assert!(lowest(&p) < -0.5, "the rest hangs from it: {}", lowest(&p));
+    assert!(lowest(&p) < -50.0, "the rest hangs from it: {}", lowest(&p));
+}
+
+#[test]
+fn units_free_fall_in_centimetres() {
+    let mut s = Session::new();
+    run(&mut s, "playbackOptions", json!({"minTime": 1, "maxTime": 60}));
+    let made = run(&mut s, "particle", json!({"position": [[0, 0, 0]]}));
+    for f in 1..=25 {
+        frame(&mut s, f as f64);
+    }
+    let y = run(&mut s, "getParticleAttr", json!({"args": [made[1].clone()], "attribute": "position"}))[1].as_f64().unwrap();
+    eprintln!("UNITS fell {y} units in one second");
+    assert!((y + 490.0).abs() < 10.0, "one second of free fall in a centimetre scene is 490 cm, got {y}");
 }

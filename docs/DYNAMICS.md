@@ -13,7 +13,7 @@ The solver is the crate `aztek_dyn`; the scene wraps it in `crates/aztek_scene/s
 The Dynamics menu set (F5, or the menu set box) has Cloth, Particles, Rigid Bodies, Fields, Constraints, Cache and
 Solver menus, and the Dynamics shelf the common items.
 
-- **Cloth.** Select a mesh, Cloth > Create Cloth. The mesh as it comes in (skinned, keyed, deformed) is where the
+- **Cloth.** Select a mesh at its real size, Cloth > Create Cloth. The mesh as it comes in (skinned, keyed, deformed) is where the
   cloth starts and what it can be drawn to; the simulated mesh goes out to the shape. Material presets (silk, cotton,
   leather, heavy denim, rubber) are in the Cloth menu and at the top of the cloth's Attribute Editor tab.
 - **Painted maps.** With the cloth's mesh selected, the Paint Attributes tool paints `cloth.cloth1.inputAttractPerVertex`
@@ -49,8 +49,36 @@ and shown again when scrubbing back. `dynInfo` reports the solver's state.
 
 Attributes keep the reference's names where they mean the same thing (`thickness`, `stretchResistance`,
 `bendResistance`, `pointMass`, `inputMeshAttract`, `subSteps`, `gravity`, `lifespanMode`, `magnitude`, `attenuation`
-and so on), so files map across. Resistances become compliance as `1e-5 / stretchResistance`,
-`1e-5 / compressionResistance` and `1e-4 / bendResistance`.
+and so on), so files map across.
+
+## Units
+
+Dynamics work at real size. A scene unit is what `currentUnit -linear` says (centimetres by default, also millimetres,
+metres, inches and feet), so a 2 m sheet modelled 200 units across in a centimetre scene is 2 m of cloth: it falls at
+9.81 m/s^2 and drapes as 2 m of that material would. The solver works in metres, kilograms and seconds and converts
+every length on the way in and out. Nothing needs setting for this.
+
+Materials are physical:
+
+| Attribute | Unit |
+|---|---|
+| `density` | kilograms per square metre (silk 0.04, cotton 0.15, denim 0.45); 0 makes `pointMass` each point's mass |
+| `stretchResistance`, `compressionResistance`, `deformResistance` | 100 newtons per metre of width |
+| `bendResistance` | 1e-4 newton metres |
+| `drag`, `tangentialDrag` | a twentieth of the drag coefficient (0.05 is a flat plate across the flow) |
+| `damp` | fraction of speed lost per second |
+| `thickness`, collider `thickness`, particle `radius` | scene units |
+| solver `gravity` | m/s^2; `windSpeed` and `maxVelocity` m/s; `airDensity` kg/m^3 |
+
+Each constraint takes the stiffness its own edge length and areas imply (an edge, the material's stiffness times its
+share of the surface over its length squared; a hinge, the bending stiffness times 3 |e|^2 / (A1 + A2)), so the same
+material behaves the same at any size and any resolution. Fabric barely resists compression, as it buckles into folds
+finer than any mesh; the presets keep its compression resistance near a hundredth of its stretch. New cloth starts as
+cotton; `createCloth -preset` picks another.
+
+The solver's `spaceScale` is metres in one scene unit. Left at 0, the default, it follows the scene's unit. Files from
+the reference's solvers, which count a unit as a metre unless their `spaceScale` says otherwise, set it so they play
+as they did there.
 
 ## Commands
 

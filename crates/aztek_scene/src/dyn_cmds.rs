@@ -194,14 +194,21 @@ fn create_cloth(s: &mut Session, a: &Args) -> CmdResult {
         let name = a.string("name", "cloth1");
         let c = crate::deform::insert_at(g, m, dy::CLOTH, &name, crate::deform::Place::After)?;
         join(g, c, solver)?;
-        // Thickness to suit the mesh: a fifth of an edge.
+        // New cloth starts as a material: cotton unless told.
+        let preset = a.string("preset", "cotton");
+        let Some((_, values)) = PRESETS.iter().find(|(n, _)| n.eq_ignore_ascii_case(&preset)) else { fail!("createCloth: no preset {preset}") };
+        for (at, v) in values.iter() {
+            set(g, c, at, *v)?;
+        }
         g.evaluate();
         if let Some(mesh) = g.node(c).and_then(|n| n.data().mesh(IN).cloned()) {
             let (pts, faces) = dy::mesh_parts(&mesh);
             let t = aztek_dyn::topology::Topology::new(pts.len(), &faces);
             let w = crate::rig::world(g, crate::dag::transform_of(g, m));
             let world: Vec<DVec3> = pts.iter().map(|p| w.transform_point3(*p)).collect();
-            set(g, c, "thickness", (t.mean_edge(&world) * 0.2).max(1e-4))?;
+            // A tenth of an edge, between 2 mm and 1 cm of real size.
+            let mpu = crate::dyn_solve::metres(g, solver);
+            set(g, c, "thickness", (t.mean_edge(&world) * mpu * 0.1).clamp(0.002, 0.01) / mpu)?;
         }
         made.push(json!(g.path(c)));
     }
@@ -319,12 +326,15 @@ fn create_solver(s: &mut Session, a: &Args) -> CmdResult {
 }
 
 /// Material presets for cloth: (name, [(attribute, value)]).
+/// Material presets in physical units: density kg/m^2; stretch and compression resistance in 100 N/m; bend resistance
+/// in 1e-4 N m; friction; damp per second; drag as a coefficient over 20. Fabric barely resists compression, buckling
+/// into folds finer than any mesh, so its compression resistance is about a hundredth of its stretch; rubber's is not.
 pub const PRESETS: &[(&str, &[(&str, f64)])] = &[
-    ("silk", &[("stretchResistance", 60.0), ("compressionResistance", 10.0), ("bendResistance", 0.02), ("pointMass", 0.3), ("friction", 0.1), ("damp", 0.01), ("drag", 0.1)]),
-    ("cotton", &[("stretchResistance", 40.0), ("compressionResistance", 20.0), ("bendResistance", 0.1), ("pointMass", 0.6), ("friction", 0.3), ("damp", 0.02), ("drag", 0.05)]),
-    ("leather", &[("stretchResistance", 100.0), ("compressionResistance", 60.0), ("bendResistance", 2.0), ("pointMass", 1.5), ("friction", 0.6), ("damp", 0.1), ("drag", 0.02)]),
-    ("heavyDenim", &[("stretchResistance", 80.0), ("compressionResistance", 40.0), ("bendResistance", 0.8), ("pointMass", 1.2), ("friction", 0.5), ("damp", 0.05), ("drag", 0.03)]),
-    ("rubber", &[("stretchResistance", 2.0), ("compressionResistance", 4.0), ("bendResistance", 1.0), ("pointMass", 1.0), ("friction", 0.8), ("damp", 0.02), ("drag", 0.01)]),
+    ("silk", &[("density", 0.04), ("stretchResistance", 3.0), ("compressionResistance", 0.03), ("bendResistance", 0.02), ("friction", 0.2), ("damp", 0.01), ("drag", 0.05)]),
+    ("cotton", &[("density", 0.15), ("stretchResistance", 15.0), ("compressionResistance", 0.15), ("bendResistance", 0.15), ("friction", 0.4), ("damp", 0.02), ("drag", 0.05)]),
+    ("leather", &[("density", 0.8), ("stretchResistance", 80.0), ("compressionResistance", 2.0), ("bendResistance", 10.0), ("friction", 0.6), ("damp", 0.05), ("drag", 0.04)]),
+    ("heavyDenim", &[("density", 0.45), ("stretchResistance", 50.0), ("compressionResistance", 0.5), ("bendResistance", 3.0), ("friction", 0.5), ("damp", 0.03), ("drag", 0.05)]),
+    ("rubber", &[("density", 1.1), ("stretchResistance", 2.0), ("compressionResistance", 2.0), ("bendResistance", 1.0), ("friction", 0.9), ("damp", 0.02), ("drag", 0.04)]),
 ];
 
 fn cloth_preset(s: &mut Session, a: &Args) -> CmdResult {
@@ -439,7 +449,7 @@ pub(crate) fn links_of(g: &mut Graph, s: NodeId, bodies: &[BodyRef], solver: &az
         let strength = num(g, "strength", 20.0).max(1e-6);
         let compliance = if matches!(kind, 2 | 3) { 0.0 } else { 1e-3 / (strength * strength) };
         let tear = num(g, "glueStrength", 0.0);
-        let fixed = (num(g, "restLengthMethod", 0.0) as i64 == 1).then(|| num(g, "restLength", 0.0));
+        let fixed = (num(g, "restLengthMethod", 0.0) as i64 == 1).then(|| num(g, "restLength", 0.0) * crate::dyn_solve::metres(g, s));
         let name = g.path(c);
         let members_text = g.node(c).map(|n| n.value(n.ty().attr_index("members").unwrap()).as_str().to_string()).unwrap_or_default();
         let targets_text = g.node(c).map(|n| n.value(n.ty().attr_index("targets").unwrap()).as_str().to_string()).unwrap_or_default();
@@ -559,6 +569,7 @@ pub fn register(c: &mut Commands<Session>) {
         q(Cmd::new(name, "Make the selected (or named) meshes cloth in a solver: the mesh as it comes is the animation the cloth starts from and can be drawn to. Returns the cloth nodes.", create_cloth))
             .positional("meshes")
             .flag(f("solver", "sv", ArgType::String, "The solver to join (the newest, or a new one)."))
+            .flag(f("preset", "p", ArgType::String, "The material it starts as: silk, cotton (the default), leather, heavyDenim or rubber.").choices(&["silk", "cotton", "leather", "heavyDenim", "rubber"]))
     };
     c.register(cloth("createCloth"));
     c.register(cloth("nCloth"));

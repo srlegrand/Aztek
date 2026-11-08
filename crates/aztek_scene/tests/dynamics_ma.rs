@@ -68,7 +68,21 @@ fn own_nodes_save_and_read_back_the_same() {
         frame(&mut back, f as f64);
     }
     let (a, b) = (points(&mut s, "sheet"), points(&mut back, "sheet"));
-    assert!(a.iter().zip(&b).all(|(x, y)| (*x - *y).length() < 1e-9), "the file solves differently");
+    let worst = a.iter().zip(&b).map(|(x, y)| (*x - *y).length()).fold(0.0, f64::max);
+    if worst >= 1e-9 {
+        for at in ["solverShape1", "cloth1", "collider1"] {
+            let la = run(&mut s, "listAttr", json!({"args": [at]}));
+            for name in la.as_array().unwrap() {
+                let p = format!("{at}.{}", name.as_str().unwrap());
+                if let (Ok(x), Ok(y)) = (s.run("getAttr", json!({"args": [p.clone()]})), back.run("getAttr", json!({"args": [p.clone()]}))) {
+                    if x != y {
+                        eprintln!("DIFF {p}: {x} vs {y}");
+                    }
+                }
+            }
+        }
+    }
+    assert!(worst < 1e-9, "the file solves differently by {worst}");
     assert!(a.iter().map(|p| p.y).fold(f64::INFINITY, f64::min) < 0.9, "it moved");
 }
 

@@ -8,6 +8,7 @@
 //! Phases leave room for liquids, smoke and fire to join the same solve through `Extension`.
 
 pub mod body;
+pub mod bvh;
 pub mod cache;
 pub mod constraints;
 pub mod contacts;

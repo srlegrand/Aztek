@@ -6,7 +6,7 @@ use rayon::prelude::*;
 
 use crate::util::PAR_CHUNK;
 
-use crate::body::{Body, BodyKind, Phase};
+use crate::body::{Body, BodyKind};
 use crate::solver::{Anchor, Solver};
 use crate::topology::Colouring;
 use crate::util::{clamp_len, finite, Shared};
@@ -76,15 +76,22 @@ pub(crate) fn integrate(s: &mut Solver, h: f64) {
             let mass = 1.0 / s.pt.inv_mass[i];
             let v = s.pt.v[i];
             let mut a = g * st.gravity_scale + s.field_accel(bi, x, v, mass);
+            // Air drag, quadratic as on a plate: cloth by each point's share of the surface across the flow and along
+            // it, particles and rigid points by their cross-section.
             let rel = v - wind;
             let n = s.normals[i];
-            let drag = if n != DVec3::ZERO {
+            let force = if n != DVec3::ZERO && body.kind == BodyKind::Cloth {
+                let share = body.cloth.point_area.get(s.pt.local[i] as usize).copied().unwrap_or(0.0);
                 let vn = n * rel.dot(n);
-                vn * st.drag + (rel - vn) * st.tangential_drag
+                let vt = rel - vn;
+                (vn * vn.length() * st.drag + vt * vt.length() * st.tangential_drag) * (0.5 * air * share)
             } else {
-                rel * st.drag
+                let r = s.pt.radius[i];
+                rel * rel.length() * (0.5 * air * st.drag * std::f64::consts::PI * r * r)
             };
-            a -= drag * air / mass.max(1e-9) * if s.pt.phase[i] == Phase::Cloth { 1.0 } else { 0.1 };
+            // Drag can stop a point but never turn it round within a step.
+            let dv = crate::util::clamp_len(force / mass * h, rel.length());
+            a -= dv / h;
             let mut v = v + a * h;
             v *= (1.0 - st.damping * h).max(0.0);
             v = clamp_len(v, vmax);
@@ -196,7 +203,7 @@ pub(crate) fn cloth(s: &mut Solver, h: f64, stretch_passes: u32) {
         let st = &body.settings;
         let rest_now = s.rest_now.get(bi).and_then(|r| r.as_ref());
         let torn = &body.torn;
-        let limit_alpha = st.stretch_compliance / h2;
+        let limit_alpha = 0.0;
         for _ in 0..stretch_passes {
             by_colour(&c.dist_colour, |k| {
                 if torn[k] {
@@ -217,7 +224,12 @@ pub(crate) fn cloth(s: &mut Solver, h: f64, stretch_passes: u32) {
                 }
                 let rest = rest_now.map_or(c.dist_rest[k], |r| r[k]);
                 let cval = l - rest;
-                let alpha = if cval > 0.0 { st.stretch_compliance } else { st.compression_compliance } / h2;
+                // Compliance is one over the edge's stiffness: the material's times its geometric factor.
+                let stiff = if cval > 0.0 { st.stretch_stiffness } else { st.compression_stiffness } * c.dist_geo[k];
+                let alpha = if stiff > 0.0 { 1.0 / (stiff * h2) } else { f64::INFINITY };
+                if !alpha.is_finite() {
+                    return;
+                }
                 let dl = -cval / (wsum + alpha);
                 let n = d / l;
                 let (na, nb) = (pa + n * (wa * dl), pb - n * (wb * dl));
@@ -251,7 +263,7 @@ pub(crate) fn cloth(s: &mut Solver, h: f64, stretch_passes: u32) {
                 }
             }
         }
-        let bend_alpha = st.bend_compliance / h2;
+        let bend_k = st.bend_stiffness;
         by_colour(&c.bend_colour, |k| {
             if crate::util::off("bend") {
                 return;
@@ -287,7 +299,11 @@ pub(crate) fn cloth(s: &mut Solver, h: f64, stretch_passes: u32) {
             if !(denom > 1e-18) {
                 return;
             }
-            let mut dl = (phi - c.bend_rest[k]) / (denom + bend_alpha);
+            let kb = bend_k * c.bend_geo[k];
+            if !(kb > 0.0) {
+                return;
+            }
+            let mut dl = (phi - c.bend_rest[k]) / (denom + 1.0 / (kb * h2));
             if u1.cross(u2).dot(e) > 0.0 {
                 dl = -dl;
             }
@@ -298,8 +314,7 @@ pub(crate) fn cloth(s: &mut Solver, h: f64, stretch_passes: u32) {
                 }
             }
         });
-        if let Some(ac) = st.area_compliance {
-            let alpha = ac / h2;
+        if let Some(ak) = st.area_stiffness.filter(|&k| k > 0.0) {
             by_colour(&c.area_colour, |k| {
                 let t = c.area[k].map(|x| o + x as usize);
                 let w = t.map(|i| im[i]);
@@ -316,6 +331,8 @@ pub(crate) fn cloth(s: &mut Solver, h: f64, stretch_passes: u32) {
                     return;
                 }
                 let cval = a2 * 0.5 - c.area_rest[k];
+                // Energy (k / A0) dA^2 / 2: compliance A0 / k.
+                let alpha = c.area_rest[k].max(1e-18) / (ak * h2);
                 let dl = -cval / (denom + alpha);
                 let q: Vec<DVec3> = (0..3).map(|j| x[j] + g[j] * (w[j] * dl)).collect();
                 if q.iter().all(|v| finite(*v)) {
