@@ -235,6 +235,8 @@ impl FrameData {
             let movers: Vec<DVec3> = (0..n).filter(|&i| s.pt.inv_mass[i] > 0.0).map(|i| vel[i]).filter(|v| finite(*v)).collect();
             let mean_v = if movers.is_empty() { DVec3::ZERO } else { movers.iter().sum::<DVec3>() / movers.len() as f64 };
             let motion = |i: usize| crate::util::clamp_len((vel[i] - mean_v) * dt, vmax * dt).length();
+            // Collider points do not share that mean: against them the cloth moves by all of it.
+            let mean_motion = crate::util::clamp_len(mean_v * dt, vmax * dt).length();
             let tri_bounds: Vec<Aabb> = dyn_tris
                 .par_iter()
                 .with_min_len(PAR_CHUNK)
@@ -260,12 +262,13 @@ impl FrameData {
                 all.add(b.lo);
                 all.add(b.hi);
             }
-            // Collider vertices near cloth, as points that cannot move: where the collider is finer than the cloth, so
-            // its corners could poke between cloth vertices. A coarser one is held off by its faces alone.
+            // Collider vertices near cloth, as points that cannot move: where the collider is much finer than the cloth,
+            // so its corners could poke between cloth vertices. One of about the same size is held off by its faces
+            // alone; its vertices would only fight the face contacts (a skinned body under a garment modelled on it).
             let finest_cloth = s.bodies.iter().filter(|b| b.kind == BodyKind::Cloth).map(|b| b.mean_edge).fold(f64::INFINITY, f64::min);
             for (bi, b) in s.bodies.iter().enumerate().filter(|_| !crate::util::off("kin")) {
-                if b.kind == BodyKind::Collider && b.settings.enabled && b.settings.collide && b.mean_edge < finest_cloth * 0.75 {
-                    let grown = all.grow(b.settings.thickness + rmax);
+                if b.kind == BodyKind::Collider && b.settings.enabled && b.settings.collide && b.mean_edge < finest_cloth * 0.5 {
+                    let grown = all.grow(b.settings.thickness + rmax + mean_motion);
                     for (l, p) in b.anim.iter().enumerate() {
                         let q = b.anim_prev[l];
                         if (p.cmpge(grown.lo).all() && p.cmple(grown.hi).all()) || (q.cmpge(grown.lo).all() && q.cmple(grown.hi).all()) {
@@ -293,7 +296,7 @@ impl FrameData {
                         let body = &s.bodies[b as usize];
                         let (p0, p1) = (body.anim_prev[l as usize], body.anim[l as usize]);
                         // Over this span only, not the whole frame.
-                        (p0.lerp(p1, a0), b, true, body.settings.thickness + (p1 - p0).length() * span, b)
+                        (p0.lerp(p1, a0), b, true, body.settings.thickness + (p1 - p0).length() * span + mean_motion, b)
                     };
                     let mut bb = Aabb::EMPTY;
                     bb.add(x);
@@ -330,7 +333,9 @@ impl FrameData {
                         }
                         let (w, feat) = geom::closest_on_triangle(x, a, b, c);
                         let d = x - geom::at(w, a, b, c);
-                        if feat != Feature::Face && d.length() > thick {
+                        // Beyond an edge by more than the thickness: the neighbour holds it, unless a collider point
+                        // is close enough to the edge to slide over it before the next search.
+                        if feat != Feature::Face && d.length() > thick && !(is_kin && geom::over_face(x, a, b, c, 0.1)) {
                             return;
                         }
                         if d.length() > thick + reach_r + tri_motion {
@@ -352,7 +357,27 @@ impl FrameData {
                                 return;
                             }
                         }
-                        let side = if d.dot(nrm) < 0.0 { -1.0 } else { 1.0 };
+                        let mut side = if d.dot(nrm) < 0.0 { -1.0 } else { 1.0 };
+                        if is_kin {
+                            // A closed collider says which way is out: the cloth belongs on its outside, even when the
+                            // point has already come a little through.
+                            let body = &s.bodies[pbody as usize];
+                            if let Some(out_sign) = body.outside {
+                                let l = kin[k - n].1 as usize;
+                                let vn: DVec3 = body.topo.point_tris[l]
+                                    .iter()
+                                    .map(|&t| {
+                                        let [i, j, m] = body.topo.triangles[t as usize].map(|g| body.anim[g as usize]);
+                                        (j - i).cross(m - i)
+                                    })
+                                    .sum::<DVec3>()
+                                    * out_sign;
+                                let along = vn.dot(nrm);
+                                if along != 0.0 {
+                                    side = if along > 0.0 { -1.0 } else { 1.0 };
+                                }
+                            }
+                        }
                         let friction = 0.5 * (fric[tb as usize] + fric[pbody as usize]);
                         out.push(PtTri { point: if is_kin { (k - n) as u32 } else { k as u32 }, kin: is_kin, tri: t, side, thick, friction });
                     });
@@ -508,7 +533,8 @@ pub(crate) fn solve_pairs(s: &mut Solver, _h: f64, a0: f64, a1: f64) {
             let tw = tri.map(|g| im[g as usize]);
             let (bw, feat) = geom::closest_on_triangle(pp, tp[0], tp[1], tp[2]);
             // Over the face only: beyond an edge the neighbouring triangle holds it, and the normal says nothing there.
-            if feat != Feature::Face {
+            // A collider point near the edge holds on until the next search hands it to the neighbour.
+            if feat != Feature::Face && !(c.kin && geom::over_face(pp, tp[0], tp[1], tp[2], 0.1)) {
                 return out;
             }
             let n = geom::normal(tp[0], tp[1], tp[2]) * c.side;
@@ -588,20 +614,38 @@ pub(crate) fn solve_pairs(s: &mut Solver, _h: f64, a0: f64, a1: f64) {
     let n = s.pt.len();
     let mut sum = vec![DVec3::ZERO; n];
     let mut count = vec![0u32; n];
+    let mut largest = vec![DVec3::ZERO; n];
     let mut contacts = 0;
-    for f in tri_fixes.iter().chain(&pair_fixes) {
+    for (k, f) in tri_fixes.iter().chain(&pair_fixes).enumerate() {
         if f.1 > 0 {
             contacts += 1;
         }
+        let kin = k < fd.pt_tri.len() && fd.pt_tri[k].kin;
         for &(i, d) in &f.0[..f.1 as usize] {
-            sum[i as usize] += d;
-            count[i as usize] += 1;
+            let i = i as usize;
+            sum[i] += d;
+            count[i] += 1;
+            if kin && d.length_squared() > largest[i].length_squared() {
+                largest[i] = d;
+            }
         }
     }
     s.stats.contacts += contacts;
     s.pt.p.par_iter_mut().with_min_len(PAR_CHUNK).enumerate().for_each(|(i, p)| {
         if count[i] > 0 {
-            let to = *p + sum[i] / count[i] as f64;
+            // Averaged over its contacts, a point under several gets too little of each to hold against the cloth.
+            // The largest push from a collider point is met in full along its direction; the rest average.
+            let mut d = sum[i] / count[i] as f64;
+            let m = largest[i];
+            let ml = m.length();
+            if ml > 0.0 {
+                let dir = m / ml;
+                let along = d.dot(dir);
+                if along < ml {
+                    d += dir * (ml - along);
+                }
+            }
+            let to = *p + d;
             if finite(to) {
                 *p = to;
             }

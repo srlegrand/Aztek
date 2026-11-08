@@ -295,3 +295,70 @@ fn a_garment_mesh_with_degenerate_seams_holds_together() {
         }
     }
 }
+
+/// A cone pointing up, tip at `tip`, closed underneath, fine enough that its tip sits between the vertices of a coarse
+/// cloth.
+fn cone(tip: DVec3, r: f64, h: f64, seg: usize, rings: usize) -> (Vec<DVec3>, Vec<Vec<u32>>) {
+    let mut pts = vec![tip];
+    for k in 1..=rings {
+        let t = k as f64 / rings as f64;
+        for s in 0..seg {
+            let a = std::f64::consts::TAU * s as f64 / seg as f64;
+            pts.push(tip + DVec3::new(a.cos() * r * t, -h * t, a.sin() * r * t));
+        }
+    }
+    pts.push(tip - DVec3::new(0.0, h, 0.0));
+    let bottom = (pts.len() - 1) as u32;
+    let ring = |k: usize, s: usize| (1 + (k - 1) * seg + s % seg) as u32;
+    let mut faces = Vec::new();
+    for s in 0..seg {
+        faces.push(vec![0, ring(1, s + 1), ring(1, s)]);
+    }
+    for k in 1..rings {
+        for s in 0..seg {
+            faces.push(vec![ring(k, s), ring(k, s + 1), ring(k + 1, s + 1), ring(k + 1, s)]);
+        }
+    }
+    for s in 0..seg {
+        faces.push(vec![ring(rings, s), ring(rings, s + 1), bottom]);
+    }
+    (pts, faces)
+}
+
+#[test]
+fn a_fine_sharp_collider_does_not_poke_between_cloth_vertices() {
+    let mut s = Solver::new(SolverSettings::default());
+    // Seven quads across a metre: the middle of the cloth is the middle of a quad, right over the tip.
+    let (pts, faces) = grid(7, 1.0, 0.2);
+    let c = s.add_cloth("cloth", pts.clone(), &faces, cloth_settings(0.01));
+    let (cp, cf) = cone(DVec3::ZERO, 0.3, 0.5, 32, 10);
+    s.add_collider("cone", cp, &cf, BodySettings { thickness: 0.0, friction: 0.8, ..Default::default() });
+    s.reset();
+    assert!(s.bodies[1].mean_edge < s.bodies[c].mean_edge * 0.5, "the cone must be much finer than the cloth");
+    let tri_faces: Vec<[usize; 3]> = faces.iter().flat_map(|f| [[f[0] as usize, f[1] as usize, f[2] as usize], [f[0] as usize, f[2] as usize, f[3] as usize]]).collect();
+    // The landing and the settling on the tip. Later the coarse cloth slides off the tip folding over itself, and a
+    // fold can still end up through the cone: not covered.
+    for f in 0..40 {
+        s.set_input(c, &pts);
+        s.step(DT);
+        assert!(all_finite(&s), "frame {f}: a value is not finite");
+        let x = s.positions(c);
+        // The cloth's height over the tip, where a triangle covers it seen from above.
+        for t in &tri_faces {
+            let [a, b, d] = t.map(|i| x[i]);
+            let (ax, bx, dx) = (a.x, b.x, d.x);
+            let (az, bz, dz) = (a.z, b.z, d.z);
+            let det = (bx - ax) * (dz - az) - (dx - ax) * (bz - az);
+            if det.abs() < 1e-12 {
+                continue;
+            }
+            let u = ((0.0 - ax) * (dz - az) - (dx - ax) * (0.0 - az)) / det;
+            let v = ((bx - ax) * (0.0 - az) - (0.0 - ax) * (bz - az)) / det;
+            if u < 0.0 || v < 0.0 || u + v > 1.0 {
+                continue;
+            }
+            let y = a.y + u * (b.y - a.y) + v * (d.y - a.y);
+            assert!(y > -0.005, "frame {f}: the tip came through the cloth, which is at {y} over it");
+        }
+    }
+}

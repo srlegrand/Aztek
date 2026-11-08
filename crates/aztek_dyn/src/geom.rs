@@ -71,6 +71,27 @@ pub fn at(w: DVec3, a: DVec3, b: DVec3, c: DVec3) -> DVec3 {
     a * w.x + b * w.y + c * w.z
 }
 
+/// Where p, dropped onto the triangle's plane, lands, as barycentric weights that may be negative outside it. None
+/// for a degenerate triangle.
+pub fn plane_bary(p: DVec3, a: DVec3, b: DVec3, c: DVec3) -> Option<DVec3> {
+    let (e0, e1, d) = (b - a, c - a, p - a);
+    let (d00, d01, d11) = (e0.dot(e0), e0.dot(e1), e1.dot(e1));
+    let (d20, d21) = (d.dot(e0), d.dot(e1));
+    let den = d00 * d11 - d01 * d01;
+    if !(den > 0.0) {
+        return None;
+    }
+    let v = (d11 * d20 - d01 * d21) / den;
+    let w = (d00 * d21 - d01 * d20) / den;
+    Some(DVec3::new(1.0 - v - w, v, w))
+}
+
+/// Whether p, dropped onto the triangle's plane, lands inside it or within `slack` (a fraction of the triangle) of
+/// it. A point on an edge two triangles share is over both.
+pub fn over_face(p: DVec3, a: DVec3, b: DVec3, c: DVec3, slack: f64) -> bool {
+    plane_bary(p, a, b, c).is_some_and(|w| w.min_element() >= -slack)
+}
+
 /// The triangle's unit normal, or zero for a degenerate one.
 #[inline]
 pub fn normal(a: DVec3, b: DVec3, c: DVec3) -> DVec3 {
