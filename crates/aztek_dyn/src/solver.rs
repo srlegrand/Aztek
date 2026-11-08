@@ -274,6 +274,8 @@ pub struct Solver {
     pub(crate) rest_now: Vec<Option<Vec<f64>>>,
     /// Each particle's weight in the simulation this substep: what blending to a fallback leaves of its speed.
     pub(crate) blend_ws: Vec<f64>,
+    /// With DYN_JUMP: the largest move each phase made this frame, and by which particle.
+    pub jumps: std::collections::BTreeMap<&'static str, (usize, f64)>,
 }
 
 impl Default for Solver {
@@ -303,6 +305,7 @@ impl Solver {
             v_int: Vec::new(),
             rest_now: Vec::new(),
             blend_ws: Vec::new(),
+            jumps: Default::default(),
         }
     }
 
@@ -413,11 +416,25 @@ impl Solver {
                 *edge_area.entry((p.min(q), p.max(q))).or_default() += a / 3.0;
             }
         }
-        c.point_area = point_area;
+        // Points on degenerate seams have no area of their own; each weighs at least a quarter of the average point, or
+        // the slightest contact flings it.
+        let used: Vec<f64> = point_area.iter().copied().filter(|&a| a > 0.0).collect();
+        let mean_area = if used.is_empty() { 0.0 } else { used.iter().sum::<f64>() / used.len() as f64 };
+        c.point_area = point_area.into_iter().map(|a| a.max(if crate::util::off("massfloor") { 0.0 } else { mean_area * 0.25 })).collect();
         c.dist_rest = c.dist.iter().map(|e| (rest[e[0] as usize] - rest[e[1] as usize]).length()).collect();
+        if std::env::var("DYN_WHY").is_ok() {
+            let mut l = c.dist_rest.clone();
+            l.sort_by(|a, b| a.total_cmp(b));
+            let q = |f: f64| l[((l.len() - 1) as f64 * f) as usize];
+            let zero_area = c.point_area.iter().filter(|&&a| a <= 0.0).count();
+            eprintln!("edges {}: min {:.2e} 1% {:.2e} 10% {:.2e} median {:.2e} max {:.2e} m; points without area {zero_area}; triangles {}", l.len(), q(0.0), q(0.01), q(0.1), q(0.5), q(1.0), t.triangles.len());
+        }
         // An edge's stiffness is the material's times its share of the surface over its length squared: the same cloth
         // stretches the same at any resolution.
-        c.dist_geo = c.dist.iter().zip(&c.dist_rest).map(|(e, &l)| if l > 1e-12 { edge_area.get(&(e[0], e[1])).copied().unwrap_or(0.0) / (l * l) } else { 0.0 }).collect();
+        // Seam edges of almost no length still hold their points together: no edge is weaker than a regular mesh's
+        // (an equilateral triangle's share, about 0.29).
+        let mean = t.mean_edge(rest).max(1e-9);
+        c.dist_geo = c.dist.iter().zip(&c.dist_rest).map(|(e, &l)| (edge_area.get(&(e[0], e[1])).copied().unwrap_or(0.0) / l.max(mean * 0.25).powi(2)).clamp(if crate::util::off("geofloor") { 0.0 } else { 0.29 }, 4.0)).collect();
         c.dist_colour = colour(&mut c.dist, &mut [&mut c.dist_rest, &mut c.dist_geo], n);
         c.bend = t.bends.clone();
         c.bend_rest = c.bend.iter().map(|s| crate::constraints::dihedral_angle(rest, s)).collect();
@@ -427,8 +444,10 @@ impl Solver {
             .iter()
             .map(|s| {
                 let e = (rest[s[0] as usize] - rest[s[1] as usize]).length_squared();
-                let a = crate::constraints::area(rest, &[s[0], s[1], s[2]]) + crate::constraints::area(rest, &[s[0], s[1], s[3]]);
-                if a > 1e-18 && e.is_finite() { 3.0 * e / a } else { 0.0 }
+                let (a1, a2) = (crate::constraints::area(rest, &[s[0], s[1], s[2]]), crate::constraints::area(rest, &[s[0], s[1], s[3]]));
+                // A sliver's fold angle is noise: no bending across one. Otherwise capped, so no hinge is stiffer than
+                // a well shaped mesh's would be many times over.
+                if a1.min(a2) > 0.02 * e && e.is_finite() && e > 0.0 { (3.0 * e / (a1 + a2)).min(20.0) } else { 0.0 }
             })
             .collect();
         c.bend_colour = colour(&mut c.bend, &mut [&mut c.bend_rest, &mut c.bend_geo], n);
@@ -739,14 +758,32 @@ impl Solver {
         self.im = im;
         self.stats.add("weights", tc);
         let t = std::time::Instant::now();
+        let snap = |s: &Solver| if std::env::var("DYN_JUMP").is_ok() { s.pt.p.clone() } else { Vec::new() };
+        let jump = |s: &mut Solver, name: &'static str, before: &[DVec3]| {
+            if before.len() == s.pt.p.len() && !before.is_empty() {
+                let (i, d) = s.pt.p.iter().zip(before).map(|(a, b)| (*a - *b).length()).enumerate().fold((0, 0.0f64), |m, (i, d)| if d > m.1 { (i, d) } else { m });
+                let e = s.jumps.entry(name).or_insert((0, 0.0));
+                if d > e.1 {
+                    *e = (i, d);
+                }
+            }
+        };
+        let b0: Vec<DVec3> = self.pt.x.clone();
         crate::constraints::integrate(self, h);
+        if std::env::var("DYN_JUMP").is_ok() {
+            jump(self, "integrate", &b0);
+        }
         self.stats.add("integrate", t);
         let t = std::time::Instant::now();
+        let b0 = snap(self);
         crate::constraints::cloth(self, h, self.settings.iterations.clamp(1, 16));
+        jump(self, "cloth", &b0);
         self.stats.add("cloth", t);
         let t = std::time::Instant::now();
+        let b0 = snap(self);
         crate::constraints::attract(self, h);
         crate::constraints::links(self, h, a1);
+        jump(self, "attract", &b0);
         self.stats.add("attract+links", t);
         if !self.extensions.is_empty() {
             let mut ext = std::mem::take(&mut self.extensions);
@@ -758,15 +795,21 @@ impl Solver {
         }
         let tk = std::time::Instant::now();
         self.stats.ms_constraints += (tk - tc).as_secs_f64() * 1e3;
+        let b0 = snap(self);
         crate::contacts::solve_pairs(self, h, a0, a1);
+        jump(self, "pairs", &b0);
         self.stats.add("pairs", tk);
         let t = std::time::Instant::now();
+        let b0 = snap(self);
         crate::contacts::solve_colliders(self, h, a0, a1, last);
+        jump(self, "colliders", &b0);
         self.stats.add("colliders", t);
         crate::rigid::shape_match(self);
         let tr = std::time::Instant::now();
         self.stats.ms_collide += (tr - tk).as_secs_f64() * 1e3;
+        let b0 = snap(self);
         crate::resolve::blend(self, a1, h);
+        jump(self, "blend", &b0);
         self.finish_substep(h);
         self.stats.ms_other += tr.elapsed().as_secs_f64() * 1e3;
     }

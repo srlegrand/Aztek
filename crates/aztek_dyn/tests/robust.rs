@@ -225,3 +225,46 @@ fn a_fine_drape_with_self_collision_stays_bounded() {
         assert!(worst_stretch(&s, c) < 12.0, "frame {f}: stretch {}", worst_stretch(&s, c));
     }
 }
+
+#[test]
+fn a_garment_mesh_with_degenerate_seams_holds_together() {
+    // A sheet cut down the middle and stitched with quads of no area, as modelled garments are: seam points with no
+    // area of their own, edges of no length, sliver triangles.
+    let n = 16;
+    let (mut pts, faces) = grid(n, 2.0, 1.0);
+    let w = n + 1;
+    let seam = n / 2;
+    let dup: Vec<u32> = (0..w).map(|j| {
+        pts.push(pts[j * w + seam]);
+        (pts.len() - 1) as u32
+    }).collect();
+    let mut faces: Vec<Vec<u32>> = faces
+        .into_iter()
+        .map(|f| {
+            // Faces right of the seam take the copies.
+            let right = f.iter().all(|&v| (v as usize % w) >= seam);
+            f.into_iter().map(|v| if right && v as usize % w == seam { dup[v as usize / w] } else { v }).collect()
+        })
+        .collect();
+    for j in 0..n {
+        faces.push(vec![(j * w + seam) as u32, dup[j], dup[j + 1], ((j + 1) * w + seam) as u32]);
+    }
+    let mut s = Solver::new(SolverSettings::default());
+    let c = s.add_cloth("garment", pts, &faces, cloth_settings(0.01));
+    let (sp, sf) = sphere(0.5, DVec3::ZERO, 32, 16);
+    s.add_collider("ball", sp, &sf, BodySettings { thickness: 0.0, ..Default::default() });
+    s.reset();
+    for f in 0..48 {
+        let before = s.positions(c).to_vec();
+        s.step(DT);
+        assert!(all_finite(&s), "frame {f}");
+        let x = s.positions(c);
+        // No point flung: nothing moves more than a free fall's frame could, and the seam stays closed.
+        let moved = x.iter().zip(&before).map(|(a, b)| (*a - *b).length()).fold(0.0, f64::max);
+        assert!(moved < 0.3, "frame {f}: a point moved {moved} m");
+        for j in 0..w {
+            let gap = (x[j * w + seam] - x[dup[j] as usize]).length();
+            assert!(gap < 0.03, "frame {f}: the seam opened {gap} m at row {j}");
+        }
+    }
+}

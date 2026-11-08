@@ -83,8 +83,12 @@ fn drape_on_a_sphere_settles() {
     assert!(worst_stretch(&s, c) < 1.15, "stretch {}", worst_stretch(&s, c));
     let corner = x[0];
     assert!(corner.y < 0.0, "corner did not fall: {corner}");
-    let speed = s.velocities(c).iter().map(|v| v.length()).fold(0.0, f64::max);
-    assert!(speed < 0.5, "still moving at {speed}");
+    // Nearly still: what a frame moves it, not the last substep's speed, which carries the solve's small corrections.
+    let before = s.positions(c).to_vec();
+    let mut s = s;
+    s.step(DT);
+    let moved = s.positions(c).iter().zip(&before).map(|(a, b)| (*a - *b).length()).fold(0.0, f64::max);
+    assert!(moved < 0.02, "still moving {moved} m a frame");
     assert_eq!(s.out_count(c), 0, "vertices left the simulation in a plain drape");
 }
 

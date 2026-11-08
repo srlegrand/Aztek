@@ -16,6 +16,9 @@ fn main() {
     // Thickness well under half an edge, as a garment would have.
     let mut cs = cloth_settings((2.0 / n as f64 * 0.3).min(0.02));
     cs.self_collide = std::env::var("SELF").map_or(true, |v| v != "0");
+    if let Some(c) = std::env::var("COMP").ok().and_then(|v| v.parse().ok()) {
+        cs.compression_stiffness = c;
+    }
     if std::env::var("NORESOLVE").is_ok() {
         cs.resolve = false;
     }
@@ -38,6 +41,7 @@ fn main() {
     s.add_collider("ball", sp, &sf, BodySettings { thickness: 0.0, friction: std::env::var("FRIC").ok().and_then(|v| v.parse().ok()).unwrap_or(0.3), ..Default::default() });
     }
     s.reset();
+    let mut prev: Vec<DVec3> = Vec::new();
     for f in 0..frames {
         let t = std::time::Instant::now();
         s.step(1.0 / 24.0);
@@ -61,9 +65,16 @@ fn main() {
         if std::env::var("SPEED").is_ok() {
             let v = s.velocities(c);
             let top = v.iter().map(|v| v.length()).fold(0.0, f64::max);
-            let fast = v.iter().filter(|v| v.length() > 3.0).count();
+            let at = v.iter().position(|q| q.length() == top).unwrap_or(0);
+            let w = n + 1;
+            println!("  fastest point {at} (row {}, column {}) at {:.3} |p| {:.3}", at / w, at % w, s.positions(c)[at], s.positions(c)[at].length());
+            let fast = v.iter().filter(|v| v.length() > 0.2).count();
             let lowest = s.positions(c).iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
-            println!("  top speed {top:.2}, {fast} over 3, lowest y {lowest:.3}, clamped {}, fixed {}", s.stats.clamped, s.stats.fixed);
+            let x = s.positions(c).to_vec();
+            let moved = if prev.len() == x.len() { x.iter().zip(&prev).map(|(a, b)| (*a - *b).length()).fold(0.0, f64::max) } else { 0.0 };
+            prev = x;
+            println!("  most moved in the frame {:.4} m", moved);
+            println!("  top speed {top:.2}, {fast} over 0.2 m/s, lowest y {lowest:.3}, clamped {}, fixed {}", s.stats.clamped, s.stats.fixed);
         }
         if std::env::var("WHERE").is_ok() {
             let body = &s.bodies[c];

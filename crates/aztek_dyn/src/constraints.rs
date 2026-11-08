@@ -91,7 +91,9 @@ pub(crate) fn integrate(s: &mut Solver, h: f64) {
             };
             // Drag can stop a point but never turn it round within a step.
             let dv = crate::util::clamp_len(force / mass * h, rel.length());
-            a -= dv / h;
+            if !crate::util::off("drag") {
+                a -= dv / h;
+            }
             let mut v = v + a * h;
             v *= (1.0 - st.damping * h).max(0.0);
             v = clamp_len(v, vmax);
