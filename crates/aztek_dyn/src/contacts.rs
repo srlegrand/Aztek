@@ -124,7 +124,9 @@ impl FrameData {
         let mut cache = std::mem::take(&mut s.bvh);
         let fresh = a0 <= 0.0;
         let (col_tris, col_motion, bounds) = Self::collider_tris(s, a0, a1);
-        if fresh || cache.col.len != bounds.len() {
+        // The collider tree is built again now and then, refitted the rest of the time: a skinned body moves, but
+        // its triangles stay near the ones they started near.
+        if cache.col.len != bounds.len() || (fresh && s.frame % 24 == 1) {
             cache.col = Bvh::build(&bounds);
         } else {
             cache.col.refit(&bounds);
@@ -258,9 +260,11 @@ impl FrameData {
                 all.add(b.lo);
                 all.add(b.hi);
             }
-            // Collider vertices near cloth, as points that cannot move.
+            // Collider vertices near cloth, as points that cannot move: where the collider is finer than the cloth, so
+            // its corners could poke between cloth vertices. A coarser one is held off by its faces alone.
+            let finest_cloth = s.bodies.iter().filter(|b| b.kind == BodyKind::Cloth).map(|b| b.mean_edge).fold(f64::INFINITY, f64::min);
             for (bi, b) in s.bodies.iter().enumerate().filter(|_| !crate::util::off("kin")) {
-                if b.kind == BodyKind::Collider && b.settings.enabled && b.settings.collide {
+                if b.kind == BodyKind::Collider && b.settings.enabled && b.settings.collide && b.mean_edge < finest_cloth * 0.75 {
                     let grown = all.grow(b.settings.thickness + rmax);
                     for (l, p) in b.anim.iter().enumerate() {
                         let q = b.anim_prev[l];
@@ -318,16 +322,17 @@ impl FrameData {
                             tst.thickness + s.pt.radius[k]
                         };
                         let [a, b, c] = tri.map(|g| s.pt.x[g as usize]);
+                        // Far from the triangle's plane: no closest point needed.
+                        let nrm = geom::normal(a, b, c);
+                        let tri_motion = tri.iter().fold(0.0f64, |m, &g| m.max(motion(g as usize)));
+                        if nrm == DVec3::ZERO || (x - a).dot(nrm).abs() > thick + reach_r + tri_motion {
+                            return;
+                        }
                         let (w, feat) = geom::closest_on_triangle(x, a, b, c);
                         let d = x - geom::at(w, a, b, c);
                         if feat != Feature::Face && d.length() > thick {
                             return;
                         }
-                        let nrm = geom::normal(a, b, c);
-                        if nrm == DVec3::ZERO {
-                            return;
-                        }
-                        let tri_motion = tri.iter().fold(0.0f64, |m, &g| m.max(motion(g as usize)));
                         if d.length() > thick + reach_r + tri_motion {
                             return;
                         }
@@ -341,7 +346,9 @@ impl FrameData {
                             }
                             let rt = tri.map(|g| body.rest[g as usize - body.start]);
                             let (w, _) = geom::closest_on_triangle(body.rest[l], rt[0], rt[1], rt[2]);
-                            if (body.rest[l] - geom::at(w, rt[0], rt[1], rt[2])).length() < thick * 2.0 {
+                            // Closer than half an edge at rest: the two sides of a garment modelled with thickness,
+                            // which belong together.
+                            if (body.rest[l] - geom::at(w, rt[0], rt[1], rt[2])).length() < (thick * 2.0).max(body.mean_edge * 0.5) {
                                 return;
                             }
                         }
@@ -360,6 +367,9 @@ impl FrameData {
                 sizes.sort_by(|a, b| a.total_cmp(b));
                 let mut mot: Vec<f64> = (0..n).map(motion).collect();
                 mot.sort_by(|a, b| a.total_cmp(b));
+                for b in s.bodies.iter().filter(|b| b.kind == BodyKind::Collider) {
+                    eprintln!("collider {}: mean edge {:.4}", b.name, b.mean_edge);
+                }
                 for b in s.bodies.iter().filter(|b| b.kind == BodyKind::Cloth) {
                     eprintln!("cloth {}: thickness {:.3}, self {:.3}, mean edge {:.3}, radius[0] {:.3}", b.name, b.settings.thickness, b.settings.self_thickness, b.mean_edge, s.pt.radius[b.start]);
                 }
@@ -600,6 +610,7 @@ pub(crate) fn solve_pairs(s: &mut Solver, _h: f64, a0: f64, a1: f64) {
 }
 
 /// The nearest triangle of one collider to a point.
+#[derive(Clone, Copy)]
 pub(crate) struct Hit {
     pub body: u32,
     pub tri: u32,
@@ -617,8 +628,34 @@ pub(crate) struct Hit {
 }
 
 /// For each collider among the candidates, its nearest triangle to `pos` at blend `a` through the frame.
-pub(crate) fn closest_per_body(s: &Solver, fd: &FrameData, cands: &[u32], pos: DVec3, a: f64) -> Vec<Hit> {
-    let mut hits: Vec<Hit> = Vec::new();
+/// Up to four colliders' nearest triangles, without allocating: this runs for every particle in every substep.
+pub(crate) struct Hits {
+    hits: [Option<Hit>; 4],
+    n: usize,
+}
+
+impl Hits {
+    fn iter_mut(&mut self) -> impl Iterator<Item = &mut Hit> {
+        self.hits[..self.n].iter_mut().flatten()
+    }
+    fn push(&mut self, h: Hit) {
+        if self.n < 4 {
+            self.hits[self.n] = Some(h);
+            self.n += 1;
+        }
+    }
+}
+
+impl IntoIterator for Hits {
+    type Item = Hit;
+    type IntoIter = std::iter::Flatten<std::iter::Take<std::array::IntoIter<Option<Hit>, 4>>>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.hits.into_iter().take(self.n).flatten()
+    }
+}
+
+pub(crate) fn closest_per_body(s: &Solver, fd: &FrameData, cands: &[u32], pos: DVec3, a: f64) -> Hits {
+    let mut hits = Hits { hits: [None; 4], n: 0 };
     for &c in cands {
         let (cb, t) = fd.col_tris[c as usize];
         let body = &s.bodies[cb as usize];
@@ -636,13 +673,15 @@ pub(crate) fn closest_per_body(s: &Solver, fd: &FrameData, cands: &[u32], pos: D
         let border = feat != Feature::Face && (0..3).filter(|&k| w[k] > 1e-9).all(|k| body.topo.border[tri[k] as usize]);
         let size = (p1 - p0).length().max((p2 - p1).length()).max((p0 - p2).length());
         let hit = Hit { body: cb, tri: t, cand: c, w, feat, q, d, dist, n, border, size };
-        match hits.iter_mut().find(|h| h.body == cb) {
-            Some(h) => {
-                if better(h) {
-                    *h = hit;
-                }
+        let mut found = false;
+        for h in hits.iter_mut().filter(|h| h.body == cb) {
+            found = true;
+            if better(h) {
+                *h = hit;
             }
-            None => hits.push(hit),
+        }
+        if !found {
+            hits.push(hit);
         }
     }
     hits

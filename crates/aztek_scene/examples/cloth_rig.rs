@@ -57,6 +57,9 @@ fn main() {
         total += ms;
         let info = run(&mut s, "dynInfo", json!({}));
         let solve = info.as_object().and_then(|o| o.values().next()).and_then(|x| x.get("solve")).cloned().unwrap_or_default();
+        if std::env::var("DETAIL_AT").ok().and_then(|v| v.parse::<i64>().ok()) == Some(f) {
+            println!("detail at {f}: {}", solve["detail"]);
+        }
         println!("{f:3} {ms:8.1} ms frame, solve {:.1} (prepare {:.1}, constraints {:.1}, collide {:.1}), out {}, contacts {}", solve["ms"].as_f64().unwrap_or(0.0), solve["msPrepare"].as_f64().unwrap_or(0.0), solve["msConstraints"].as_f64().unwrap_or(0.0), solve["msCollide"].as_f64().unwrap_or(0.0), info.as_object().and_then(|o| o.values().next()).map(|x| x["outOfSimulation"].clone()).unwrap_or_default(), solve["contacts"]);
     }
     let info = run(&mut s, "dynInfo", json!({}));

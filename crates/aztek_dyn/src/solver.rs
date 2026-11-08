@@ -349,6 +349,8 @@ impl Solver {
     /// An animated mesh the others collide with.
     pub fn add_collider(&mut self, name: &str, positions: Vec<DVec3>, polygons: &[Vec<u32>], settings: BodySettings) -> usize {
         let b = self.add_body(BodyKind::Collider, name, positions, polygons, settings);
+        let me = self.bodies[b].topo.mean_edge(&self.bodies[b].rest);
+        self.bodies[b].mean_edge = me;
         // A closed mesh has one outside, whichever side a particle starts on: one that starts inside is pushed out,
         // or, deep in, handled as impossible.
         let body = &mut self.bodies[b];
