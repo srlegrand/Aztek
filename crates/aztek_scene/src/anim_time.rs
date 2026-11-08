@@ -487,3 +487,17 @@ pub fn register(c: &mut Commands<Session>) {
         c.register(Cmd::new(name, doc, move |s, a| set_ghosting(s, a, on, all)).positional("objects (the selection when none)"));
     }
 }
+
+/// Metres in one scene unit, from currentUnit -linear: 0.01 in a centimetre scene.
+pub fn metres_per_unit() -> f64 {
+    match LINEAR.lock().unwrap().as_deref().unwrap_or("cm") {
+        "mm" => 0.001,
+        "m" => 1.0,
+        "km" => 1000.0,
+        "in" => 0.0254,
+        "ft" => 0.3048,
+        "yd" => 0.9144,
+        "mi" => 1609.344,
+        _ => 0.01,
+    }
+}

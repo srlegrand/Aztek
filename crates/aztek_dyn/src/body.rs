@@ -64,18 +64,23 @@ pub struct BodySettings {
     pub thickness: f64,
     /// Self collision thickness, for cloth against itself and particles against each other.
     pub self_thickness: f64,
-    /// Compliance: 0 is as stiff as the steps allow; larger gives more.
-    pub stretch_compliance: f64,
-    pub compression_compliance: f64,
-    pub bend_compliance: f64,
-    /// Bending also keeps the rest fold, rather than pulling towards flat when there is one.
-    pub area_compliance: Option<f64>,
+    /// Cloth material, in physical units (the solver works in metres, kilograms and seconds):
+    /// stretch and compression stiffness in newtons per metre of width, bending stiffness in newton metres, area
+    /// stiffness in newtons per metre (none: off). Each constraint takes the stiffness its own edge length and areas
+    /// imply, so the same material behaves the same at any size and resolution.
+    pub stretch_stiffness: f64,
+    pub compression_stiffness: f64,
+    pub bend_stiffness: f64,
+    pub area_stiffness: Option<f64>,
+    /// Areal density, kilograms per square metre. 0: `mass` is each point's mass instead.
+    pub density: f64,
     /// Fraction of velocity lost per second.
     pub damping: f64,
     pub friction: f64,
     /// Contact softness: compliance of the soft zone. 0 resolves inside the step.
     pub collide_compliance: f64,
-    /// Drag on motion along the surface normal through still air, and along the surface.
+    /// Air drag coefficients across the surface and along it (a flat plate across the flow is about 1); on particles
+    /// and rigid bodies, the fraction of their speed relative to the air lost per second.
     pub drag: f64,
     pub tangential_drag: f64,
     /// How strongly points follow the animated input, 0 to 1, per point by `attract_map`.
@@ -128,14 +133,15 @@ impl Default for BodySettings {
             mass: 1.0,
             thickness: 0.1,
             self_thickness: 0.1,
-            stretch_compliance: 0.0,
-            compression_compliance: 1e-6,
-            bend_compliance: 1e-3,
-            area_compliance: None,
+            stretch_stiffness: 2000.0,
+            compression_stiffness: 1000.0,
+            bend_stiffness: 1e-5,
+            area_stiffness: None,
+            density: 0.15,
             damping: 0.1,
             friction: 0.3,
             collide_compliance: 1e-7,
-            drag: 0.05,
+            drag: 1.0,
             tangential_drag: 0.0,
             attract: 0.0,
             attract_map: None,
@@ -176,6 +182,13 @@ pub struct ClothData {
     pub bend: Vec<[u32; 4]>,
     pub bend_rest: Vec<f64>,
     pub bend_colour: Colouring,
+    /// Per distance constraint: its share of the surface over its rest length squared, what turns the material's
+    /// stiffness into the edge's.
+    pub dist_geo: Vec<f64>,
+    /// Per bending stencil: 3 |e|^2 / (A1 + A2), what turns bending stiffness into the hinge's.
+    pub bend_geo: Vec<f64>,
+    /// Each point's share of the rest surface, square metres.
+    pub point_area: Vec<f64>,
     pub area: Vec<[u32; 3]>,
     pub area_rest: Vec<f64>,
     pub area_colour: Colouring,

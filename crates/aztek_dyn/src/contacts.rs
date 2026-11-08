@@ -15,7 +15,7 @@ use crate::util::PAR_CHUNK;
 
 use crate::body::{BodyKind, Phase};
 use crate::geom::{self, Aabb, Feature};
-use crate::hash::SpatialHash;
+use crate::bvh::Bvh;
 use crate::solver::{Sides, Signal, Solver};
 use crate::util::finite;
 
@@ -56,7 +56,8 @@ pub struct FrameData {
     pub col_tris: Vec<(u32, u32)>,
     /// How far each moved this frame.
     pub col_motion: Vec<f64>,
-    pub col_hash: Option<SpatialHash>,
+    pub col_bounds: Vec<Aabb>,
+    pub col_bvh: Bvh,
     /// Per particle, its candidate collider triangles: cand[cand_start[i]..cand_start[i + 1]].
     pub cand_start: Vec<u32>,
     pub cand: Vec<u32>,
@@ -72,7 +73,15 @@ impl FrameData {
         self.pt_tri.len() + self.pt_pt.len() + self.cand.len()
     }
 
-    fn collider_tris(s: &Solver, swept: bool) -> (Vec<(u32, u32)>, Vec<f64>, Vec<Aabb>) {
+    /// The collider triangles where they are now, for learning sides.
+    pub fn colliders_only(s: &Solver) -> FrameData {
+        let (col_tris, col_motion, bounds) = Self::collider_tris(s, 1.0, 1.0);
+        let col_bvh = Bvh::build(&bounds);
+        FrameData { col_tris, col_motion, col_bounds: bounds, col_bvh, ..Default::default() }
+    }
+
+    /// Collider triangles swept from `a0` to `a1` of the way through the frame, and how far each moves over the frame.
+    fn collider_tris(s: &Solver, a0: f64, a1: f64) -> (Vec<(u32, u32)>, Vec<f64>, Vec<Aabb>) {
         let mut tris = Vec::new();
         let mut motion = Vec::new();
         let mut bounds = Vec::new();
@@ -80,95 +89,92 @@ impl FrameData {
             if b.kind != BodyKind::Collider || !b.settings.enabled || !b.settings.collide {
                 continue;
             }
-            for (ti, t) in b.topo.triangles.iter().enumerate() {
-                let mut bb = Aabb::EMPTY;
-                let mut m = 0.0f64;
-                for &k in t {
-                    let (p0, p1) = (b.anim_prev[k as usize], b.anim[k as usize]);
-                    bb.add(p1);
-                    if swept {
-                        bb.add(p0);
+            let th = b.settings.thickness;
+            let from = b.topo.triangles.len();
+            tris.extend((0..from as u32).map(|t| (bi as u32, t)));
+            let one: Vec<(f64, Aabb)> = b
+                .topo
+                .triangles
+                .par_iter()
+                .with_min_len(PAR_CHUNK)
+                .map(|t| {
+                    let mut bb = Aabb::EMPTY;
+                    let mut m = 0.0f64;
+                    for &k in t {
+                        let (p0, p1) = (b.anim_prev[k as usize], b.anim[k as usize]);
+                        bb.add(p0.lerp(p1, a0));
+                        bb.add(p0.lerp(p1, a1));
                         m = m.max((p1 - p0).length());
                     }
-                }
-                tris.push((bi as u32, ti as u32));
+                    (m, bb.grow(th))
+                })
+                .collect();
+            for (m, bb) in one {
                 motion.push(m);
-                bounds.push(bb.grow(b.settings.thickness));
+                bounds.push(bb);
             }
         }
         (tris, motion, bounds)
     }
 
-    fn cell_for(bounds: &[Aabb], least: f64) -> f64 {
-        if bounds.is_empty() {
-            return least.max(1e-3);
-        }
-        let mut sizes: Vec<f64> = bounds.iter().map(|b| b.size().max_element()).filter(|x| x.is_finite()).collect();
-        if sizes.is_empty() {
-            return least.max(1e-3);
-        }
-        let mid = sizes.len() / 2;
-        let (_, m, _) = sizes.select_nth_unstable_by(mid, |a, b| a.total_cmp(b));
-        m.max(least).max(1e-4)
-    }
-
-    /// The collider triangles where they are now, for learning sides.
-    pub fn colliders_only(s: &Solver) -> FrameData {
-        let (col_tris, col_motion, bounds) = Self::collider_tris(s, false);
-        let least = s.pt.radius.iter().fold(0.0f64, |m, &r| m.max(r)) * 2.0;
-        let col_hash = Some(SpatialHash::build(Self::cell_for(&bounds, least), &bounds));
-        FrameData { col_tris, col_motion, col_hash, ..Default::default() }
-    }
-
-    /// Contacts for the next `dt` seconds, starting `a0` of the way through the frame.
-    pub fn build(s: &mut Solver, dt: f64, a0: f64) -> FrameData {
+    /// Contacts for the next `dt` seconds, from `a0` to `a1` of the way through the frame. The trees are built at the
+    /// frame's first search and refitted after.
+    pub fn build(s: &mut Solver, dt: f64, a0: f64, a1: f64) -> FrameData {
         let t0 = std::time::Instant::now();
-        let (col_tris, col_motion, bounds) = Self::collider_tris(s, true);
+        let mut cache = std::mem::take(&mut s.bvh);
+        let fresh = a0 <= 0.0;
+        let (col_tris, col_motion, bounds) = Self::collider_tris(s, a0, a1);
+        if fresh || cache.col.len != bounds.len() {
+            cache.col = Bvh::build(&bounds);
+        } else {
+            cache.col.refit(&bounds);
+        }
         let n = s.pt.len();
         let rmax = s.pt.radius.iter().fold(0.0f64, |m, &r| m.max(r));
         let col_thick = s.bodies.iter().filter(|b| b.kind == BodyKind::Collider).fold(0.0f64, |m, b| m.max(b.settings.thickness));
-        let col_hash = SpatialHash::build(Self::cell_for(&bounds, rmax * 2.0), &bounds);
         let vmax = s.settings.max_velocity;
         let collides: Vec<bool> = s.bodies.iter().map(|b| b.settings.enabled && b.settings.collide).collect();
-        // Where each particle may get to this frame.
-        let reach: Vec<Aabb> = (0..n)
+        // Where each particle may get to over the span, wide enough to see a point that went through.
+        let reach = |i: usize| {
+            let x = s.pt.x[i];
+            let to = x + crate::util::clamp_len(s.pt.v[i] * dt, vmax * dt);
+            let mut b = Aabb::EMPTY;
+            b.add(x);
+            b.add(to);
+            // A vertex out of the simulation goes to its input, which must be checked too.
+            if s.pt.phase[i] == Phase::Cloth && s.pt.rs[i].mode != crate::solver::Mode::Sim {
+                b.add(s.anim_target_end(i));
+            }
+            b.grow((s.pt.radius[i] + col_thick) * 4.0 + rmax)
+        };
+        let col_bvh = &cache.col;
+        let found: Vec<Vec<(u32, u32)>> = (0..n)
             .into_par_iter()
-            .with_min_len(PAR_CHUNK)
-            .map(|i| {
-                let x = s.pt.x[i];
-                let to = x + crate::util::clamp_len(s.pt.v[i] * dt, vmax * dt);
-                let mut b = Aabb::EMPTY;
-                b.add(x);
-                b.add(to);
-                // A vertex out of the simulation goes to its input, which must be checked too.
-                if s.pt.phase[i] == Phase::Cloth && s.pt.rs[i].mode != crate::solver::Mode::Sim {
-                    b.add(s.anim_target_end(i));
+            .with_min_len(256)
+            .fold(Vec::new, |mut acc, i| {
+                if collides[s.pt.body[i] as usize] && !col_tris.is_empty() {
+                    let r = reach(i);
+                    col_bvh.query(&r, &bounds, |c| acc.push((i as u32, c)));
                 }
-                // Wide enough to see a point that went through, not only one touching.
-                b.grow((s.pt.radius[i] + col_thick) * 4.0 + rmax)
+                acc
             })
             .collect();
-        let per: Vec<Vec<u32>> = (0..n)
-            .into_par_iter()
-            .with_min_len(PAR_CHUNK)
-            .map_init(|| (Vec::new(), crate::hash::Seen::default()), |(buf, seen), i| {
-                if !collides[s.pt.body[i] as usize] || col_tris.is_empty() {
-                    return Vec::new();
-                }
-                // A bucket holds whatever hashed to it: only what really comes near is kept.
-                col_hash.query_marked(&reach[i], &bounds, seen, buf);
-                buf.clone()
-            })
-            .collect();
+        let mut cand_start = vec![0u32; n + 1];
+        let mut cand = Vec::with_capacity(found.iter().map(Vec::len).sum());
+        for part in &found {
+            for &(i, c) in part {
+                cand_start[i as usize + 1] += 1;
+                cand.push(c);
+            }
+        }
+        for i in 0..n {
+            cand_start[i + 1] += cand_start[i];
+        }
         s.stats.add("prep collider candidates", t0);
         let t0 = std::time::Instant::now();
-        let mut cand_start = Vec::with_capacity(n + 1);
-        let mut cand = Vec::new();
-        cand_start.push(0u32);
-        for (i, list) in per.iter().enumerate() {
-            cand.extend_from_slice(list);
-            cand_start.push(cand.len() as u32);
-            // Far from a collider, a particle forgets which side it was on.
+        // Far from a collider, a particle forgets which side it was on.
+        for i in 0..n {
+            let list = &cand[cand_start[i] as usize..cand_start[i + 1] as usize];
             let sides = &mut s.pt.sides[i];
             let mut k = 0;
             while k < sides.n as usize {
@@ -180,7 +186,6 @@ impl FrameData {
                 }
             }
         }
-
         s.stats.add("prep forget sides", t0);
         let t0 = std::time::Instant::now();
         // Cloth triangles and what may touch them.
@@ -204,6 +209,7 @@ impl FrameData {
         let selfish = s.bodies.iter().any(|b| b.kind == BodyKind::Cloth && b.settings.self_collide && b.settings.collide);
         let any_cloth = !dyn_tris.is_empty() && (cloths > 1 || others || selfish);
         let fric: Vec<f64> = s.bodies.iter().map(|b| b.settings.friction).collect();
+        let span = (a1 - a0).max(0.0);
         if any_cloth {
             // Motion relative to the mean of everything moving: what brings things together. A garment falling as one
             // keeps its bounds small.
@@ -211,8 +217,9 @@ impl FrameData {
             let mean_v = if movers.is_empty() { DVec3::ZERO } else { movers.iter().sum::<DVec3>() / movers.len() as f64 };
             let motion = |i: usize| crate::util::clamp_len((s.pt.v[i] - mean_v) * dt, vmax * dt).length();
             let tri_bounds: Vec<Aabb> = dyn_tris
-                .iter()
-                .zip(&dyn_body)
+                .par_iter()
+                .with_min_len(PAR_CHUNK)
+                .zip(dyn_body.par_iter())
                 .map(|(t, &b)| {
                     let mut bb = Aabb::EMPTY;
                     let mut m = 0.0f64;
@@ -224,15 +231,15 @@ impl FrameData {
                     bb.grow(st.thickness.max(st.self_thickness) + m)
                 })
                 .collect();
+            if fresh || cache.cloth.len != tri_bounds.len() {
+                cache.cloth = Bvh::build(&tri_bounds);
+            } else {
+                cache.cloth.refit(&tri_bounds);
+            }
             let mut all = Aabb::EMPTY;
             for b in &tri_bounds {
                 all.add(b.lo);
                 all.add(b.hi);
-            }
-            let th = std::time::Instant::now();
-            let hash = SpatialHash::build(Self::cell_for(&tri_bounds, rmax), &tri_bounds);
-            if std::env::var("DYN_DEBUG").is_ok() {
-                eprintln!("cloth hash: {} tris, cell {:.4}, built in {:.1} ms, {}", tri_bounds.len(), Self::cell_for(&tri_bounds, rmax), th.elapsed().as_secs_f64() * 1e3, hash.describe());
             }
             // Collider vertices near cloth, as points that cannot move.
             for (bi, b) in s.bodies.iter().enumerate().filter(|_| !crate::util::off("kin")) {
@@ -247,13 +254,13 @@ impl FrameData {
                 }
             }
             let points = n + kin.len();
-            s.stats.add("prep pairs: bounds, hash, corners", t0);
+            s.stats.add("prep pairs: bounds, tree, corners", t0);
             let tq = std::time::Instant::now();
+            let cloth_bvh = &cache.cloth;
             let found: Vec<Vec<PtTri>> = (0..points)
                 .into_par_iter()
-            .with_min_len(PAR_CHUNK)
-                .map_init(|| (Vec::new(), crate::hash::Seen::default()), |(buf, seen), k| {
-                    let mut out = Vec::new();
+                .with_min_len(256)
+                .fold(Vec::new, |mut out, k| {
                     let (x, xb, is_kin, reach_r, pbody) = if k < n {
                         let b = s.pt.body[k];
                         if !collides[b as usize] {
@@ -264,22 +271,25 @@ impl FrameData {
                         let (b, l) = kin[k - n];
                         let body = &s.bodies[b as usize];
                         let (p0, p1) = (body.anim_prev[l as usize], body.anim[l as usize]);
-                        (p0.lerp(p1, a0), b, true, body.settings.thickness + (p1 - p0).length(), b)
+                        // Over this span only, not the whole frame.
+                        (p0.lerp(p1, a0), b, true, body.settings.thickness + (p1 - p0).length() * span, b)
                     };
                     let mut bb = Aabb::EMPTY;
                     bb.add(x);
                     let reach_box = bb.grow(reach_r);
-                    hash.query_marked(&reach_box, &tri_bounds, seen, buf);
-                    for &t in buf.iter() {
+                    cloth_bvh.query(&reach_box, &tri_bounds, |t| {
+                        if DEBUG_COUNT.load(std::sync::atomic::Ordering::Relaxed) > 0 {
+                            VISITED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        }
                         let tri = dyn_tris[t as usize];
                         let tb = dyn_body[t as usize];
                         if !is_kin && tri.contains(&(k as u32)) {
-                            continue;
+                            return;
                         }
                         let same = !is_kin && tb == xb;
                         let tst = &s.bodies[tb as usize].settings;
                         if same && !tst.self_collide {
-                            continue;
+                            return;
                         }
                         let thick = if is_kin {
                             tst.thickness + s.bodies[pbody as usize].settings.thickness
@@ -292,17 +302,17 @@ impl FrameData {
                         };
                         let [a, b, c] = tri.map(|g| s.pt.x[g as usize]);
                         let (w, feat) = geom::closest_on_triangle(x, a, b, c);
-                        if feat != Feature::Face && (x - geom::at(w, a, b, c)).length() > thick {
-                            continue;
-                        }
                         let d = x - geom::at(w, a, b, c);
+                        if feat != Feature::Face && d.length() > thick {
+                            return;
+                        }
                         let nrm = geom::normal(a, b, c);
                         if nrm == DVec3::ZERO {
-                            continue;
+                            return;
                         }
                         let tri_motion = tri.iter().fold(0.0f64, |m, &g| m.max(motion(g as usize)));
                         if d.length() > thick + reach_r + tri_motion {
-                            continue;
+                            return;
                         }
                         if same {
                             // Points that are close on the rest shape stay out of each other's way by the cloth itself.
@@ -310,26 +320,33 @@ impl FrameData {
                             let l = s.pt.local[k] as usize;
                             let ring = &body.topo.neighbours[l];
                             if tri.iter().any(|&g| ring.binary_search(&(g - body.start as u32)).is_ok()) {
-                                continue;
+                                return;
                             }
                             let rt = tri.map(|g| body.rest[g as usize - body.start]);
                             let (w, _) = geom::closest_on_triangle(body.rest[l], rt[0], rt[1], rt[2]);
                             if (body.rest[l] - geom::at(w, rt[0], rt[1], rt[2])).length() < thick * 2.0 {
-                                continue;
+                                return;
                             }
                         }
-
                         let side = if d.dot(nrm) < 0.0 { -1.0 } else { 1.0 };
                         let friction = 0.5 * (fric[tb as usize] + fric[pbody as usize]);
                         out.push(PtTri { point: if is_kin { (k - n) as u32 } else { k as u32 }, kin: is_kin, tri: t, side, thick, friction });
-                    }
+                    });
                     out
                 })
                 .collect();
             pt_tri = found.into_iter().flatten().collect();
             s.stats.add("prep pairs: queries", tq);
             if std::env::var("DYN_DEBUG").is_ok() {
-                eprintln!("pairs: {} points ({} collider corners), {} cloth triangles, cell {:.4}, {} pairs, {}", points, kin.len(), dyn_tris.len(), Self::cell_for(&tri_bounds, rmax), pt_tri.len(), hash.describe());
+                DEBUG_COUNT.store(1, std::sync::atomic::Ordering::Relaxed);
+                let mut sizes: Vec<f64> = tri_bounds.iter().map(|b| b.size().max_element()).collect();
+                sizes.sort_by(|a, b| a.total_cmp(b));
+                let mut mot: Vec<f64> = (0..n).map(motion).collect();
+                mot.sort_by(|a, b| a.total_cmp(b));
+                for b in s.bodies.iter().filter(|b| b.kind == BodyKind::Cloth) {
+                    eprintln!("cloth {}: thickness {:.3}, self {:.3}, mean edge {:.3}, radius[0] {:.3}", b.name, b.settings.thickness, b.settings.self_thickness, b.mean_edge, s.pt.radius[b.start]);
+                }
+                eprintln!("pairs: {} points ({} kin), {} candidates visited, {} pairs, motion of mean {:.3}; tri box median {:.3} max {:.3}; motion median {:.3} 99% {:.3} max {:.3}", points, kin.len(), VISITED.swap(0, std::sync::atomic::Ordering::Relaxed), pt_tri.len(), mean_v.length() * dt, sizes[sizes.len() / 2], sizes[sizes.len() - 1], mot[mot.len() / 2], mot[mot.len() * 99 / 100], mot[mot.len() - 1]);
             }
         }
         s.stats.add("prep cloth pairs", t0);
@@ -337,7 +354,7 @@ impl FrameData {
         let others: Vec<u32> = (0..n as u32).filter(|&i| s.pt.phase[i as usize] != Phase::Cloth && collides[s.pt.body[i as usize] as usize]).collect();
         if !others.is_empty() {
             let pts: Vec<u32> = (0..n as u32).filter(|&i| collides[s.pt.body[i as usize] as usize]).collect();
-            let bounds: Vec<Aabb> = pts
+            let pbounds: Vec<Aabb> = pts
                 .iter()
                 .map(|&i| {
                     let mut b = Aabb::EMPTY;
@@ -345,42 +362,52 @@ impl FrameData {
                     b.grow(s.pt.radius[i as usize])
                 })
                 .collect();
-            let hash = SpatialHash::build(rmax * 2.0, &bounds);
+            let tree = Bvh::build(&pbounds);
             let found: Vec<Vec<PtPt>> = others
                 .par_iter()
-            .with_min_len(PAR_CHUNK / 2)
-                .map_init(|| (Vec::new(), crate::hash::Seen::default()), |(buf, seen), &i| {
-                    let mut out = Vec::new();
+                .with_min_len(256)
+                .fold(Vec::new, |mut out, &i| {
                     let iu = i as usize;
                     let xi = s.pt.x[iu];
                     let m = crate::util::clamp_len(s.pt.v[iu] * dt, vmax * dt).length();
                     let mut bb = Aabb::EMPTY;
                     bb.add(xi);
                     let reach_box = bb.grow(s.pt.radius[iu] + rmax + m * 2.0);
-                    hash.query_marked(&reach_box, &bounds, seen, buf);
-                    for &k in buf.iter() {
+                    tree.query(&reach_box, &pbounds, |k| {
                         let j = pts[k as usize] as usize;
                         let cloth_j = s.pt.phase[j] == Phase::Cloth;
                         // Each pair once: particles in order; cloth vertices only from the particle's side.
                         if j == iu || (!cloth_j && j < iu) {
-                            continue;
+                            return;
                         }
                         let (bi, bj) = (s.pt.body[iu], s.pt.body[j]);
                         if bi == bj && (s.pt.phase[iu] == Phase::Rigid || !s.bodies[bi as usize].settings.self_collide) {
-                            continue;
+                            return;
                         }
                         let r = s.pt.radius[iu] + s.pt.radius[j];
                         if (xi - s.pt.x[j]).length() < r + m * 2.0 + rmax {
                             out.push(PtPt { a: i, b: j as u32, r, friction: 0.5 * (fric[bi as usize] + fric[bj as usize]) });
                         }
-                    }
+                    });
                     out
                 })
                 .collect();
             pt_pt = found.into_iter().flatten().collect();
         }
-        FrameData { col_tris, col_motion, col_hash: Some(col_hash), cand_start, cand, dyn_tris, kin, pt_tri, pt_pt }
+        let col_bvh = cache.col.clone();
+        s.bvh = cache;
+        FrameData { col_tris, col_motion, col_bounds: bounds, col_bvh, cand_start, cand, dyn_tris, kin, pt_tri, pt_pt }
     }
+}
+
+static DEBUG_COUNT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+static VISITED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// The trees the contact search keeps through a frame.
+#[derive(Default)]
+pub struct BvhCache {
+    pub col: Bvh,
+    pub cloth: Bvh,
 }
 
 impl Solver {
@@ -394,12 +421,11 @@ impl Solver {
 /// The sides of nearby colliders a point is on.
 pub(crate) fn sides_at(s: &Solver, fd: &FrameData, i: usize, x: DVec3) -> Sides {
     let mut sides = Sides::default();
-    let Some(hash) = &fd.col_hash else { return sides };
     let mut buf = Vec::new();
     let r = s.pt.radius[i] * 3.0 + s.bodies.iter().filter(|b| b.kind == BodyKind::Collider).fold(0.0f64, |m, b| m.max(b.settings.thickness * 3.0));
     let mut bb = Aabb::EMPTY;
     bb.add(x);
-    hash.query(&bb.grow(r), &mut buf);
+    fd.col_bvh.query(&bb.grow(r), &fd.col_bounds, |c| buf.push(c));
     let mut best: Vec<(u32, f64, f64)> = Vec::new();
     for &c in &buf {
         let (b, t) = fd.col_tris[c as usize];
