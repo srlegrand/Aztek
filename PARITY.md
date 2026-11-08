@@ -862,14 +862,13 @@ and NURBS surfaces. `render`, `hrender` with `arnoldRender` as a second name, `r
 
 From older renderers, not honoured (each named in a warning when a scene uses it):
 
-- lambert family: ambient colour, translucence, glow, reflected colour; Maya's highlight shapes are approximated by a
+- lambert family: translucence, glow, reflected colour (ambient colour is added as the viewport adds it); Maya's highlight shapes are approximated by a
   roughness (blinn's eccentricity, phong's cosine power, phongE's roughness, anisotropic's spreads).
 - rampShader: its colour, specular and transparency ramps.
 - layeredShader: textures as layers, glow.
 - mia_material and its variants: the custom reflection curve (brdf_*), translucency.
-- Lights: Maya's `decayRate` (Harold's falloff is physical; `aiDecayType` constant turns it off), depth map shadows and
-  their settings, `useRayTraceShadows` (shadows are always traced, `aiCastShadows` turns them off), light glow and
-  optical effects, volume light shapes other than a sphere and their ramps.
+- Lights: depth map shadows and their settings, `useRayTraceShadows` (shadows are always traced, `aiCastShadows` turns
+  them off), light glow and optical effects, a volume light's colour and penumbra ramps.
 - Settings of other renderers in `defaultRenderGlobals.currentRenderer`: read and ignored, with a warning.
 - Render layers and render setup: not read; the master layer renders.
 
@@ -878,3 +877,24 @@ subsurface noisier than it should be at default samples; USD stages not rendered
 memory limit rather than an evicting tile cache; no vector displacement or autobump; a simple non-local means
 denoiser run on the interface thread; light group AOVs by the light that started the light, mesh lights' direct light
 seen in reflections counted as indirect; rough metal at roughness 1 keeps 90% of the light (99.9% at 0.6).
+
+### One light model (08/11/2026)
+
+The reference's six lights now light a render as they light the viewport: decay rates, colour times intensity, spot
+edge and dropoff, ambient shade, area and volume lights, emit flags and light linking, from one formula
+(`aztek_scene::lights::viewport_diffuse`; the viewport's GLSL is its copy, pinned by a host test). `tests/light_parity.rs`
+compares the renderer's direct light on a white matte surface with it at 25 points and normals for every type, all four
+decay rates, both penumbra signs, normalised and not, and every volume shape and direction: exact for point, spot,
+directional and volume lights, within 0.004% for the sampled ambient parts, within 0.8% for area lights 200 units off
+(the viewport lights from the rectangle's nearest point, the renderer from all of it; closer, that is the soft light
+only a renderer has). A scene with no lights renders with the viewport's default lighting. `physicalLights` on the
+options node gives physical units instead. Specular highlights stay the standard surface's, not blinn's and phong's
+shapes, and the legacy materials' specular layer takes a few percent from the diffuse beneath it where the viewport adds
+the two.
+
+Measured beside the viewport (Use All Lights) from the same session at 955 x 720, render over viewport in linear light
+on lit pixels: `examples/lights.ma` median 1.02 (quartiles 1.01 and 1.03); a scene with no lights under default
+lighting 1.03; the Toph rig with a key, a rim and a fill added 0.98, the shadowed quarter lower. Found on the way: the
+spot light was missing from renders before this (Harold's own spot model and the file's settings disagreed), ambient
+colour wasn't honoured, and an ambient light's all-round half was lost to a multiple importance weight no ray could
+balance; each has a test.
