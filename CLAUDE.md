@@ -105,7 +105,5 @@ steps with plain messages (no attribution); Simon pushes.
 
 ## Next
 
-Everything on the original list is in (paint weights, dope sheet, set driven keys, NURBS, the deformers, spline IK, Quad
-Draw and friends, Tool Settings, MEL, OpenMaya, `.ma`, Node Editor). What is left is in PARITY.md under "Not yet" and in
-each dated section's list of what is shallower than the reference. None of it has been checked against a real copy of the reference, so
-the most useful next step is opening real files from the reference and running real scripts written for it.
+Work PLAN.md from the top: ground truth from the reference first, then the basics, then breadth. TICKETS.md wins when
+Simon puts something there. PARITY.md stays the record of what is done and how it differs.
