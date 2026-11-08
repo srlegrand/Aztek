@@ -18,9 +18,13 @@ pub struct SpatialHash {
 /// huge (a floor of two triangles under small cloth).
 const MOST_CELLS: i64 = 8;
 
+/// A cell's bucket key, mixed so that neighbouring cells spread over the whole table.
 #[inline]
 fn key(x: i64, y: i64, z: i64) -> u64 {
-    (x.wrapping_mul(92_837_111) ^ y.wrapping_mul(689_287_499) ^ z.wrapping_mul(283_923_481)) as u64
+    let mut h = (x as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ (y as u64).wrapping_mul(0xC2B2_AE3D_27D4_EB4F).rotate_left(21) ^ (z as u64).wrapping_mul(0x1656_67B1_9E37_79F9).rotate_left(42);
+    h ^= h >> 31;
+    h = h.wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    h ^ (h >> 29)
 }
 
 impl SpatialHash {
@@ -90,6 +94,41 @@ impl SpatialHash {
         format!("{} entries in {} buckets, longest {}, {} big", self.ids.len(), self.starts.len() - 1, longest, self.big.len())
     }
 
+    /// Every item whose cells meet the bounds and whose own bounds meet them, each once, in the table's order: the
+    /// same whatever thread asks. `seen` is the caller's scratch, one entry per item, kept between calls.
+    pub fn query_marked(&self, b: &Aabb, items: &[Aabb], seen: &mut Seen, out: &mut Vec<u32>) {
+        out.clear();
+        seen.next(items.len());
+        let mut take = |i: u32, out: &mut Vec<u32>| {
+            if seen.mark(i) && items[i as usize].overlaps(b) {
+                out.push(i);
+            }
+        };
+        for &i in &self.big {
+            take(i, out);
+        }
+        if self.ids.is_empty() {
+            return;
+        }
+        let Some((lo, hi, cut)) = self.cells(b) else { return };
+        if cut {
+            for &i in &self.ids {
+                take(i, out);
+            }
+            return;
+        }
+        for x in lo.0..=hi.0 {
+            for y in lo.1..=hi.1 {
+                for z in lo.2..=hi.2 {
+                    let k = (key(x, y, z) & self.mask) as usize;
+                    for &i in &self.ids[self.starts[k] as usize..self.starts[k + 1] as usize] {
+                        take(i, out);
+                    }
+                }
+            }
+        }
+    }
+
     /// Every item whose cells meet the bounds, each once, ascending.
     pub fn query(&self, b: &Aabb, out: &mut Vec<u32>) {
         out.clear();
@@ -117,5 +156,35 @@ impl SpatialHash {
         }
         out.sort_unstable();
         out.dedup();
+    }
+}
+
+/// Marks for one caller's queries: which items it has already given.
+#[derive(Default)]
+pub struct Seen {
+    stamp: Vec<u32>,
+    now: u32,
+}
+
+impl Seen {
+    fn next(&mut self, items: usize) {
+        if self.stamp.len() < items {
+            self.stamp.resize(items, 0);
+        }
+        self.now = self.now.wrapping_add(1);
+        if self.now == 0 {
+            self.stamp.iter_mut().for_each(|s| *s = 0);
+            self.now = 1;
+        }
+    }
+    #[inline]
+    fn mark(&mut self, i: u32) -> bool {
+        let s = &mut self.stamp[i as usize];
+        if *s == self.now {
+            false
+        } else {
+            *s = self.now;
+            true
+        }
     }
 }

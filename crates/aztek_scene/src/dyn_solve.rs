@@ -64,6 +64,22 @@ pub struct State {
     pub results: usize,
 }
 
+/// A hash of which points each face uses: the same for a mesh rebuilt the same way, as a smooth under a skin is
+/// every frame, where its topology id is new each time.
+fn connectivity(m: &aztek_geo::Mesh) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325 ^ m.point_capacity() as u64;
+    for f in 0..m.face_capacity() {
+        if !m.face_valid(f) {
+            continue;
+        }
+        m.for_each_face_corner(f, |c| {
+            h = (h ^ m.corner_point(c) as u64).wrapping_mul(0x100_0000_01b3);
+        });
+        h = (h ^ 0xff).wrapping_mul(0x100_0000_01b3);
+    }
+    h
+}
+
 fn key(frame: f64) -> i64 {
     (frame * 1000.0).round() as i64
 }
@@ -171,7 +187,7 @@ fn world_mesh(g: &mut Graph, id: NodeId, kind: Kind) -> Option<(Vec<DVec3>, Vec<
     };
     let (points, faces) = dy::mesh_parts(&mesh);
     let world = points.iter().map(|p| matrix.transform_point3(*p)).collect();
-    Some((world, faces, mesh.topology_id(), matrix))
+    Some((world, faces, connectivity(&mesh), matrix))
 }
 
 /// The transform a rigid body drives: named by its object attribute, not connected, since it drives that transform.
@@ -497,7 +513,7 @@ fn current_key(g: &mut Graph, s: NodeId) -> Vec<(NodeId, Kind, usize, u64)> {
             _ => pulled(g, id, "inputMesh"),
         };
         let Some(m) = mesh.and_then(|v| v.as_mesh().cloned()) else { continue };
-        k.push((id, kind, m.point_capacity() as usize, m.topology_id()));
+        k.push((id, kind, m.point_capacity() as usize, connectivity(&m)));
     }
     k
 }

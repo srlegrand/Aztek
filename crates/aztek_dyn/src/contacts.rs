@@ -151,13 +151,12 @@ impl FrameData {
         let per: Vec<Vec<u32>> = (0..n)
             .into_par_iter()
             .with_min_len(PAR_CHUNK)
-            .map_init(Vec::new, |buf, i| {
+            .map_init(|| (Vec::new(), crate::hash::Seen::default()), |(buf, seen), i| {
                 if !collides[s.pt.body[i] as usize] || col_tris.is_empty() {
                     return Vec::new();
                 }
-                col_hash.query(&reach[i], buf);
-                // A bucket holds whatever hashed to it: keep what really comes near.
-                buf.retain(|&c| bounds[c as usize].overlaps(&reach[i]));
+                // A bucket holds whatever hashed to it: only what really comes near is kept.
+                col_hash.query_marked(&reach[i], &bounds, seen, buf);
                 buf.clone()
             })
             .collect();
@@ -248,10 +247,12 @@ impl FrameData {
                 }
             }
             let points = n + kin.len();
+            s.stats.add("prep pairs: bounds, hash, corners", t0);
+            let tq = std::time::Instant::now();
             let found: Vec<Vec<PtTri>> = (0..points)
                 .into_par_iter()
             .with_min_len(PAR_CHUNK)
-                .map_init(Vec::new, |buf, k| {
+                .map_init(|| (Vec::new(), crate::hash::Seen::default()), |(buf, seen), k| {
                     let mut out = Vec::new();
                     let (x, xb, is_kin, reach_r, pbody) = if k < n {
                         let b = s.pt.body[k];
@@ -268,8 +269,7 @@ impl FrameData {
                     let mut bb = Aabb::EMPTY;
                     bb.add(x);
                     let reach_box = bb.grow(reach_r);
-                    hash.query(&reach_box, buf);
-                    buf.retain(|&t| tri_bounds[t as usize].overlaps(&reach_box));
+                    hash.query_marked(&reach_box, &tri_bounds, seen, buf);
                     for &t in buf.iter() {
                         let tri = dyn_tris[t as usize];
                         let tb = dyn_body[t as usize];
@@ -290,20 +290,6 @@ impl FrameData {
                         } else {
                             tst.thickness + s.pt.radius[k]
                         };
-                        if same {
-                            // Points that are close on the rest shape stay out of each other's way by the cloth itself.
-                            let body = &s.bodies[tb as usize];
-                            let l = s.pt.local[k] as usize;
-                            let ring = &body.topo.neighbours[l];
-                            if tri.iter().any(|&g| ring.binary_search(&(g - body.start as u32)).is_ok()) {
-                                continue;
-                            }
-                            let rt = tri.map(|g| body.rest[g as usize - body.start]);
-                            let (w, _) = geom::closest_on_triangle(body.rest[l], rt[0], rt[1], rt[2]);
-                            if (body.rest[l] - geom::at(w, rt[0], rt[1], rt[2])).length() < thick * 2.0 {
-                                continue;
-                            }
-                        }
                         let [a, b, c] = tri.map(|g| s.pt.x[g as usize]);
                         let (w, feat) = geom::closest_on_triangle(x, a, b, c);
                         if feat != Feature::Face && (x - geom::at(w, a, b, c)).length() > thick {
@@ -318,6 +304,21 @@ impl FrameData {
                         if d.length() > thick + reach_r + tri_motion {
                             continue;
                         }
+                        if same {
+                            // Points that are close on the rest shape stay out of each other's way by the cloth itself.
+                            let body = &s.bodies[tb as usize];
+                            let l = s.pt.local[k] as usize;
+                            let ring = &body.topo.neighbours[l];
+                            if tri.iter().any(|&g| ring.binary_search(&(g - body.start as u32)).is_ok()) {
+                                continue;
+                            }
+                            let rt = tri.map(|g| body.rest[g as usize - body.start]);
+                            let (w, _) = geom::closest_on_triangle(body.rest[l], rt[0], rt[1], rt[2]);
+                            if (body.rest[l] - geom::at(w, rt[0], rt[1], rt[2])).length() < thick * 2.0 {
+                                continue;
+                            }
+                        }
+
                         let side = if d.dot(nrm) < 0.0 { -1.0 } else { 1.0 };
                         let friction = 0.5 * (fric[tb as usize] + fric[pbody as usize]);
                         out.push(PtTri { point: if is_kin { (k - n) as u32 } else { k as u32 }, kin: is_kin, tri: t, side, thick, friction });
@@ -326,6 +327,10 @@ impl FrameData {
                 })
                 .collect();
             pt_tri = found.into_iter().flatten().collect();
+            s.stats.add("prep pairs: queries", tq);
+            if std::env::var("DYN_DEBUG").is_ok() {
+                eprintln!("pairs: {} points ({} collider corners), {} cloth triangles, cell {:.4}, {} pairs, {}", points, kin.len(), dyn_tris.len(), Self::cell_for(&tri_bounds, rmax), pt_tri.len(), hash.describe());
+            }
         }
         s.stats.add("prep cloth pairs", t0);
         // Particles against particles (and cloth vertices against particles).
@@ -344,7 +349,7 @@ impl FrameData {
             let found: Vec<Vec<PtPt>> = others
                 .par_iter()
             .with_min_len(PAR_CHUNK / 2)
-                .map_init(Vec::new, |buf, &i| {
+                .map_init(|| (Vec::new(), crate::hash::Seen::default()), |(buf, seen), &i| {
                     let mut out = Vec::new();
                     let iu = i as usize;
                     let xi = s.pt.x[iu];
@@ -352,8 +357,7 @@ impl FrameData {
                     let mut bb = Aabb::EMPTY;
                     bb.add(xi);
                     let reach_box = bb.grow(s.pt.radius[iu] + rmax + m * 2.0);
-                    hash.query(&reach_box, buf);
-                    buf.retain(|&k| bounds[k as usize].overlaps(&reach_box));
+                    hash.query_marked(&reach_box, &bounds, seen, buf);
                     for &k in buf.iter() {
                         let j = pts[k as usize] as usize;
                         let cloth_j = s.pt.phase[j] == Phase::Cloth;

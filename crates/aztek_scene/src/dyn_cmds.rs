@@ -544,7 +544,7 @@ fn dyn_info(s: &mut Session, a: &Args) -> CmdResult {
         }
         let mut entry = json!({"type": ty, "outOfSimulation": count});
         if ty == dy::SOLVER {
-            if let Some(stats) = crate::dyn_solve::with_state(g, id, |st| st.solver.as_ref().map(|sv| json!({"frame": st.last, "particles": sv.pt.len(), "contacts": sv.stats.contacts, "pairs": sv.stats.pairs, "fixed": sv.stats.fixed, "clamped": sv.stats.clamped, "left": sv.stats.left, "returned": sv.stats.returned, "longestOut": sv.stats.longest_out, "ms": st.solve_ms, "msPrepare": sv.stats.ms_prepare, "msConstraints": sv.stats.ms_constraints, "msCollide": sv.stats.ms_collide, "cachedFrames": st.cache.len()}))).flatten() {
+            if let Some(stats) = crate::dyn_solve::with_state(g, id, |st| st.solver.as_ref().map(|sv| json!({"frame": st.last, "particles": sv.pt.len(), "contacts": sv.stats.contacts, "pairs": sv.stats.pairs, "fixed": sv.stats.fixed, "clamped": sv.stats.clamped, "left": sv.stats.left, "returned": sv.stats.returned, "longestOut": sv.stats.longest_out, "ms": st.solve_ms, "msPrepare": sv.stats.ms_prepare, "msConstraints": sv.stats.ms_constraints, "msCollide": sv.stats.ms_collide, "cachedFrames": st.cache.len(), "detail": sv.stats.detail.iter().map(|(k, v)| (k.to_string(), json!(v))).collect::<serde_json::Map<String, Value>>()}))).flatten() {
                 entry["solve"] = stats;
             }
         }
