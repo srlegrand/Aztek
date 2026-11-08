@@ -178,14 +178,16 @@ Measured on 32 threads, release build.
 |---|---|---|
 | Cloth drape on a sphere (`drape` example, grid 30) | 961 | 13 |
 | Free cloth, no contacts (grid 141) | 20,164 | about 100 (60 of it constraints) |
-| The same falling onto a sphere, self collision on | 20,164 | 140 to 270 while landing, more as it folds |
-| Shirt on a skinned character, self collision, gentle swing | 3,018 against 15,277 | 130 to 190 solving |
-| The same shirt smoothed once | 12,153 against 15,277 | 240 to 320 solving |
+| The same falling onto a sphere, self collision on | 20,164 | about 100, at most 115 |
+| Shirt on a skinned character, self collision, gentle swing | 3,018 against 15,277 | 52 to 81 solving |
+| The same shirt smoothed once | 12,153 against 15,277 | 260 to 1,050 solving |
 
-Where the time goes on the character: finding contacts (cloth against itself and the body's vertices against cloth
-triangles) about half, cloth constraints a quarter, resolving collider contacts the rest. `cargo run --release -p
-aztek_scene --example cloth_rig -- file.ma garment body control` prints it per frame for a rig; `dynInfo` shows it per
-part.
+Where the time goes on the character: cloth constraints, the contact search (cloth against itself) and resolving
+collider contacts about a third each. The skinned body's own evaluation adds about 25 ms a frame outside the solver.
+The smoothed shirt is slow while many of its vertices are out of the simulation, most for stretching at contacts:
+still open.
+`cargo run --release -p aztek_scene --example cloth_rig -- file.ma garment body control` prints it per frame for a
+rig; `dynInfo` shows it per part.
 
 ## Files
 
