@@ -130,6 +130,23 @@ impl FrameData {
             cache.col.refit(&bounds);
         }
         let n = s.pt.len();
+        // How fast each point really goes: from where it was at the last search, not the last substep's velocity, which
+        // carries the solve's small corrections and would make every search box large. A quarter of that velocity is
+        // kept as a margin for what changed since.
+        let frame_dt = if a1 > a0 { dt / (a1 - a0) } else { dt };
+        let now_t = s.time + a0 * frame_dt;
+        let since = now_t - cache.last_t;
+        let vel: Vec<DVec3> = if cache.last_x.len() == n && since > 1e-9 && since < 0.5 {
+            (0..n).map(|i| {
+                let est = (s.pt.x[i] - cache.last_x[i]) / since;
+                let v = s.pt.v[i];
+                if est.length() >= v.length() * 0.25 { est } else { v * 0.25 }
+            }).collect()
+        } else {
+            s.pt.v.clone()
+        };
+        cache.last_x.clone_from(&s.pt.x);
+        cache.last_t = now_t;
         let rmax = s.pt.radius.iter().fold(0.0f64, |m, &r| m.max(r));
         let col_thick = s.bodies.iter().filter(|b| b.kind == BodyKind::Collider).fold(0.0f64, |m, b| m.max(b.settings.thickness));
         let vmax = s.settings.max_velocity;
@@ -137,7 +154,7 @@ impl FrameData {
         // Where each particle may get to over the span, wide enough to see a point that went through.
         let reach = |i: usize| {
             let x = s.pt.x[i];
-            let to = x + crate::util::clamp_len(s.pt.v[i] * dt, vmax * dt);
+            let to = x + crate::util::clamp_len(vel[i] * dt, vmax * dt);
             let mut b = Aabb::EMPTY;
             b.add(x);
             b.add(to);
@@ -150,7 +167,7 @@ impl FrameData {
         let col_bvh = &cache.col;
         let found: Vec<Vec<(u32, u32)>> = (0..n)
             .into_par_iter()
-            .with_min_len(256)
+            .with_min_len(32)
             .fold(Vec::new, |mut acc, i| {
                 if collides[s.pt.body[i] as usize] && !col_tris.is_empty() {
                     let r = reach(i);
@@ -213,9 +230,9 @@ impl FrameData {
         if any_cloth {
             // Motion relative to the mean of everything moving: what brings things together. A garment falling as one
             // keeps its bounds small.
-            let movers: Vec<DVec3> = (0..n).filter(|&i| s.pt.inv_mass[i] > 0.0).map(|i| s.pt.v[i]).filter(|v| finite(*v)).collect();
+            let movers: Vec<DVec3> = (0..n).filter(|&i| s.pt.inv_mass[i] > 0.0).map(|i| vel[i]).filter(|v| finite(*v)).collect();
             let mean_v = if movers.is_empty() { DVec3::ZERO } else { movers.iter().sum::<DVec3>() / movers.len() as f64 };
-            let motion = |i: usize| crate::util::clamp_len((s.pt.v[i] - mean_v) * dt, vmax * dt).length();
+            let motion = |i: usize| crate::util::clamp_len((vel[i] - mean_v) * dt, vmax * dt).length();
             let tri_bounds: Vec<Aabb> = dyn_tris
                 .par_iter()
                 .with_min_len(PAR_CHUNK)
@@ -259,7 +276,7 @@ impl FrameData {
             let cloth_bvh = &cache.cloth;
             let found: Vec<Vec<PtTri>> = (0..points)
                 .into_par_iter()
-                .with_min_len(256)
+                .with_min_len(32)
                 .fold(Vec::new, |mut out, k| {
                     let (x, xb, is_kin, reach_r, pbody) = if k < n {
                         let b = s.pt.body[k];
@@ -365,7 +382,7 @@ impl FrameData {
             let tree = Bvh::build(&pbounds);
             let found: Vec<Vec<PtPt>> = others
                 .par_iter()
-                .with_min_len(256)
+                .with_min_len(32)
                 .fold(Vec::new, |mut out, &i| {
                     let iu = i as usize;
                     let xi = s.pt.x[iu];
@@ -408,6 +425,9 @@ static VISITED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize:
 pub struct BvhCache {
     pub col: Bvh,
     pub cloth: Bvh,
+    /// Where the particles were at the last search, and when (seconds since the reset).
+    pub last_x: Vec<DVec3>,
+    pub last_t: f64,
 }
 
 impl Solver {
@@ -469,7 +489,7 @@ pub(crate) fn solve_pairs(s: &mut Solver, _h: f64, a0: f64, a1: f64) {
     let tri_fixes: Vec<Fix> = fd
         .pt_tri
         .par_iter()
-            .with_min_len(PAR_CHUNK / 2)
+            .with_min_len(128)
         .map(|c| {
             let mut out: Fix = ([(0, DVec3::ZERO); 4], 0);
             let tri = fd.dyn_tris[c.tri as usize];
@@ -528,7 +548,7 @@ pub(crate) fn solve_pairs(s: &mut Solver, _h: f64, a0: f64, a1: f64) {
     let pair_fixes: Vec<Fix> = fd
         .pt_pt
         .par_iter()
-            .with_min_len(PAR_CHUNK / 2)
+            .with_min_len(128)
         .map(|c| {
             let mut out: Fix = ([(0, DVec3::ZERO); 4], 0);
             let (a, b) = (c.a as usize, c.b as usize);
@@ -647,7 +667,7 @@ pub(crate) fn solve_colliders(s: &mut Solver, h: f64, a0: f64, a1: f64, last: bo
     };
     let res: Vec<(DVec3, Signal, Sides, usize)> = (0..s.pt.len())
         .into_par_iter()
-            .with_min_len(PAR_CHUNK)
+            .with_min_len(64)
         .map(|i| {
             let mut pp = s.pt.p[i];
             let xs = s.pt.x[i];

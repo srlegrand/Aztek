@@ -112,14 +112,14 @@ pub(crate) fn integrate(s: &mut Solver, h: f64) {
 }
 
 /// Constraints a thread takes at least, within one colour.
-const COLOUR_CHUNK: usize = 256;
+const COLOUR_CHUNK: usize = 1024;
 
 /// Runs `f` over each colour's constraints at once; the last colour one at a time when colouring ran out.
 fn by_colour(col: &Colouring, f: impl Fn(usize) + Sync) {
     for (ci, r) in col.ranges.iter().enumerate() {
         if col.serial && ci + 1 == col.ranges.len() {
             r.clone().for_each(&f);
-        } else if r.len() < COLOUR_CHUNK * 2 {
+        } else if r.len() < COLOUR_CHUNK * 4 {
             r.clone().for_each(&f);
         } else {
             r.clone().into_par_iter().with_min_len(COLOUR_CHUNK).for_each(&f);
