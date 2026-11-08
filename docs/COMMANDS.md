@@ -1,9 +1,9 @@
 # Command reference
 
 Generated from the command registry by `cargo run -p aztek_host --example gen_commands`; do not edit by hand.
-Commands take Maya's flags, long or short, in MEL and in Python (`aztek.cmds` or `maya.cmds`).
+Commands take the reference's flags, long or short, in MEL and in Python (`aztek.cmds` or `maya.cmds`).
 
-1103 commands.
+1108 commands.
 
 ## AL_usdmaya_LayerCreateLayer
 
@@ -64,7 +64,7 @@ Arguments: proxy
 
 ## AL_usdmaya_ProxyShapeImport
 
-A proxy shape on a USD file, as AL_USDMaya makes one. Returns the shapes.
+A proxy shape on a USD file, as the Animal Logic USD plug-in makes one. Returns the shapes.
 
 Arguments: transform to go under
 
@@ -79,7 +79,7 @@ Arguments: transform to go under
 
 ## AL_usdmaya_TranslatePrim
 
-As AL_USDMaya: -ip paths imports prims as nodes, -tp paths tears them down, in the proxy -p.
+As the Animal Logic USD plug-in: -ip paths imports prims as nodes, -tp paths tears them down, in the proxy -p.
 
 | Flag | Short | Description |
 | --- | --- | --- |
@@ -420,7 +420,7 @@ About the application and the system: -v, -os, -win, -linux, -mac, -batch, -api.
 
 ## addAttr
 
-Add an attribute to objects (Maya's addAttr): attributeType for a single value or, with multi, an array of them; dataType for strings and arrays (stringArray, doubleArray, Int32Array, vectorArray). attributeType='compound' groups the attributes then added with parent=; a multi compound gives each element every child, node.targets[2].weight. Compounds nest one level. Saved with the scene. Returns the new plugs.
+Add an attribute to objects (the reference's addAttr): attributeType for a single value or, with multi, an array of them; dataType for strings and arrays (stringArray, doubleArray, Int32Array, vectorArray). attributeType='compound' groups the attributes then added with parent=; a multi compound gives each element every child, node.targets[2].weight. Compounds nest one level. Saved with the scene. Returns the new plugs.
 
 Arguments: objects
 
@@ -431,7 +431,7 @@ Arguments: objects
 | `niceName` | `nn` | The label editors show. |
 | `attributeType` | `at` | bool, long, float, double, double3, enum, matrix or compound (Aztek's int, vec3 too). |
 | `parent` | `p` | The compound this attribute is a child of. |
-| `numberOfChildren` | `nc` | Accepted for Maya scripts: a compound takes any number of children. |
+| `numberOfChildren` | `nc` | Accepted for existing scripts: a compound takes any number of children. |
 | `dataType` | `dt` | string, stringArray, doubleArray, floatArray, Int32Array, vectorArray or matrix. |
 | `multi` | `m` | An array of attributeType: any number of elements, attr[0], attr[1] ... |
 | `defaultValue` | `dv` | Default value (each element's, for an array). |
@@ -451,19 +451,19 @@ Arguments: objects
 | `exists` | `ex` | With -q: whether it exists. |
 | `hasMinValue` | `hnv` | Whether it has a hard minimum. |
 | `hasMaxValue` | `hxv` | Whether it has a hard maximum. |
-| `hasSoftMinValue` | `hsn` | Accepted for Maya scripts. |
-| `hasSoftMaxValue` | `hsx` | Accepted for Maya scripts. |
+| `hasSoftMinValue` | `hsn` | Accepted for existing scripts. |
+| `hasSoftMaxValue` | `hsx` | Accepted for existing scripts. |
 | `indexMatters` | `im` | Accepted: a multi's indices always matter here. |
-| `readable` | `r` | Accepted for Maya scripts. |
-| `writable` | `w` | Accepted for Maya scripts. |
-| `storable` | `s` | Accepted for Maya scripts. |
-| `cachedInternally` | `ci` | Accepted for Maya scripts. |
-| `internalSet` | `is` | Accepted for Maya scripts. |
-| `disconnectBehaviour` | `dcb` | Accepted for Maya scripts. |
-| `fromPlugin` | `fp` | Accepted for Maya scripts. |
-| `binaryTag` | `bt` | Accepted for Maya scripts. |
-| `proxy` | `pxy` | Accepted for Maya scripts. |
-| `usedAsProxy` | `uap` | Accepted for Maya scripts. |
+| `readable` | `r` | Accepted for existing scripts. |
+| `writable` | `w` | Accepted for existing scripts. |
+| `storable` | `s` | Accepted for existing scripts. |
+| `cachedInternally` | `ci` | Accepted for existing scripts. |
+| `internalSet` | `is` | Accepted for existing scripts. |
+| `disconnectBehaviour` | `dcb` | Accepted for existing scripts. |
+| `fromPlugin` | `fp` | Accepted for existing scripts. |
+| `binaryTag` | `bt` | Accepted for existing scripts. |
+| `proxy` | `pxy` | Accepted for existing scripts. |
+| `usedAsProxy` | `uap` | Accepted for existing scripts. |
 
 ## addMetadata
 
@@ -609,11 +609,11 @@ The rotation from -v1 to -v2: axis and angle in degrees, or -er Euler angles.
 | `vector1` | `v1` | From. |
 | `vector2` | `v2` | To. |
 | `euler` | `er` | Euler angles instead. |
-| `constructionHistory` | `ch` | Accepted for Maya scripts. |
+| `constructionHistory` | `ch` | Accepted for existing scripts. |
 
 ## animCurveEditor
 
-Script UI: animCurveEditor, with create, edit and query as in Maya's command.
+Script UI: animCurveEditor, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -829,7 +829,24 @@ Arguments: a curve (the selection when none)
 
 | Flag | Short | Description |
 | --- | --- | --- |
-| `constructionHistory` | `ch` | Accepted for Maya scripts. |
+| `constructionHistory` | `ch` | Accepted for existing scripts. |
+
+## arnoldRender
+
+hrender under the name other scripts use.
+
+Arguments: camera
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `camera` | `cam` | Camera to render through. |
+| `width` | `w` | Image width. |
+| `height` | `h` | Image height. |
+| `region` | `reg` | x0 y0 x1 y1, pixels from the top left. |
+| `seq` | `seq` | Frames: "1 10", "1 10 2" or one frame. |
+| `batch` | `b` | Render the frames the render settings name and write them. |
+| `ipr` | `ipr` | start, stop, refresh or pause interactive rendering. |
+| `async` | `as` | Start the current frame and return at once; the render view shows it as it refines. |
 
 ## arrayCenter
 
@@ -1115,9 +1132,9 @@ Arguments: curves (the selection when none)
 | --- | --- | --- |
 | `replaceOriginal` | `rpo` | The first curve takes the result. |
 | `name` | `n` | Name of the new curve. |
-| `method` | `m` | Accepted for Maya scripts. |
-| `blendBias` | `bb` | Accepted for Maya scripts. |
-| `constructionHistory` | `ch` | Accepted for Maya scripts. |
+| `method` | `m` | Accepted for existing scripts. |
+| `blendBias` | `bb` | Accepted for existing scripts. |
+| `constructionHistory` | `ch` | Accepted for existing scripts. |
 
 ## attachSurface
 
@@ -1130,14 +1147,14 @@ Arguments: two surfaces (the selection when none)
 | `method` | `m` | 0 connect, 1 blend (0). |
 | `blendBias` | `bb` | Where a blend meets (0.5). |
 | `direction` | `d` | 1 U, 0 V (1). |
-| `keepMultipleKnots` | `kmk` | Accepted for Maya scripts. |
-| `blendKnotInsertion` | `bki` | Accepted for Maya scripts. |
-| `parameter` | `p` | Accepted for Maya scripts. |
+| `keepMultipleKnots` | `kmk` | Accepted for existing scripts. |
+| `blendKnotInsertion` | `bki` | Accepted for existing scripts. |
+| `parameter` | `p` | Accepted for existing scripts. |
 | `constructionHistory` | `ch` | Keep a history node (on by default). |
 | `replaceOriginal` | `rpo` | Change the surface itself (on by default). |
 | `name` | `n` | Name of a new surface. |
-| `object` | `o` | Accepted for Maya scripts. |
-| `polygon` | `po` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
+| `polygon` | `po` | Accepted for existing scripts. |
 
 ## attrColorSliderGrp
 
@@ -1948,7 +1965,7 @@ Arguments: object
 | `multi` | `m` | Arrays. |
 | `short` | `s` | Short names. |
 | `type` | `t` | A type rather than a node. |
-| `userInterface` | `ui` | Accepted for Maya scripts. |
+| `userInterface` | `ui` | Accepted for existing scripts. |
 | `writable` | `w` | Writable ones. |
 
 ## attributeName
@@ -2130,17 +2147,17 @@ Arguments: objects or plugs (the selection when none)
 | `sampleBy` | `sb` | Frames between keys (1). |
 | `hierarchy` | `hi` | none or below. |
 | `preserveOutsideKeys` | `pok` | Keep keys outside the baked range. |
-| `simulation` | `sm` | Accepted for Maya scripts (always evaluated in time order). |
-| `disableImplicitControl` | `dic` | Accepted for Maya scripts. |
-| `sparseAnimCurveBake` | `sac` | Accepted for Maya scripts. |
+| `simulation` | `sm` | Accepted for existing scripts (always evaluated in time order). |
+| `disableImplicitControl` | `dic` | Accepted for existing scripts. |
+| `sparseAnimCurveBake` | `sac` | Accepted for existing scripts. |
 | `destinationLayer` | `dl` | The layer that takes the result. |
 | `bakeOnOverrideLayer` | `bol` | The result goes on a new override layer on top. |
 | `removeBakedAttributeFromLayer` | `ral` | Baked channels leave their layers, rather than those layers being muted. |
 | `removeBakedAnimFromLayer` | `rba` | Baked animation leaves its layers, rather than those layers being muted. |
 | `resolveWithoutLayer` | `rwl` | Layers merged in the bake: only these give way to the result. |
-| `minimizeRotation` | `mr` | Accepted for Maya scripts. |
-| `controlPoints` | `cp` | Accepted for Maya scripts. |
-| `shape` | `s` | Accepted for Maya scripts. |
+| `minimizeRotation` | `mr` | Accepted for existing scripts. |
+| `controlPoints` | `cp` | Accepted for existing scripts. |
+| `shape` | `s` | Accepted for existing scripts. |
 
 ## bakeSimulation
 
@@ -2155,17 +2172,17 @@ Arguments: objects or plugs (the selection when none)
 | `sampleBy` | `sb` | Frames between keys (1). |
 | `hierarchy` | `hi` | none or below. |
 | `preserveOutsideKeys` | `pok` | Keep keys outside the baked range. |
-| `simulation` | `sm` | Accepted for Maya scripts (always evaluated in time order). |
-| `disableImplicitControl` | `dic` | Accepted for Maya scripts. |
-| `sparseAnimCurveBake` | `sac` | Accepted for Maya scripts. |
+| `simulation` | `sm` | Accepted for existing scripts (always evaluated in time order). |
+| `disableImplicitControl` | `dic` | Accepted for existing scripts. |
+| `sparseAnimCurveBake` | `sac` | Accepted for existing scripts. |
 | `destinationLayer` | `dl` | The layer that takes the result. |
 | `bakeOnOverrideLayer` | `bol` | The result goes on a new override layer on top. |
 | `removeBakedAttributeFromLayer` | `ral` | Baked channels leave their layers, rather than those layers being muted. |
 | `removeBakedAnimFromLayer` | `rba` | Baked animation leaves its layers, rather than those layers being muted. |
 | `resolveWithoutLayer` | `rwl` | Layers merged in the bake: only these give way to the result. |
-| `minimizeRotation` | `mr` | Accepted for Maya scripts. |
-| `controlPoints` | `cp` | Accepted for Maya scripts. |
-| `shape` | `s` | Accepted for Maya scripts. |
+| `minimizeRotation` | `mr` | Accepted for existing scripts. |
+| `controlPoints` | `cp` | Accepted for existing scripts. |
+| `shape` | `s` | Accepted for existing scripts. |
 
 ## baseTemplate
 
@@ -2198,14 +2215,14 @@ Arguments: a curve
 | `depth` | `d` | How deep the bevel (0.1). |
 | `extrudeDepth` | `ed` | How deep the wall (1). |
 | `bevelShapeType` | `bst` | 1 straight, 2 arc. |
-| `cornerType` | `ct` | Accepted for Maya scripts. |
+| `cornerType` | `ct` | Accepted for existing scripts. |
 | `constructionHistory` | `ch` | Keep the node (on by default). |
 | `name` | `n` | The new object's name. |
-| `object` | `o` | Accepted for Maya scripts. |
-| `range` | `rn` | Accepted for Maya scripts. |
-| `caching` | `cch` | Accepted for Maya scripts. |
-| `nodeState` | `nds` | Accepted for Maya scripts. |
-| `tolerance` | `tol` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
+| `range` | `rn` | Accepted for existing scripts. |
+| `caching` | `cch` | Accepted for existing scripts. |
+| `nodeState` | `nds` | Accepted for existing scripts. |
+| `tolerance` | `tol` | Accepted for existing scripts. |
 | `polygon` | `po` | 0 NURBS, 1 polygons. |
 
 ## bevelApplyEdges
@@ -2257,20 +2274,20 @@ Arguments: a curve
 | `extrudeDepth` | `ed` | How deep the wall (1). |
 | `numberOfSides` | `ns` | Sides of the round. |
 | `capSides` | `cap` | 1 none, 2 front, 3 back, 4 both. |
-| `innerStyle` | `is` | Accepted for Maya scripts. |
-| `outerStyle` | `os` | Accepted for Maya scripts. |
+| `innerStyle` | `is` | Accepted for existing scripts. |
+| `outerStyle` | `os` | Accepted for existing scripts. |
 | `constructionHistory` | `ch` | Keep the node (on by default). |
 | `name` | `n` | The new object's name. |
-| `object` | `o` | Accepted for Maya scripts. |
-| `range` | `rn` | Accepted for Maya scripts. |
-| `caching` | `cch` | Accepted for Maya scripts. |
-| `nodeState` | `nds` | Accepted for Maya scripts. |
-| `tolerance` | `tol` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
+| `range` | `rn` | Accepted for existing scripts. |
+| `caching` | `cch` | Accepted for existing scripts. |
+| `nodeState` | `nds` | Accepted for existing scripts. |
+| `tolerance` | `tol` | Accepted for existing scripts. |
 | `polygon` | `po` | 0 NURBS, 1 polygons. |
 
 ## bezierAnchorPreset
 
-Set selected anchors' tangents: -p 0 Bezier (smooth and even, along the line between the neighbours), 1 Bezier Corner (each a third of the way to its neighbour), 2 Corner (drawn in to the anchor). Returns how many anchors. The exact tangent lengths are this command's own: Maya does not document them.
+Set selected anchors' tangents: -p 0 Bezier (smooth and even, along the line between the neighbours), 1 Bezier Corner (each a third of the way to its neighbour), 2 Corner (drawn in to the anchor). Returns how many anchors. The exact tangent lengths are this command's own: the reference does not document them.
 
 | Flag | Short | Description |
 | --- | --- | --- |
@@ -2278,7 +2295,7 @@ Set selected anchors' tangents: -p 0 Bezier (smooth and even, along the line bet
 
 ## bezierAnchorState
 
-Set selected anchors or their tangents: -sm true lines the tangents up, -ev true makes them the same length. Returns how many anchors. Less than Maya: there is no lasting state, so false changes nothing and later drags do not keep the tangents smooth or even.
+Set selected anchors or their tangents: -sm true lines the tangents up, -ev true makes them the same length. Returns how many anchors. Less than the reference: there is no lasting state, so false changes nothing and later drags do not keep the tangents smooth or even.
 
 | Flag | Short | Description |
 | --- | --- | --- |
@@ -2296,7 +2313,7 @@ Arguments: curves (the selection when none)
 | `constructionHistory` | `ch` | Keep a history node (on by default). |
 | `replaceOriginal` | `rpo` | Change the curve itself (on by default). |
 | `name` | `n` | Name of a new curve. |
-| `object` | `o` | Make an object (accepted for Maya scripts). |
+| `object` | `o` | Make an object (accepted for existing scripts). |
 
 ## bezierInfo
 
@@ -2320,13 +2337,13 @@ Arguments: skeleton and geometry
 | Flag | Short | Description |
 | --- | --- | --- |
 | `byClosestPoint` | `bcp` | Accepted: closest point is how it binds. |
-| `byPartition` | `bp` | Accepted for Maya scripts. |
-| `colorJoints` | `cj` | Accepted for Maya scripts. |
+| `byPartition` | `bp` | Accepted for existing scripts. |
+| `colorJoints` | `cj` | Accepted for existing scripts. |
 | `delete` | `del` | Remove the skin. |
 | `doNotDescend` | `dnd` | Only the joints named. |
-| `enable` | `en` | Accepted for Maya scripts. |
+| `enable` | `en` | Accepted for existing scripts. |
 | `name` | `n` | The skinCluster's name. |
-| `partition` | `p` | Accepted for Maya scripts. |
+| `partition` | `p` | Accepted for existing scripts. |
 | `toAll` | `ta` | The whole skeleton (the default). |
 | `toSelectedBones` | `tsb` | Only the joints named. |
 | `unbind` | `ub` | Remove the skin. |
@@ -2340,17 +2357,17 @@ Arguments: a profile and two rails (the selection when none)
 
 | Flag | Short | Description |
 | --- | --- | --- |
-| `tangentContinuityProfile1` | `tp1` | Accepted for Maya scripts. |
-| `transformMode` | `tm` | Accepted for Maya scripts. |
+| `tangentContinuityProfile1` | `tp1` | Accepted for existing scripts. |
+| `transformMode` | `tm` | Accepted for existing scripts. |
 | `constructionHistory` | `ch` | Keep the node (on by default). |
 | `polygon` | `po` | 0 NURBS, 1 polygons. |
-| `range` | `rn` | Accepted for Maya scripts. |
+| `range` | `rn` | Accepted for existing scripts. |
 | `name` | `n` | Name of the new object. |
-| `object` | `o` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
 
 ## blend2
 
-A surface between two rails, curves or surface edges (surface.u[x]): -ls, -le, -rs, -re the ranges, -la, -ra on closed rails, -aa lines closed rails up, -fln, -frn flip the tangents off an edge, -rvl, -rvr with -an false. Returns [surface, node]. Less than Maya: one curve per rail, so -cfr must be 1; the result meets its rails exactly and -pt, -tt and -mk are only held.
+A surface between two rails, curves or surface edges (surface.u[x]): -ls, -le, -rs, -re the ranges, -la, -ra on closed rails, -aa lines closed rails up, -fln, -frn flip the tangents off an edge, -rvl, -rvr with -an false. Returns [surface, node]. Less than the reference: one curve per rail, so -cfr must be 1; the result meets its rails exactly and -pt, -tt and -mk are only held.
 
 Arguments: two rails (the selection when none)
 
@@ -2358,11 +2375,11 @@ Arguments: two rails (the selection when none)
 | --- | --- | --- |
 | `constructionHistory` | `ch` | Keep the node (on by default). |
 | `name` | `n` | The new object's name. |
-| `object` | `o` | Accepted for Maya scripts. |
-| `range` | `rn` | Accepted for Maya scripts. |
-| `caching` | `cch` | Accepted for Maya scripts. |
-| `nodeState` | `nds` | Accepted for Maya scripts. |
-| `tolerance` | `tol` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
+| `range` | `rn` | Accepted for existing scripts. |
+| `caching` | `cch` | Accepted for existing scripts. |
+| `nodeState` | `nds` | Accepted for existing scripts. |
+| `tolerance` | `tol` | Accepted for existing scripts. |
 | `polygon` | `po` | 0 NURBS, 1 polygons. |
 | `autoAnchor` | `aa` | On closed rails, line them up. |
 | `autoNormal` | `an` | Take the directions from the geometry. |
@@ -2414,7 +2431,7 @@ Arguments: targets, then the base; the blendShape with -e and -q
 
 ## blendShapeEditor
 
-Script UI: blendShapeEditor, with create, edit and query as in Maya's command.
+Script UI: blendShapeEditor, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -2508,15 +2525,15 @@ Arguments: objects or plugs (the selection when none); the node with -q and -e
 | `attribute0` | `at0` | What feeds the first input. |
 | `attribute1` | `at1` | What feeds the second input. |
 | `blender` | `bl` | The attribute driving the blend. |
-| `controlPoints` | `cp` | Accepted for Maya scripts; has no effect. |
+| `controlPoints` | `cp` | Accepted for existing scripts; has no effect. |
 | `driver` | `d` | The driver index, 0 or 1. |
 | `name` | `n` | The node's name. |
-| `shape` | `s` | Accepted for Maya scripts; has no effect. |
+| `shape` | `s` | Accepted for existing scripts; has no effect. |
 | `time` | `t` | The range to blend over; a single time is an abrupt change. |
 
 ## boneLattice
 
-A flexor's node on a lattice along a bone: the joint's bend bulges the lattice's points. Returns the node. Less than Maya: it does not move the lattice's ends rigidly (flexor parents the lattice to the bone).
+A flexor's node on a lattice along a bone: the joint's bend bulges the lattice's points. Returns the node. Less than the reference: it does not move the lattice's ends rigidly (flexor parents the lattice to the bone).
 
 Arguments: the lattice (the selection when none); the node with -q and -e
 
@@ -2543,14 +2560,14 @@ Arguments: three or four curves (the selection when none)
 
 | Flag | Short | Description |
 | --- | --- | --- |
-| `order` | `or` | Accepted for Maya scripts. |
-| `endPoint` | `ep` | Accepted for Maya scripts. |
-| `endPointTolerance` | `ept` | Accepted for Maya scripts. |
+| `order` | `or` | Accepted for existing scripts. |
+| `endPoint` | `ep` | Accepted for existing scripts. |
+| `endPointTolerance` | `ept` | Accepted for existing scripts. |
 | `constructionHistory` | `ch` | Keep the node (on by default). |
 | `polygon` | `po` | 0 NURBS, 1 polygons. |
-| `range` | `rn` | Accepted for Maya scripts. |
+| `range` | `rn` | Accepted for existing scripts. |
 | `name` | `n` | Name of the new object. |
-| `object` | `o` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
 
 ## boxDollyCtx
 
@@ -2607,7 +2624,7 @@ Arguments: objects, plugs or curves (the selection when none)
 | `index` | `in` | Key index(es) on each curve, or a range "0:2". |
 | `includeUpperBound` | `iub` | Whether a range's end counts (on by default). |
 | `hierarchy` | `hi` | none, below, above or both. |
-| `controlPoints` | `cp` | Accepted for Maya scripts: control points have no channels of their own here. |
+| `controlPoints` | `cp` | Accepted for existing scripts: control points have no channels of their own here. |
 | `shape` | `s` | Include the channels of the objects' shapes. |
 | `animation` | `an` | objects (the default), keys or keysOrObjects: keys means the selected keys. |
 | `overwrite` | `ov` | Replace what the buffer holds (on by default). |
@@ -2618,7 +2635,7 @@ Arguments: objects, plugs or curves (the selection when none)
 
 ## button
 
-Script UI: button, with create, edit and query as in Maya's command.
+Script UI: button, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -2679,14 +2696,14 @@ Arguments: a camera, with -q and -e
 | `position` | `p` | World position. |
 | `rotation` | `rot` | Rotation, degrees. |
 | `worldCenterOfInterest` | `wci` | The point it looks at. |
-| `worldUp` | `wup` | Accepted for Maya scripts. |
+| `worldUp` | `wup` | Accepted for existing scripts. |
 | `name` | `n` | Name. |
 | `query` | `q` | Query mode. |
 | `edit` | `e` | Edit mode. |
 
 ## canvas
 
-Script UI: canvas, with create, edit and query as in Maya's command.
+Script UI: canvas, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -2754,7 +2771,7 @@ Arguments: channels or objects (the selection when none); the character when que
 | `excludeRotate` | `er` | Leave out rotate channels. |
 | `excludeScale` | `es` | Leave out scale channels. |
 | `excludeVisibility` | `ev` | Leave out visibility. |
-| `excludeDynamic` | `ed` | Accepted for Maya scripts: objects give their keyable channels. |
+| `excludeDynamic` | `ed` | Accepted for existing scripts: objects give their keyable channels. |
 
 ## characterMap
 
@@ -2771,12 +2788,12 @@ Arguments: two characters, or a map
 | `mapAttr` | `ma` | Two plugs to pair. |
 | `unmapAttr` | `ua` | Two plugs to part. |
 | `mapMethod` | `mm` | Accepted: by name is what it does. |
-| `mapNode` | `mn` | Accepted for Maya scripts. |
-| `unmapNode` | `un` | Accepted for Maya scripts. |
+| `mapNode` | `mn` | Accepted for existing scripts. |
+| `unmapNode` | `un` | Accepted for existing scripts. |
 
 ## characterize
 
-Make a character from a skeleton: the joints named or selected go to slots by their names, -sk "joint slot, joint slot" sets others, -nm names it. Returns the character (a HIKCharacterNode). Less than Maya: -type label reads names too; the pivot, effector and stance flags fail, since the full body solver is not here; -pos and -aab are only held.
+Make a character from a skeleton: the joints named or selected go to slots by their names, -sk "joint slot, joint slot" sets others, -nm names it. Returns the character (a HIKCharacterNode). Less than the reference: -type label reads names too; the pivot, effector and stance flags fail, since the full body solver is not here; -pos and -aab are only held.
 
 Arguments: the skeleton's root (the selection when none)
 
@@ -2810,7 +2827,7 @@ Arguments: directory
 
 ## checkBox
 
-Script UI: checkBox, with create, edit and query as in Maya's command.
+Script UI: checkBox, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -2854,7 +2871,7 @@ Arguments: name
 
 ## checkBoxGrp
 
-Script UI: checkBoxGrp, with create, edit and query as in Maya's command.
+Script UI: checkBoxGrp, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -2972,10 +2989,10 @@ Create a NURBS circle, with a makeNurbCircle node (-nr normal, -c centre, -r rad
 | `degree` | `d` | Degree (3). |
 | `sections` | `s` | Sections (8). |
 | `sweep` | `sw` | Degrees covered (360). |
-| `useTolerance` | `ut` | Accepted for Maya scripts. |
-| `tolerance` | `tol` | Accepted for Maya scripts. |
+| `useTolerance` | `ut` | Accepted for existing scripts. |
+| `tolerance` | `tol` | Accepted for existing scripts. |
 | `constructionHistory` | `ch` | Keep the node (on by default). |
-| `object` | `o` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
 | `name` | `n` | Name of the transform. |
 
 ## circularFillet
@@ -2989,14 +3006,14 @@ Arguments: two surfaces
 | `radius` | `r` | Both offsets (1). |
 | `primaryRadius` | `pr` | Offset from the first. |
 | `secondaryRadius` | `sr` | Offset from the second. |
-| `curveOnSurface` | `cos` | Accepted for Maya scripts. |
+| `curveOnSurface` | `cos` | Accepted for existing scripts. |
 | `constructionHistory` | `ch` | Keep the node (on by default). |
 | `name` | `n` | The new object's name. |
-| `object` | `o` | Accepted for Maya scripts. |
-| `range` | `rn` | Accepted for Maya scripts. |
-| `caching` | `cch` | Accepted for Maya scripts. |
-| `nodeState` | `nds` | Accepted for Maya scripts. |
-| `tolerance` | `tol` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
+| `range` | `rn` | Accepted for existing scripts. |
+| `caching` | `cch` | Accepted for existing scripts. |
+| `nodeState` | `nds` | Accepted for existing scripts. |
+| `tolerance` | `tol` | Accepted for existing scripts. |
 | `polygon` | `po` | 0 NURBS, 1 polygons. |
 
 ## cleanUpScene
@@ -3139,12 +3156,12 @@ Arguments: curves (the selection when none)
 
 | Flag | Short | Description |
 | --- | --- | --- |
-| `preserveShape` | `ps` | Accepted for Maya scripts. |
-| `blendBias` | `bb` | Accepted for Maya scripts. |
+| `preserveShape` | `ps` | Accepted for existing scripts. |
+| `blendBias` | `bb` | Accepted for existing scripts. |
 | `constructionHistory` | `ch` | Keep a history node (on by default). |
 | `replaceOriginal` | `rpo` | Change the curve itself (on by default). |
 | `name` | `n` | Name of a new curve. |
-| `object` | `o` | Make an object (accepted for Maya scripts). |
+| `object` | `o` | Make an object (accepted for existing scripts). |
 
 ## closeSurface
 
@@ -3155,15 +3172,15 @@ Arguments: surfaces (the selection when none)
 | Flag | Short | Description |
 | --- | --- | --- |
 | `direction` | `d` | 0 U, 1 V, 2 both (0). |
-| `preserveShape` | `ps` | Accepted for Maya scripts. |
-| `blendBias` | `bb` | Accepted for Maya scripts. |
-| `blendKnotInsertion` | `bki` | Accepted for Maya scripts. |
-| `parameter` | `p` | Accepted for Maya scripts. |
+| `preserveShape` | `ps` | Accepted for existing scripts. |
+| `blendBias` | `bb` | Accepted for existing scripts. |
+| `blendKnotInsertion` | `bki` | Accepted for existing scripts. |
+| `parameter` | `p` | Accepted for existing scripts. |
 | `constructionHistory` | `ch` | Keep a history node (on by default). |
 | `replaceOriginal` | `rpo` | Change the surface itself (on by default). |
 | `name` | `n` | Name of a new surface. |
-| `object` | `o` | Accepted for Maya scripts. |
-| `polygon` | `po` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
+| `polygon` | `po` | Accepted for existing scripts. |
 
 ## closestPointOnMesh
 
@@ -3231,13 +3248,13 @@ Arguments: index [r g b]
 | --- | --- | --- |
 | `query` | `q` | Query mode. |
 | `edit` | `e` | Edit mode. |
-| `hueSaturationValue` | `hsv` | Accepted for Maya scripts. |
+| `hueSaturationValue` | `hsv` | Accepted for existing scripts. |
 | `resetToFactory` | `rf` | Back to the factory colours. |
 | `resetToSaved` | `rs` | Back to the saved colours. |
 
 ## colorIndexSliderGrp
 
-Script UI: colorIndexSliderGrp, with create, edit and query as in Maya's command.
+Script UI: colorIndexSliderGrp, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -3316,7 +3333,7 @@ Arguments: name
 
 ## colorSliderGrp
 
-Script UI: colorSliderGrp, with create, edit and query as in Maya's command.
+Script UI: colorSliderGrp, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -3392,7 +3409,7 @@ Arguments: name
 
 ## columnLayout
 
-Script UI: columnLayout, with create, edit and query as in Maya's command.
+Script UI: columnLayout, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -3468,7 +3485,7 @@ What is echoed: -st on echoes commands called from Python too, -f and -af filter
 
 ## componentEditor
 
-Script UI: componentEditor, with create, edit and query as in Maya's command.
+Script UI: componentEditor, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -3577,7 +3594,7 @@ Create a NURBS cone with a makeNurbCone node. Returns [nurbsCone1, makeNurbCone1
 | `pivot` | `p` | The centre. |
 | `constructionHistory` | `ch` | Keep the make node (on by default). |
 | `name` | `n` | Name of the transform. |
-| `object` | `o` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
 | `polygon` | `po` | 1 makes polygons. |
 | `radius` | `r` | The radius (1). |
 | `startSweep` | `ssw` | Start, degrees (0). |
@@ -3585,8 +3602,8 @@ Create a NURBS cone with a makeNurbCone node. Returns [nurbsCone1, makeNurbCone1
 | `degree` | `d` | 1 linear, 3 cubic (3). |
 | `sections` | `s` | Sections around (8). |
 | `spans` | `nsp` | Spans along the axis. |
-| `useTolerance` | `ut` | Accepted for Maya scripts. |
-| `tolerance` | `tol` | Accepted for Maya scripts. |
+| `useTolerance` | `ut` | Accepted for existing scripts. |
+| `tolerance` | `tol` | Accepted for existing scripts. |
 | `heightRatio` | `hr` | Height over radius. |
 
 ## confirmDialog
@@ -3617,7 +3634,7 @@ Arguments: src dst
 | `force` | `f` | Replace an existing input connection. |
 | `nextAvailable` | `na` | The next free element of a multi attribute. |
 | `lock` | `l` | Lock the destination afterwards. |
-| `referenceDest` | `rd` | Accepted for Maya scripts. |
+| `referenceDest` | `rd` | Accepted for existing scripts. |
 
 ## connectControl
 
@@ -3629,8 +3646,8 @@ Arguments: control attribute...
 | --- | --- | --- |
 | `index` | `in` | Which part of a group. |
 | `fileName` | `fi` | A file name attribute. |
-| `preventContextualMenu` | `pcm` | Accepted for Maya scripts. |
-| `preventOverride` | `po` | Accepted for Maya scripts. |
+| `preventContextualMenu` | `pcm` | Accepted for existing scripts. |
+| `preventOverride` | `po` | Accepted for existing scripts. |
 
 ## connectDynamic
 
@@ -3703,9 +3720,9 @@ Arguments: container
 | `findContainer` | `fc` | With -q: the container a node is in. |
 | `isContainer` | `isc` | With -q: whether it's a container. |
 | `asset` | `a` | Marks it an asset. |
-| `force` | `f` | Accepted for Maya scripts. |
-| `type` | `typ` | Accepted for Maya scripts. |
-| `includeHierarchyBelow` | `ihb` | Accepted for Maya scripts. |
+| `force` | `f` | Accepted for existing scripts. |
+| `type` | `typ` | Accepted for existing scripts. |
+| `includeHierarchyBelow` | `ihb` | Accepted for existing scripts. |
 
 ## contextInfo
 
@@ -3775,10 +3792,10 @@ Arguments: objects
 | `allControllers` | `ac` | All the controls. |
 | `isController` | `ic` | Whether the object is a control. |
 | `unparent` | `unp` | Take from its parent. |
-| `group` | `g` | Accepted for Maya scripts. |
-| `index` | `idx` | Accepted for Maya scripts. |
-| `pickWalkDown` | `pwd` | Accepted for Maya scripts. |
-| `pickWalkUp` | `pwu` | Accepted for Maya scripts. |
+| `group` | `g` | Accepted for existing scripts. |
+| `index` | `idx` | Accepted for existing scripts. |
+| `pickWalkDown` | `pwd` | Accepted for existing scripts. |
+| `pickWalkUp` | `pwu` | Accepted for existing scripts. |
 
 ## convertSelection
 
@@ -3821,8 +3838,8 @@ Arguments: source target
 | `inConnections` | `ic` | Move incoming connections. |
 | `outConnections` | `oc` | Move outgoing connections. |
 | `keepSourceConnections` | `ksc` | Leave the source its connections. |
-| `containerParentChild` | `cpc` | Accepted for Maya scripts. |
-| `renameTargetContainer` | `rtc` | Accepted for Maya scripts. |
+| `containerParentChild` | `cpc` | Accepted for existing scripts. |
+| `renameTargetContainer` | `rtc` | Accepted for existing scripts. |
 
 ## copyDeformerWeights
 
@@ -3835,15 +3852,15 @@ Copy a deformer's weights to another by closest point in world space: -sd, -dd, 
 | `sourceShape` | `ss` | Its shape. |
 | `destinationShape` | `ds` | Its shape. |
 | `mirrorMode` | `mm` | XY, XZ or YZ. |
-| `mirrorInverse` | `mi` | Accepted for Maya scripts. |
+| `mirrorInverse` | `mi` | Accepted for existing scripts. |
 | `noMirror` | `nm` | Don't mirror. |
-| `smooth` | `sm` | Accepted for Maya scripts. |
+| `smooth` | `sm` | Accepted for existing scripts. |
 | `surfaceAssociation` | `sa` | Accepted: closest point is what's used. |
-| `uvSpace` | `uv` | Accepted for Maya scripts. |
+| `uvSpace` | `uv` | Accepted for existing scripts. |
 
 ## copyFlexor
 
-Copy a flexor's settings and lattice tweaks to another joint: the flexor's lattice, then the joint. Returns the new node. Less than Maya: a mirrored bone does not reflect the lattice.
+Copy a flexor's settings and lattice tweaks to another joint: the flexor's lattice, then the joint. Returns the new node. Less than the reference: a mirrored bone does not reflect the lattice.
 
 Arguments: the flexor's lattice and the joint
 
@@ -3861,12 +3878,12 @@ Arguments: objects, plugs or curves (the selection when none)
 | `index` | `in` | Key index(es) on each curve, or a range "0:2". |
 | `includeUpperBound` | `iub` | Whether a range's end counts (on by default). |
 | `hierarchy` | `hi` | none, below, above or both. |
-| `controlPoints` | `cp` | Accepted for Maya scripts: control points have no channels of their own here. |
+| `controlPoints` | `cp` | Accepted for existing scripts: control points have no channels of their own here. |
 | `shape` | `s` | Include the channels of the objects' shapes. |
 | `animation` | `an` | objects (the default), keys or keysOrObjects: keys means the selected keys. |
 | `selected` | `sl` | Copy the keys selectKey selected. |
 | `option` | `o` | keys (the default) or curve. |
-| `clipboard` | `cb` | Accepted for Maya scripts. |
+| `clipboard` | `cb` | Accepted for existing scripts. |
 
 ## copySkinWeights
 
@@ -3885,7 +3902,7 @@ Arguments: source then destination (the selection when none)
 | `influenceAssociation` | `ia` | closestJoint (default), closestBone, oneToOne, label or name, tried in turn. |
 | `normalize` | `nr` | Normalize the copied weights (default on). |
 | `uvSpace` | `uv` | Source and destination UV sets: points read the source at their UV position, between the corners of the face there. Sets beyond map1 aren't kept here. |
-| `sampleSpace` | `spa` | Accepted for Maya scripts. |
+| `sampleSpace` | `spa` | Accepted for existing scripts. |
 
 ## createCloth
 
@@ -3902,7 +3919,7 @@ Arguments: meshes
 
 ## createCurveWarp
 
-Make a curveWarp on a mesh and a curve, as the Deform menu's Create Curve Warp does. Maya does not document this as a command; it runs curveWarp with what it is given.
+Make a curveWarp on a mesh and a curve, as the Deform menu's Create Curve Warp does. The reference does not document this as a command; it runs curveWarp with what it is given.
 
 Arguments: the mesh, then the curve (the selection when none)
 
@@ -4164,8 +4181,8 @@ Arguments: a curve, with -a or -r
 | `bezier` | `bez` | The points are Bezier points. |
 | `append` | `a` | Add the points to the curve named. |
 | `replace` | `r` | Replace the curve named. |
-| `worldSpace` | `ws` | Accepted for Maya scripts. |
-| `objectSpace` | `os` | Accepted for Maya scripts. |
+| `worldSpace` | `ws` | Accepted for existing scripts. |
+| `objectSpace` | `os` | Accepted for existing scripts. |
 | `name` | `n` | Name of the transform. |
 
 ## curveAddPtCtx
@@ -4295,7 +4312,7 @@ Arguments: two curves
 | `tolerance` | `tol` | How close counts (0.001). |
 | `useDirection` | `ud` | Flatten along -d first. |
 | `direction` | `d` | Which way. |
-| `constructionHistory` | `ch` | Accepted for Maya scripts. |
+| `constructionHistory` | `ch` | Accepted for existing scripts. |
 
 ## curveMoveEPCtx
 
@@ -4329,10 +4346,10 @@ Arguments: a surface
 | `knot` | `k` | A knot. |
 | `periodic` | `per` | Closed. |
 | `name` | `n` | The curve's name. |
-| `append` | `a` | Accepted for Maya scripts. |
-| `replace` | `r` | Accepted for Maya scripts. |
-| `positionTolerance` | `pt` | Accepted for Maya scripts. |
-| `tangentTolerance` | `tt` | Accepted for Maya scripts. |
+| `append` | `a` | Accepted for existing scripts. |
+| `replace` | `r` | Accepted for existing scripts. |
+| `positionTolerance` | `pt` | Accepted for existing scripts. |
+| `tangentTolerance` | `tt` | Accepted for existing scripts. |
 
 ## curveSketchCtx
 
@@ -4391,7 +4408,7 @@ Arguments: objects, plugs or curves (the selection when none)
 | `index` | `in` | Key index(es) on each curve, or a range "0:2". |
 | `includeUpperBound` | `iub` | Whether a range's end counts (on by default). |
 | `hierarchy` | `hi` | none, below, above or both. |
-| `controlPoints` | `cp` | Accepted for Maya scripts: control points have no channels of their own here. |
+| `controlPoints` | `cp` | Accepted for existing scripts: control points have no channels of their own here. |
 | `shape` | `s` | Include the channels of the objects' shapes. |
 | `animation` | `an` | objects (the default), keys or keysOrObjects: keys means the selected keys. |
 | `clear` | `cl` | Delete without copying to the clipboard. |
@@ -4412,9 +4429,9 @@ Arguments: objects
 | `all` | `all` | Look through the whole scene. |
 | `list` | `l` | List the plugs on a cycle. |
 | `firstCycleOnly` | `fco` | Accepted: the first found is what's listed. |
-| `children` | `c` | Accepted for Maya scripts. |
-| `parents` | `p` | Accepted for Maya scripts. |
-| `dag` | `dag` | Accepted for Maya scripts. |
+| `children` | `c` | Accepted for existing scripts. |
+| `parents` | `p` | Accepted for existing scripts. |
+| `dag` | `dag` | Accepted for existing scripts. |
 
 ## cylinder
 
@@ -4426,7 +4443,7 @@ Create a NURBS cylinder with a makeNurbCylinder node. Returns [nurbsCylinder1, m
 | `pivot` | `p` | The centre. |
 | `constructionHistory` | `ch` | Keep the make node (on by default). |
 | `name` | `n` | Name of the transform. |
-| `object` | `o` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
 | `polygon` | `po` | 1 makes polygons. |
 | `radius` | `r` | The radius (1). |
 | `startSweep` | `ssw` | Start, degrees (0). |
@@ -4434,8 +4451,8 @@ Create a NURBS cylinder with a makeNurbCylinder node. Returns [nurbsCylinder1, m
 | `degree` | `d` | 1 linear, 3 cubic (3). |
 | `sections` | `s` | Sections around (8). |
 | `spans` | `nsp` | Spans along the axis. |
-| `useTolerance` | `ut` | Accepted for Maya scripts. |
-| `tolerance` | `tol` | Accepted for Maya scripts. |
+| `useTolerance` | `ut` | Accepted for existing scripts. |
+| `tolerance` | `tol` | Accepted for existing scripts. |
 | `heightRatio` | `hr` | Height over radius. |
 
 ## dagPose
@@ -4576,7 +4593,7 @@ Arguments: objects to deform (the selection when none); the deformer with -e and
 
 ## deformerWeights
 
-Export or import a deformer's weights in Maya's layout: deformerWeights name.xml -ex -deformer skinCluster1 -path dir; -im with -method index, nearest, barycentric, bilinear or over. A .json file, or -fm JSON, goes as JSON. Returns the file's path.
+Export or import a deformer's weights in the reference's layout: deformerWeights name.xml -ex -deformer skinCluster1 -path dir; -im with -method index, nearest, barycentric, bilinear or over. A .json file, or -fm JSON, goes as JSON. Returns the file's path.
 
 Arguments: the file
 
@@ -4613,8 +4630,8 @@ Arguments: objects
 | `unitlessAnimationCurves` | `uac` | Driven key curves. |
 | `attribute` | `at` | Only on these attributes. |
 | `inputConnectionsAndNodes` | `icn` | Everything feeding the channels. |
-| `controlPoints` | `cp` | Accepted for Maya scripts. |
-| `motionPaths` | `mp` | Accepted for Maya scripts. |
+| `controlPoints` | `cp` | Accepted for existing scripts. |
+| `motionPaths` | `mp` | Accepted for existing scripts. |
 
 ## deleteAttr
 
@@ -4698,8 +4715,8 @@ Arguments: a curve (the selection when none)
 | --- | --- | --- |
 | `parameter` | `p` | Where to cut. Repeat it. |
 | `replaceOriginal` | `rpo` | The first piece replaces the curve. |
-| `keep` | `k` | Accepted for Maya scripts. |
-| `constructionHistory` | `ch` | Accepted for Maya scripts. |
+| `keep` | `k` | Accepted for existing scripts. |
+| `constructionHistory` | `ch` | Accepted for existing scripts. |
 
 ## detachSurface
 
@@ -4711,12 +4728,12 @@ Arguments: a surface (the selection when none)
 | --- | --- | --- |
 | `parameter` | `p` | Where. Repeat it. |
 | `direction` | `d` | 1 U, 0 V (1). |
-| `keep` | `k` | Accepted for Maya scripts. |
+| `keep` | `k` | Accepted for existing scripts. |
 | `constructionHistory` | `ch` | Keep a history node (on by default). |
 | `replaceOriginal` | `rpo` | Change the surface itself (on by default). |
 | `name` | `n` | Name of a new surface. |
-| `object` | `o` | Accepted for Maya scripts. |
-| `polygon` | `po` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
+| `polygon` | `po` | Accepted for existing scripts. |
 
 ## dgInfo
 
@@ -4732,9 +4749,9 @@ Arguments: objects
 | `dirty` | `d` | Only nodes in this dirty state. |
 | `nonDeletable` | `nod` | Only locked nodes. |
 | `outputFile` | `of` | Write to this file. |
-| `propagation` | `p` | Accepted for Maya scripts. |
-| `short` | `s` | Accepted for Maya scripts. |
-| `subgraph` | `sub` | Accepted for Maya scripts. |
+| `propagation` | `p` | Accepted for existing scripts. |
+| `short` | `s` | Accepted for existing scripts. |
+| `subgraph` | `sub` | Accepted for existing scripts. |
 | `type` | `nt` | Only this type. |
 
 ## dgdirty
@@ -4746,8 +4763,8 @@ Arguments: objects or plugs
 | Flag | Short | Description |
 | --- | --- | --- |
 | `allPlugs` | `a` | Every node. |
-| `clean` | `c` | Accepted for Maya scripts. |
-| `verbose` | `v` | Accepted for Maya scripts. |
+| `clean` | `c` | Accepted for existing scripts. |
+| `verbose` | `v` | Accepted for existing scripts. |
 
 ## dgeval
 
@@ -4757,7 +4774,7 @@ Arguments: objects or plugs
 
 | Flag | Short | Description |
 | --- | --- | --- |
-| `verbose` | `v` | Accepted for Maya scripts. |
+| `verbose` | `v` | Accepted for existing scripts. |
 
 ## dgtimer
 
@@ -4874,10 +4891,10 @@ Arguments: name [index]
 | `dormant` | `d` | The dormant colour (the default). |
 | `create` | `c` | Create the name. |
 | `list` | `l` | List the names. |
-| `queryIndex` | `qi` | Accepted for Maya scripts. |
+| `queryIndex` | `qi` | Accepted for existing scripts. |
 | `resetToFactory` | `rf` | Back to the factory colours. |
 | `resetToSaved` | `rs` | Back to the saved colours. |
-| `userDefined` | `ud` | Accepted for Maya scripts. |
+| `userDefined` | `ud` | Accepted for existing scripts. |
 
 ## displayCull
 
@@ -4956,7 +4973,7 @@ Arguments: name r g b [a]
 | `edit` | `e` | Edit mode. |
 | `alpha` | `a` | With alpha. |
 | `create` | `c` | Create the name. |
-| `hueSaturationValue` | `hsv` | Accepted for Maya scripts. |
+| `hueSaturationValue` | `hsv` | Accepted for existing scripts. |
 | `list` | `l` | List the names. |
 | `resetToFactory` | `rf` | Back to the factory colours. |
 | `resetToSaved` | `rs` | Back to the saved colours. |
@@ -4973,7 +4990,7 @@ Arguments: objects (the selection when none)
 | `divisionsV` | `dv` | Isoparms within a span along V. |
 | `pointsWire` | `pw` | Points to a drawn span. |
 | `pointsShaded` | `ps` | Shaded fineness. |
-| `polygonObject` | `po` | Accepted for Maya scripts. |
+| `polygonObject` | `po` | Accepted for existing scripts. |
 | `all` | `all` | Every surface. |
 
 ## displayStats
@@ -5016,7 +5033,7 @@ Measure between two points: -sp, -ep, with locators there (made when none is). R
 
 ## dockControl
 
-Script UI: dockControl, with create, edit and query as in Maya's command.
+Script UI: dockControl, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -5104,7 +5121,7 @@ Arguments: [name]
 
 ## dopeSheetEditor
 
-Script UI: dopeSheetEditor, with create, edit and query as in Maya's command.
+Script UI: dopeSheetEditor, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -5223,7 +5240,7 @@ Arguments: objects
 | `renameChildren` | `rc` | Give the children new unique names. |
 | `smartTransform` | `st` | Repeat the last duplicate's step. |
 | `transformsOnly` | `to` | Leave out the shapes. |
-| `instanceLeaf` | `ilf` | Accepted for Maya scripts. |
+| `instanceLeaf` | `ilf` | Accepted for existing scripts. |
 
 ## duplicateCurve
 
@@ -5235,8 +5252,8 @@ Arguments: an isoparm or a curve (the selection when none)
 | --- | --- | --- |
 | `constructionHistory` | `ch` | Keep the node (on by default). |
 | `local` | `l` | Follow the surface in object space, not the world. |
-| `range` | `rn` | Accepted for Maya scripts. |
-| `relative` | `r` | Accepted for Maya scripts. |
+| `range` | `rn` | Accepted for existing scripts. |
+| `relative` | `r` | Accepted for existing scripts. |
 | `name` | `n` | Name of the curve. |
 
 ## duplicateModifier
@@ -5254,14 +5271,14 @@ Arguments: a surface or patches
 | Flag | Short | Description |
 | --- | --- | --- |
 | `local` | `l` | Keep following it. |
-| `mergeItems` | `mi` | Accepted for Maya scripts. |
+| `mergeItems` | `mi` | Accepted for existing scripts. |
 | `constructionHistory` | `ch` | Keep the node (on by default). |
 | `name` | `n` | The new object's name. |
-| `object` | `o` | Accepted for Maya scripts. |
-| `range` | `rn` | Accepted for Maya scripts. |
-| `caching` | `cch` | Accepted for Maya scripts. |
-| `nodeState` | `nds` | Accepted for Maya scripts. |
-| `tolerance` | `tol` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
+| `range` | `rn` | Accepted for existing scripts. |
+| `caching` | `cch` | Accepted for existing scripts. |
+| `nodeState` | `nds` | Accepted for existing scripts. |
+| `tolerance` | `tol` | Accepted for existing scripts. |
 | `polygon` | `po` | 0 NURBS, 1 polygons. |
 
 ## duplicateWithTransform
@@ -5470,9 +5487,9 @@ The evaluation mode, as a setting scripts can read: -mode off|serial|parallel|em
 | `edit` | `e` | Edit mode. |
 | `mode` | `m` | off, serial, parallel or emp. |
 | `enabled` | `en` | Whether a mode other than off is set. |
-| `invalidate` | `inv` | Accepted for Maya scripts. |
-| `manipulation` | `man` | Accepted for Maya scripts. |
-| `idleBuild` | `ib` | Accepted for Maya scripts. |
+| `invalidate` | `inv` | Accepted for existing scripts. |
+| `manipulation` | `man` | Accepted for existing scripts. |
+| `idleBuild` | `ib` | Accepted for existing scripts. |
 
 ## exactWorldBoundingBox
 
@@ -5543,8 +5560,8 @@ Arguments: [expression node, for -q and -e]
 | `alwaysEvaluate` | `ae` | Evaluate whenever asked (1, the default). |
 | `unitConversion` | `uc` | all, none or angularOnly. With none, angles read and assign in radians. |
 | `name` | `n` | The node's name. |
-| `shortNames` | `sn` | Accepted for Maya scripts. |
-| `safe` | `sf` | Accepted for Maya scripts. |
+| `shortNames` | `sn` | Accepted for existing scripts. |
+| `safe` | `sf` | Accepted for existing scripts. |
 | `timeDependent` | `td` | With -q: whether it reads time or frame. |
 
 ## extendCurve
@@ -5557,11 +5574,11 @@ Arguments: curves (the selection when none)
 | --- | --- | --- |
 | `distance` | `d` | How far. |
 | `start` | `s` | 0 the end, 1 the start, 2 both. |
-| `extensionType` | `et` | Accepted for Maya scripts. |
+| `extensionType` | `et` | Accepted for existing scripts. |
 | `constructionHistory` | `ch` | Keep a history node (on by default). |
 | `replaceOriginal` | `rpo` | Change the curve itself (on by default). |
 | `name` | `n` | Name of a new curve. |
-| `object` | `o` | Make an object (accepted for Maya scripts). |
+| `object` | `o` | Make an object (accepted for existing scripts). |
 
 ## extendSurface
 
@@ -5575,16 +5592,16 @@ Arguments: surfaces (the selection when none)
 | `extendDirection` | `ed` | 0 U, 1 V, 2 both. |
 | `extendSide` | `es` | 0 start, 1 end, 2 both. |
 | `extensionType` | `et` | Accepted: tangent lines. |
-| `extendMethod` | `em` | Accepted for Maya scripts. |
-| `join` | `jn` | Accepted for Maya scripts. |
+| `extendMethod` | `em` | Accepted for existing scripts. |
+| `join` | `jn` | Accepted for existing scripts. |
 | `replaceOriginal` | `rpo` | Change the surface itself (on by default). |
 | `constructionHistory` | `ch` | Keep the node (on by default). |
 | `name` | `n` | The new object's name. |
-| `object` | `o` | Accepted for Maya scripts. |
-| `range` | `rn` | Accepted for Maya scripts. |
-| `caching` | `cch` | Accepted for Maya scripts. |
-| `nodeState` | `nds` | Accepted for Maya scripts. |
-| `tolerance` | `tol` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
+| `range` | `rn` | Accepted for existing scripts. |
+| `caching` | `cch` | Accepted for existing scripts. |
+| `nodeState` | `nds` | Accepted for existing scripts. |
+| `tolerance` | `tol` | Accepted for existing scripts. |
 | `polygon` | `po` | 0 NURBS, 1 polygons. |
 
 ## extrude
@@ -5602,12 +5619,12 @@ Arguments: the profile, then the path (the selection when none)
 | `length` | `l` | Length, with no path. |
 | `divisions` | `dv` | Mesh points per span of the profile. |
 | `fixedPath` | `fpt` | The surface sits on the path, not where the profile is. |
-| `useComponentPivot` | `ucp` | Accepted for Maya scripts. |
-| `useProfileNormal` | `upn` | Accepted for Maya scripts. |
-| `reverseSurfaceIfPathReversed` | `rsp` | Accepted for Maya scripts. |
+| `useComponentPivot` | `ucp` | Accepted for existing scripts. |
+| `useProfileNormal` | `upn` | Accepted for existing scripts. |
+| `reverseSurfaceIfPathReversed` | `rsp` | Accepted for existing scripts. |
 | `polygon` | `po` | 0 NURBS (the default), 1 polygons. |
 | `constructionHistory` | `ch` | Keep the node (on by default). |
-| `range` | `rn` | Accepted for Maya scripts. |
+| `range` | `rn` | Accepted for existing scripts. |
 | `name` | `n` | Name of the new object. |
 
 ## file
@@ -5626,7 +5643,7 @@ Arguments: the file
 | `exportAll` | `ea` | Write the whole scene to the file. |
 | `exportSelected` | `es` | Write the selection, what lies below it, its parents and the skeletons of its skins. |
 | `type` | `typ` | mayaAscii, or aztek for Aztek's own format. |
-| `options` | `op` | File translator options. Accepted for Maya scripts. |
+| `options` | `op` | File translator options. Accepted for existing scripts. |
 | `force` | `f` | Don't ask about unsaved changes. Nothing asks here. |
 | `query` | `q` | Query mode. |
 | `sceneName` | `sn` | Query: the scene's path; empty when untitled. |
@@ -5661,15 +5678,15 @@ Arguments: the file
 | `edit` | `e` | Edit mode: -namespace renames a reference's. |
 | `saveReferencesUnloaded` | `sru` | Accepted for scripts. |
 | `exportUnloadedReferences` | `eur` | Accepted for scripts. |
-| `referenceDepthInfo` | `rdi` | Accepted for Maya scripts. |
-| `prompt` | `pmt` | Accepted for Maya scripts. |
-| `ignoreVersion` | `iv` | Accepted for Maya scripts. |
-| `preserveReferences` | `pr` | Accepted for Maya scripts. |
-| `constructionHistory` | `ch` | Accepted for Maya scripts; history is baked in .ma. |
-| `channels` | `chn` | Accepted for Maya scripts. |
-| `constraints` | `con` | Accepted for Maya scripts. |
-| `expressions` | `exp` | Accepted for Maya scripts. |
-| `shader` | `sh` | Accepted for Maya scripts. |
+| `referenceDepthInfo` | `rdi` | Accepted for existing scripts. |
+| `prompt` | `pmt` | Accepted for existing scripts. |
+| `ignoreVersion` | `iv` | Accepted for existing scripts. |
+| `preserveReferences` | `pr` | Accepted for existing scripts. |
+| `constructionHistory` | `ch` | Accepted for existing scripts; history is baked in .ma. |
+| `channels` | `chn` | Accepted for existing scripts. |
+| `constraints` | `con` | Accepted for existing scripts. |
+| `expressions` | `exp` | Accepted for existing scripts. |
+| `shader` | `sh` | Accepted for existing scripts. |
 | `returnNewNodes` | `rnn` | With a reference, return the new nodes. |
 | `namespace` | `ns` | The namespace a reference goes under. |
 
@@ -5725,18 +5742,18 @@ Arguments: two curves
 | `freeformBlend` | `fb` | A free-form fillet. |
 | `depth` | `d` | How far a free-form fillet reaches. |
 | `bias` | `b` | Which way it leans. |
-| `blendControl` | `bc` | Accepted for Maya scripts. |
+| `blendControl` | `bc` | Accepted for existing scripts. |
 | `curveParameter1` | `cp1` | Where on the first curve. |
 | `curveParameter2` | `cp2` | Where on the second curve. |
 | `join` | `jn` | Trim the curves back too. |
 | `trim` | `t` | Trim the curves back. |
 | `constructionHistory` | `ch` | Keep the node (on by default). |
 | `name` | `n` | The new object's name. |
-| `object` | `o` | Accepted for Maya scripts. |
-| `range` | `rn` | Accepted for Maya scripts. |
-| `caching` | `cch` | Accepted for Maya scripts. |
-| `nodeState` | `nds` | Accepted for Maya scripts. |
-| `tolerance` | `tol` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
+| `range` | `rn` | Accepted for existing scripts. |
+| `caching` | `cch` | Accepted for existing scripts. |
+| `nodeState` | `nds` | Accepted for existing scripts. |
+| `tolerance` | `tol` | Accepted for existing scripts. |
 | `polygon` | `po` | 0 NURBS, 1 polygons. |
 
 ## filterCurve
@@ -5760,10 +5777,10 @@ Arguments: curves, objects or plugs (the selection when none)
 | `startTime` | `stt` | Start of the part filtered. |
 | `endTime` | `edt` | End of the part filtered. |
 | `selectedKeys` | `sk` | Only between the selected keys. |
-| `minTimeStep` | `mns` | Accepted for Maya scripts. |
-| `maxTimeStep` | `mxs` | Accepted for Maya scripts. |
-| `positionTolerance` | `pot` | Accepted for Maya scripts. |
-| `preserveKeyTangent` | `pkt` | Accepted for Maya scripts. |
+| `minTimeStep` | `mns` | Accepted for existing scripts. |
+| `maxTimeStep` | `mxs` | Accepted for existing scripts. |
+| `positionTolerance` | `pot` | Accepted for existing scripts. |
+| `preserveKeyTangent` | `pkt` | Accepted for existing scripts. |
 
 ## filterExpand
 
@@ -5853,15 +5870,15 @@ Arguments: curves (the selection when none)
 
 | Flag | Short | Description |
 | --- | --- | --- |
-| `tolerance` | `tol` | Accepted for Maya scripts. |
+| `tolerance` | `tol` | Accepted for existing scripts. |
 | `constructionHistory` | `ch` | Keep a history node (on by default). |
 | `replaceOriginal` | `rpo` | Change the curve itself (on by default). |
 | `name` | `n` | Name of a new curve. |
-| `object` | `o` | Make an object (accepted for Maya scripts). |
+| `object` | `o` | Make an object (accepted for existing scripts). |
 
 ## flexor
 
-A deformer at joints or bones: -typ jointLattice (the default), boneLattice or sculpt, -aj or -ab, -ts for the whole skeleton. Deforms what the joints are bound to, and any meshes named. -q -l lists the types. Returns the new nodes. Less than Maya: of -dc only the lattice's -dv and the sculpt's -mxd are read; a sculpt flexor follows its joint but no attribute drives it; the lattice sits after the skin.
+A deformer at joints or bones: -typ jointLattice (the default), boneLattice or sculpt, -aj or -ab, -ts for the whole skeleton. Deforms what the joints are bound to, and any meshes named. -q -l lists the types. Returns the new nodes. Less than the reference: of -dc only the lattice's -dv and the sculpt's -mxd are read; a sculpt flexor follows its joint but no attribute drives it; the lattice sits after the skin.
 
 Arguments: joints, and any extra meshes (the selection when none)
 
@@ -5873,14 +5890,14 @@ Arguments: joints, and any extra meshes (the selection when none)
 | `atJoints` | `aj` | At joints (the default). |
 | `deformerCommand` | `dc` | The deformer's command text: -dv and -mxd are read from it. |
 | `list` | `l` | With -q: the types. |
-| `name` | `n` | Obsolete in Maya; has no effect. |
+| `name` | `n` | Obsolete in the reference; has no effect. |
 | `noScale` | `ns` | Do not size the flexor to the geometry nearby. |
 | `toSkeleton` | `ts` | Every joint below those selected. |
 | `type` | `typ` | Which flexor. |
 
 ## floatField
 
-Script UI: floatField, with create, edit and query as in Maya's command.
+Script UI: floatField, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -5927,7 +5944,7 @@ Arguments: name
 
 ## floatFieldGrp
 
-Script UI: floatFieldGrp, with create, edit and query as in Maya's command.
+Script UI: floatFieldGrp, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -6022,7 +6039,7 @@ Arguments: name
 
 ## floatScrollBar
 
-Script UI: floatScrollBar, with create, edit and query as in Maya's command.
+Script UI: floatScrollBar, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -6065,7 +6082,7 @@ Arguments: name
 
 ## floatSlider
 
-Script UI: floatSlider, with create, edit and query as in Maya's command.
+Script UI: floatSlider, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -6108,7 +6125,7 @@ Arguments: name
 
 ## floatSliderButtonGrp
 
-Script UI: floatSliderButtonGrp, with create, edit and query as in Maya's command.
+Script UI: floatSliderButtonGrp, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -6198,7 +6215,7 @@ Arguments: name
 
 ## floatSliderGrp
 
-Script UI: floatSliderGrp, with create, edit and query as in Maya's command.
+Script UI: floatSliderGrp, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -6290,13 +6307,13 @@ Arguments: the object (the selection when none)
 | Flag | Short | Description |
 | --- | --- | --- |
 | `divisions` | `dv` | Lattice divisions. |
-| `localCompute` | `lc` | Accepted for Maya scripts. |
-| `localDivisions` | `ld` | Accepted for Maya scripts. |
-| `objectCentered` | `oc` | Accepted for Maya scripts. |
+| `localCompute` | `lc` | Accepted for existing scripts. |
+| `localDivisions` | `ld` | Accepted for existing scripts. |
+| `objectCentered` | `oc` | Accepted for existing scripts. |
 
 ## flowLayout
 
-Script UI: flowLayout, with create, edit and query as in Maya's command.
+Script UI: flowLayout, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -6349,7 +6366,7 @@ Clear undo history. which='past' drops the steps undo would revert, so undo cann
 
 ## formLayout
 
-Script UI: formLayout, with create, edit and query as in Maya's command.
+Script UI: formLayout, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -6394,7 +6411,7 @@ Arguments: name
 
 ## frameLayout
 
-Script UI: frameLayout, with create, edit and query as in Maya's command.
+Script UI: frameLayout, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -6456,27 +6473,27 @@ Arguments: two edges
 | --- | --- | --- |
 | `depth` | `d` | How far the tangents reach (0.5). |
 | `bias` | `bb` | Which way it leans. |
-| `positionTolerance` | `pt` | Accepted for Maya scripts. |
-| `tangentTolerance` | `tt` | Accepted for Maya scripts. |
+| `positionTolerance` | `pt` | Accepted for existing scripts. |
+| `tangentTolerance` | `tt` | Accepted for existing scripts. |
 | `constructionHistory` | `ch` | Keep the node (on by default). |
 | `name` | `n` | The new object's name. |
-| `object` | `o` | Accepted for Maya scripts. |
-| `range` | `rn` | Accepted for Maya scripts. |
-| `caching` | `cch` | Accepted for Maya scripts. |
-| `nodeState` | `nds` | Accepted for Maya scripts. |
-| `tolerance` | `tol` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
+| `range` | `rn` | Accepted for existing scripts. |
+| `caching` | `cch` | Accepted for existing scripts. |
+| `nodeState` | `nds` | Accepted for existing scripts. |
+| `tolerance` | `tol` | Accepted for existing scripts. |
 | `polygon` | `po` | 0 NURBS, 1 polygons. |
 
 ## freezeTransforms
 
-Bake translate/rotate/scale into mesh or curve points, leaving identity values. World positions don't change. With hierarchy (the default, like Maya) everything parented under the objects is frozen too; without it the children's transforms absorb what their parent gives up. Joints keep their translate and take their rotation into jointOrient, or with jointOrient line up with the world.
+Bake translate/rotate/scale into mesh or curve points, leaving identity values. World positions don't change. With hierarchy (the default, like the reference) everything parented under the objects is frozen too; without it the children's transforms absorb what their parent gives up. Joints keep their translate and take their rotation into jointOrient, or with jointOrient line up with the world.
 
 Arguments: objects
 
 | Flag | Short | Description |
 | --- | --- | --- |
-| `normal` | `n` | Accepted for Maya scripts. |
-| `preserveNormals` | `pn` | Accepted for Maya scripts. |
+| `normal` | `n` | Accepted for existing scripts. |
+| `preserveNormals` | `pn` | Accepted for existing scripts. |
 | `hierarchy` |  | Freeze everything parented under the objects too. |
 | `jointOrient` |  | Also line joints' axes up with the world, zeroing their orientation. |
 | `apply` | `a` | On: bake into the geometry. Off, when given: back to identity, the object moving. |
@@ -6495,8 +6512,8 @@ Arguments: skinCluster or skinned mesh
 | `bindMethod` | `bm` | 3 geodesic voxel; 2 heat map; 0 and 1 closest distance and hierarchy. |
 | `falloff` | `fo` | 0 to 1, how far influences reach. |
 | `maxInfluences` | `mi` | Most influences on a point. |
-| `geodesicVoxelParams` | `gvp` | Accepted for Maya scripts. |
-| `postVoxelSmooth` | `pvs` | Accepted for Maya scripts. |
+| `geodesicVoxelParams` | `gvp` | Accepted for existing scripts. |
+| `postVoxelSmooth` | `pvs` | Accepted for existing scripts. |
 
 ## geometryConstraint
 
@@ -6540,9 +6557,9 @@ Arguments: plug
 | `channelBox` | `cb` | Whether it shows in the channel box without being keyable. |
 | `settable` | `se` | Whether setAttr would take: not locked, not driven, an input. |
 | `size` | `s` | The element count of a multi attribute; 1 otherwise. |
-| `silent` | `sl` | Accepted for Maya scripts. |
+| `silent` | `sl` | Accepted for existing scripts. |
 | `asString` | `as` | An enum's label. |
-| `expandEnvironmentVariables` | `x` | Accepted for Maya scripts. |
+| `expandEnvironmentVariables` | `x` | Accepted for existing scripts. |
 | `lock` | `l` | Whether it is locked. |
 | `multiIndices` | `mi` | The element indices of a multi attribute. |
 
@@ -6644,7 +6661,7 @@ Arguments: name
 
 ## ghosting
 
-Ghosting state: -act ghost, unghost or unghostAll on the selection, the options as defaults, -e to change objects (-ago all ghosted), -q an option, -q -go the ghosted objects, -q -f their ghost frames. Less than Maya: the views draw no ghosts, so -en, the colours, the opacities and -ud are only held.
+Ghosting state: -act ghost, unghost or unghostAll on the selection, the options as defaults, -e to change objects (-ago all ghosted), -q an option, -q -go the ghosted objects, -q -f their ghost frames. Less than the reference: the views draw no ghosts, so -en, the colours, the opacities and -ud are only held.
 
 Arguments: objects (the selection when none)
 
@@ -6684,20 +6701,20 @@ Arguments: surfaces
 | Flag | Short | Description |
 | --- | --- | --- |
 | `maxSeparation` | `ms` | How far apart edges may be (0.1). |
-| `lockSurface` | `lk` | Accepted for Maya scripts. |
-| `modificationResistance` | `mr` | Accepted for Maya scripts. |
-| `sampling` | `sam` | Accepted for Maya scripts. |
-| `stitchCorners` | `sc` | Accepted for Maya scripts. |
-| `stitchEdges` | `se` | Accepted for Maya scripts. |
-| `stitchPartialEdges` | `spe` | Accepted for Maya scripts. |
-| `stitchSmoothness` | `ss` | Accepted for Maya scripts. |
+| `lockSurface` | `lk` | Accepted for existing scripts. |
+| `modificationResistance` | `mr` | Accepted for existing scripts. |
+| `sampling` | `sam` | Accepted for existing scripts. |
+| `stitchCorners` | `sc` | Accepted for existing scripts. |
+| `stitchEdges` | `se` | Accepted for existing scripts. |
+| `stitchPartialEdges` | `spe` | Accepted for existing scripts. |
+| `stitchSmoothness` | `ss` | Accepted for existing scripts. |
 | `constructionHistory` | `ch` | Keep the node (on by default). |
 | `name` | `n` | The new object's name. |
-| `object` | `o` | Accepted for Maya scripts. |
-| `range` | `rn` | Accepted for Maya scripts. |
-| `caching` | `cch` | Accepted for Maya scripts. |
-| `nodeState` | `nds` | Accepted for Maya scripts. |
-| `tolerance` | `tol` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
+| `range` | `rn` | Accepted for existing scripts. |
+| `caching` | `cch` | Accepted for existing scripts. |
+| `nodeState` | `nds` | Accepted for existing scripts. |
+| `tolerance` | `tol` | Accepted for existing scripts. |
 | `polygon` | `po` | 0 NURBS, 1 polygons. |
 
 ## graphDollyCtx
@@ -6791,7 +6808,7 @@ The ground plane: -s size, -sp spacing between major lines, -d divisions between
 | `edit` | `e` | Edit mode. |
 | `default` | `df` | Set or read the defaults. |
 | `reset` | `r` | Back to the defaults. |
-| `style` | `st` | Obsolete in Maya; has no effect. |
+| `style` | `st` | Obsolete in the reference; has no effect. |
 | `displayAxes` | `da` | A grid setting. |
 | `displayAxesBold` | `dab` | A grid setting. |
 | `displayDivisionLines` | `ddl` | A grid setting. |
@@ -6807,7 +6824,7 @@ The ground plane: -s size, -sp spacing between major lines, -d divisions between
 
 ## gridLayout
 
-Script UI: gridLayout, with create, edit and query as in Maya's command.
+Script UI: gridLayout, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -6868,7 +6885,7 @@ Arguments: objects
 | `world` | `w` | Under the world (the default here). |
 | `absolute` | `a` | Keep world placement (the default). |
 | `relative` | `r` | Keep local placement. |
-| `useAsGroup` | `uag` | Accepted for Maya scripts. |
+| `useAsGroup` | `uag` | Accepted for existing scripts. |
 
 ## growSelection
 
@@ -6890,7 +6907,7 @@ Arguments: CVs (the selection when none)
 | `constructionHistory` | `ch` | Keep a history node (on by default). |
 | `replaceOriginal` | `rpo` | Change the curve itself (on by default). |
 | `name` | `n` | Name of a new curve. |
-| `object` | `o` | Make an object (accepted for Maya scripts). |
+| `object` | `o` | Make an object (accepted for existing scripts). |
 
 ## headsUpDisplay
 
@@ -6953,9 +6970,9 @@ Arguments: objects
 
 | Flag | Short | Description |
 | --- | --- | --- |
-| `clearSelection` | `cs` | Accepted for Maya scripts. |
+| `clearSelection` | `cs` | Accepted for existing scripts. |
 | `returnHidden` | `rh` | Return what was hidden. |
-| `invertComponents` | `ic` | Accepted for Maya scripts. |
+| `invertComponents` | `ic` | Accepted for existing scripts. |
 | `testVisibility` | `tv` | Whether they are hidden, changing nothing. |
 
 ## hikBake
@@ -7066,7 +7083,7 @@ What drives the current character: None, Stance, Control Rig, or a character.
 
 ## hikGetDependNodes
 
-The nodes a character depends on: its joints, then what is connected to it. Maya does not document this command, so what it returns is inferred from the name.
+The nodes a character depends on: its joints, then what is connected to it. The reference does not document this command, so what it returns is inferred from the name.
 
 Arguments: a character
 
@@ -7201,7 +7218,7 @@ Arguments: target, source
 
 ## hikStraightenArms
 
-For a rig bound with its arms down: writes a T-pose into the definition by turning the arms' stored stance out along X, the joints left where they are. Not a procedure of Maya's, where the rig is posed instead. Returns how many slots changed.
+For a rig bound with its arms down: writes a T-pose into the definition by turning the arms' stored stance out along X, the joints left where they are. Not a procedure of the reference's, where the rig is posed instead. Returns how many slots changed.
 
 Arguments: the character
 
@@ -7296,17 +7313,34 @@ Bind a key: -k the key, -alt -ctl -sht modifiers, -n the name command for press,
 
 ## hotkeyCheck
 
-The annotation of the nameCommand a key is bound to, or an empty string: -k the key, -alt, -ctl, -cmd, -opt modifiers, -kup for release. Less than Maya: it sees keys bound with the hotkey command, not the built-in table the shell keeps.
+The annotation of the nameCommand a key is bound to, or an empty string: -k the key, -alt, -ctl, -cmd, -opt modifiers, -kup for release. Less than the reference: it sees keys bound with the hotkey command, not the built-in table the shell keeps.
 
 | Flag | Short | Description |
 | --- | --- | --- |
 | `altModifier` | `alt` | With Alt. |
 | `commandModifier` | `cmd` | With Command: as Ctrl here. |
 | `ctrlModifier` | `ctl` | With Ctrl. |
-| `isRepeatable` | `ir` | Accepted for Maya scripts; has no effect. |
+| `isRepeatable` | `ir` | Accepted for existing scripts; has no effect. |
 | `keyString` | `k` | The key. |
 | `keyUp` | `kup` | On release. |
 | `optionModifier` | `opt` | With Option: as Alt here. |
+
+## hrender
+
+Renders with Harold: the current frame, a sequence (-seq), every frame the settings name (-batch), or interactively (-ipr start).
+
+Arguments: camera
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `camera` | `cam` | Camera to render through. |
+| `width` | `w` | Image width. |
+| `height` | `h` | Image height. |
+| `region` | `reg` | x0 y0 x1 y1, pixels from the top left. |
+| `seq` | `seq` | Frames: "1 10", "1 10 2" or one frame. |
+| `batch` | `b` | Render the frames the render settings name and write them. |
+| `ipr` | `ipr` | start, stop, refresh or pause interactive rendering. |
+| `async` | `as` | Start the current frame and return at once; the render view shows it as it refines. |
 
 ## hudButton
 
@@ -7428,7 +7462,7 @@ Arguments: objects, for -assign
 
 ## iconTextButton
 
-Script UI: iconTextButton, with create, edit and query as in Maya's command.
+Script UI: iconTextButton, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -7493,7 +7527,7 @@ Arguments: name
 
 ## iconTextCheckBox
 
-Script UI: iconTextCheckBox, with create, edit and query as in Maya's command.
+Script UI: iconTextCheckBox, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -7540,7 +7574,7 @@ Arguments: name
 
 ## iconTextRadioButton
 
-Script UI: iconTextRadioButton, with create, edit and query as in Maya's command.
+Script UI: iconTextRadioButton, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -7596,11 +7630,11 @@ Arguments: start and end joints (the selection when -sj/-ee are not given), or t
 | --- | --- | --- |
 | `curve` | `c` | Spline IK: the curve to follow. Queried, the curve. |
 | `createCurve` | `ccv` | Spline IK: make a curve through the joints (the default). |
-| `parentCurve` | `pcv` | Accepted for Maya scripts: the curve drives in world space. |
+| `parentCurve` | `pcv` | Accepted for existing scripts: the curve drives in world space. |
 | `rootOnCurve` | `roc` | Spline IK: the start joint goes to the curve's start (on by default). |
-| `simplifyCurve` | `scv` | Accepted for Maya scripts. |
-| `rootTwistMode` | `rtm` | Accepted for Maya scripts. |
-| `twistType` | `tws` | Accepted for Maya scripts (linear). |
+| `simplifyCurve` | `scv` | Accepted for existing scripts. |
+| `rootTwistMode` | `rtm` | Accepted for existing scripts. |
+| `twistType` | `tws` | Accepted for existing scripts (linear). |
 | `startJoint` | `sj` | First joint of the chain. |
 | `endEffector` | `ee` | Last joint of the chain. Queried, the effector. |
 | `solver` | `sol` | ikRPsolver (default), ikSCsolver or a solver node's name. |
@@ -7760,7 +7794,7 @@ Held for scripts: how IK/FK blending shows on a selected handle, -d none, ik, fk
 
 ## image
 
-Script UI: image, with create, edit and query as in Maya's command.
+Script UI: image, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -7924,12 +7958,12 @@ Arguments: curves (the selection when none)
 | --- | --- | --- |
 | `parameter` | `p` | Where. |
 | `numberOfKnots` | `nk` | How many. |
-| `addKnots` | `add` | Accepted for Maya scripts. |
-| `insertBetween` | `ib` | Accepted for Maya scripts. |
+| `addKnots` | `add` | Accepted for existing scripts. |
+| `insertBetween` | `ib` | Accepted for existing scripts. |
 | `constructionHistory` | `ch` | Keep a history node (on by default). |
 | `replaceOriginal` | `rpo` | Change the curve itself (on by default). |
 | `name` | `n` | Name of a new curve. |
-| `object` | `o` | Make an object (accepted for Maya scripts). |
+| `object` | `o` | Make an object (accepted for existing scripts). |
 
 ## insertKnotSurface
 
@@ -7943,12 +7977,12 @@ Arguments: surfaces (the selection when none)
 | `direction` | `d` | 1 U, 0 V (1). |
 | `numberOfKnots` | `nk` | How many (1). |
 | `addKnots` | `add` | Add them (on), or bring the multiplicity up to the number. |
-| `insertBetween` | `ib` | Accepted for Maya scripts. |
+| `insertBetween` | `ib` | Accepted for existing scripts. |
 | `constructionHistory` | `ch` | Keep a history node (on by default). |
 | `replaceOriginal` | `rpo` | Change the surface itself (on by default). |
 | `name` | `n` | Name of a new surface. |
-| `object` | `o` | Accepted for Maya scripts. |
-| `polygon` | `po` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
+| `polygon` | `po` | Accepted for existing scripts. |
 
 ## instance
 
@@ -7960,8 +7994,8 @@ Arguments: objects
 | --- | --- | --- |
 | `name` | `n` | Name for a single instance. |
 | `reference` |  | Share only the base mesh and keep a modifier stack of its own (same shape, a different bevel). Off, instances share the modifier stack too, so every copy looks the same and exports as one mesh. |
-| `leaf` | `lf` | Accepted for Maya scripts. |
-| `smartTransform` | `st` | Accepted for Maya scripts. |
+| `leaf` | `lf` | Accepted for existing scripts. |
+| `smartTransform` | `st` | Accepted for existing scripts. |
 
 ## instanceInfo
 
@@ -7985,7 +8019,7 @@ Arguments: nodes (the selection when none)
 
 ## intField
 
-Script UI: intField, with create, edit and query as in Maya's command.
+Script UI: intField, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -8030,7 +8064,7 @@ Arguments: name
 
 ## intFieldGrp
 
-Script UI: intFieldGrp, with create, edit and query as in Maya's command.
+Script UI: intFieldGrp, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -8122,7 +8156,7 @@ Arguments: name
 
 ## intScrollBar
 
-Script UI: intScrollBar, with create, edit and query as in Maya's command.
+Script UI: intScrollBar, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -8165,7 +8199,7 @@ Arguments: name
 
 ## intSlider
 
-Script UI: intSlider, with create, edit and query as in Maya's command.
+Script UI: intSlider, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -8208,7 +8242,7 @@ Arguments: name
 
 ## intSliderGrp
 
-Script UI: intSliderGrp, with create, edit and query as in Maya's command.
+Script UI: intSliderGrp, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -8298,14 +8332,14 @@ Arguments: two surfaces
 | Flag | Short | Description |
 | --- | --- | --- |
 | `curveOnSurface` | `cos` | As curves on the first surface. |
-| `firstSurface` | `fs` | Accepted for Maya scripts. |
+| `firstSurface` | `fs` | Accepted for existing scripts. |
 | `constructionHistory` | `ch` | Keep the node (on by default). |
 | `name` | `n` | The new object's name. |
-| `object` | `o` | Accepted for Maya scripts. |
-| `range` | `rn` | Accepted for Maya scripts. |
-| `caching` | `cch` | Accepted for Maya scripts. |
-| `nodeState` | `nds` | Accepted for Maya scripts. |
-| `tolerance` | `tol` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
+| `range` | `rn` | Accepted for existing scripts. |
+| `caching` | `cch` | Accepted for existing scripts. |
+| `nodeState` | `nds` | Accepted for existing scripts. |
+| `tolerance` | `tol` | Accepted for existing scripts. |
 | `polygon` | `po` | 0 NURBS, 1 polygons. |
 
 ## invertSelection
@@ -8476,11 +8510,11 @@ Arguments: joint
 | `belowBound` | `bb` | How far below, percent. |
 | `aboveValue` | `av` | Weight above. |
 | `belowValue` | `bv` | Weight below. |
-| `aboveDropoffType` | `adt` | Accepted for Maya scripts. |
-| `belowDropoffType` | `bdt` | Accepted for Maya scripts. |
-| `aboveCluster` | `ac` | Accepted for Maya scripts. |
-| `belowCluster` | `bc` | Accepted for Maya scripts. |
-| `deformerTools` | `dt` | Accepted for Maya scripts. |
+| `aboveDropoffType` | `adt` | Accepted for existing scripts. |
+| `belowDropoffType` | `bdt` | Accepted for existing scripts. |
+| `aboveCluster` | `ac` | Accepted for existing scripts. |
+| `belowCluster` | `bc` | Accepted for existing scripts. |
+| `deformerTools` | `dt` | Accepted for existing scripts. |
 | `name` | `n` | The node's name. |
 
 ## jointCtx
@@ -8537,7 +8571,7 @@ Arguments: the scale
 
 ## jointLattice
 
-A flexor's node on a lattice: the joint's bend bulges the lattice's points. Returns the node. Less than Maya: it does not move the lattice's ends rigidly (flexor keeps the lattice on the joints with constraints) and the bind skin flags do nothing.
+A flexor's node on a lattice: the joint's bend bulges the lattice's points. Returns the node. Less than the reference: it does not move the lattice's ends rigidly (flexor keeps the lattice on the joints with constraints) and the bind skin flags do nothing.
 
 Arguments: the lattice (the selection when none); the node with -q and -e
 
@@ -8556,8 +8590,8 @@ Arguments: the lattice (the selection when none); the node with -q and -e
 | `rounding` | `ro` | Bulge on the outside of the bend. |
 | `upperTransform` | `ut` | The transform of the upper part: the joint's parent by default. |
 | `lowerTransform` | `lt` | The transform of the lower part: the joint by default. |
-| `upperBindSkin` | `ub` | Accepted for Maya scripts; has no effect. |
-| `lowerBindSkin` | `lb` | Accepted for Maya scripts; has no effect. |
+| `upperBindSkin` | `ub` | Accepted for existing scripts; has no effect. |
+| `lowerBindSkin` | `lb` | Accepted for existing scripts; has no effect. |
 
 ## keyTangent
 
@@ -8575,7 +8609,7 @@ Arguments: objects, plugs or curves (the selection when none)
 | `index` | `in` | Key index(es) on each curve, or a range "0:2". |
 | `includeUpperBound` | `iub` | Whether a range's end counts (on by default). |
 | `hierarchy` | `hi` | none, below, above or both. |
-| `controlPoints` | `cp` | Accepted for Maya scripts: control points have no channels of their own here. |
+| `controlPoints` | `cp` | Accepted for existing scripts: control points have no channels of their own here. |
 | `shape` | `s` | Include the channels of the objects' shapes. |
 | `animation` | `an` | objects (the default), keys or keysOrObjects: keys means the selected keys. |
 | `inTangentType` | `itt` | Tangent into the keys. |
@@ -8595,7 +8629,7 @@ Arguments: objects, plugs or curves (the selection when none)
 | `relative` | `r` | Edits add to what is there. |
 | `absolute` | `a` | Edits are new values (the default). |
 | `selected` | `sl` | Work on the keys selectKey selected. |
-| `stepAttributes` | `sa` | Accepted for Maya scripts: step tangents apply to any channel. |
+| `stepAttributes` | `sa` | Accepted for existing scripts: step tangents apply to any channel. |
 | `global` | `g` | The default tangents for new keys. |
 
 ## keyTimes
@@ -8620,7 +8654,7 @@ Arguments: objects, plugs or curves (the selection when none)
 | `index` | `in` | Key index(es) on each curve, or a range "0:2". |
 | `includeUpperBound` | `iub` | Whether a range's end counts (on by default). |
 | `hierarchy` | `hi` | none, below, above or both. |
-| `controlPoints` | `cp` | Accepted for Maya scripts: control points have no channels of their own here. |
+| `controlPoints` | `cp` | Accepted for existing scripts: control points have no channels of their own here. |
 | `shape` | `s` | Include the channels of the objects' shapes. |
 | `animation` | `an` | objects (the default), keys or keysOrObjects: keys means the selected keys. |
 | `floatChange` | `fc` | Driven keys: the driver value, as -tc for time keys. |
@@ -8641,7 +8675,7 @@ Arguments: objects, plugs or curves (the selection when none)
 
 ## keyframeOutliner
 
-Script UI: keyframeOutliner, with create, edit and query as in Maya's command.
+Script UI: keyframeOutliner, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -8862,7 +8896,7 @@ Arguments: [name]
 
 The Graph Editor's stats fields: -q -ta the selected keys' frame, -q -va their value, blank when they differ.
 
-Arguments: the control's name, accepted for Maya scripts
+Arguments: the control's name, accepted for existing scripts
 
 | Flag | Short | Description |
 | --- | --- | --- |
@@ -8870,9 +8904,9 @@ Arguments: the control's name, accepted for Maya scripts
 | `edit` | `e` | Change the flags named. |
 | `timeAnnotation` | `ta` | Query: the time field. |
 | `valueAnnotation` | `va` | Query: the value field. |
-| `precision` | `pre` | Accepted for Maya scripts. |
-| `classicMode` | `cm` | Accepted for Maya scripts. |
-| `animEditor` | `ae` | Accepted for Maya scripts. |
+| `precision` | `pre` | Accepted for existing scripts. |
+| `classicMode` | `cm` | Accepted for existing scripts. |
+| `animEditor` | `ae` | Accepted for existing scripts. |
 
 ## keyingGroup
 
@@ -8889,7 +8923,7 @@ Arguments: objects
 | `addElement` | `add` | With -e: what to add. |
 | `include` | `in` | With -e: what to add. |
 | `remove` | `rm` | With -e: what to remove. |
-| `minimizeRotation` | `mr` | Accepted for Maya scripts. |
+| `minimizeRotation` | `mr` | Accepted for existing scripts. |
 
 ## lassoContext
 
@@ -8943,7 +8977,7 @@ Arguments: meshes or vertices (the selection when none); the ffd or lattice with
 
 ## layerButton
 
-Script UI: layerButton, with create, edit and query as in Maya's command.
+Script UI: layerButton, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -9125,12 +9159,12 @@ Arguments: object
 | `shortNames` | `sn` | Short names. |
 | `array` | `a` | Only arrays. |
 | `output` | `o` | Only outputs. |
-| `hasData` | `hd` | Accepted for Maya scripts. |
-| `inUse` | `iu` | Accepted for Maya scripts. |
-| `changedSinceFileOpen` | `cfo` | Accepted for Maya scripts. |
-| `nodeName` | `nn` | Accepted for Maya scripts. |
+| `hasData` | `hd` | Accepted for existing scripts. |
+| `inUse` | `iu` | Accepted for existing scripts. |
+| `changedSinceFileOpen` | `cfo` | Accepted for existing scripts. |
+| `nodeName` | `nn` | Accepted for existing scripts. |
 | `string` | `st` | Only names matching this pattern, or these. |
-| `category` | `ct` | Accepted for Maya scripts. |
+| `category` | `ct` | Accepted for existing scripts. |
 
 ## listCameras
 
@@ -9245,8 +9279,8 @@ Arguments: objects
 | `edit` | `e` | Edit mode. |
 | `lock` | `l` | On or off. |
 | `lockName` | `ln` | Accepted: a locked node keeps its name anyway. |
-| `lockUnpublished` | `lu` | Accepted for Maya scripts. |
-| `ignoreComponents` | `ic` | Accepted for Maya scripts. |
+| `lockUnpublished` | `lu` | Accepted for existing scripts. |
+| `ignoreComponents` | `ic` | Accepted for existing scripts. |
 
 ## loft
 
@@ -9265,7 +9299,7 @@ Arguments: curves in order (the selection when none)
 | `reverseSurfaceNormals` | `rsn` | Flip the normals. |
 | `polygon` | `po` | 0 NURBS (the default), 1 polygons. |
 | `constructionHistory` | `ch` | Keep the node (on by default). |
-| `range` | `rn` | Accepted for Maya scripts. |
+| `range` | `rn` | Accepted for existing scripts. |
 | `name` | `n` | Name of the new object. |
 
 ## lookThru
@@ -9356,8 +9390,8 @@ Arguments: objects
 
 | Flag | Short | Description |
 | --- | --- | --- |
-| `normal` | `n` | Accepted for Maya scripts. |
-| `preserveNormals` | `pn` | Accepted for Maya scripts. |
+| `normal` | `n` | Accepted for existing scripts. |
+| `preserveNormals` | `pn` | Accepted for existing scripts. |
 | `hierarchy` |  | Freeze everything parented under the objects too. |
 | `jointOrient` |  | Also line joints' axes up with the world, zeroing their orientation. |
 | `apply` | `a` | On: bake into the geometry. Off, when given: back to identity, the object moving. |
@@ -9388,11 +9422,11 @@ Arguments: node type and attribute
 | `edit` | `e` | Edit mode. |
 | `activate` | `ac` | Turn it on or off. |
 | `activateAll` | `aca` | Turn all on or off. |
-| `altAttribute` | `aa` | Accepted for Maya scripts; has no effect. |
+| `altAttribute` | `aa` | Accepted for existing scripts; has no effect. |
 | `attrType` | `at` | intArray, doubleArray, vectorArray, multiInteger, multiFloat, multiDouble or multiVector. |
 | `clearAll` | `ca` | Remove all. |
 | `remove` | `rm` | Remove this one. |
-| `shapeMode` | `sm` | Accepted for Maya scripts; has no effect. |
+| `shapeMode` | `sm` | Accepted for existing scripts; has no effect. |
 | `uiName` | `ui` | The name shown. |
 
 ## makeSingleSurface
@@ -9403,14 +9437,14 @@ Arguments: surfaces
 
 | Flag | Short | Description |
 | --- | --- | --- |
-| `stitchTolerance` | `st` | Accepted for Maya scripts. |
+| `stitchTolerance` | `st` | Accepted for existing scripts. |
 | `constructionHistory` | `ch` | Keep the node (on by default). |
 | `name` | `n` | The new object's name. |
-| `object` | `o` | Accepted for Maya scripts. |
-| `range` | `rn` | Accepted for Maya scripts. |
-| `caching` | `cch` | Accepted for Maya scripts. |
-| `nodeState` | `nds` | Accepted for Maya scripts. |
-| `tolerance` | `tol` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
+| `range` | `rn` | Accepted for existing scripts. |
+| `caching` | `cch` | Accepted for existing scripts. |
+| `nodeState` | `nds` | Accepted for existing scripts. |
+| `tolerance` | `tol` | Accepted for existing scripts. |
 | `polygon` | `po` | 0 NURBS, 1 polygons. |
 
 ## makeUnique
@@ -9667,7 +9701,7 @@ Arguments: objects, then the target
 | `rotation` | `rot` | Match rotation. |
 | `scale` | `scl` | Match scale. |
 | `pivots` | `piv` | Match the pivots. |
-| `positionConstraint` | `pcp` | Accepted for Maya scripts. |
+| `positionConstraint` | `pcp` | Accepted for existing scripts. |
 
 ## mayaHIKgetInputCharacter
 
@@ -9677,7 +9711,7 @@ Arguments: character
 
 ## mayaUSDExport
 
-Write the scene to a USD file: usda, usdc, usdz or usd by the file's extension. Flags as the Maya-USD plug-in's. Returns the file.
+Write the scene to a USD file: usda, usdc, usdz or usd by the file's extension. Flags as the reference's USD plug-in's. Returns the file.
 
 | Flag | Short | Description |
 | --- | --- | --- |
@@ -9731,7 +9765,7 @@ Write the scene to a USD file: usda, usdc, usdz or usd by the file's extension. 
 
 ## mayaUSDImport
 
-Read a USD file into the scene as nodes. Flags as the Maya-USD plug-in's. Returns the new root transforms.
+Read a USD file into the scene as nodes. Flags as the reference's USD plug-in's. Returns the new root transforms.
 
 | Flag | Short | Description |
 | --- | --- | --- |
@@ -9786,7 +9820,7 @@ Arguments: source destination
 
 ## mayaUsdEditAsMaya
 
-Edit As Maya Data: a prim becomes nodes under __mayaUsd__, its USD copy hidden. Returns the top node.
+Edit As Scene Data: a prim becomes nodes under __mayaUsd__, its USD copy hidden. Returns the top node.
 
 Arguments: proxy,/path
 
@@ -9804,7 +9838,7 @@ Arguments: proxy
 
 ## mayaUsdLayerEditor
 
-Edit a layer of a stage, named by identifier. Flags as Maya-USD's: sublayers, clearing, discarding edits, muting, locking.
+Edit a layer of a stage, named by identifier. Flags as the reference's USD plug-in's: sublayers, clearing, discarding edits, muting, locking.
 
 Arguments: layer identifier
 
@@ -9815,7 +9849,7 @@ Arguments: layer identifier
 | `addAnonymous` | `aa` | Add a new anonymous sublayer of this name. |
 | `discardEdits` | `de` | Back to the file's contents. |
 | `clear` | `cl` | Empty the layer. |
-| `flatten` | `fl` | Compose everything into the root layer. Less than Maya-USD: references and payloads flatten too. |
+| `flatten` | `fl` | Compose everything into the root layer. Less than the reference's USD plug-in: references and payloads flatten too. |
 | `muteLayer` | `mt` | On or off, and the proxy. |
 | `lockLayer` | `lk` | 0 unlocked or 1 locked, and the proxy. |
 | `skipSystemLocked` | `ssl` | Accepted. |
@@ -9858,7 +9892,7 @@ A proxy shape on a new anonymous layer. Returns the shape.
 
 ## menu
 
-Script UI: menu, with create, edit and query as in Maya's command.
+Script UI: menu, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -9907,7 +9941,7 @@ Arguments: name
 
 ## menuBarLayout
 
-Script UI: menuBarLayout, with create, edit and query as in Maya's command.
+Script UI: menuBarLayout, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -9949,7 +9983,7 @@ Arguments: name
 
 ## menuItem
 
-Script UI: menuItem, with create, edit and query as in Maya's command.
+Script UI: menuItem, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -10294,15 +10328,15 @@ Arguments: objects
 | `parent` | `pa` | The parent's axes. |
 | `worldSpaceDistance` | `wd` | Accepted: distances are in world units already. |
 | `preserveChildPosition` | `pcp` | Children stay where they are in the world. |
-| `preserveGeometryPosition` | `pgp` | Accepted for Maya scripts. |
-| `rotatePivotRelative` | `rpr` | Accepted for Maya scripts. |
-| `scalePivotRelative` | `spr` | Accepted for Maya scripts. |
-| `deletePriorHistory` | `dph` | Accepted for Maya scripts. |
-| `xformConstraint` | `xc` | Accepted for Maya scripts. |
-| `constrainAlongNormal` | `xn` | Accepted for Maya scripts. |
-| `orientJoint` | `oj` | Accepted for Maya scripts. |
-| `secondaryAxisOrient` | `sao` | Accepted for Maya scripts. |
-| `componentSpace` | `cs` | Accepted for Maya scripts. |
+| `preserveGeometryPosition` | `pgp` | Accepted for existing scripts. |
+| `rotatePivotRelative` | `rpr` | Accepted for existing scripts. |
+| `scalePivotRelative` | `spr` | Accepted for existing scripts. |
+| `deletePriorHistory` | `dph` | Accepted for existing scripts. |
+| `xformConstraint` | `xc` | Accepted for existing scripts. |
+| `constrainAlongNormal` | `xn` | Accepted for existing scripts. |
+| `orientJoint` | `oj` | Accepted for existing scripts. |
+| `secondaryAxisOrient` | `sao` | Accepted for existing scripts. |
+| `componentSpace` | `cs` | Accepted for existing scripts. |
 | `x` |  | This axis: a value, or on to read the positional value. |
 | `y` |  | This axis. |
 | `z` |  | This axis. |
@@ -10359,7 +10393,7 @@ Arguments: modifier
 
 ## movePivot
 
-Move objects' pivots without moving the objects: -by a world offset, or -to a world position. Maya spells it move -r x y z obj.scalePivot obj.rotatePivot.
+Move objects' pivots without moving the objects: -by a world offset, or -to a world position. The reference spells it move -r x y z obj.scalePivot obj.rotatePivot.
 
 Arguments: objects
 
@@ -10461,29 +10495,29 @@ Arguments: name
 
 ## namespace
 
-Maya's namespace command: -add, -set, -rm, -ex, -q, -mnr, -dnc, -ren.
+The reference's namespace command: -add, -set, -rm, -ex, -q, -mnr, -dnc, -ren.
 
 Arguments: [namespace]
 
 | Flag | Short | Description |
 | --- | --- | --- |
 | `query` | `q` | Query. |
-| `addNamespace` | `add` | As in Maya. |
-| `setNamespace` | `set` | As in Maya. |
-| `removeNamespace` | `rm` | As in Maya. |
-| `parent` | `p` | As in Maya. |
-| `exists` | `ex` | As in Maya. |
-| `relativeNames` | `rel` | As in Maya. |
-| `isRootNamespace` | `ir` | As in Maya. |
-| `validateName` | `vn` | As in Maya. |
-| `mergeNamespaceWithRoot` | `mnr` | As in Maya. |
-| `mergeNamespaceWithParent` | `mnp` | As in Maya. |
-| `deleteNamespaceContent` | `dnc` | As in Maya. |
-| `rename` | `ren` | As in Maya. |
-| `moveNamespace` | `mv` | As in Maya. |
-| `force` | `f` | As in Maya. |
-| `recurse` | `r` | As in Maya. |
-| `absoluteName` | `an` | As in Maya. |
+| `addNamespace` | `add` | As in the reference. |
+| `setNamespace` | `set` | As in the reference. |
+| `removeNamespace` | `rm` | As in the reference. |
+| `parent` | `p` | As in the reference. |
+| `exists` | `ex` | As in the reference. |
+| `relativeNames` | `rel` | As in the reference. |
+| `isRootNamespace` | `ir` | As in the reference. |
+| `validateName` | `vn` | As in the reference. |
+| `mergeNamespaceWithRoot` | `mnr` | As in the reference. |
+| `mergeNamespaceWithParent` | `mnp` | As in the reference. |
+| `deleteNamespaceContent` | `dnc` | As in the reference. |
+| `rename` | `ren` | As in the reference. |
+| `moveNamespace` | `mv` | As in the reference. |
+| `force` | `f` | As in the reference. |
+| `recurse` | `r` | As in the reference. |
+| `absoluteName` | `an` | As in the reference. |
 
 ## namespaceInfo
 
@@ -10493,18 +10527,18 @@ Arguments: [namespace]
 
 | Flag | Short | Description |
 | --- | --- | --- |
-| `currentNamespace` | `cur` | As in Maya. |
-| `listOnlyNamespaces` | `lon` | As in Maya. |
-| `listOnlyDependencyNodes` | `lod` | As in Maya. |
-| `listNamespace` | `ls` | As in Maya. |
-| `recurse` | `r` | As in Maya. |
-| `dagPath` | `dp` | As in Maya. |
-| `fullName` | `fn` | As in Maya. |
-| `absoluteName` | `an` | As in Maya. |
-| `baseName` | `bn` | As in Maya. |
-| `parent` | `p` | As in Maya. |
-| `isRootNamespace` | `ir` | As in Maya. |
-| `shortName` | `sn` | As in Maya. |
+| `currentNamespace` | `cur` | As in the reference. |
+| `listOnlyNamespaces` | `lon` | As in the reference. |
+| `listOnlyDependencyNodes` | `lod` | As in the reference. |
+| `listNamespace` | `ls` | As in the reference. |
+| `recurse` | `r` | As in the reference. |
+| `dagPath` | `dp` | As in the reference. |
+| `fullName` | `fn` | As in the reference. |
+| `absoluteName` | `an` | As in the reference. |
+| `baseName` | `bn` | As in the reference. |
+| `parent` | `p` | As in the reference. |
+| `isRootNamespace` | `ir` | As in the reference. |
+| `shortName` | `sn` | As in the reference. |
 
 ## namingConvention
 
@@ -10578,8 +10612,8 @@ Arguments: source, then target
 | Flag | Short | Description |
 | --- | --- | --- |
 | `copyDynamicAttrs` | `cda` | Bring added attributes the source lacks. |
-| `disableAPICallbacks` | `dsa` | Accepted for Maya scripts; has no effect. |
-| `disableScriptJobCallbacks` | `dsj` | Accepted for Maya scripts; has no effect. |
+| `disableAPICallbacks` | `dsa` | Accepted for existing scripts; has no effect. |
+| `disableScriptJobCallbacks` | `dsj` | Accepted for existing scripts; has no effect. |
 | `disconnectUnmatchedAttrs` | `dua` | Drop connections the source has no attribute for. |
 | `force` | `f` | Try even when the types differ. |
 | `swapNames` | `sn` | Swap the names. |
@@ -10587,7 +10621,7 @@ Arguments: source, then target
 
 ## nodeEditor
 
-Script UI: nodeEditor, with create, edit and query as in Maya's command.
+Script UI: nodeEditor, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -10714,12 +10748,12 @@ Arguments: name
 
 ## nodePreset
 
-Save and load a node's settings by name: -sv node name, -ld node name, -ls node, -del node name, -ex node name, -ivn name; -atr limits what is saved. Less than Maya: multis and hidden attributes are left out, files are JSON, -ctm does nothing.
+Save and load a node's settings by name: -sv node name, -ld node name, -ls node, -del node name, -ex node name, -ivn name; -atr limits what is saved. Less than the reference: multis and hidden attributes are left out, files are JSON, -ctm does nothing.
 
 | Flag | Short | Description |
 | --- | --- | --- |
 | `attributes` | `atr` | Attributes to save, separated by spaces. |
-| `custom` | `ctm` | Accepted for Maya scripts; has no effect. |
+| `custom` | `ctm` | Accepted for existing scripts; has no effect. |
 | `delete` | `delete` | Node and preset. |
 | `exists` | `ex` | Node and preset. |
 | `isValidName` | `ivn` | A name to check. |
@@ -10794,14 +10828,14 @@ Arguments: two surfaces
 | Flag | Short | Description |
 | --- | --- | --- |
 | `operation` | `op` | 0 union, 1 difference, 2 intersection. |
-| `smartConnection` | `sc` | Accepted for Maya scripts. |
-| `constructionHistory` | `ch` | Accepted for Maya scripts. |
-| `nsrfsInFirstShell` | `nsf` | Accepted for Maya scripts. |
-| `name` | `n` | Accepted for Maya scripts. |
+| `smartConnection` | `sc` | Accepted for existing scripts. |
+| `constructionHistory` | `ch` | Accepted for existing scripts. |
+| `nsrfsInFirstShell` | `nsf` | Accepted for existing scripts. |
+| `name` | `n` | Accepted for existing scripts. |
 
 ## nurbsCopyUVSet
 
-Copy the implicit parameterization to the surface's explicit set, as Maya's debugging command does. Returns true. The values are evenly spaced by CV.
+Copy the implicit parameterization to the surface's explicit set, as the reference's debugging command does. Returns true. The values are evenly spaced by CV.
 
 Arguments: a surface (the selection when none)
 
@@ -10815,7 +10849,7 @@ Create a cube of six NURBS patches under a group, with a makeNurbCube node. Retu
 | `pivot` | `p` | The centre. |
 | `constructionHistory` | `ch` | Keep the make node (on by default). |
 | `name` | `n` | Name of the transform. |
-| `object` | `o` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
 | `polygon` | `po` | 1 makes polygons. |
 | `width` | `w` | The width (1). |
 | `lengthRatio` | `lr` | Length over width (1). |
@@ -10826,7 +10860,7 @@ Create a cube of six NURBS patches under a group, with a makeNurbCube node. Retu
 
 ## nurbsCurveToBezier
 
-Make a curve Bezier: a cubic with every third CV an anchor, keeping its shape. Other degrees are refit and change a little. Returns [object, node]. Less than Maya: the shape stays a nurbsCurve with an added attribute marking it.
+Make a curve Bezier: a cubic with every third CV an anchor, keeping its shape. Other degrees are refit and change a little. Returns [object, node]. Less than the reference: the shape stays a nurbsCurve with an added attribute marking it.
 
 Arguments: curves (the selection when none)
 
@@ -10835,7 +10869,7 @@ Arguments: curves (the selection when none)
 | `constructionHistory` | `ch` | Keep a history node (on by default). |
 | `replaceOriginal` | `rpo` | Change the curve itself (on by default). |
 | `name` | `n` | Name of a new curve. |
-| `object` | `o` | Make an object (accepted for Maya scripts). |
+| `object` | `o` | Make an object (accepted for existing scripts). |
 
 ## nurbsEditUV
 
@@ -10869,7 +10903,7 @@ Create a NURBS plane with a makeNurbPlane node. Returns [nurbsPlane1, makeNurbPl
 | `pivot` | `p` | The centre. |
 | `constructionHistory` | `ch` | Keep the make node (on by default). |
 | `name` | `n` | Name of the transform. |
-| `object` | `o` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
 | `polygon` | `po` | 1 makes polygons. |
 | `width` | `w` | The width (1). |
 | `lengthRatio` | `lr` | Length over width (1). |
@@ -10920,23 +10954,23 @@ Arguments: surfaces (the selection when none)
 | `uNumber` | `un` | How many along U (3). |
 | `vType` | `vt` | 1 per surface in 3D, 2 per surface, 3 per span (3). |
 | `vNumber` | `vn` | How many along V (3). |
-| `chordHeightRatio` | `chr` | Accepted for Maya scripts. |
-| `minEdgeLength` | `mel` | Accepted for Maya scripts. |
-| `delta` | `d` | Accepted for Maya scripts. |
-| `useChordHeight` | `uch` | Accepted for Maya scripts. |
-| `useChordHeightRatio` | `ucr` | Accepted for Maya scripts. |
-| `chordHeight` | `cht` | Accepted for Maya scripts. |
-| `edgeSwap` | `es` | Accepted for Maya scripts. |
-| `normalizeTrimmedUVRange` | `ntr` | Accepted for Maya scripts. |
-| `matchRenderTessellation` | `mrt` | Accepted for Maya scripts. |
-| `useSurfaceShader` | `uss` | Accepted for Maya scripts. |
-| `matchNormalDir` | `mnd` | Accepted for Maya scripts. |
+| `chordHeightRatio` | `chr` | Accepted for existing scripts. |
+| `minEdgeLength` | `mel` | Accepted for existing scripts. |
+| `delta` | `d` | Accepted for existing scripts. |
+| `useChordHeight` | `uch` | Accepted for existing scripts. |
+| `useChordHeightRatio` | `ucr` | Accepted for existing scripts. |
+| `chordHeight` | `cht` | Accepted for existing scripts. |
+| `edgeSwap` | `es` | Accepted for existing scripts. |
+| `normalizeTrimmedUVRange` | `ntr` | Accepted for existing scripts. |
+| `matchRenderTessellation` | `mrt` | Accepted for existing scripts. |
+| `useSurfaceShader` | `uss` | Accepted for existing scripts. |
+| `matchNormalDir` | `mnd` | Accepted for existing scripts. |
 | `constructionHistory` | `ch` | Keep the node (on by default). |
 | `name` | `n` | Name of the mesh. |
 
 ## nurbsUVSet
 
-Explicit UVs on a surface: -c makes the set from the implicit ones, -ue switches to it. Returns true. Less than Maya: one set per surface, the implicit values are evenly spaced by CV rather than taken from the knots, and nothing draws from them yet.
+Explicit UVs on a surface: -c makes the set from the implicit ones, -ue switches to it. Returns true. Less than the reference: one set per surface, the implicit values are evenly spaced by CV rather than taken from the knots, and nothing draws from them yet.
 
 Arguments: a surface (the selection when none)
 
@@ -11000,12 +11034,12 @@ Arguments: curves (the selection when none)
 | --- | --- | --- |
 | `distance` | `d` | How far. |
 | `normal` | `nr` | The plane's normal. |
-| `useGivenNormal` | `ugn` | Accepted for Maya scripts. |
-| `tolerance` | `tol` | Accepted for Maya scripts. |
+| `useGivenNormal` | `ugn` | Accepted for existing scripts. |
+| `tolerance` | `tol` | Accepted for existing scripts. |
 | `constructionHistory` | `ch` | Keep a history node (on by default). |
 | `replaceOriginal` | `rpo` | Change the curve itself (on by default). |
 | `name` | `n` | Name of a new curve. |
-| `object` | `o` | Make an object (accepted for Maya scripts). |
+| `object` | `o` | Make an object (accepted for existing scripts). |
 
 ## offsetCurveOnSurface
 
@@ -11019,7 +11053,7 @@ Arguments: a curve on a surface
 | `constructionHistory` | `ch` | Keep a history node (on by default). |
 | `replaceOriginal` | `rpo` | Change the curve itself (on by default). |
 | `name` | `n` | Name of a new curve. |
-| `object` | `o` | Make an object (accepted for Maya scripts). |
+| `object` | `o` | Make an object (accepted for existing scripts). |
 
 ## offsetSurface
 
@@ -11030,16 +11064,16 @@ Arguments: surfaces (the selection when none)
 | Flag | Short | Description |
 | --- | --- | --- |
 | `distance` | `d` | How far (1). |
-| `method` | `m` | Accepted for Maya scripts. |
+| `method` | `m` | Accepted for existing scripts. |
 | `constructionHistory` | `ch` | Keep a history node (on by default). |
 | `replaceOriginal` | `rpo` | Change the surface itself (on by default). |
 | `name` | `n` | Name of a new surface. |
-| `object` | `o` | Accepted for Maya scripts. |
-| `polygon` | `po` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
+| `polygon` | `po` | Accepted for existing scripts. |
 
 ## optionMenu
 
-Script UI: optionMenu, with create, edit and query as in Maya's command.
+Script UI: optionMenu, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -11086,7 +11120,7 @@ Arguments: name
 
 ## optionMenuGrp
 
-Script UI: optionMenuGrp, with create, edit and query as in Maya's command.
+Script UI: optionMenuGrp, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -11262,7 +11296,7 @@ Arguments: order (xyz), then joints
 
 ## outlinerEditor
 
-Script UI: outlinerEditor, with create, edit and query as in Maya's command.
+Script UI: outlinerEditor, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -11451,7 +11485,7 @@ Arguments: [camera]
 
 ## paneLayout
 
-Script UI: paneLayout, with create, edit and query as in Maya's command.
+Script UI: paneLayout, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -11588,8 +11622,8 @@ Arguments: objects... parent
 | `addObject` | `add` | Add as an instance under the parent. |
 | `removeObject` | `rm` | Remove this instance. |
 | `shape` | `s` | Move the shapes, not the transforms. |
-| `noConnections` | `nc` | Accepted for Maya scripts. |
-| `noInvScale` | `nis` | Accepted for Maya scripts. |
+| `noConnections` | `nc` | Accepted for existing scripts. |
+| `noInvScale` | `nis` | Accepted for existing scripts. |
 
 ## parentConstraint
 
@@ -11654,8 +11688,8 @@ Arguments: objects or plugs (the selection when none)
 | `timeOffset` | `to` | Added to the paste time. |
 | `valueOffset` | `vo` | Added to the values. |
 | `copies` | `cp` | How many times to paste. |
-| `connect` | `c` | Accepted for Maya scripts. |
-| `clipboard` | `cb` | Accepted for Maya scripts. |
+| `connect` | `c` | Accepted for existing scripts. |
+| `clipboard` | `cb` | Accepted for existing scripts. |
 
 ## pathAnimation
 
@@ -11708,11 +11742,11 @@ Walk the selection through the hierarchy like the arrow keys: up to the parent, 
 | Flag | Short | Description |
 | --- | --- | --- |
 | `direction` | `d` | up, down, left or right. |
-| `type` | `typ` | Accepted for Maya scripts. |
+| `type` | `typ` | Accepted for existing scripts. |
 
 ## picture
 
-Script UI: picture, with create, edit and query as in Maya's command.
+Script UI: picture, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -11768,11 +11802,11 @@ Arguments: a closed curve (the selection when none)
 
 | Flag | Short | Description |
 | --- | --- | --- |
-| `degree` | `d` | Accepted for Maya scripts. |
-| `tolerance` | `tol` | Accepted for Maya scripts. |
+| `degree` | `d` | Accepted for existing scripts. |
+| `tolerance` | `tol` | Accepted for existing scripts. |
 | `polygon` | `po` | 0 NURBS (the default), 1 polygons. |
 | `constructionHistory` | `ch` | Keep the node (on by default). |
-| `range` | `rn` | Accepted for Maya scripts. |
+| `range` | `rn` | Accepted for existing scripts. |
 | `name` | `n` | Name of the new object. |
 
 ## planarSrf
@@ -11783,11 +11817,11 @@ Arguments: a closed curve (the selection when none)
 
 | Flag | Short | Description |
 | --- | --- | --- |
-| `degree` | `d` | Accepted for Maya scripts. |
-| `tolerance` | `tol` | Accepted for Maya scripts. |
+| `degree` | `d` | Accepted for existing scripts. |
+| `tolerance` | `tol` | Accepted for existing scripts. |
 | `polygon` | `po` | 0 NURBS (the default), 1 polygons. |
 | `constructionHistory` | `ch` | Keep the node (on by default). |
-| `range` | `rn` | Accepted for Maya scripts. |
+| `range` | `rn` | Accepted for existing scripts. |
 | `name` | `n` | Name of the new object. |
 
 ## plane
@@ -11814,8 +11848,8 @@ Start or stop playback: -st on or off, -f forward or back. -w plays the range th
 | `forward` | `f` | Play forwards (on by default). |
 | `state` | `st` | Playing or not. |
 | `wait` | `w` | Play through before returning. |
-| `record` | `rec` | Accepted for Maya scripts: there are no dynamics to record. |
-| `sound` | `s` | Accepted for Maya scripts. |
+| `record` | `rec` | Accepted for existing scripts: there are no dynamics to record. |
+| `sound` | `s` | Accepted for existing scripts. |
 
 ## playbackOptions
 
@@ -11930,11 +11964,11 @@ Arguments: a point on a curve
 | --- | --- | --- |
 | `position` | `p` | Where it goes. |
 | `weight` | `w` | How much (1). |
-| `pointWeight` | `pw` | Accepted for Maya scripts. |
+| `pointWeight` | `pw` | Accepted for existing scripts. |
 | `constructionHistory` | `ch` | Keep the node (on by default). |
 | `replaceOriginal` | `rpo` | Accepted: the curve itself changes. |
-| `name` | `n` | Accepted for Maya scripts. |
-| `object` | `o` | Accepted for Maya scripts. |
+| `name` | `n` | Accepted for existing scripts. |
+| `object` | `o` | Accepted for existing scripts. |
 
 ## pointLight
 
@@ -11973,7 +12007,7 @@ Arguments: a curve (the selection when none)
 | `position` | `p` | Ask for the point. |
 | `tangent` | `t` | Ask for the tangent. |
 | `normalizedTangent` | `nt` | Ask for the unit tangent. |
-| `constructionHistory` | `ch` | Accepted for Maya scripts. |
+| `constructionHistory` | `ch` | Accepted for existing scripts. |
 
 ## pointOnCurveDeformer
 
@@ -12040,7 +12074,7 @@ Arguments: a surface (the selection when none)
 | `tangentV` | `tv` | Ask for the V derivative. |
 | `normalizedTangentU` | `ntu` | Ask for the unit U tangent. |
 | `normalizedTangentV` | `ntv` | Ask for the unit V tangent. |
-| `constructionHistory` | `ch` | Accepted for Maya scripts. |
+| `constructionHistory` | `ch` | Accepted for existing scripts. |
 
 ## pointPosition
 
@@ -12139,7 +12173,7 @@ Arguments: components or meshes (the selection when none)
 | `append` | `a` | An existing vertex. Repeat it. |
 | `point` | `p` | A new point: x y z. Repeat it. |
 | `items` |  | In order: {vertex: id} or {position: [x, y, z]}. |
-| `constructionHistory` | `ch` | Accepted for Maya scripts. |
+| `constructionHistory` | `ch` | Accepted for existing scripts. |
 | `hole` | `h` | See the command reference. |
 | `texture` | `tx` | See the command reference. |
 | `vertex` | `v` | See the command reference. |
@@ -12157,18 +12191,18 @@ Arguments: faces or meshes
 | Flag | Short | Description |
 | --- | --- | --- |
 | `percentageSpace` | `ps` | Space between shells, percent of the square. |
-| `layoutMethod` | `lm` | Accepted for Maya scripts. |
-| `layout` | `l` | Accepted for Maya scripts. |
-| `percentageSpaceLegacy` | `pb` | Accepted for Maya scripts. |
-| `insertBeforeDeformers` | `ibd` | Accepted for Maya scripts. |
-| `createNewMap` | `cm` | Accepted for Maya scripts. |
-| `scaleMode` | `sc` | Accepted for Maya scripts. |
-| `optimize` | `o` | Accepted for Maya scripts. |
-| `worldSpace` | `ws` | Accepted for Maya scripts. |
-| `uvSetName` | `uvs` | Accepted for Maya scripts. |
-| `constructionHistory` | `ch` | Accepted for Maya scripts. |
-| `name` | `n` | Accepted for Maya scripts. |
-| `planes` | `p` | Accepted for Maya scripts (six planes). |
+| `layoutMethod` | `lm` | Accepted for existing scripts. |
+| `layout` | `l` | Accepted for existing scripts. |
+| `percentageSpaceLegacy` | `pb` | Accepted for existing scripts. |
+| `insertBeforeDeformers` | `ibd` | Accepted for existing scripts. |
+| `createNewMap` | `cm` | Accepted for existing scripts. |
+| `scaleMode` | `sc` | Accepted for existing scripts. |
+| `optimize` | `o` | Accepted for existing scripts. |
+| `worldSpace` | `ws` | Accepted for existing scripts. |
+| `uvSetName` | `uvs` | Accepted for existing scripts. |
+| `constructionHistory` | `ch` | Accepted for existing scripts. |
+| `name` | `n` | Accepted for existing scripts. |
+| `planes` | `p` | Accepted for existing scripts (six planes). |
 
 ## polyAverageColor
 
@@ -12317,8 +12351,8 @@ Arguments: components or meshes (the selection when none)
 | `stringData` | `sd` | Refused: numbers only. |
 | `binaryData` | `bnd` | Refused: numbers only. |
 | `reset` | `rst` | Remove the data. |
-| `rescale` | `rs` | Accepted for Maya scripts. |
-| `shape` | `sh` | Accepted for Maya scripts. |
+| `rescale` | `rs` | Accepted for existing scripts. |
+| `shape` | `sh` | Accepted for existing scripts. |
 | `blindIds` |  | The components, worked out from the arguments. |
 | `blindValue` |  | The value, worked out from the arguments. |
 
@@ -12494,7 +12528,7 @@ Create a Capsule mesh. Returns [mesh, generator] (generator is None with generat
 | `subdivisionsHeight` | `sh` | Segments along the straight part. |
 | `subdivisionsCaps` | `sc` | Rings on each rounded end. |
 | `baseAtOrigin` |  | Sit on the ground. |
-| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as Maya's -ax 1 0 0); the scene up axis when left out. |
+| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as the reference's -ax 1 0 0); the scene up axis when left out. |
 
 ## polyChamferVtx
 
@@ -12868,7 +12902,7 @@ Arguments: two meshes
 | `uvSetIndices` | `iuv` | Compare how UVs are shared. |
 | `colorSets` | `c` | Compare colour sets. |
 | `colorSetIndices` | `ic` | Compare colour values. |
-| `userNormals` | `un` | Accepted for Maya scripts. |
+| `userNormals` | `un` | Accepted for existing scripts. |
 
 ## polyCone
 
@@ -12903,7 +12937,7 @@ Create a Cone mesh. Returns [mesh, generator] (generator is None with generator=
 | `subdivisionsX` | `sx` | Another name for the attribute it sets. |
 | `subdivisionsY` | `sy` | Another name for the attribute it sets. |
 | `subdivisionsZ` | `sz` | Another name for the attribute it sets. |
-| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as Maya's -ax 1 0 0); the scene up axis when left out. |
+| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as the reference's -ax 1 0 0); the scene up axis when left out. |
 
 ## polyConform
 
@@ -13012,7 +13046,7 @@ Arguments: edges (the selection when none)
 | Flag | Short | Description |
 | --- | --- | --- |
 | `value` | `v` | Crease value: 0 to 10. |
-| `relativeValue` | `rv` | Accepted for Maya scripts. |
+| `relativeValue` | `rv` | Accepted for existing scripts. |
 | `query` | `q` | Query mode. |
 | `operation` | `op` | See the command reference. |
 | `vertexValue` | `vv` | See the command reference. |
@@ -13114,7 +13148,7 @@ Create a Cube mesh. Returns [mesh, generator] (generator is None with generator=
 | `subdivisionsX` | `sx` | Another name for the attribute it sets. |
 | `subdivisionsY` | `sy` | Another name for the attribute it sets. |
 | `subdivisionsZ` | `sz` | Another name for the attribute it sets. |
-| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as Maya's -ax 1 0 0); the scene up axis when left out. |
+| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as the reference's -ax 1 0 0); the scene up axis when left out. |
 
 ## polyCut
 
@@ -13136,7 +13170,7 @@ Arguments: components or meshes (the selection when none)
 | `deleteFaces` | `df` | Delete the side the normal points to. |
 | `extractFaces` | `ef` | Pull that side off. |
 | `extractOffset` | `eo` | How far. |
-| `onObject` | `oo` | Accepted for Maya scripts. |
+| `onObject` | `oo` | Accepted for existing scripts. |
 | `worldSpace` | `ws` | The plane is in world space (always). |
 | `worldInverse` |  | The object's inverse world matrix when the edit was made. |
 
@@ -13194,7 +13228,7 @@ Create a Cylinder mesh. Returns [mesh, generator] (generator is None with genera
 | `subdivisionsX` | `sx` | Another name for the attribute it sets. |
 | `subdivisionsY` | `sy` | Another name for the attribute it sets. |
 | `subdivisionsZ` | `sz` | Another name for the attribute it sets. |
-| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as Maya's -ax 1 0 0); the scene up axis when left out. |
+| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as the reference's -ax 1 0 0); the scene up axis when left out. |
 
 ## polyDelEdge
 
@@ -13278,7 +13312,7 @@ Create a Disc mesh. Returns [mesh, generator] (generator is None with generator=
 | `sides` | `s` | Another name for the attribute it sets. |
 | `subdivisions` | `sd` | Another name for the attribute it sets. |
 | `subdivisionMode` | `sm` | Another name for the attribute it sets. |
-| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as Maya's -ax 1 0 0); the scene up axis when left out. |
+| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as the reference's -ax 1 0 0); the scene up axis when left out. |
 
 ## polyDissolve
 
@@ -13292,8 +13326,8 @@ Arguments: meshes
 
 | Flag | Short | Description |
 | --- | --- | --- |
-| `removeOriginalFromShaders` | `ros` | Accepted for Maya scripts. |
-| `renameChildren` | `rc` | Accepted for Maya scripts. |
+| `removeOriginalFromShaders` | `ros` | Accepted for existing scripts. |
+| `renameChildren` | `rc` | Accepted for existing scripts. |
 
 ## polyDuplicateEdge
 
@@ -13323,7 +13357,7 @@ Copy the selected faces into a separate shell of the same mesh and select the co
 
 ## polyEditEdgeFlow
 
-Move the selected edge loops onto the curvature of the surface around them (Maya's Edit Edge Flow). Each vertex lands on a curve through the nearest unselected vertices across the loop, shaped by the vertices beyond them, and neighbouring selected loops spread evenly between those, as subdividing would place them. Selected vertices off any chain, and face selections, fit both directions across each vertex.
+Move the selected edge loops onto the curvature of the surface around them (the reference's Edit Edge Flow). Each vertex lands on a curve through the nearest unselected vertices across the loop, shaped by the vertices beyond them, and neighbouring selected loops spread evenly between those, as subdividing would place them. Selected vertices off any chain, and face selections, fit both directions across each vertex.
 
 Arguments: components or meshes (the selection when none)
 
@@ -13367,9 +13401,9 @@ Arguments: UVs, faces or meshes (the selection when none)
 | Flag | Short | Description |
 | --- | --- | --- |
 | `constructionHistory` | `ch` | Accepted: a node is made while history is on. |
-| `name` | `n` | Accepted for Maya scripts. |
-| `caching` | `cch` | Accepted for Maya scripts. |
-| `nodeState` | `nds` | Accepted for Maya scripts. |
+| `name` | `n` | Accepted for existing scripts. |
+| `caching` | `cch` | Accepted for existing scripts. |
+| `nodeState` | `nds` | Accepted for existing scripts. |
 | `uValue` | `u` | U offset, or value with -r 0. |
 | `vValue` | `v` | V offset, or value with -r 0. |
 | `scaleU` | `su` | U scale. |
@@ -13379,7 +13413,7 @@ Arguments: UVs, faces or meshes (the selection when none)
 | `pivotU` | `pu` | Pivot U. |
 | `pivotV` | `pv` | Pivot V. |
 | `relative` | `r` | Offsets (the default) or values. |
-| `rotation` | `rot` | Accepted for Maya scripts. |
+| `rotation` | `rot` | Accepted for existing scripts. |
 | `query` | `q` | Return u, v of each UV. |
 
 ## polyEvaluate
@@ -13402,9 +13436,9 @@ Arguments: meshes or components (the selection when none)
 | `boundingBoxComponent` | `bc` | World bounds of the selected components. |
 | `format` | `fmt` | The counts as text. |
 | `accurateEvaluation` | `ae` | Accepted: counts are always exact here. |
-| `ac` | `ac` | Accepted for Maya scripts. |
+| `ac` | `ac` | Accepted for existing scripts. |
 | `triangleComponent` | `tc` | Triangle count of the selected components. |
-| `usu` | `usu` | Accepted for Maya scripts. |
+| `usu` | `usu` | Accepted for existing scripts. |
 | `vertexComponent` | `vc` | Selected vertex count. |
 | `edgeComponent` | `ec` | Selected edge count. |
 | `faceComponent` | `fc` | Selected face count. |
@@ -13681,8 +13715,8 @@ Arguments: components or meshes (the selection when none)
 | `scaleFactor` | `sf` | Scale. |
 | `clampMin` | `cmn` | Lowest value. |
 | `clampMax` | `cmx` | Highest value. |
-| `computeShadows` | `cs` | Accepted for Maya scripts. |
-| `sampleByFace` | `sbf` | Accepted for Maya scripts. |
+| `computeShadows` | `cs` | Accepted for existing scripts. |
+| `sampleByFace` | `sbf` | Accepted for existing scripts. |
 
 ## polyGridFill
 
@@ -13720,7 +13754,7 @@ Create a Helix mesh. Returns [mesh, generator] (generator is None with generator
 | `subdivisionsCoil` | `sco` | Segments per coil. |
 | `subdivisionsCaps` | `sc` | Rings on each end. |
 | `roundCap` | `rcp` | Accepted; the ends stay flat. |
-| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as Maya's -ax 1 0 0); the scene up axis when left out. |
+| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as the reference's -ax 1 0 0); the scene up axis when left out. |
 
 ## polyHole
 
@@ -13761,7 +13795,7 @@ Create a IcoSphere mesh. Returns [mesh, generator] (generator is None with gener
 | `subdivisions` |  | 1 is an icosahedron; each level splits every triangle in four. |
 | `baseAtOrigin` |  | Sit on the ground. |
 | `fraction` |  | Portion of the height kept, from the top: 1 is whole, 0.5 a dome open at the bottom. |
-| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as Maya's -ax 1 0 0); the scene up axis when left out. |
+| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as the reference's -ax 1 0 0); the scene up axis when left out. |
 
 ## polyInfo
 
@@ -13814,7 +13848,7 @@ Inset the selected faces.
 
 ## polyInstallAction
 
-Prepare for a poly action: -ic the component mode and for polyCloseBorder a border constraint, -id show borders, -cs convert the selection, -uc and -ud take them off. An action alone does -ic -id; no arguments does -uc -ud. Returns the selection on -ic. Less than Maya: only the actions it knows have a mode, and only polyCloseBorder a constraint and display.
+Prepare for a poly action: -ic the component mode and for polyCloseBorder a border constraint, -id show borders, -cs convert the selection, -uc and -ud take them off. An action alone does -ic -id; no arguments does -uc -ud. Returns the selection on -ic. Less than the reference: only the actions it knows have a mode, and only polyCloseBorder a constraint and display.
 
 Arguments: the action
 
@@ -13826,7 +13860,7 @@ Arguments: the action
 | `convertSelection` | `cs` | Convert selected objects to the action's components. |
 | `installConstraint` | `ic` | Install the mode and constraint. |
 | `installDisplay` | `id` | Install the display. |
-| `keepInstances` | `ki` | Accepted for Maya scripts; has no effect. |
+| `keepInstances` | `ki` | Accepted for existing scripts; has no effect. |
 | `uninstallConstraint` | `uc` | Take the constraint off. |
 | `uninstallDisplay` | `ud` | Take the display off. |
 
@@ -13917,9 +13951,9 @@ Arguments: UVs, faces or meshes (the selection when none)
 | Flag | Short | Description |
 | --- | --- | --- |
 | `constructionHistory` | `ch` | Accepted: a node is made while history is on. |
-| `name` | `n` | Accepted for Maya scripts. |
-| `caching` | `cch` | Accepted for Maya scripts. |
-| `nodeState` | `nds` | Accepted for Maya scripts. |
+| `name` | `n` | Accepted for existing scripts. |
+| `caching` | `cch` | Accepted for existing scripts. |
+| `nodeState` | `nds` | Accepted for existing scripts. |
 
 ## polyMapSew
 
@@ -13935,8 +13969,8 @@ Arguments: edges
 
 | Flag | Short | Description |
 | --- | --- | --- |
-| `nf` | `nf` | Accepted for Maya scripts. |
-| `lps` | `lps` | Accepted for Maya scripts. |
+| `nf` | `nf` | Accepted for existing scripts. |
+| `lps` | `lps` | Accepted for existing scripts. |
 
 ## polyMerge
 
@@ -14411,7 +14445,7 @@ Arguments: faces or meshes
 
 ## polyOffsetLoop
 
-Insert an edge loop either side of the selected edges, parallel to them (Maya's Offset Edge Loop). Partial loops end on a border, or inside the mesh by meeting at the end vertex or wrapping round it. Returns the new edges.
+Insert an edge loop either side of the selected edges, parallel to them (the reference's Offset Edge Loop). Partial loops end on a border, or inside the mesh by meeting at the end vertex or wrapping round it. Returns the new edges.
 
 | Flag | Short | Description |
 | --- | --- | --- |
@@ -14430,19 +14464,19 @@ Arguments: UVs, faces or meshes (the selection when none)
 | Flag | Short | Description |
 | --- | --- | --- |
 | `constructionHistory` | `ch` | Accepted: a node is made while history is on. |
-| `name` | `n` | Accepted for Maya scripts. |
-| `caching` | `cch` | Accepted for Maya scripts. |
-| `nodeState` | `nds` | Accepted for Maya scripts. |
+| `name` | `n` | Accepted for existing scripts. |
+| `caching` | `cch` | Accepted for existing scripts. |
+| `nodeState` | `nds` | Accepted for existing scripts. |
 | `iterations` | `i` | Accepted: the solver decides. |
 | `stoppingThreshold` | `ss` | Accepted: the solver decides. |
-| `useScale` | `us` | Accepted for Maya scripts. |
-| `scale` | `s` | Accepted for Maya scripts. |
-| `areaWeight` | `aw` | Accepted for Maya scripts. |
-| `globalBlend` | `gb` | Accepted for Maya scripts. |
-| `globalMethodBlend` | `gmb` | Accepted for Maya scripts. |
-| `optimizeAxis` | `oa` | Accepted for Maya scripts. |
-| `pinSelected` | `ps` | Accepted for Maya scripts. |
-| `pinUvBorder` | `pub` | Accepted for Maya scripts. |
+| `useScale` | `us` | Accepted for existing scripts. |
+| `scale` | `s` | Accepted for existing scripts. |
+| `areaWeight` | `aw` | Accepted for existing scripts. |
+| `globalBlend` | `gb` | Accepted for existing scripts. |
+| `globalMethodBlend` | `gmb` | Accepted for existing scripts. |
+| `optimizeAxis` | `oa` | Accepted for existing scripts. |
+| `pinSelected` | `ps` | Accepted for existing scripts. |
+| `pinUvBorder` | `pub` | Accepted for existing scripts. |
 | `applyToShell` | `as` | Accepted: shells are what it works on. |
 
 ## polyOptions
@@ -14521,11 +14555,11 @@ Arguments: meshes
 | `edge` | `ed` | Edges. |
 | `face` | `f` | Faces. |
 | `faceNorm` | `fn` | Face normals. |
-| `vertNorm` | `vn` | Accepted for Maya scripts. |
-| `triangle` | `t` | Accepted for Maya scripts. |
-| `uvValue` | `uv` | Accepted for Maya scripts. |
-| `color` | `c` | Accepted for Maya scripts. |
-| `group` | `g` | Accepted for Maya scripts. |
+| `vertNorm` | `vn` | Accepted for existing scripts. |
+| `triangle` | `t` | Accepted for existing scripts. |
+| `uvValue` | `uv` | Accepted for existing scripts. |
+| `color` | `c` | Accepted for existing scripts. |
+| `group` | `g` | Accepted for existing scripts. |
 | `outputFile` | `of` | Write here. |
 
 ## polyPasteFace
@@ -14588,7 +14622,7 @@ Create a Pipe mesh. Returns [mesh, generator] (generator is None with generator=
 | `subdivisionsX` | `sx` | Another name for the attribute it sets. |
 | `subdivisionsY` | `sy` | Another name for the attribute it sets. |
 | `subdivisionsZ` | `sz` | Another name for the attribute it sets. |
-| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as Maya's -ax 1 0 0); the scene up axis when left out. |
+| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as the reference's -ax 1 0 0); the scene up axis when left out. |
 
 ## polyPlane
 
@@ -14616,7 +14650,7 @@ Create a Plane mesh. Returns [mesh, generator] (generator is None with generator
 | `subdivisionsY` | `sy` | Another name for the attribute it sets. |
 | `subdivisionsZ` | `sz` | Another name for the attribute it sets. |
 | `depth` |  | Another name for the attribute it sets. |
-| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as Maya's -ax 1 0 0); the scene up axis when left out. |
+| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as the reference's -ax 1 0 0); the scene up axis when left out. |
 
 ## polyPlatonicSolid
 
@@ -14639,7 +14673,7 @@ Create a Solid mesh. Returns [mesh, generator] (generator is None with generator
 | `radius` | `r` | Centre to each point, cm. |
 | `sideLength` | `w` | Accepted; the radius sets the size. |
 | `solidType` | `st` | 0 dodecahedron, 1 icosahedron, 2 octahedron, 3 tetrahedron. |
-| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as Maya's -ax 1 0 0); the scene up axis when left out. |
+| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as the reference's -ax 1 0 0); the scene up axis when left out. |
 
 ## polyPoke
 
@@ -14686,7 +14720,7 @@ Create a Solid mesh. Returns [mesh, generator] (generator is None with generator
 | `radius` | `r` | Centre to each point, cm. |
 | `sideLength` | `w` | Accepted; the radius sets the size. |
 | `polyType` | `pt` | 0 soccer ball. |
-| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as Maya's -ax 1 0 0); the scene up axis when left out. |
+| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as the reference's -ax 1 0 0); the scene up axis when left out. |
 
 ## polyPrism
 
@@ -14711,7 +14745,7 @@ Create a Prism mesh. Returns [mesh, generator] (generator is None with generator
 | `numberOfSides` | `ns` | Sides. |
 | `subdivisionsHeight` | `sh` | Segments up. |
 | `subdivisionsCaps` | `sc` | Rings on each end. |
-| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as Maya's -ax 1 0 0); the scene up axis when left out. |
+| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as the reference's -ax 1 0 0); the scene up axis when left out. |
 
 ## polyProjectCurve
 
@@ -14743,7 +14777,7 @@ Arguments: faces or meshes
 | --- | --- | --- |
 | `type` | `t` | planar, cylindrical or spherical. |
 | `mapDirection` | `md` | x, y, z, or b (best plane). |
-| `constructionHistory` | `ch` | Accepted for Maya scripts. |
+| `constructionHistory` | `ch` | Accepted for existing scripts. |
 
 ## polyPyramid
 
@@ -14767,7 +14801,7 @@ Create a Pyramid mesh. Returns [mesh, generator] (generator is None with generat
 | `numberOfSides` | `ns` | Sides of the base. |
 | `subdivisionsHeight` | `sh` | Segments up. |
 | `subdivisionsCaps` | `sc` | Rings on the base. |
-| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as Maya's -ax 1 0 0); the scene up axis when left out. |
+| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as the reference's -ax 1 0 0); the scene up axis when left out. |
 
 ## polyQuad
 
@@ -14809,7 +14843,7 @@ Create a QuadSphere mesh. Returns [mesh, generator] (generator is None with gene
 | `radius` | `r` | cm. |
 | `subdivisions` |  | Segments per cube face edge. |
 | `fraction` |  | Portion of the height kept, from the top: 1 is whole, 0.5 a dome open at the bottom. |
-| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as Maya's -ax 1 0 0); the scene up axis when left out. |
+| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as the reference's -ax 1 0 0); the scene up axis when left out. |
 
 ## polyQuadrangulate
 
@@ -15157,8 +15191,8 @@ Arguments: components or meshes (the selection when none)
 | `nodeState` | `nds` | Accepted; see the command reference. |
 | `frozen` | `fzn` | Accepted; see the command reference. |
 | `tolerance` | `tx` | How close the ends must be. |
-| `texture` | `tx2` | Accepted for Maya scripts. |
-| `worldSpace` | `ws` | Accepted for Maya scripts. |
+| `texture` | `tx2` | Accepted for existing scripts. |
+| `worldSpace` | `ws` | Accepted for existing scripts. |
 
 ## polyShortestPathCtx
 
@@ -15187,10 +15221,10 @@ Slide the selected edges within the faces beside them: -v -1 to 1, a fraction of
 | Flag | Short | Description |
 | --- | --- | --- |
 | `value` | `v` | How far: -1 to 1. |
-| `absolute` | `a` | Accepted for Maya scripts. |
-| `direction` | `d` | Accepted for Maya scripts. |
-| `edgeFlow` | `ef` | Accepted for Maya scripts. |
-| `symmetry` | `sym` | Accepted for Maya scripts. |
+| `absolute` | `a` | Accepted for existing scripts. |
+| `direction` | `d` | Accepted for existing scripts. |
+| `edgeFlow` | `ef` | Accepted for existing scripts. |
+| `symmetry` | `sym` | Accepted for existing scripts. |
 
 ## polySmartBevel
 
@@ -15281,7 +15315,7 @@ Create a SoccerBall mesh. Returns [mesh, generator] (generator is None with gene
 | `nodeState` | `nds` | Accepted. |
 | `constructionHistory` | `ch` | False: no generator node, as generator=False. |
 | `radius` | `r` | Centre to each point, cm. |
-| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as Maya's -ax 1 0 0); the scene up axis when left out. |
+| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as the reference's -ax 1 0 0); the scene up axis when left out. |
 
 ## polySoftEdge
 
@@ -15324,7 +15358,7 @@ Create a Sphere mesh. Returns [mesh, generator] (generator is None with generato
 | `fraction` |  | Portion of the height kept, from the top: 1 is whole, 0.5 a dome open at the bottom. |
 | `subdivisionsX` | `sx` | Another name for the attribute it sets. |
 | `subdivisionsY` | `sy` | Another name for the attribute it sets. |
-| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as Maya's -ax 1 0 0); the scene up axis when left out. |
+| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as the reference's -ax 1 0 0); the scene up axis when left out. |
 
 ## polySpherize
 
@@ -15534,13 +15568,13 @@ Arguments: UVs, faces or meshes (the selection when none)
 | Flag | Short | Description |
 | --- | --- | --- |
 | `constructionHistory` | `ch` | Accepted: a node is made while history is on. |
-| `name` | `n` | Accepted for Maya scripts. |
-| `caching` | `cch` | Accepted for Maya scripts. |
-| `nodeState` | `nds` | Accepted for Maya scripts. |
+| `name` | `n` | Accepted for existing scripts. |
+| `caching` | `cch` | Accepted for existing scripts. |
+| `nodeState` | `nds` | Accepted for existing scripts. |
 | `blendOriginal` | `bo` | 0 straight, 1 as it was. |
 | `curvature` | `c` | How much to bow. |
 | `preserveLength` | `pl` | 1 keeps spacing, 0 evens it. |
-| `gapTolerance` | `gt` | Accepted for Maya scripts. |
+| `gapTolerance` | `gt` | Accepted for existing scripts. |
 
 ## polySubdivide
 
@@ -15666,7 +15700,7 @@ Create a SuperShape mesh. Returns [mesh, generator] (generator is None with gene
 | `ultraVN1` | `uvn1` | Shape pole to pole: first exponent. |
 | `ultraVN2` | `uvn2` | Shape pole to pole: second exponent. |
 | `ultraVN3` | `uvn3` | Shape pole to pole: third exponent. |
-| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as Maya's -ax 1 0 0); the scene up axis when left out. |
+| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as the reference's -ax 1 0 0); the scene up axis when left out. |
 
 ## polySymmetrize
 
@@ -15698,13 +15732,13 @@ Target weld: merge one vertex into another, which keeps its place (or both meet 
 
 ## polyToCurve
 
-A curve through a loop of selected edges (Maya's Mesh > Create Curve From Edges): -d the degree (3), -f 0 open or 2 best. Returns [curve].
+A curve through a loop of selected edges (the reference's Mesh > Create Curve From Edges): -d the degree (3), -f 0 open or 2 best. Returns [curve].
 
 | Flag | Short | Description |
 | --- | --- | --- |
 | `degree` | `d` | Degree. |
-| `form` | `f` | Accepted for Maya scripts. |
-| `constructionHistory` | `ch` | Accepted for Maya scripts. |
+| `form` | `f` | Accepted for existing scripts. |
+| `constructionHistory` | `ch` | Accepted for existing scripts. |
 | `name` | `n` | Name of the curve. |
 
 ## polyTorus
@@ -15734,7 +15768,7 @@ Create a Torus mesh. Returns [mesh, generator] (generator is None with generator
 | `cutCaps` |  | Close the flat ends a partial sweep leaves. |
 | `subdivisionsX` | `sx` | Another name for the attribute it sets. |
 | `subdivisionsY` | `sy` | Another name for the attribute it sets. |
-| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as Maya's -ax 1 0 0); the scene up axis when left out. |
+| `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as the reference's -ax 1 0 0); the scene up axis when left out. |
 
 ## polyTransfer
 
@@ -15800,9 +15834,9 @@ Arguments: UVs, faces or meshes (the selection when none)
 | Flag | Short | Description |
 | --- | --- | --- |
 | `constructionHistory` | `ch` | Accepted: a node is made while history is on. |
-| `name` | `n` | Accepted for Maya scripts. |
-| `caching` | `cch` | Accepted for Maya scripts. |
-| `nodeState` | `nds` | Accepted for Maya scripts. |
+| `name` | `n` | Accepted for existing scripts. |
+| `caching` | `cch` | Accepted for existing scripts. |
+| `nodeState` | `nds` | Accepted for existing scripts. |
 
 ## polyUVSet
 
@@ -15847,11 +15881,11 @@ Arguments: UVs, faces or meshes (the selection when none)
 | Flag | Short | Description |
 | --- | --- | --- |
 | `constructionHistory` | `ch` | Accepted: a node is made while history is on. |
-| `name` | `n` | Accepted for Maya scripts. |
-| `caching` | `cch` | Accepted for Maya scripts. |
-| `nodeState` | `nds` | Accepted for Maya scripts. |
+| `name` | `n` | Accepted for existing scripts. |
+| `caching` | `cch` | Accepted for existing scripts. |
+| `nodeState` | `nds` | Accepted for existing scripts. |
 | `tolerance` | `tol` | How close the areas must be, as a fraction. |
-| `onlyMatch` | `om` | Accepted for Maya scripts. |
+| `onlyMatch` | `om` | Accepted for existing scripts. |
 
 ## polyUnite
 
@@ -15907,7 +15941,7 @@ Face-weighted normals on the selected faces (whole meshes in object mode): each 
 
 ## popupMenu
 
-Script UI: popupMenu, with create, edit and query as in Maya's command.
+Script UI: popupMenu, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -15968,7 +16002,7 @@ Arguments: the character (the current one when none)
 
 ## poseEditor
 
-Script UI: poseEditor, with create, edit and query as in Maya's command.
+Script UI: poseEditor, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -16056,7 +16090,7 @@ Arguments: root prefix
 
 ## progressBar
 
-Script UI: progressBar, with create, edit and query as in Maya's command.
+Script UI: progressBar, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -16131,11 +16165,11 @@ Arguments: a curve and a surface
 | `curveSamples` | `cs` | How many samples (50). |
 | `constructionHistory` | `ch` | Keep the node (on by default). |
 | `name` | `n` | The new object's name. |
-| `object` | `o` | Accepted for Maya scripts. |
-| `range` | `rn` | Accepted for Maya scripts. |
-| `caching` | `cch` | Accepted for Maya scripts. |
-| `nodeState` | `nds` | Accepted for Maya scripts. |
-| `tolerance` | `tol` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
+| `range` | `rn` | Accepted for existing scripts. |
+| `caching` | `cch` | Accepted for existing scripts. |
+| `nodeState` | `nds` | Accepted for existing scripts. |
+| `tolerance` | `tol` | Accepted for existing scripts. |
 | `polygon` | `po` | 0 NURBS, 1 polygons. |
 
 ## projectTangent
@@ -16150,12 +16184,12 @@ Arguments: a curve and what to follow
 | `rotate` | `ro` | Degrees. |
 | `reverseTangent` | `rt` | The other way. |
 | `tangentDirection` | `td` | 1 U or 2 V. |
-| `curvature` | `cvt` | Accepted for Maya scripts. |
-| `ignoreEdges` | `ie` | Accepted for Maya scripts. |
+| `curvature` | `cvt` | Accepted for existing scripts. |
+| `ignoreEdges` | `ie` | Accepted for existing scripts. |
 | `constructionHistory` | `ch` | Keep a history node (on by default). |
 | `replaceOriginal` | `rpo` | Change the curve itself (on by default). |
 | `name` | `n` | Name of a new curve. |
-| `object` | `o` | Make an object (accepted for Maya scripts). |
+| `object` | `o` | Make an object (accepted for existing scripts). |
 
 ## promptDialog
 
@@ -16235,7 +16269,7 @@ Arguments: bodies to act on
 
 ## radioButton
 
-Script UI: radioButton, with create, edit and query as in Maya's command.
+Script UI: radioButton, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -16281,7 +16315,7 @@ Arguments: name
 
 ## radioButtonGrp
 
-Script UI: radioButtonGrp, with create, edit and query as in Maya's command.
+Script UI: radioButtonGrp, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -16425,7 +16459,7 @@ Arguments: name
 
 ## rangeControl
 
-Script UI: rangeControl, with create, edit and query as in Maya's command.
+Script UI: rangeControl, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -16473,16 +16507,16 @@ Arguments: curves (the selection when none)
 | `spans` | `s` | Spans. |
 | `degree` | `d` | Degree. |
 | `keepControlPoints` | `kcp` | Keep the CVs. |
-| `rebuildType` | `rt` | Accepted for Maya scripts (uniform). |
-| `endKnots` | `end` | Accepted for Maya scripts. |
-| `keepRange` | `kr` | Accepted for Maya scripts. |
-| `keepEndPoints` | `kep` | Accepted for Maya scripts. |
-| `keepTangents` | `kt` | Accepted for Maya scripts. |
-| `tolerance` | `tol` | Accepted for Maya scripts. |
+| `rebuildType` | `rt` | Accepted for existing scripts (uniform). |
+| `endKnots` | `end` | Accepted for existing scripts. |
+| `keepRange` | `kr` | Accepted for existing scripts. |
+| `keepEndPoints` | `kep` | Accepted for existing scripts. |
+| `keepTangents` | `kt` | Accepted for existing scripts. |
+| `tolerance` | `tol` | Accepted for existing scripts. |
 | `constructionHistory` | `ch` | Keep a history node (on by default). |
 | `replaceOriginal` | `rpo` | Change the curve itself (on by default). |
 | `name` | `n` | Name of a new curve. |
-| `object` | `o` | Make an object (accepted for Maya scripts). |
+| `object` | `o` | Make an object (accepted for existing scripts). |
 
 ## rebuildSurface
 
@@ -16499,16 +16533,16 @@ Arguments: surfaces (the selection when none)
 | `keepRange` | `kr` | 0 parameters 0 to 1, 1 as they were, 2 0 to the spans (1). |
 | `direction` | `dir` | 0 U, 1 V, 2 both (2). |
 | `keepControlPoints` | `kcp` | Leave the CVs as they are. |
-| `rebuildType` | `rt` | Accepted for Maya scripts (uniform). |
-| `endKnots` | `end` | Accepted for Maya scripts. |
-| `keepCorners` | `kc` | Accepted for Maya scripts. |
-| `fitRebuild` | `fr` | Accepted for Maya scripts. |
-| `tolerance` | `tol` | Accepted for Maya scripts. |
+| `rebuildType` | `rt` | Accepted for existing scripts (uniform). |
+| `endKnots` | `end` | Accepted for existing scripts. |
+| `keepCorners` | `kc` | Accepted for existing scripts. |
+| `fitRebuild` | `fr` | Accepted for existing scripts. |
+| `tolerance` | `tol` | Accepted for existing scripts. |
 | `constructionHistory` | `ch` | Keep a history node (on by default). |
 | `replaceOriginal` | `rpo` | Change the surface itself (on by default). |
 | `name` | `n` | Name of a new surface. |
-| `object` | `o` | Accepted for Maya scripts. |
-| `polygon` | `po` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
+| `polygon` | `po` | Accepted for existing scripts. |
 
 ## recordAttr
 
@@ -16604,13 +16638,13 @@ Brings the scene up to date; the viewports draw on their own.
 
 | Flag | Short | Description |
 | --- | --- | --- |
-| `force` | `f` | Accepted for Maya scripts. |
-| `suspend` | `su` | Accepted for Maya scripts. |
-| `currentView` | `cv` | Accepted for Maya scripts. |
+| `force` | `f` | Accepted for existing scripts. |
+| `suspend` | `su` | Accepted for existing scripts. |
+| `currentView` | `cv` | Accepted for existing scripts. |
 
 ## relationship
 
-Held for scripts: relationship type owner members, -b breaks it, -rd its data; -q type owner lists the members. Maya makes the connections on reading a file; this only holds the list, and it is not saved.
+Held for scripts: relationship type owner members, -b breaks it, -rd its data; -q type owner lists the members. The reference makes the connections on reading a file; this only holds the list, and it is not saved.
 
 Arguments: the type, the owner, then what is related
 
@@ -16673,6 +16707,55 @@ Arguments: [object] newName
 renameAttr('node.attr', 'newName'): renames an attribute added with addAttr.
 
 Arguments: plug newName
+
+## render
+
+Renders the current frame and returns the image's path.
+
+Arguments: camera
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `camera` | `cam` | Camera to render through. |
+| `width` | `w` | Image width. |
+| `height` | `h` | Image height. |
+| `region` | `reg` | x0 y0 x1 y1, pixels from the top left. |
+| `batch` | `b` | Render the frames the render settings name. |
+
+## renderSettings
+
+Output file names the render settings give.
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `query` | `q` | Query mode. |
+| `edit` | `e` | Edit mode. |
+| `firstImageName` | `fin` | The first frame's file name. |
+| `lastImageName` | `lin` | The last frame's file name. |
+| `imageGenericName` | `ign` | The file name with # for the frame. |
+| `fullPath` | `fp` | With the images folder. |
+| `fullPathTemp` | `fpt` | The folder of images the render view keeps. |
+| `camera` | `cam` | For this camera. |
+| `layer` | `lyr` | For this render layer. |
+
+## renderWindowEditor
+
+The render view's images: write, keep, remove, exposure and gamma.
+
+Arguments: editor
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `query` | `q` | Query mode. |
+| `edit` | `e` | Edit mode. |
+| `writeImage` | `wi` | Write the current image to a file. |
+| `snapShot` | `snp` | Keep the current image. |
+| `removeAllImages` | `ra` | Forget kept images. |
+| `removeImage` | `ri` | Forget one kept image. |
+| `nbImages` | `nim` | How many images are kept. |
+| `exposure` | `exp` | Display exposure, stops. |
+| `gamma` | `ga` | Display gamma. |
+| `currentCamera` | `crc` | The camera rendered through. |
 
 ## reorder
 
@@ -16737,7 +16820,7 @@ Arguments: curves (the selection when none)
 | `constructionHistory` | `ch` | Keep a history node (on by default). |
 | `replaceOriginal` | `rpo` | Change the curve itself (on by default). |
 | `name` | `n` | Name of a new curve. |
-| `object` | `o` | Make an object (accepted for Maya scripts). |
+| `object` | `o` | Make an object (accepted for existing scripts). |
 
 ## reverseSurface
 
@@ -16751,8 +16834,8 @@ Arguments: surfaces (the selection when none)
 | `constructionHistory` | `ch` | Keep a history node (on by default). |
 | `replaceOriginal` | `rpo` | Change the surface itself (on by default). |
 | `name` | `n` | Name of a new surface. |
-| `object` | `o` | Accepted for Maya scripts. |
-| `polygon` | `po` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
+| `polygon` | `po` | Accepted for existing scripts. |
 
 ## revolve
 
@@ -16769,11 +16852,11 @@ Arguments: a curve (the selection when none)
 | `startSweep` | `ssw` | Start, degrees. |
 | `endSweep` | `esw` | End, degrees. |
 | `degree` | `d` | Degree around (3). |
-| `useTolerance` | `ut` | Accepted for Maya scripts. |
-| `tolerance` | `tol` | Accepted for Maya scripts. |
+| `useTolerance` | `ut` | Accepted for existing scripts. |
+| `tolerance` | `tol` | Accepted for existing scripts. |
 | `polygon` | `po` | 0 NURBS (the default), 1 polygons. |
 | `constructionHistory` | `ch` | Keep the node (on by default). |
-| `range` | `rn` | Accepted for Maya scripts. |
+| `range` | `rn` | Accepted for existing scripts. |
 | `name` | `n` | Name of the new object. |
 
 ## rigidBind
@@ -16785,13 +16868,13 @@ Arguments: skeleton and geometry
 | Flag | Short | Description |
 | --- | --- | --- |
 | `byClosestPoint` | `bcp` | Accepted: closest point is how it binds. |
-| `byPartition` | `bp` | Accepted for Maya scripts. |
-| `colorJoints` | `cj` | Accepted for Maya scripts. |
+| `byPartition` | `bp` | Accepted for existing scripts. |
+| `colorJoints` | `cj` | Accepted for existing scripts. |
 | `delete` | `del` | Remove the skin. |
 | `doNotDescend` | `dnd` | Only the joints named. |
-| `enable` | `en` | Accepted for Maya scripts. |
+| `enable` | `en` | Accepted for existing scripts. |
 | `name` | `n` | The skinCluster's name. |
-| `partition` | `p` | Accepted for Maya scripts. |
+| `partition` | `p` | Accepted for existing scripts. |
 | `toAll` | `ta` | The whole skeleton (the default). |
 | `toSelectedBones` | `tsb` | Only the joints named. |
 | `unbind` | `ub` | Remove the skin. |
@@ -16872,15 +16955,15 @@ Arguments: objects
 | `parent` | `pa` | The parent's axes. |
 | `worldSpaceDistance` | `wd` | Accepted: distances are in world units already. |
 | `preserveChildPosition` | `pcp` | Children stay where they are in the world. |
-| `preserveGeometryPosition` | `pgp` | Accepted for Maya scripts. |
-| `rotatePivotRelative` | `rpr` | Accepted for Maya scripts. |
-| `scalePivotRelative` | `spr` | Accepted for Maya scripts. |
-| `deletePriorHistory` | `dph` | Accepted for Maya scripts. |
-| `xformConstraint` | `xc` | Accepted for Maya scripts. |
-| `constrainAlongNormal` | `xn` | Accepted for Maya scripts. |
-| `orientJoint` | `oj` | Accepted for Maya scripts. |
-| `secondaryAxisOrient` | `sao` | Accepted for Maya scripts. |
-| `componentSpace` | `cs` | Accepted for Maya scripts. |
+| `preserveGeometryPosition` | `pgp` | Accepted for existing scripts. |
+| `rotatePivotRelative` | `rpr` | Accepted for existing scripts. |
+| `scalePivotRelative` | `spr` | Accepted for existing scripts. |
+| `deletePriorHistory` | `dph` | Accepted for existing scripts. |
+| `xformConstraint` | `xc` | Accepted for existing scripts. |
+| `constrainAlongNormal` | `xn` | Accepted for existing scripts. |
+| `orientJoint` | `oj` | Accepted for existing scripts. |
+| `secondaryAxisOrient` | `sao` | Accepted for existing scripts. |
+| `componentSpace` | `cs` | Accepted for existing scripts. |
 | `x` |  | This axis: a value, or on to read the positional value. |
 | `y` |  | This axis. |
 | `z` |  | This axis. |
@@ -16892,9 +16975,9 @@ Arguments: objects
 | `rotateYZ` | `yz` | The axes the values are for. |
 | `rotateXYZ` | `xyz` | The axes the values are for. |
 | `pivot` | `p` | The world point to turn about. |
-| `euler` | `eu` | Accepted for Maya scripts. |
-| `forceOrderXYZ` | `fo` | Accepted for Maya scripts. |
-| `objectCenterPivot` | `ocp` | Accepted for Maya scripts. |
+| `euler` | `eu` | Accepted for existing scripts. |
+| `forceOrderXYZ` | `fo` | Accepted for existing scripts. |
+| `objectCenterPivot` | `ocp` | Accepted for existing scripts. |
 
 ## rotateComponents
 
@@ -16921,14 +17004,14 @@ Arguments: curves, objects or rotate plugs (the selection when none)
 | `index` | `in` | Key index(es) on each curve, or a range "0:2". |
 | `includeUpperBound` | `iub` | Whether a range's end counts (on by default). |
 | `hierarchy` | `hi` | none, below, above or both. |
-| `controlPoints` | `cp` | Accepted for Maya scripts: control points have no channels of their own here. |
+| `controlPoints` | `cp` | Accepted for existing scripts: control points have no channels of their own here. |
 | `shape` | `s` | Include the channels of the objects' shapes. |
 | `animation` | `an` | objects (the default), keys or keysOrObjects: keys means the selected keys. |
 | `convert` | `c` | The interpolation to convert to. |
 
 ## roundConstantRadius
 
-Constant radius fillets where surface edges meet: edges in pairs, surface.u[x] surface.v[y], -rad the radius (one for all, or one per pair; 1 by default). Returns the fillets, then the nodes. Less than Maya: it makes the fillets but does not trim the surfaces or build corners, and -a, -sa, -sb and -s (compound edges) fail.
+Constant radius fillets where surface edges meet: edges in pairs, surface.u[x] surface.v[y], -rad the radius (one for all, or one per pair; 1 by default). Returns the fillets, then the nodes. Less than the reference: it makes the fillets but does not trim the surfaces or build corners, and -a, -sa, -sb and -s (compound edges) fail.
 
 Arguments: edges in pairs
 
@@ -16936,11 +17019,11 @@ Arguments: edges in pairs
 | --- | --- | --- |
 | `constructionHistory` | `ch` | Keep the node (on by default). |
 | `name` | `n` | The new object's name. |
-| `object` | `o` | Accepted for Maya scripts. |
-| `range` | `rn` | Accepted for Maya scripts. |
-| `caching` | `cch` | Accepted for Maya scripts. |
-| `nodeState` | `nds` | Accepted for Maya scripts. |
-| `tolerance` | `tol` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
+| `range` | `rn` | Accepted for existing scripts. |
+| `caching` | `cch` | Accepted for existing scripts. |
+| `nodeState` | `nds` | Accepted for existing scripts. |
+| `tolerance` | `tol` | Accepted for existing scripts. |
 | `polygon` | `po` | 0 NURBS, 1 polygons. |
 | `append` | `a` | Not supported: fails. |
 | `radiuss` | `rad` | The radius, one or one per pair. |
@@ -16950,7 +17033,7 @@ Arguments: edges in pairs
 
 ## rowColumnLayout
 
-Script UI: rowColumnLayout, with create, edit and query as in Maya's command.
+Script UI: rowColumnLayout, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -17003,7 +17086,7 @@ Arguments: name
 
 ## rowLayout
 
-Script UI: rowLayout, with create, edit and query as in Maya's command.
+Script UI: rowLayout, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -17111,15 +17194,15 @@ Arguments: objects
 | `parent` | `pa` | The parent's axes. |
 | `worldSpaceDistance` | `wd` | Accepted: distances are in world units already. |
 | `preserveChildPosition` | `pcp` | Children stay where they are in the world. |
-| `preserveGeometryPosition` | `pgp` | Accepted for Maya scripts. |
-| `rotatePivotRelative` | `rpr` | Accepted for Maya scripts. |
-| `scalePivotRelative` | `spr` | Accepted for Maya scripts. |
-| `deletePriorHistory` | `dph` | Accepted for Maya scripts. |
-| `xformConstraint` | `xc` | Accepted for Maya scripts. |
-| `constrainAlongNormal` | `xn` | Accepted for Maya scripts. |
-| `orientJoint` | `oj` | Accepted for Maya scripts. |
-| `secondaryAxisOrient` | `sao` | Accepted for Maya scripts. |
-| `componentSpace` | `cs` | Accepted for Maya scripts. |
+| `preserveGeometryPosition` | `pgp` | Accepted for existing scripts. |
+| `rotatePivotRelative` | `rpr` | Accepted for existing scripts. |
+| `scalePivotRelative` | `spr` | Accepted for existing scripts. |
+| `deletePriorHistory` | `dph` | Accepted for existing scripts. |
+| `xformConstraint` | `xc` | Accepted for existing scripts. |
+| `constrainAlongNormal` | `xn` | Accepted for existing scripts. |
+| `orientJoint` | `oj` | Accepted for existing scripts. |
+| `secondaryAxisOrient` | `sao` | Accepted for existing scripts. |
+| `componentSpace` | `cs` | Accepted for existing scripts. |
 | `x` |  | This axis: a value, or on to read the positional value. |
 | `y` |  | This axis. |
 | `z` |  | This axis. |
@@ -17131,8 +17214,8 @@ Arguments: objects
 | `scaleYZ` | `yz` | The axes the values are for. |
 | `scaleXYZ` | `xyz` | The axes the values are for. |
 | `pivot` | `p` | The world point to scale about. |
-| `distanceOnly` | `dso` | Accepted for Maya scripts. |
-| `objectCenterPivot` | `ocp` | Accepted for Maya scripts. |
+| `distanceOnly` | `dso` | Accepted for existing scripts. |
+| `objectCenterPivot` | `ocp` | Accepted for existing scripts. |
 
 ## scaleComponents
 
@@ -17186,7 +17269,7 @@ Arguments: objects, plugs or curves (the selection when none)
 | `index` | `in` | Key index(es) on each curve, or a range "0:2". |
 | `includeUpperBound` | `iub` | Whether a range's end counts (on by default). |
 | `hierarchy` | `hi` | none, below, above or both. |
-| `controlPoints` | `cp` | Accepted for Maya scripts: control points have no channels of their own here. |
+| `controlPoints` | `cp` | Accepted for existing scripts: control points have no channels of their own here. |
 | `shape` | `s` | Include the channels of the objects' shapes. |
 | `animation` | `an` | objects (the default), keys or keysOrObjects: keys means the selected keys. |
 | `selected` | `sl` | Scale the keys selectKey selected. |
@@ -17320,7 +17403,7 @@ Arguments: name
 
 ## scriptTable
 
-Script UI: scriptTable, with create, edit and query as in Maya's command.
+Script UI: scriptTable, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -17440,7 +17523,7 @@ Arguments: name
 
 ## scrollField
 
-Script UI: scrollField, with create, edit and query as in Maya's command.
+Script UI: scrollField, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -17488,7 +17571,7 @@ Arguments: name
 
 ## scrollLayout
 
-Script UI: scrollLayout, with create, edit and query as in Maya's command.
+Script UI: scrollLayout, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -17629,8 +17712,8 @@ Arguments: objects
 | `allDependencyNodes` | `adn` | Every node. |
 | `visible` | `vis` | Only visible objects. |
 | `all` | `all` | Every object. |
-| `symmetry` | `sym` | Accepted for Maya scripts. |
-| `symmetrySide` | `sys` | Accepted for Maya scripts. |
+| `symmetry` | `sym` | Accepted for existing scripts. |
+| `symmetrySide` | `sys` | Accepted for existing scripts. |
 
 ## selectAllComponents
 
@@ -17772,7 +17855,7 @@ Arguments: objects, plugs or curves (the selection when none)
 | `index` | `in` | Key index(es) on each curve, or a range "0:2". |
 | `includeUpperBound` | `iub` | Whether a range's end counts (on by default). |
 | `hierarchy` | `hi` | none, below, above or both. |
-| `controlPoints` | `cp` | Accepted for Maya scripts: control points have no channels of their own here. |
+| `controlPoints` | `cp` | Accepted for existing scripts: control points have no channels of their own here. |
 | `shape` | `s` | Include the channels of the objects' shapes. |
 | `animation` | `an` | objects (the default), keys or keysOrObjects: keys means the selected keys. |
 | `addTo` | `add` | Add to the selection. |
@@ -17781,8 +17864,8 @@ Arguments: objects, plugs or curves (the selection when none)
 | `replace` | `r` | Replace the selection (the default). |
 | `clear` | `cl` | Clear the selection. |
 | `keyframe` | `k` | Select the keys themselves (the default). |
-| `inTangent` | `it` | Accepted for Maya scripts: selects the keys. |
-| `outTangent` | `ot` | Accepted for Maya scripts: selects the keys. |
+| `inTangent` | `it` | Accepted for existing scripts: selects the keys. |
+| `outTangent` | `ot` | Accepted for existing scripts: selects the keys. |
 | `unsnappedKeys` | `uk` | Only keys not on a multiple of this time (1 when 0). |
 | `selected` | `sl` | Work on the keys already selected. |
 | `keyframeCount` | `kc` | Query: how many selected. |
@@ -17822,7 +17905,7 @@ Arguments: objects, plugs or curves (the selection when none)
 | `index` | `in` | Key index(es) on each curve, or a range "0:2". |
 | `includeUpperBound` | `iub` | Whether a range's end counts (on by default). |
 | `hierarchy` | `hi` | none, below, above or both. |
-| `controlPoints` | `cp` | Accepted for Maya scripts: control points have no channels of their own here. |
+| `controlPoints` | `cp` | Accepted for existing scripts: control points have no channels of their own here. |
 | `shape` | `s` | Include the channels of the objects' shapes. |
 | `animation` | `an` | objects (the default), keys or keysOrObjects: keys means the selected keys. |
 | `addTo` | `add` | Add to the selection. |
@@ -17831,8 +17914,8 @@ Arguments: objects, plugs or curves (the selection when none)
 | `replace` | `r` | Replace the selection (the default). |
 | `clear` | `cl` | Clear the selection. |
 | `keyframe` | `k` | Select the keys themselves (the default). |
-| `inTangent` | `it` | Accepted for Maya scripts: selects the keys. |
-| `outTangent` | `ot` | Accepted for Maya scripts: selects the keys. |
+| `inTangent` | `it` | Accepted for existing scripts: selects the keys. |
+| `outTangent` | `ot` | Accepted for existing scripts: selects the keys. |
 | `unsnappedKeys` | `uk` | Only keys not on a multiple of this time (1 when 0). |
 | `selected` | `sl` | Work on the keys already selected. |
 | `keyframeCount` | `kc` | Query: how many selected. |
@@ -17875,10 +17958,10 @@ Arguments: [mode]
 | `object` | `o` | Object mode. |
 | `component` | `co` | Component mode. |
 | `hierarchical` | `h` | Hierarchy mode: objects here. |
-| `preset` | `p` | Accepted for Maya scripts. |
-| `root` | `r` | Accepted for Maya scripts. |
-| `leaf` | `l` | Accepted for Maya scripts. |
-| `template` | `t` | Accepted for Maya scripts. |
+| `preset` | `p` | Accepted for existing scripts. |
+| `root` | `r` | Accepted for existing scripts. |
+| `leaf` | `l` | Accepted for existing scripts. |
+| `template` | `t` | Accepted for existing scripts. |
 
 ## selectPathBetween
 
@@ -18083,7 +18166,7 @@ Arguments: [name]
 
 ## separator
 
-Script UI: separator, with create, edit and query as in Maya's command.
+Script UI: separator, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -18132,9 +18215,9 @@ Arguments: plug [value]
 | `lock` | `l` | Lock or unlock the plug. |
 | `type` | `typ` | double3, string, matrix, stringArray, doubleArray and so on. |
 | `clamp` | `c` | Accepted: values are always held inside an attribute's limits. |
-| `size` | `s` | Accepted for Maya scripts. |
-| `alteredValue` | `av` | Accepted for Maya scripts. |
-| `caching` | `ca` | Accepted for Maya scripts. |
+| `size` | `s` | Accepted for existing scripts. |
+| `alteredValue` | `av` | Accepted for existing scripts. |
+| `caching` | `ca` | Accepted for existing scripts. |
 
 ## setAttrMapping
 
@@ -18265,7 +18348,7 @@ Arguments: objects or object.attribute plugs (the selection when none)
 | --- | --- | --- |
 | `attribute` | `at` | Channel name(s) to key: tx, rotateY... |
 | `time` | `t` | Frame(s) to key at. |
-| `float` | `f` | Accepted for Maya scripts: driven keys are set with setDrivenKeyframe. |
+| `float` | `f` | Accepted for existing scripts: driven keys are set with setDrivenKeyframe. |
 | `value` | `v` | Value to key instead of the current one. |
 | `inTangentType` | `itt` | Tangent into the key. |
 | `outTangentType` | `ott` | Tangent out of the key. |
@@ -18275,15 +18358,15 @@ Arguments: objects or object.attribute plugs (the selection when none)
 | `minimizeRotation` | `mr` | Key rotations as the turn nearest the previous key. |
 | `noResolve` | `nr` | With -v: put the value straight on the layer's curve. |
 | `respectKeyable` | `rk` | Skip channels that aren't keyable. |
-| `controlPoints` | `cp` | Accepted for Maya scripts: control points have no channels of their own here. |
+| `controlPoints` | `cp` | Accepted for existing scripts: control points have no channels of their own here. |
 | `shape` | `s` | Key the shapes' keyable channels too. |
-| `animLayer` | `al` | The layer to key. Ignored for channels not in it, as in Maya. |
-| `dirtyDG` | `dd` | Accepted for Maya scripts: keying always dirties what it drives. |
+| `animLayer` | `al` | The layer to key. Ignored for channels not in it, as in the reference. |
+| `dirtyDG` | `dd` | Accepted for existing scripts: keying always dirties what it drives. |
 | `identity` | `id` | An identity key: one that nullifies the layer here. Only on channels driven by layers. |
 
 ## setKeyframeBlendshapeTargetWts
 
-Key per-point blend shape target weights at the current time: a selected base keys all its targets, a selected live target only itself. Returns how many keys. The keys go on the node's targetWeightKeys elements, which override the painted weight for that point: Maya has them under inputTarget, which are not plugs here.
+Key per-point blend shape target weights at the current time: a selected base keys all its targets, a selected live target only itself. Returns how many keys. The keys go on the node's targetWeightKeys elements, which override the painted weight for that point: the reference has them under inputTarget, which are not plugs here.
 
 Arguments: a base or a target (the selection when none)
 
@@ -18418,7 +18501,7 @@ The manipulator's settings: -showUnits, -suppress, -useRotatePivot, -useScalePiv
 
 ## sets
 
-Maya's object set command: create, add to, take from, list and combine sets.
+The reference's object set command: create, add to, take from, list and combine sets.
 
 Arguments: items, or a set with -q
 
@@ -18439,12 +18522,12 @@ Arguments: items, or a set with -q
 | `intersection` | `int` | What this set shares with the others. |
 | `subtract` | `sub` | This set less the others. |
 | `size` | `s` | With -q: how many. |
-| `flatten` | `fl` | Accepted for Maya scripts. |
-| `noWarnings` | `nw` | Accepted for Maya scripts. |
-| `vertices` | `v` | Accepted for Maya scripts. |
-| `edges` | `ed` | Accepted for Maya scripts. |
-| `facets` | `fc` | Accepted for Maya scripts. |
-| `text` | `t` | Accepted for Maya scripts. |
+| `flatten` | `fl` | Accepted for existing scripts. |
+| `noWarnings` | `nw` | Accepted for existing scripts. |
+| `vertices` | `v` | Accepted for existing scripts. |
+| `edges` | `ed` | Accepted for existing scripts. |
+| `facets` | `fc` | Accepted for existing scripts. |
+| `text` | `t` | Accepted for existing scripts. |
 | `noSurfaceShader` | `nss` | With -renderable: leave the new shading group with no material, rather than lambert1. |
 | `renderable` | `r` | Make a shading group; with -q, whether the set is one. |
 
@@ -18468,7 +18551,7 @@ Arguments: type
 
 ## shelfButton
 
-Script UI: shelfButton, with create, edit and query as in Maya's command.
+Script UI: shelfButton, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -18533,7 +18616,7 @@ Arguments: name
 
 ## shelfLayout
 
-Script UI: shelfLayout, with create, edit and query as in Maya's command.
+Script UI: shelfLayout, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -18579,7 +18662,7 @@ Arguments: name
 
 ## shelfTabLayout
 
-Script UI: shelfTabLayout, with create, edit and query as in Maya's command.
+Script UI: shelfTabLayout, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -18748,7 +18831,7 @@ Arguments: objects, plugs or curves (the selection when none)
 | `index` | `in` | Key index(es) on each curve, or a range "0:2". |
 | `includeUpperBound` | `iub` | Whether a range's end counts (on by default). |
 | `hierarchy` | `hi` | none, below, above or both. |
-| `controlPoints` | `cp` | Accepted for Maya scripts: control points have no channels of their own here. |
+| `controlPoints` | `cp` | Accepted for existing scripts: control points have no channels of their own here. |
 | `shape` | `s` | Include the channels of the objects' shapes. |
 | `animation` | `an` | objects (the default), keys or keysOrObjects: keys means the selected keys. |
 | `valueTolerance` | `vtl` | How far the curve may move (0.01). |
@@ -18763,17 +18846,17 @@ Arguments: a profile and two rails (the selection when none)
 
 | Flag | Short | Description |
 | --- | --- | --- |
-| `tangentContinuityProfile1` | `tp1` | Accepted for Maya scripts. |
-| `transformMode` | `tm` | Accepted for Maya scripts. |
+| `tangentContinuityProfile1` | `tp1` | Accepted for existing scripts. |
+| `transformMode` | `tm` | Accepted for existing scripts. |
 | `constructionHistory` | `ch` | Keep the node (on by default). |
 | `polygon` | `po` | 0 NURBS, 1 polygons. |
-| `range` | `rn` | Accepted for Maya scripts. |
+| `range` | `rn` | Accepted for existing scripts. |
 | `name` | `n` | Name of the new object. |
-| `object` | `o` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
 
 ## skeletonEmbed
 
-Fit a joint chain inside meshes: a plain heuristic, a straight run along the bounds' longest axis through the middle of each slice of points. Maya embeds a whole skeleton from a voxel segmentation; -sm and -sr are accepted and change nothing. -jc is this command's own: how many joints (5). Returns the joints; -q the positions; -q -mm the merged mesh as points and faces.
+Fit a joint chain inside meshes: a plain heuristic, a straight run along the bounds' longest axis through the middle of each slice of points. The reference embeds a whole skeleton from a voxel segmentation; -sm and -sr are accepted and change nothing. -jc is this command's own: how many joints (5). Returns the joints; -q the positions; -q -mm the merged mesh as points and faces.
 
 Arguments: meshes (the selection when none)
 
@@ -18782,8 +18865,8 @@ Arguments: meshes (the selection when none)
 | `query` | `q` | Query mode. |
 | `edit` | `e` | Edit mode. |
 | `mergedMesh` | `mm` | With -q: the meshes merged. |
-| `segmentationMethod` | `sm` | Accepted for Maya scripts; has no effect. |
-| `segmentationResolution` | `sr` | Accepted for Maya scripts; has no effect. |
+| `segmentationMethod` | `sm` | Accepted for existing scripts; has no effect. |
+| `segmentationResolution` | `sr` | Accepted for existing scripts; has no effect. |
 | `jointCount` | `jc` | How many joints. |
 
 ## skinBindCtx
@@ -18829,13 +18912,13 @@ Arguments: joints, then the mesh (the selection when none); a skinCluster or ski
 | `heatmapFalloff` | `hmf` | Heat map bind: 1 keeps the heat as solved, less tightens it (0.68). |
 | `moveJointsMode` | `mjm` | With -e: on, joints move without moving the mesh; off, where they are becomes the bind pose. |
 | `useGeometry` | `ug` | With -ai: the influence is a mesh, and points take weight by their distance from its surface. |
-| `baseShape` | `bsh` | Accepted for Maya scripts. |
-| `polySmoothness` | `ps` | Accepted for Maya scripts. |
+| `baseShape` | `bsh` | Accepted for existing scripts. |
+| `polySmoothness` | `ps` | Accepted for existing scripts. |
 | `bindMethod` | `bm` | 0 closest distance, 1 closest in hierarchy, 2 heat map, 3 geodesic voxel. |
 | `skinMethod` | `sm` | 0 classic linear, 1 dual quaternion, 2 blended point by point by .blendWeights. |
 | `normalizeWeights` | `nw` | 0 none, 1 interactive, 2 post. |
-| `weightDistribution` | `wd` | Accepted for Maya scripts. |
-| `includeHiddenSelections` | `ihs` | Accepted for Maya scripts. |
+| `weightDistribution` | `wd` | Accepted for existing scripts. |
+| `includeHiddenSelections` | `ihs` | Accepted for existing scripts. |
 | `name` | `n` | Name of the skinCluster. |
 | `unbind` | `ub` | With -e: remove the skin, back to the bind pose. |
 | `unbindKeepHistory` | `ubk` | With -e: stop the skinning, keeping the node and its weights. |
@@ -18901,7 +18984,7 @@ Arguments: curves (the selection when none)
 | `constructionHistory` | `ch` | Keep a history node (on by default). |
 | `replaceOriginal` | `rpo` | Change the curve itself (on by default). |
 | `name` | `n` | Name of a new curve. |
-| `object` | `o` | Make an object (accepted for Maya scripts). |
+| `object` | `o` | Make an object (accepted for existing scripts). |
 
 ## smoothPreview
 
@@ -18923,12 +19006,12 @@ Arguments: surfaces (the selection when none)
 | --- | --- | --- |
 | `parameter` | `p` | Which isoparm. |
 | `direction` | `d` | 1 U, 0 V. |
-| `smoothness` | `s` | Accepted for Maya scripts. |
+| `smoothness` | `s` | Accepted for existing scripts. |
 | `constructionHistory` | `ch` | Keep a history node (on by default). |
 | `replaceOriginal` | `rpo` | Change the surface itself (on by default). |
 | `name` | `n` | Name of a new surface. |
-| `object` | `o` | Accepted for Maya scripts. |
-| `polygon` | `po` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
+| `polygon` | `po` | Accepted for existing scripts. |
 
 ## snapKey
 
@@ -18944,7 +19027,7 @@ Arguments: objects, plugs or curves (the selection when none)
 | `index` | `in` | Key index(es) on each curve, or a range "0:2". |
 | `includeUpperBound` | `iub` | Whether a range's end counts (on by default). |
 | `hierarchy` | `hi` | none, below, above or both. |
-| `controlPoints` | `cp` | Accepted for Maya scripts: control points have no channels of their own here. |
+| `controlPoints` | `cp` | Accepted for existing scripts: control points have no channels of their own here. |
 | `shape` | `s` | Include the channels of the objects' shapes. |
 | `animation` | `an` | objects (the default), keys or keysOrObjects: keys means the selected keys. |
 | `selected` | `sl` | Snap the keys selectKey selected. |
@@ -18998,7 +19081,7 @@ Arguments: objects (the selection when none)
 | `startTime` | `st` | First frame (the playback start). |
 | `endTime` | `et` | Last frame (the playback end). |
 | `increment` | `i` | Frames between copies (1). |
-| `constructionHistory` | `ch` | Accepted for Maya scripts: copies are made once. |
+| `constructionHistory` | `ch` | Accepted for existing scripts: copies are made once. |
 | `c` | `c` | As -ch. |
 | `name` | `n` | The snapshot's name. |
 | `update` | `u` | always or animCurve: recorded on the node. |
@@ -19131,7 +19214,7 @@ Create a NURBS sphere with a makeNurbSphere node. Returns [nurbsSphere1, makeNur
 | `pivot` | `p` | The centre. |
 | `constructionHistory` | `ch` | Keep the make node (on by default). |
 | `name` | `n` | Name of the transform. |
-| `object` | `o` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
 | `polygon` | `po` | 1 makes polygons. |
 | `radius` | `r` | The radius (1). |
 | `startSweep` | `ssw` | Start, degrees (0). |
@@ -19139,8 +19222,8 @@ Create a NURBS sphere with a makeNurbSphere node. Returns [nurbsSphere1, makeNur
 | `degree` | `d` | 1 linear, 3 cubic (3). |
 | `sections` | `s` | Sections around (8). |
 | `spans` | `nsp` | Spans along the axis. |
-| `useTolerance` | `ut` | Accepted for Maya scripts. |
-| `tolerance` | `tol` | Accepted for Maya scripts. |
+| `useTolerance` | `ut` | Accepted for existing scripts. |
+| `tolerance` | `tol` | Accepted for existing scripts. |
 | `heightRatio` | `hr` | Height over radius. |
 
 ## splitRingsApplySelection
@@ -19195,7 +19278,7 @@ Arguments: the light, to edit or query
 
 ## spreadSheetEditor
 
-Script UI: spreadSheetEditor, with create, edit and query as in Maya's command.
+Script UI: spreadSheetEditor, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -19259,15 +19342,15 @@ Arguments: four curves (the selection when none)
 
 | Flag | Short | Description |
 | --- | --- | --- |
-| `degree` | `d` | Accepted for Maya scripts. |
-| `continuityType1` | `cp` | Accepted for Maya scripts. |
-| `endPointTolerance` | `ept` | Accepted for Maya scripts. |
-| `rebuildCurve1` | `rc1` | Accepted for Maya scripts. |
+| `degree` | `d` | Accepted for existing scripts. |
+| `continuityType1` | `cp` | Accepted for existing scripts. |
+| `endPointTolerance` | `ept` | Accepted for existing scripts. |
+| `rebuildCurve1` | `rc1` | Accepted for existing scripts. |
 | `constructionHistory` | `ch` | Keep the node (on by default). |
 | `polygon` | `po` | 0 NURBS, 1 polygons. |
-| `range` | `rn` | Accepted for Maya scripts. |
+| `range` | `rn` | Accepted for existing scripts. |
 | `name` | `n` | Name of the new object. |
-| `object` | `o` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
 
 ## squareSurface
 
@@ -19277,15 +19360,15 @@ Arguments: four curves (the selection when none)
 
 | Flag | Short | Description |
 | --- | --- | --- |
-| `degree` | `d` | Accepted for Maya scripts. |
-| `continuityType1` | `cp` | Accepted for Maya scripts. |
-| `endPointTolerance` | `ept` | Accepted for Maya scripts. |
-| `rebuildCurve1` | `rc1` | Accepted for Maya scripts. |
+| `degree` | `d` | Accepted for existing scripts. |
+| `continuityType1` | `cp` | Accepted for existing scripts. |
+| `endPointTolerance` | `ept` | Accepted for existing scripts. |
+| `rebuildCurve1` | `rc1` | Accepted for existing scripts. |
 | `constructionHistory` | `ch` | Keep the node (on by default). |
 | `polygon` | `po` | 0 NURBS, 1 polygons. |
-| `range` | `rn` | Accepted for Maya scripts. |
+| `range` | `rn` | Accepted for existing scripts. |
 | `name` | `n` | Name of the new object. |
-| `object` | `o` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
 
 ## stackTrace
 
@@ -19306,20 +19389,20 @@ Arguments: two surfaces or edges
 | Flag | Short | Description |
 | --- | --- | --- |
 | `bias` | `b` | Which moves (0.5). |
-| `cascade` | `c` | Accepted for Maya scripts. |
-| `keepG0Continuity` | `kg0` | Accepted for Maya scripts. |
-| `keepG1Continuity` | `kg1` | Accepted for Maya scripts. |
-| `numberOfSamples` | `ns` | Accepted for Maya scripts. |
-| `stepCount` | `sc` | Accepted for Maya scripts. |
-| `fixBoundary` | `fb` | Accepted for Maya scripts. |
+| `cascade` | `c` | Accepted for existing scripts. |
+| `keepG0Continuity` | `kg0` | Accepted for existing scripts. |
+| `keepG1Continuity` | `kg1` | Accepted for existing scripts. |
+| `numberOfSamples` | `ns` | Accepted for existing scripts. |
+| `stepCount` | `sc` | Accepted for existing scripts. |
+| `fixBoundary` | `fb` | Accepted for existing scripts. |
 | `replaceOriginal` | `rpo` | Accepted: the surfaces themselves change. |
 | `constructionHistory` | `ch` | Keep the node (on by default). |
 | `name` | `n` | The new object's name. |
-| `object` | `o` | Accepted for Maya scripts. |
-| `range` | `rn` | Accepted for Maya scripts. |
-| `caching` | `cch` | Accepted for Maya scripts. |
-| `nodeState` | `nds` | Accepted for Maya scripts. |
-| `tolerance` | `tol` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
+| `range` | `rn` | Accepted for existing scripts. |
+| `caching` | `cch` | Accepted for existing scripts. |
+| `nodeState` | `nds` | Accepted for existing scripts. |
+| `tolerance` | `tol` | Accepted for existing scripts. |
 | `polygon` | `po` | 0 NURBS, 1 polygons. |
 
 ## stitchSurfacePoints
@@ -19331,14 +19414,14 @@ Arguments: CVs
 | Flag | Short | Description |
 | --- | --- | --- |
 | `equalWeight` | `ew` | Their mean (the default), or the first. |
-| `bias` | `b` | Accepted for Maya scripts. |
-| `constructionHistory` | `ch` | Accepted for Maya scripts. |
-| `cascade` | `c` | Accepted for Maya scripts. |
-| `keepG0Continuity` | `kg0` | Accepted for Maya scripts. |
-| `keepG1Continuity` | `kg1` | Accepted for Maya scripts. |
+| `bias` | `b` | Accepted for existing scripts. |
+| `constructionHistory` | `ch` | Accepted for existing scripts. |
+| `cascade` | `c` | Accepted for existing scripts. |
+| `keepG0Continuity` | `kg0` | Accepted for existing scripts. |
+| `keepG1Continuity` | `kg1` | Accepted for existing scripts. |
 | `replaceOriginal` | `rpo` | Accepted: they change in place. |
-| `stepCount` | `sc` | Accepted for Maya scripts. |
-| `tolerance` | `tol` | Accepted for Maya scripts. |
+| `stepCount` | `sc` | Accepted for existing scripts. |
+| `tolerance` | `tol` | Accepted for existing scripts. |
 
 ## stringArrayIntersector
 
@@ -19351,11 +19434,11 @@ Arguments: its name
 | `query` | `q` | Query mode. |
 | `edit` | `e` | Edit mode. |
 | `allowDuplicates` | `ad` | Keep duplicate entries. |
-| `defineTemplate` | `dt` | Accepted for Maya scripts; has no effect. |
+| `defineTemplate` | `dt` | Accepted for existing scripts; has no effect. |
 | `exists` | `ex` | Whether it exists. |
 | `intersect` | `i` | An array. |
 | `reset` | `r` | Start again. |
-| `useTemplate` | `ut` | Accepted for Maya scripts; has no effect. |
+| `useTemplate` | `ut` | Accepted for existing scripts; has no effect. |
 
 ## substituteGeometry
 
@@ -19384,8 +19467,8 @@ A surface from raw data: -du -dv degrees, -fu -fv open, closed or periodic, -ku 
 | `point` | `p` | A CV. |
 | `pointWeight` | `pw` | A CV with a weight, dropped: surfaces aren't rational here. |
 | `name` | `n` | The surface's name. |
-| `objectSpace` | `ob` | Accepted for Maya scripts. |
-| `worldSpace` | `ws` | Accepted for Maya scripts. |
+| `objectSpace` | `ob` | Accepted for existing scripts. |
+| `worldSpace` | `ws` | Accepted for existing scripts. |
 
 ## sweepMeshFromCurve
 
@@ -19402,12 +19485,12 @@ Arguments: a curve (the selection when none)
 | `twist` | `tw` | Twist at the end, degrees. |
 | `polygon` | `po` | 0 NURBS (the default), 1 polygons. |
 | `constructionHistory` | `ch` | Keep the node (on by default). |
-| `range` | `rn` | Accepted for Maya scripts. |
+| `range` | `rn` | Accepted for existing scripts. |
 | `name` | `n` | Name of the new object. |
 
 ## symbolButton
 
-Script UI: symbolButton, with create, edit and query as in Maya's command.
+Script UI: symbolButton, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -19445,7 +19528,7 @@ Arguments: name
 
 ## symbolCheckBox
 
-Script UI: symbolCheckBox, with create, edit and query as in Maya's command.
+Script UI: symbolCheckBox, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -19501,9 +19584,9 @@ Symmetry for component edits: -e -s on, -ax x|y|z, -ab world|object|topo, -ts on
 | `worldSpace` | `ws` | About world. |
 | `tolerance` | `tol` | How close a pair must be. |
 | `reset` | `r` | Back to the defaults. |
-| `allowPartial` | `ap` | Accepted for Maya scripts. |
+| `allowPartial` | `ap` | Accepted for existing scripts. |
 | `preserveSeam` | `ps` | 1 keeps points on the plane there; 0 lets them leave it. |
-| `seamTolerance` | `st` | Accepted for Maya scripts. |
+| `seamTolerance` | `st` | Accepted for existing scripts. |
 
 ## symmetrize
 
@@ -19559,7 +19642,7 @@ Arguments: objects
 
 ## sysFile
 
-File operations on a path: -cp, -delete, -md, -mov, -red, -ren. Returns whether it worked. Not undoable, unlike what Maya's reference says.
+File operations on a path: -cp, -delete, -md, -mov, -red, -ren. Returns whether it worked. Not undoable, unlike what the reference's reference says.
 
 Arguments: the path
 
@@ -19574,7 +19657,7 @@ Arguments: the path
 
 ## tabLayout
 
-Script UI: tabLayout, with create, edit and query as in Maya's command.
+Script UI: tabLayout, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -19992,7 +20075,7 @@ Arguments: [name]
 
 ## text
 
-Script UI: text, with create, edit and query as in Maya's command.
+Script UI: text, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -20041,11 +20124,11 @@ Text as curves: -t words, -f font accepted (one stroke font). A group, a transfo
 | `text` | `t` | The words. |
 | `font` | `f` | Accepted: one stroke font here. |
 | `name` | `n` | The group's name. |
-| `object` | `o` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
 
 ## textField
 
-Script UI: textField, with create, edit and query as in Maya's command.
+Script UI: textField, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -20094,7 +20177,7 @@ Arguments: name
 
 ## textFieldButtonGrp
 
-Script UI: textFieldButtonGrp, with create, edit and query as in Maya's command.
+Script UI: textFieldButtonGrp, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -20177,7 +20260,7 @@ Arguments: name
 
 ## textFieldGrp
 
-Script UI: textFieldGrp, with create, edit and query as in Maya's command.
+Script UI: textFieldGrp, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -20257,7 +20340,7 @@ Arguments: name
 
 ## textScrollList
 
-Script UI: textScrollList, with create, edit and query as in Maya's command.
+Script UI: textScrollList, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -20361,7 +20444,7 @@ Arguments: [name]
 
 ## textureWindow
 
-Script UI: textureWindow, with create, edit and query as in Maya's command.
+Script UI: textureWindow, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -20527,8 +20610,8 @@ Arguments: the node, with -q
 | `normal` | `nr` | With -q: the normal. |
 | `constructionHistory` | `ch` | Keep the node (on by default). |
 | `name` | `n` | The curve's name. |
-| `object` | `o` | Accepted for Maya scripts. |
-| `spans` | `sp` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
+| `spans` | `sp` | Accepted for existing scripts. |
 | `radius` | `r` | With -q: the radius. |
 
 ## threePointArcCtx
@@ -20565,7 +20648,7 @@ Arguments: objects or plugs (the selection when none)
 
 ## timeCode
 
-Held for scripts: the file's time code, -msf, -psf, -psh, -psm, -pss, read back with -q. Less than Maya: the numbers are in the session, not on a time1 node, so they are not saved, and nothing shows them.
+Held for scripts: the file's time code, -msf, -psf, -psh, -psm, -pss, read back with -q. Less than the reference: the numbers are in the session, not on a time1 node, so they are not saved, and nothing shows them.
 
 | Flag | Short | Description |
 | --- | --- | --- |
@@ -20581,7 +20664,7 @@ Held for scripts: the file's time code, -msf, -psf, -psh, -psm, -pss, read back 
 
 The time slider's state: the range selected on it (-q -ra, -q -rng, -q -rv), its key display and snapping.
 
-Arguments: the slider's name, accepted for Maya scripts
+Arguments: the slider's name, accepted for existing scripts
 
 | Flag | Short | Description |
 | --- | --- | --- |
@@ -20595,13 +20678,13 @@ Arguments: the slider's name, accepted for Maya scripts
 | `tickSize` | `ts` | How wide ticks are drawn. |
 | `minTime` | `min` | Query: the playback start. |
 | `maxTime` | `max` | Query: the playback end. |
-| `beginScrub` | `bs` | Accepted for Maya scripts. |
-| `endScrub` | `es` | Accepted for Maya scripts. |
-| `forceRedraw` | `fr` | Accepted for Maya scripts. |
+| `beginScrub` | `bs` | Accepted for existing scripts. |
+| `endScrub` | `es` | Accepted for existing scripts. |
+| `forceRedraw` | `fr` | Accepted for existing scripts. |
 
 ## timePort
 
-Script UI: timePort, with create, edit and query as in Maya's command.
+Script UI: timePort, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -20639,7 +20722,7 @@ Arguments: name
 
 ## timeRangeControl
 
-Script UI: timeRangeControl, with create, edit and query as in Maya's command.
+Script UI: timeRangeControl, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -20749,7 +20832,7 @@ Arguments: objects
 
 ## toolButton
 
-Script UI: toolButton, with create, edit and query as in Maya's command.
+Script UI: toolButton, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -20836,7 +20919,7 @@ Create a NURBS torus with a makeNurbTorus node. Returns [nurbsTorus1, makeNurbTo
 | `pivot` | `p` | The centre. |
 | `constructionHistory` | `ch` | Keep the make node (on by default). |
 | `name` | `n` | Name of the transform. |
-| `object` | `o` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
 | `polygon` | `po` | 1 makes polygons. |
 | `radius` | `r` | The radius (1). |
 | `startSweep` | `ssw` | Start, degrees (0). |
@@ -20844,8 +20927,8 @@ Create a NURBS torus with a makeNurbTorus node. Returns [nurbsTorus1, makeNurbTo
 | `degree` | `d` | 1 linear, 3 cubic (3). |
 | `sections` | `s` | Sections around (8). |
 | `spans` | `nsp` | Spans along the axis. |
-| `useTolerance` | `ut` | Accepted for Maya scripts. |
-| `tolerance` | `tol` | Accepted for Maya scripts. |
+| `useTolerance` | `ut` | Accepted for existing scripts. |
+| `tolerance` | `tol` | Accepted for existing scripts. |
 | `heightRatio` | `hr` | Height over radius. |
 | `minorSweep` | `msw` | Degrees of the tube's section (360). |
 
@@ -21002,14 +21085,14 @@ Arguments: a surface, then curves on it
 | `locatorU` | `lu` | Where, in U (0.5). |
 | `locatorV` | `lv` | Where, in V (0.5). |
 | `selected` | `sl` | 0 keeps that region, 1 throws it away. |
-| `shrink` | `sh` | Accepted for Maya scripts. |
+| `shrink` | `sh` | Accepted for existing scripts. |
 | `constructionHistory` | `ch` | Keep the node (on by default). |
 | `name` | `n` | The new object's name. |
-| `object` | `o` | Accepted for Maya scripts. |
-| `range` | `rn` | Accepted for Maya scripts. |
-| `caching` | `cch` | Accepted for Maya scripts. |
-| `nodeState` | `nds` | Accepted for Maya scripts. |
-| `tolerance` | `tol` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
+| `range` | `rn` | Accepted for existing scripts. |
+| `caching` | `cch` | Accepted for existing scripts. |
+| `nodeState` | `nds` | Accepted for existing scripts. |
+| `tolerance` | `tol` | Accepted for existing scripts. |
 | `polygon` | `po` | 0 NURBS, 1 polygons. |
 
 ## tumble
@@ -21092,7 +21175,7 @@ A circular arc between -p1 and -p2 with radius -r on the side -dv's normal gives
 | `sections` | `s` | The sections (8). |
 | `constructionHistory` | `ch` | Keep the node (on by default). |
 | `name` | `n` | The curve's name. |
-| `object` | `o` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
 
 ## twoPointArcCtx
 
@@ -21124,11 +21207,11 @@ Arguments: UVs, faces or meshes (the selection when none)
 | Flag | Short | Description |
 | --- | --- | --- |
 | `constructionHistory` | `ch` | Accepted: a node is made while history is on. |
-| `name` | `n` | Accepted for Maya scripts. |
-| `caching` | `cch` | Accepted for Maya scripts. |
-| `nodeState` | `nds` | Accepted for Maya scripts. |
+| `name` | `n` | Accepted for existing scripts. |
+| `caching` | `cch` | Accepted for existing scripts. |
+| `nodeState` | `nds` | Accepted for existing scripts. |
 | `splitShells` | `s` | How readily. |
-| `cutPipes` | `p` | Accepted for Maya scripts. |
+| `cutPipes` | `p` | Accepted for existing scripts. |
 
 ## u3dLayout
 
@@ -21140,7 +21223,7 @@ Arguments: faces, UVs or meshes
 | --- | --- | --- |
 | `shellSpacing` | `spc` | Space between shells, in UV units. |
 | `rotateStep` | `rst` | 0 keeps shells unturned. |
-| `resolution` | `res` | Accepted for Maya scripts. |
+| `resolution` | `res` | Accepted for existing scripts. |
 
 ## u3dOptimize
 
@@ -21151,16 +21234,16 @@ Arguments: UVs, faces or meshes (the selection when none)
 | Flag | Short | Description |
 | --- | --- | --- |
 | `constructionHistory` | `ch` | Accepted: a node is made while history is on. |
-| `name` | `n` | Accepted for Maya scripts. |
-| `caching` | `cch` | Accepted for Maya scripts. |
-| `nodeState` | `nds` | Accepted for Maya scripts. |
+| `name` | `n` | Accepted for existing scripts. |
+| `caching` | `cch` | Accepted for existing scripts. |
+| `nodeState` | `nds` | Accepted for existing scripts. |
 | `iterations` | `ite` | Accepted: the solver decides. |
-| `power` | `pow` | Accepted for Maya scripts. |
-| `surfangle` | `sa` | Accepted for Maya scripts. |
-| `borderintersection` | `bi` | Accepted for Maya scripts. |
-| `triangleflip` | `tf` | Accepted for Maya scripts. |
-| `mapsize` | `ms` | Accepted for Maya scripts. |
-| `roomspace` | `rs` | Accepted for Maya scripts. |
+| `power` | `pow` | Accepted for existing scripts. |
+| `surfangle` | `sa` | Accepted for existing scripts. |
+| `borderintersection` | `bi` | Accepted for existing scripts. |
+| `triangleflip` | `tf` | Accepted for existing scripts. |
+| `mapsize` | `ms` | Accepted for existing scripts. |
+| `roomspace` | `rs` | Accepted for existing scripts. |
 
 ## u3dUnfold
 
@@ -21170,10 +21253,10 @@ Arguments: faces, UVs or meshes
 
 | Flag | Short | Description |
 | --- | --- | --- |
-| `iterations` | `ite` | Accepted for Maya scripts. |
-| `pack` | `p` | Accepted for Maya scripts. |
-| `borderintersection` | `bi` | Accepted for Maya scripts. |
-| `triangleflip` | `tf` | Accepted for Maya scripts. |
+| `iterations` | `ite` | Accepted for existing scripts. |
+| `pack` | `p` | Accepted for existing scripts. |
+| `borderintersection` | `bi` | Accepted for existing scripts. |
+| `triangleflip` | `tf` | Accepted for existing scripts. |
 
 ## uiPref
 
@@ -21210,7 +21293,7 @@ Query or control the undo queue. openChunk/closeChunk group everything in betwee
 | `memoryBudget` | `mb` | Drop the oldest steps past this many MB, 0 for unlimited. |
 | `history` | `h` | Also return every step's label, oldest first, and the current position. |
 | `query` | `q` | Query. |
-| `state` | `st` | Turn undo on or off; off flushes the queue, as in Maya. |
+| `state` | `st` | Turn undo on or off; off flushes the queue, as in the reference. |
 | `stateWithoutFlush` | `swf` | Turn undo on or off, keeping the queue. |
 | `undoName` | `un` | With -q: what undo would undo. |
 | `redoName` | `rn` | With -q: what redo would redo. |
@@ -21218,7 +21301,7 @@ Query or control the undo queue. openChunk/closeChunk group everything in betwee
 | `redoQueueEmpty` | `rqe` | With -q: whether there is nothing to redo. |
 | `length` | `l` | How many steps to keep. |
 | `infinity` | `infinity` | Keep every step. |
-| `printQueue` | `pq` | Accepted for Maya scripts. |
+| `printQueue` | `pq` | Accepted for existing scripts. |
 
 ## undoJump
 
@@ -21301,17 +21384,17 @@ Arguments: UVs, faces or meshes (the selection when none)
 | Flag | Short | Description |
 | --- | --- | --- |
 | `constructionHistory` | `ch` | Accepted: a node is made while history is on. |
-| `name` | `n` | Accepted for Maya scripts. |
-| `caching` | `cch` | Accepted for Maya scripts. |
-| `nodeState` | `nds` | Accepted for Maya scripts. |
+| `name` | `n` | Accepted for existing scripts. |
+| `caching` | `cch` | Accepted for existing scripts. |
+| `nodeState` | `nds` | Accepted for existing scripts. |
 | `mapBorder` | `mb` | circular, square or none. |
 | `pinSelected` | `ps` | Hold the UVs named. |
 | `pinBorder` | `pb` | Accepted: the border holds unless -mb moves it. |
-| `pinUnselected` | `pu` | Accepted for Maya scripts. |
+| `pinUnselected` | `pu` | Accepted for existing scripts. |
 | `relax` | `r` | Accepted: the inside is evened uniformly. |
-| `maxRelaxIterations` | `mri` | Accepted for Maya scripts. |
-| `relaxTolerance` | `rt` | Accepted for Maya scripts. |
-| `shapeDetail` | `sd` | Accepted for Maya scripts. |
+| `maxRelaxIterations` | `mri` | Accepted for existing scripts. |
+| `relaxTolerance` | `rt` | Accepted for existing scripts. |
+| `shapeDetail` | `sd` | Accepted for existing scripts. |
 
 ## untrim
 
@@ -21321,13 +21404,13 @@ Arguments: surfaces (the selection when none)
 
 | Flag | Short | Description |
 | --- | --- | --- |
-| `curveOnSurface` | `cos` | Accepted for Maya scripts. |
-| `noChanges` | `nc` | Accepted for Maya scripts. |
+| `curveOnSurface` | `cos` | Accepted for existing scripts. |
+| `noChanges` | `nc` | Accepted for existing scripts. |
 | `constructionHistory` | `ch` | Keep a history node (on by default). |
 | `replaceOriginal` | `rpo` | Change the surface itself (on by default). |
 | `name` | `n` | Name of a new surface. |
-| `object` | `o` | Accepted for Maya scripts. |
-| `polygon` | `po` | Accepted for Maya scripts. |
+| `object` | `o` | Accepted for existing scripts. |
+| `polygon` | `po` | Accepted for existing scripts. |
 
 ## upAxis
 
@@ -21384,7 +21467,7 @@ Arguments: proxy,/path
 
 ## usdLayer
 
-Layer work Maya-USD does in its editor: -q gives the layer tree as JSON; -save, -saveAs, -reload, -flattenTo, -saveDirty.
+Layer work the reference's USD plug-in does in its editor: -q gives the layer tree as JSON; -save, -saveAs, -reload, -flattenTo, -saveDirty.
 
 Arguments: layer identifier
 
@@ -21544,8 +21627,8 @@ Arguments: faces or meshes (the selection when none)
 | `vMax` | `vmx` | Range. |
 | `overwrite` | `o` | Replace the file. |
 | `fileFormat` | `ff` | png, or ppm. |
-| `antiAliased` | `aa` | Accepted for Maya scripts. |
-| `entireUVRange` | `euv` | Accepted for Maya scripts. |
+| `antiAliased` | `aa` | Accepted for existing scripts. |
+| `entireUVRange` | `euv` | Accepted for existing scripts. |
 
 ## viewCamera
 
@@ -21793,7 +21876,7 @@ Arguments: objects
 
 ## window
 
-Script UI: window, with create, edit and query as in Maya's command.
+Script UI: window, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -21921,7 +22004,7 @@ Arguments: [path]
 
 ## workspaceControl
 
-Script UI: workspaceControl, with create, edit and query as in Maya's command.
+Script UI: workspaceControl, with create, edit and query as in the reference's command.
 
 Arguments: name
 
@@ -22086,11 +22169,11 @@ Arguments: Transforms to edit or query; the selection when none are given.
 | `centerPivotsOnComponents` | `cpc` | Centre the pivots on the bounding box. |
 | `zeroTransformPivots` | `ztp` | Put the pivots back at the origin of the object. |
 | `worldSpaceDistance` | `wd` | Accepted: distances are in world units already. |
-| `eulerFilter` | `eu` | Accepted for Maya scripts. |
-| `deletePriorHistory` | `dph` | Accepted for Maya scripts. |
-| `reflection` | `rfl` | Accepted for Maya scripts. |
-| `disableReflection` | `drp` | Accepted for Maya scripts. |
-| `requiresAll` | `rab` | Accepted for Maya scripts. |
+| `eulerFilter` | `eu` | Accepted for existing scripts. |
+| `deletePriorHistory` | `dph` | Accepted for existing scripts. |
+| `reflection` | `rfl` | Accepted for existing scripts. |
+| `disableReflection` | `drp` | Accepted for existing scripts. |
+| `requiresAll` | `rab` | Accepted for existing scripts. |
 
 ## xformConstraint
 
