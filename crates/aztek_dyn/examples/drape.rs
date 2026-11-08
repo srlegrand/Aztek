@@ -83,6 +83,17 @@ fn main() {
             ratios.sort_by(|a, b| b.0.total_cmp(&a.0));
             let over = ratios.iter().filter(|r| r.0 > 1.1).count();
             let mean = ratios.iter().map(|r| r.0).sum::<f64>() / ratios.len() as f64;
+            let mut on = (0.0, 0usize, 0usize);
+            let mut off = (0.0, 0usize, 0usize);
+            for r in &ratios {
+                let e = body.topo.edges[r.1];
+                let near = x[e[0] as usize].length() < 0.55 || x[e[1] as usize].length() < 0.55;
+                let t = if near { &mut on } else { &mut off };
+                t.0 += r.0;
+                t.1 += 1;
+                t.2 += (r.0 > 1.1) as usize;
+            }
+            println!("  on the ball: mean {:.3}, {} of {} over 1.1; hanging: mean {:.3}, {} of {} over 1.1", on.0 / on.1.max(1) as f64, on.2, on.1, off.0 / off.1.max(1) as f64, off.2, off.1);
             let e = body.topo.edges[ratios[0].1];
             let (a, b) = (x[e[0] as usize], x[e[1] as usize]);
             println!("  mean {mean:.3}, {over} edges over 1.1; worst edge {} {} at {a:.3} |a| {:.3} and {b:.3} |b| {:.3}, sim weights {:.2} {:.2}", e[0], e[1], a.length(), b.length(), s.pt.rs[e[0] as usize].w, s.pt.rs[e[1] as usize].w);

@@ -192,12 +192,13 @@ pub struct ClothData {
     pub area: Vec<[u32; 3]>,
     pub area_rest: Vec<f64>,
     pub area_colour: Colouring,
-    /// Stretch limits along paths of edges between vertices several edges apart: path k is
-    /// path[path_start[k]..path_start[k + 1]], its rest length along the mesh path_rest[k]. Each acts only when its
-    /// two ends are further apart than that.
-    pub path: Vec<u32>,
-    pub path_start: Vec<u32>,
-    pub path_rest: Vec<f64>,
+    /// Stretch limits between vertices several edges apart: the two ends, the rest length along the mesh between
+    /// them, and how many edges that path has. Each acts only when its ends are further apart than that, as stiff as
+    /// those edges in a row.
+    pub limit: Vec<[u32; 2]>,
+    pub limit_rest: Vec<f64>,
+    pub limit_edges: Vec<f64>,
+    pub limit_colour: Colouring,
     /// Long range attachments: each free vertex's nearest pinned vertex and the distance between them along the
     /// rest mesh; the vertex is kept within it. (vertex, anchor, distance).
     pub tether: Vec<(u32, u32, f64)>,

@@ -131,65 +131,6 @@ thread_local! {
     static SUMS: std::cell::RefCell<Vec<(DVec3, u32)>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
-/// Stretch limits, Jacobi style: each holds the two ends of a path no further apart than the path's rest length
-/// along the mesh, so it never acts on folds, only on stretch. Corrections are averaged per vertex.
-/// (Pulling in along the whole path was tried: the inner gradients cancel on a straight path, so the ends jump.)
-fn paths(c: &crate::body::ClothData, o: usize, im: &[f64], p: &Shared<DVec3>, alpha: f64) {
-    if c.path_rest.is_empty() || crate::util::off("limit") {
-        return;
-    }
-    let fixes: Vec<[(u32, DVec3); 2]> = (0..c.path_rest.len())
-        .into_par_iter()
-        .with_min_len(PAR_CHUNK)
-        .map(|k| {
-            let none = [(u32::MAX, DVec3::ZERO); 2];
-            let chain = &c.path[c.path_start[k] as usize..c.path_start[k + 1] as usize];
-            let (a, b) = (chain[0], chain[chain.len() - 1]);
-            let (ia, ib) = (o + a as usize, o + b as usize);
-            let (wa, wb) = (im[ia], im[ib]);
-            if wa + wb <= 0.0 {
-                return none;
-            }
-            let d = p.get(ia) - p.get(ib);
-            let l = d.length();
-            let cval = l - c.path_rest[k];
-            if !(cval > 0.0) || !l.is_finite() {
-                return none;
-            }
-            let n = d / l;
-            let dl = -cval / (wa + wb + alpha);
-            [(a, n * (wa * dl)), (b, -n * (wb * dl))]
-        })
-        .collect();
-    // Summed in path order into the vertex's slot: the same on any number of threads.
-    let mut touched: Vec<u32> = Vec::new();
-    SUMS.with(|cell| {
-        let mut sums = cell.borrow_mut();
-        for f in &fixes {
-            for &(v, d) in f {
-                if v != u32::MAX && finite(d) {
-                    let v = v as usize;
-                    if sums.len() <= v {
-                        sums.resize(v + 1, (DVec3::ZERO, 0));
-                    }
-                    if sums[v].1 == 0 {
-                        touched.push(v as u32);
-                    }
-                    sums[v].0 += d;
-                    sums[v].1 += 1;
-                }
-            }
-        }
-        for &v in &touched {
-            let (d, n) = std::mem::take(&mut sums[v as usize]);
-            let i = o + v as usize;
-            let to = p.get(i) + d / n as f64;
-            if finite(to) {
-                p.set(i, to);
-            }
-        }
-    });
-}
 
 /// Stretch, compression, bending and area for every cloth body.
 pub(crate) fn cloth(s: &mut Solver, h: f64, stretch_passes: u32) {
@@ -205,7 +146,6 @@ pub(crate) fn cloth(s: &mut Solver, h: f64, stretch_passes: u32) {
         let st = &body.settings;
         let rest_now = s.rest_now.get(bi).and_then(|r| r.as_ref());
         let torn = &body.torn;
-        let limit_alpha = 0.0;
         for _ in 0..stretch_passes {
             by_colour(&c.dist_colour, |k| {
                 if torn[k] {
@@ -240,8 +180,36 @@ pub(crate) fn cloth(s: &mut Solver, h: f64, stretch_passes: u32) {
                     p.set(ib, nb);
                 }
             });
+            // Across many edges at once: the fine edges alone carry tension only a few edges a pass, so a large
+            // sheet sags long under its weight.
+            if !crate::util::off("limit") {
+                by_colour(&c.limit_colour, |k| {
+                    let [a, b] = c.limit[k];
+                    let (ia, ib) = (o + a as usize, o + b as usize);
+                    let (wa, wb) = (im[ia], im[ib]);
+                    if wa + wb <= 0.0 {
+                        return;
+                    }
+                    let (pa, pb) = (p.get(ia), p.get(ib));
+                    let d = pa - pb;
+                    let l = d.length();
+                    let cval = l - c.limit_rest[k];
+                    if !(cval > 0.0) || !l.is_finite() {
+                        return;
+                    }
+                    // Its edges in a row: each as stiff as an average edge.
+                    let stiff = st.stretch_stiffness / c.limit_edges[k].max(1.0);
+                    let alpha = if stiff > 0.0 { 1.0 / (stiff * h2) } else { return };
+                    let dl = -cval / (wa + wb + alpha);
+                    let n = d / l;
+                    let (na, nb) = (pa + n * (wa * dl), pb - n * (wb * dl));
+                    if finite(na) && finite(nb) {
+                        p.set(ia, na);
+                        p.set(ib, nb);
+                    }
+                });
+            }
         }
-        paths(c, o, im, &p, limit_alpha);
         // Long range attachments: straight onto the ball around the anchor, which does not move for them.
         if !c.tether.is_empty() && !crate::util::off("tether") {
             let moved: Vec<(usize, DVec3)> = c
