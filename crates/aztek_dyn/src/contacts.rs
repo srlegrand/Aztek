@@ -26,6 +26,9 @@ const SOFT_RISE: f64 = 0.25;
 
 /// The gap a contact should have after this substep: the thickness, but no more than a little above where it started
 /// or is now, and never below the surface.
+/// How much of a point's estimated motion its search box keeps all round, beyond the sweep.
+const SWEEP_SLACK: f64 = 0.25;
+
 #[inline]
 fn zone_target(gap_now: f64, gap_start: f64, thick: f64) -> f64 {
     thick.min(gap_start.max(gap_now.max(0.0)) + SOFT_RISE * thick)
@@ -124,12 +127,31 @@ impl FrameData {
         let mut cache = std::mem::take(&mut s.bvh);
         let fresh = a0 <= 0.0;
         let (col_tris, col_motion, bounds) = Self::collider_tris(s, a0, a1);
-        if fresh || cache.col.len != bounds.len() {
+        // The collider tree is built again now and then, refitted the rest of the time: a skinned body moves, but
+        // its triangles stay near the ones they started near.
+        if cache.col.len != bounds.len() || (fresh && s.frame % 24 == 1) {
             cache.col = Bvh::build(&bounds);
         } else {
             cache.col.refit(&bounds);
         }
         let n = s.pt.len();
+        // How fast each point really goes: from where it was at the last search, not the last substep's velocity, which
+        // carries the solve's small corrections and would make every search box large. A quarter of that velocity is
+        // kept as a margin for what changed since.
+        let frame_dt = if a1 > a0 { dt / (a1 - a0) } else { dt };
+        let now_t = s.time + a0 * frame_dt;
+        let since = now_t - cache.last_t;
+        let vel: Vec<DVec3> = if cache.last_x.len() == n && since > 1e-9 && since < 0.5 {
+            (0..n).map(|i| {
+                let est = (s.pt.x[i] - cache.last_x[i]) / since;
+                let v = s.pt.v[i];
+                if est.length() >= v.length() * 0.25 { est } else { v * 0.25 }
+            }).collect()
+        } else {
+            s.pt.v.clone()
+        };
+        cache.last_x.clone_from(&s.pt.x);
+        cache.last_t = now_t;
         let rmax = s.pt.radius.iter().fold(0.0f64, |m, &r| m.max(r));
         let col_thick = s.bodies.iter().filter(|b| b.kind == BodyKind::Collider).fold(0.0f64, |m, b| m.max(b.settings.thickness));
         let vmax = s.settings.max_velocity;
@@ -137,7 +159,7 @@ impl FrameData {
         // Where each particle may get to over the span, wide enough to see a point that went through.
         let reach = |i: usize| {
             let x = s.pt.x[i];
-            let to = x + crate::util::clamp_len(s.pt.v[i] * dt, vmax * dt);
+            let to = x + crate::util::clamp_len(vel[i] * dt, vmax * dt);
             let mut b = Aabb::EMPTY;
             b.add(x);
             b.add(to);
@@ -150,7 +172,7 @@ impl FrameData {
         let col_bvh = &cache.col;
         let found: Vec<Vec<(u32, u32)>> = (0..n)
             .into_par_iter()
-            .with_min_len(256)
+            .with_min_len(32)
             .fold(Vec::new, |mut acc, i| {
                 if collides[s.pt.body[i] as usize] && !col_tris.is_empty() {
                     let r = reach(i);
@@ -213,22 +235,29 @@ impl FrameData {
         if any_cloth {
             // Motion relative to the mean of everything moving: what brings things together. A garment falling as one
             // keeps its bounds small.
-            let movers: Vec<DVec3> = (0..n).filter(|&i| s.pt.inv_mass[i] > 0.0).map(|i| s.pt.v[i]).filter(|v| finite(*v)).collect();
+            let movers: Vec<DVec3> = (0..n).filter(|&i| s.pt.inv_mass[i] > 0.0).map(|i| vel[i]).filter(|v| finite(*v)).collect();
             let mean_v = if movers.is_empty() { DVec3::ZERO } else { movers.iter().sum::<DVec3>() / movers.len() as f64 };
-            let motion = |i: usize| crate::util::clamp_len((s.pt.v[i] - mean_v) * dt, vmax * dt).length();
+            let step_of = |i: usize| crate::util::clamp_len((vel[i] - mean_v) * dt, vmax * dt);
+            let motion = |i: usize| step_of(i).length();
+            // Collider points do not share that mean: against them the cloth moves by all of it.
+            let mean_motion = crate::util::clamp_len(mean_v * dt, vmax * dt).length();
             let tri_bounds: Vec<Aabb> = dyn_tris
                 .par_iter()
                 .with_min_len(PAR_CHUNK)
                 .zip(dyn_body.par_iter())
                 .map(|(t, &b)| {
+                    // Swept: where it is and where its motion takes it, with a quarter of that motion around for
+                    // the estimate being off.
                     let mut bb = Aabb::EMPTY;
                     let mut m = 0.0f64;
                     for &k in t {
-                        bb.add(s.pt.x[k as usize]);
-                        m = m.max(motion(k as usize));
+                        let (x, d) = (s.pt.x[k as usize], step_of(k as usize));
+                        bb.add(x);
+                        bb.add(x + d);
+                        m = m.max(d.length());
                     }
                     let st = &s.bodies[b as usize].settings;
-                    bb.grow(st.thickness.max(st.self_thickness) + m)
+                    bb.grow(st.thickness.max(st.self_thickness) + m * SWEEP_SLACK)
                 })
                 .collect();
             if fresh || cache.cloth.len != tri_bounds.len() {
@@ -241,10 +270,13 @@ impl FrameData {
                 all.add(b.lo);
                 all.add(b.hi);
             }
-            // Collider vertices near cloth, as points that cannot move.
+            // Collider vertices near cloth, as points that cannot move: where the collider is much finer than the cloth,
+            // so its corners could poke between cloth vertices. One of about the same size is held off by its faces
+            // alone; its vertices would only fight the face contacts (a skinned body under a garment modelled on it).
+            let finest_cloth = s.bodies.iter().filter(|b| b.kind == BodyKind::Cloth).map(|b| b.mean_edge).fold(f64::INFINITY, f64::min);
             for (bi, b) in s.bodies.iter().enumerate().filter(|_| !crate::util::off("kin")) {
-                if b.kind == BodyKind::Collider && b.settings.enabled && b.settings.collide {
-                    let grown = all.grow(b.settings.thickness + rmax);
+                if b.kind == BodyKind::Collider && b.settings.enabled && b.settings.collide && b.mean_edge < finest_cloth * 0.5 {
+                    let grown = all.grow(b.settings.thickness + rmax + mean_motion);
                     for (l, p) in b.anim.iter().enumerate() {
                         let q = b.anim_prev[l];
                         if (p.cmpge(grown.lo).all() && p.cmple(grown.hi).all()) || (q.cmpge(grown.lo).all() && q.cmple(grown.hi).all()) {
@@ -259,7 +291,7 @@ impl FrameData {
             let cloth_bvh = &cache.cloth;
             let found: Vec<Vec<PtTri>> = (0..points)
                 .into_par_iter()
-                .with_min_len(256)
+                .with_min_len(32)
                 .fold(Vec::new, |mut out, k| {
                     let (x, xb, is_kin, reach_r, pbody) = if k < n {
                         let b = s.pt.body[k];
@@ -272,11 +304,17 @@ impl FrameData {
                         let body = &s.bodies[b as usize];
                         let (p0, p1) = (body.anim_prev[l as usize], body.anim[l as usize]);
                         // Over this span only, not the whole frame.
-                        (p0.lerp(p1, a0), b, true, body.settings.thickness + (p1 - p0).length() * span, b)
+                        (p0.lerp(p1, a0), b, true, body.settings.thickness + (p1 - p0).length() * span + mean_motion, b)
                     };
                     let mut bb = Aabb::EMPTY;
                     bb.add(x);
-                    let reach_box = bb.grow(reach_r);
+                    let reach_box = if is_kin {
+                        bb.grow(reach_r)
+                    } else {
+                        let d = step_of(k);
+                        bb.add(x + d);
+                        bb.grow(s.pt.radius[k] + d.length() * SWEEP_SLACK)
+                    };
                     cloth_bvh.query(&reach_box, &tri_bounds, |t| {
                         if DEBUG_COUNT.load(std::sync::atomic::Ordering::Relaxed) > 0 {
                             VISITED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -301,16 +339,24 @@ impl FrameData {
                             tst.thickness + s.pt.radius[k]
                         };
                         let [a, b, c] = tri.map(|g| s.pt.x[g as usize]);
+                        // Far from the triangle's plane: no closest point needed.
+                        let nrm = geom::normal(a, b, c);
+                        let tri_motion = tri.iter().fold(0.0f64, |m, &g| m.max(motion(g as usize)));
+                        if nrm == DVec3::ZERO || (x - a).dot(nrm).abs() > thick + reach_r + tri_motion {
+                            return;
+                        }
                         let (w, feat) = geom::closest_on_triangle(x, a, b, c);
                         let d = x - geom::at(w, a, b, c);
-                        if feat != Feature::Face && d.length() > thick {
+                        // Beyond an edge by more than the thickness: the neighbour holds it, unless a collider point
+                        // is close enough to the edge to slide over it before the next search.
+                        if feat != Feature::Face && d.length() > thick && !(is_kin && geom::over_face(x, a, b, c, 0.1)) {
                             return;
                         }
-                        let nrm = geom::normal(a, b, c);
-                        if nrm == DVec3::ZERO {
+                        // The solve acts over the face only: a point well beyond it (most of what a crumpled garment
+                        // finds) cannot get there before the next search.
+                        if !is_kin && feat != Feature::Face && !geom::over_face(x, a, b, c, 0.5) {
                             return;
                         }
-                        let tri_motion = tri.iter().fold(0.0f64, |m, &g| m.max(motion(g as usize)));
                         if d.length() > thick + reach_r + tri_motion {
                             return;
                         }
@@ -324,11 +370,33 @@ impl FrameData {
                             }
                             let rt = tri.map(|g| body.rest[g as usize - body.start]);
                             let (w, _) = geom::closest_on_triangle(body.rest[l], rt[0], rt[1], rt[2]);
-                            if (body.rest[l] - geom::at(w, rt[0], rt[1], rt[2])).length() < thick * 2.0 {
+                            // Closer than half an edge at rest: the two sides of a garment modelled with thickness,
+                            // which belong together.
+                            if (body.rest[l] - geom::at(w, rt[0], rt[1], rt[2])).length() < (thick * 2.0).max(body.mean_edge * 0.5) {
                                 return;
                             }
                         }
-                        let side = if d.dot(nrm) < 0.0 { -1.0 } else { 1.0 };
+                        let mut side = if d.dot(nrm) < 0.0 { -1.0 } else { 1.0 };
+                        if is_kin {
+                            // A closed collider says which way is out: the cloth belongs on its outside, even when the
+                            // point has already come a little through.
+                            let body = &s.bodies[pbody as usize];
+                            if let Some(out_sign) = body.outside {
+                                let l = kin[k - n].1 as usize;
+                                let vn: DVec3 = body.topo.point_tris[l]
+                                    .iter()
+                                    .map(|&t| {
+                                        let [i, j, m] = body.topo.triangles[t as usize].map(|g| body.anim[g as usize]);
+                                        (j - i).cross(m - i)
+                                    })
+                                    .sum::<DVec3>()
+                                    * out_sign;
+                                let along = vn.dot(nrm);
+                                if along != 0.0 {
+                                    side = if along > 0.0 { -1.0 } else { 1.0 };
+                                }
+                            }
+                        }
                         let friction = 0.5 * (fric[tb as usize] + fric[pbody as usize]);
                         out.push(PtTri { point: if is_kin { (k - n) as u32 } else { k as u32 }, kin: is_kin, tri: t, side, thick, friction });
                     });
@@ -343,6 +411,9 @@ impl FrameData {
                 sizes.sort_by(|a, b| a.total_cmp(b));
                 let mut mot: Vec<f64> = (0..n).map(motion).collect();
                 mot.sort_by(|a, b| a.total_cmp(b));
+                for b in s.bodies.iter().filter(|b| b.kind == BodyKind::Collider) {
+                    eprintln!("collider {}: mean edge {:.4}", b.name, b.mean_edge);
+                }
                 for b in s.bodies.iter().filter(|b| b.kind == BodyKind::Cloth) {
                     eprintln!("cloth {}: thickness {:.3}, self {:.3}, mean edge {:.3}, radius[0] {:.3}", b.name, b.settings.thickness, b.settings.self_thickness, b.mean_edge, s.pt.radius[b.start]);
                 }
@@ -365,7 +436,7 @@ impl FrameData {
             let tree = Bvh::build(&pbounds);
             let found: Vec<Vec<PtPt>> = others
                 .par_iter()
-                .with_min_len(256)
+                .with_min_len(32)
                 .fold(Vec::new, |mut out, &i| {
                     let iu = i as usize;
                     let xi = s.pt.x[iu];
@@ -408,6 +479,9 @@ static VISITED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize:
 pub struct BvhCache {
     pub col: Bvh,
     pub cloth: Bvh,
+    /// Where the particles were at the last search, and when (seconds since the reset).
+    pub last_x: Vec<DVec3>,
+    pub last_t: f64,
 }
 
 impl Solver {
@@ -469,7 +543,7 @@ pub(crate) fn solve_pairs(s: &mut Solver, _h: f64, a0: f64, a1: f64) {
     let tri_fixes: Vec<Fix> = fd
         .pt_tri
         .par_iter()
-            .with_min_len(PAR_CHUNK / 2)
+            .with_min_len(128)
         .map(|c| {
             let mut out: Fix = ([(0, DVec3::ZERO); 4], 0);
             let tri = fd.dyn_tris[c.tri as usize];
@@ -478,7 +552,8 @@ pub(crate) fn solve_pairs(s: &mut Solver, _h: f64, a0: f64, a1: f64) {
             let tw = tri.map(|g| im[g as usize]);
             let (bw, feat) = geom::closest_on_triangle(pp, tp[0], tp[1], tp[2]);
             // Over the face only: beyond an edge the neighbouring triangle holds it, and the normal says nothing there.
-            if feat != Feature::Face {
+            // A collider point near the edge holds on until the next search hands it to the neighbour.
+            if feat != Feature::Face && !(c.kin && geom::over_face(pp, tp[0], tp[1], tp[2], 0.1)) {
                 return out;
             }
             let n = geom::normal(tp[0], tp[1], tp[2]) * c.side;
@@ -528,7 +603,7 @@ pub(crate) fn solve_pairs(s: &mut Solver, _h: f64, a0: f64, a1: f64) {
     let pair_fixes: Vec<Fix> = fd
         .pt_pt
         .par_iter()
-            .with_min_len(PAR_CHUNK / 2)
+            .with_min_len(128)
         .map(|c| {
             let mut out: Fix = ([(0, DVec3::ZERO); 4], 0);
             let (a, b) = (c.a as usize, c.b as usize);
@@ -558,20 +633,38 @@ pub(crate) fn solve_pairs(s: &mut Solver, _h: f64, a0: f64, a1: f64) {
     let n = s.pt.len();
     let mut sum = vec![DVec3::ZERO; n];
     let mut count = vec![0u32; n];
+    let mut largest = vec![DVec3::ZERO; n];
     let mut contacts = 0;
-    for f in tri_fixes.iter().chain(&pair_fixes) {
+    for (k, f) in tri_fixes.iter().chain(&pair_fixes).enumerate() {
         if f.1 > 0 {
             contacts += 1;
         }
+        let kin = k < fd.pt_tri.len() && fd.pt_tri[k].kin;
         for &(i, d) in &f.0[..f.1 as usize] {
-            sum[i as usize] += d;
-            count[i as usize] += 1;
+            let i = i as usize;
+            sum[i] += d;
+            count[i] += 1;
+            if kin && d.length_squared() > largest[i].length_squared() {
+                largest[i] = d;
+            }
         }
     }
     s.stats.contacts += contacts;
     s.pt.p.par_iter_mut().with_min_len(PAR_CHUNK).enumerate().for_each(|(i, p)| {
         if count[i] > 0 {
-            let to = *p + sum[i] / count[i] as f64;
+            // Averaged over its contacts, a point under several gets too little of each to hold against the cloth.
+            // The largest push from a collider point is met in full along its direction; the rest average.
+            let mut d = sum[i] / count[i] as f64;
+            let m = largest[i];
+            let ml = m.length();
+            if ml > 0.0 {
+                let dir = m / ml;
+                let along = d.dot(dir);
+                if along < ml {
+                    d += dir * (ml - along);
+                }
+            }
+            let to = *p + d;
             if finite(to) {
                 *p = to;
             }
@@ -580,6 +673,7 @@ pub(crate) fn solve_pairs(s: &mut Solver, _h: f64, a0: f64, a1: f64) {
 }
 
 /// The nearest triangle of one collider to a point.
+#[derive(Clone, Copy)]
 pub(crate) struct Hit {
     pub body: u32,
     pub tri: u32,
@@ -597,8 +691,34 @@ pub(crate) struct Hit {
 }
 
 /// For each collider among the candidates, its nearest triangle to `pos` at blend `a` through the frame.
-pub(crate) fn closest_per_body(s: &Solver, fd: &FrameData, cands: &[u32], pos: DVec3, a: f64) -> Vec<Hit> {
-    let mut hits: Vec<Hit> = Vec::new();
+/// Up to four colliders' nearest triangles, without allocating: this runs for every particle in every substep.
+pub(crate) struct Hits {
+    hits: [Option<Hit>; 4],
+    n: usize,
+}
+
+impl Hits {
+    fn iter_mut(&mut self) -> impl Iterator<Item = &mut Hit> {
+        self.hits[..self.n].iter_mut().flatten()
+    }
+    fn push(&mut self, h: Hit) {
+        if self.n < 4 {
+            self.hits[self.n] = Some(h);
+            self.n += 1;
+        }
+    }
+}
+
+impl IntoIterator for Hits {
+    type Item = Hit;
+    type IntoIter = std::iter::Flatten<std::iter::Take<std::array::IntoIter<Option<Hit>, 4>>>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.hits.into_iter().take(self.n).flatten()
+    }
+}
+
+pub(crate) fn closest_per_body(s: &Solver, fd: &FrameData, cands: &[u32], pos: DVec3, a: f64) -> Hits {
+    let mut hits = Hits { hits: [None; 4], n: 0 };
     for &c in cands {
         let (cb, t) = fd.col_tris[c as usize];
         let body = &s.bodies[cb as usize];
@@ -616,13 +736,15 @@ pub(crate) fn closest_per_body(s: &Solver, fd: &FrameData, cands: &[u32], pos: D
         let border = feat != Feature::Face && (0..3).filter(|&k| w[k] > 1e-9).all(|k| body.topo.border[tri[k] as usize]);
         let size = (p1 - p0).length().max((p2 - p1).length()).max((p0 - p2).length());
         let hit = Hit { body: cb, tri: t, cand: c, w, feat, q, d, dist, n, border, size };
-        match hits.iter_mut().find(|h| h.body == cb) {
-            Some(h) => {
-                if better(h) {
-                    *h = hit;
-                }
+        let mut found = false;
+        for h in hits.iter_mut().filter(|h| h.body == cb) {
+            found = true;
+            if better(h) {
+                *h = hit;
             }
-            None => hits.push(hit),
+        }
+        if !found {
+            hits.push(hit);
         }
     }
     hits
@@ -647,7 +769,7 @@ pub(crate) fn solve_colliders(s: &mut Solver, h: f64, a0: f64, a1: f64, last: bo
     };
     let res: Vec<(DVec3, Signal, Sides, usize)> = (0..s.pt.len())
         .into_par_iter()
-            .with_min_len(PAR_CHUNK)
+            .with_min_len(64)
         .map(|i| {
             let mut pp = s.pt.p[i];
             let xs = s.pt.x[i];
