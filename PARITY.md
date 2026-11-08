@@ -895,6 +895,7 @@ the two.
 Measured beside the viewport (Use All Lights) from the same session at 955 x 720, render over viewport in linear light
 on lit pixels: `examples/lights.ma` median 1.02 (quartiles 1.01 and 1.03); a scene with no lights under default
 lighting 1.03; the Toph rig with a key, a rim and a fill added 0.98, the shadowed quarter lower. Found on the way: the
-spot light was missing from renders before this (Harold's own spot model and the file's settings disagreed), ambient
+spot light was missing from renders before this (no decay in the file, intensity 2, but rendered with quadratic falloff
+about 13 units from the floor: a hundredth of the light), ambient
 colour wasn't honoured, and an ambient light's all-round half was lost to a multiple importance weight no ray could
 balance; each has a test.
