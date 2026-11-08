@@ -147,6 +147,10 @@ pub(super) fn translate(doc: &mut Doc) -> Vec<String> {
             continue;
         }
         let Some((ours, split_shape, field)) = mapping(&old) else { continue };
+        // Ours share these names and sit under no transform; the other systems' are shapes under one.
+        if matches!(old.as_str(), "dynamicConstraint" | "rigidBody") && doc.nodes[i].parent.is_none() {
+            continue;
+        }
         let t = types::find(ours).expect(ours);
         let name = doc.nodes[i].name.clone();
         let sets = std::mem::take(&mut doc.nodes[i].sets);
