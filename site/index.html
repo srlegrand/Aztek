@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Aztek</title>
-<meta name="description" content="Aztek: modelling, UVs, rigging and animation with the industry-standard commands, hotkeys, menus and file format. Free under MIT-0, for Linux and Windows.">
+<meta name="description" content="Aztek: a free 3D application for modelling, UVs, rigging, animation, dynamics and rendering, with the industry-standard commands, hotkeys, menus and file format. MIT-0, for Linux and Windows.">
 <meta property="og:title" content="Aztek">
-<meta property="og:description" content="Modelling, UVs, rigging and animation with the industry-standard commands, hotkeys and menus. MIT-0, Linux and Windows.">
+<meta property="og:description" content="Modelling, UVs, rigging, animation, dynamics and rendering, with the industry-standard commands, hotkeys and menus. MIT-0, Linux and Windows.">
 <meta property="og:image" content="https://srlegrand.github.io/Aztek/img/social-preview.png">
 <link rel="icon" type="image/png" href="img/aztek-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -19,58 +19,272 @@
 <header class="top">
   <a class="brand" href="#"><img src="img/aztek-icon.png" alt="" width="28" height="28"><span>Aztek</span></a>
   <nav>
-    <a href="#features">Features</a>
-    <a href="#feedback">Feedback</a>
-    <a href="#works">In the works</a>
     <a href="#download">Download</a>
+    <a href="#glance">Features</a>
+    <a href="#dynamics">Dynamics</a>
+    <a href="#rendering">Rendering</a>
+    <a href="#copy">Copy it</a>
     <a href="#licence">Licence</a>
     <a href="https://github.com/srlegrand/Aztek">GitHub</a>
   </nav>
 </header>
 
 <section class="hero">
-  <img class="splash" src="img/splash.png" alt="Aztek splash screen" width="1200" height="700">
-  <div class="hero-text">
-    <h1>Modelling, UVs, rigging and animation, the way you already work.</h1>
-    <p>Same commands, flags, hotkeys, menus and marking menus. MEL and Python scripts run, <code>.ma</code> files open and save,
-      and production rigs pose. Free and open source under MIT-0, for Linux and Windows.</p>
-    <div class="buttons">
-      <a class="btn primary" id="dl-main" href="#download">Download</a>
-      <a class="btn" href="#download">Other platforms &darr;</a>
-      <a class="btn" href="https://github.com/srlegrand/Aztek">Source on GitHub</a>
-      <a class="btn" href="https://github.com/srlegrand/Aztek/fork">Fork it on GitHub</a>
-      <a class="btn" href="#copy">Copy it anywhere</a>
+  <div class="hero-in">
+    <img class="splash" src="img/splash.png" alt="Aztek splash screen" width="1200" height="700">
+    <div class="hero-text">
+      <p class="kicker">Free and open source 3D</p>
+      <h1>Model, rig, animate, simulate and render. One application, the way you already work.</h1>
+      <p class="standfirst">Modelling, UVs, rigging, animation, cloth, particles, rigid bodies, a path tracer and USD, with the
+        industry-standard commands, flags, hotkeys, menus and marking menus. MEL and Python scripts run, <code>.ma</code>
+        files open and save, production rigs pose. MIT-0, for Linux and Windows.</p>
     </div>
-    <p class="build-line" id="build-line"></p>
   </div>
 </section>
 
-<section class="why" id="why">
-  <h2>Why</h2>
-  <p>The tools we build our work on shouldn't belong to whoever bought them last. Too many of them were bought, left to stand still, and kept on subscription while bugs older than some of the people using them went unfixed. Aztek works the way you already work, and it belongs to everyone who uses it: no account, no subscription, no owner who can sell it, shelve it or switch it off.</p>
-  <p class="why-last"><strong>Back it up, clone it, fork it.</strong> As long as one copy exists somewhere, nobody can take it away.</p>
+<section class="download" id="download">
+  <div class="dl-head">
+    <h2>Download</h2>
+    <p class="build-line" id="build-line">Built from every change to the main branch.</p>
+  </div>
+  <div class="dl-grid">
+    <a class="dl win" data-asset="setup-x64.exe" href="https://github.com/srlegrand/Aztek/releases/latest">
+      <span class="os">Windows</span><span class="file">installer .exe, 64 bit</span>
+    </a>
+    <a class="dl win" data-asset="windows-x86_64.zip" href="https://github.com/srlegrand/Aztek/releases/latest">
+      <span class="os">Windows</span><span class="file">.zip, no install</span>
+    </a>
+    <a class="dl rocky" data-asset="el9.x86_64.rpm" href="https://github.com/srlegrand/Aztek/releases/latest">
+      <span class="os">Rocky Linux 9</span><span class="file">.rpm</span>
+    </a>
+    <a class="dl rocky" data-asset="el8.x86_64.rpm" href="https://github.com/srlegrand/Aztek/releases/latest">
+      <span class="os">Rocky Linux 8</span><span class="file">.rpm, own Qt</span>
+    </a>
+    <a class="dl ubuntu" data-asset="ubuntu24.04" href="https://github.com/srlegrand/Aztek/releases/latest">
+      <span class="os">Ubuntu 24.04</span><span class="file">.deb</span>
+    </a>
+    <a class="dl ubuntu" data-asset="ubuntu22.04" href="https://github.com/srlegrand/Aztek/releases/latest">
+      <span class="os">Ubuntu 22.04</span><span class="file">.deb</span>
+    </a>
+    <a class="dl linux" data-asset="linux-x86_64.tar.gz" href="https://github.com/srlegrand/Aztek/releases/latest">
+      <span class="os">Linux</span><span class="file">.tar.gz, needs Qt 6</span>
+    </a>
+  </div>
+  <div class="buttons">
+    <a class="btn" href="https://github.com/srlegrand/Aztek">Source on GitHub</a>
+    <a class="btn" href="https://github.com/srlegrand/Aztek/fork">Fork it on GitHub</a>
+    <a class="btn hot" href="#copy">Copy it anywhere</a>
+    <a class="btn" href="https://github.com/srlegrand/Aztek/releases">All releases</a>
+  </div>
+  <p class="small">Windows: run the installer, or unzip and run <code>aztek.exe</code>. Rocky Linux: <code>sudo dnf install ./aztek-*.rpm</code>
+    (Rocky 9 needs EPEL for Qt). Ubuntu: <code>sudo apt install ./aztek_*.deb</code>. All need a Vulkan driver.</p>
 </section>
 
-<section class="copy" id="copy">
-  <h2>Copy it anywhere</h2>
-  <p>Copying Aztek somewhere else is welcome. Clone it, fork it, mirror it or re-host it on any git server or other
-    version control: Codeberg, GitLab, a forge in your country, a server at your studio, a drive in your pocket. With or
-    without changes, under your own name or none. There is nothing to ask and no one to credit: the licence is
-    <a href="https://github.com/srlegrand/Aztek/blob/main/LICENSE">MIT-0</a>. Every extra copy makes the project harder to lose.</p>
+<section class="why" id="why">
+  <div class="why-col">
+    <h2>Why</h2>
+    <p class="dropcap">The tools we build our work on shouldn't belong to whoever bought them last. Too many of them were bought, left to stand still, and kept on subscription while bugs older than some of the people using them went unfixed. Aztek works the way you already work, and it belongs to everyone who uses it: no account, no subscription, no owner who can sell it, shelve it or switch it off.</p>
+    <p class="pull">Back it up, clone it, fork it. As long as one copy exists somewhere, nobody can take it away.</p>
+  </div>
+  <div class="copy-box" id="copy">
+    <h2>Copy it anywhere</h2>
+    <p>Copying Aztek somewhere else is welcome. Clone it, fork it, mirror it or re-host it on any git server or other
+      version control: Codeberg, GitLab, a forge in your country, a server at your studio, a drive in your pocket. With or
+      without changes, under your own name or none. There is nothing to ask and no one to credit: the licence is
+      <a href="https://github.com/srlegrand/Aztek/blob/main/LICENSE">MIT-0</a>. Every extra copy makes the project harder to lose.</p>
 <pre><code>git clone --mirror https://github.com/srlegrand/Aztek.git
 cd Aztek.git
 git push --mirror &lt;your repository's URL&gt;</code></pre>
+  </div>
 </section>
 
-<div class="fret" aria-hidden="true"></div>
+<section class="glance" id="glance">
+  <h2>At a glance</h2>
+  <div class="glance-grid">
+    <a class="g c-model" href="#modelling"><b>01</b><strong>Modelling</strong><span>Polygons with history, NURBS, sculpting, Quad Draw</span></a>
+    <a class="g c-uv" href="#uvs"><b>02</b><strong>UVs</strong><span>Projections, unfold, layout, cut and sew</span></a>
+    <a class="g c-rig" href="#rigging"><b>03</b><strong>Rigging</strong><span>Joints, IK, constraints, skinning, deformers, HumanIK</span></a>
+    <a class="g c-anim" href="#animation"><b>04</b><strong>Animation</strong><span>Graph Editor, Dope Sheet, layers, playblast</span></a>
+    <a class="g c-dyn" href="#dynamics"><b>05</b><strong>Dynamics</strong><span>Cloth, particles and rigid bodies in one solver</span></a>
+    <a class="g c-ren" href="#rendering"><b>06</b><strong>Rendering</strong><span>Harold, a CPU path tracer, and the lights you know</span></a>
+    <a class="g c-usd" href="#pipeline"><b>07</b><strong>Pipeline</strong><span><code>.ma</code> files, references, USD stages</span></a>
+    <a class="g c-code" href="#scripting"><b>08</b><strong>Scripting</strong><span>MEL, Python, the API, plug-ins, script-built UI</span></a>
+  </div>
+</section>
+
+<section class="reel">
+  <figure>
+    <video src="img/clip-cloth.mp4" poster="img/clip-cloth.jpg" autoplay muted loop playsinline preload="metadata"></video>
+    <figcaption><b>Cloth</b> A sheet dropped on a ball, simulated and rendered with Harold, frame by frame.</figcaption>
+  </figure>
+  <figure>
+    <video src="img/clip-modelling.mp4" poster="img/clip-modelling.jpg" autoplay muted loop playsinline preload="metadata"></video>
+    <figcaption><b>History</b> Extrude, width and bevel keyed on their history nodes and played back in the viewport.</figcaption>
+  </figure>
+  <figure>
+    <video src="img/clip-turntable.mp4" poster="img/clip-turntable.jpg" autoplay muted loop playsinline preload="metadata"></video>
+    <figcaption><b>Harold</b> Glass, gold, chrome, plastic and car paint under a sky, the camera going round.</figcaption>
+  </figure>
+</section>
 
 <section class="showcase">
   <figure>
     <img src="img/production-rig.png" alt="A production character rig opened in Aztek and posed" loading="lazy">
-    <figcaption>A production character rig, opened from its <code>.ma</code> file and posed: 414 joints,
-      37 skinClusters, 17 blendShapes, 82 IK handles, follicles, ribbons and wires. It opens in about 3 seconds and responds
-      in 13 to 44 ms per change.</figcaption>
+    <figcaption><b>A production rig</b> Opened from its <code>.ma</code> file and posed: 414 joints, 37 skinClusters,
+      17 blendShapes, 82 IK handles, follicles, ribbons and wires. It opens in about 3 seconds and responds in 13 to 44 ms
+      per change.</figcaption>
   </figure>
+</section>
+
+<section class="features">
+
+  <article class="spread c-model" id="modelling">
+    <div class="tab"><b>01</b>Modelling</div>
+    <div class="spread-copy">
+      <h3>Polygons, NURBS and sculpting, with construction history</h3>
+      <p class="lead">The standard polygon commands, each one a history node you can go back and change.</p>
+      <p>Quad Draw, Multi-Cut, Insert and Offset Edge Loop, Target Weld, Slide Edge, Crease, Create and Append Polygon,
+        booleans, bevel, smooth, mirror; symmetry and soft selection (B), eighteen sculpting brushes. NURBS curves (CV and
+        EP tools, rebuild, attach, detach, offset, fillets, projection, trims) and surfaces (primitives, loft, revolve,
+        extrude, boundary, birail, <code>nurbsToPoly</code>), with CVs, edit points and isoparms as components.</p>
+    </div>
+    <div class="spread-media">
+      <figure class="wide"><img src="img/modelling.png" alt="Component editing with construction history and the move manipulator" loading="lazy">
+        <figcaption><b>History</b> <code>polyExtrudeFace1</code> in the channel box's inputs, the move manipulator on the faces.</figcaption></figure>
+      <figure><img src="img/quad-draw-view.png" alt="Quad Draw on a live surface" loading="lazy"><figcaption><b>Quad Draw</b> Retopology on a live surface.</figcaption></figure>
+      <figure><img src="img/soft-select-view.png" alt="Soft selection falloff on a plane" loading="lazy"><figcaption><b>Soft selection</b> The falloff shown on the vertices.</figcaption></figure>
+      <figure class="wide"><img src="img/nurbs-view.png" alt="NURBS surfaces and curves" loading="lazy"><figcaption><b>NURBS</b> Surfaces and curves, with a drawing override on the control.</figcaption></figure>
+    </div>
+  </article>
+
+  <article class="spread c-uv" id="uvs">
+    <div class="tab"><b>02</b>UVs</div>
+    <div class="spread-copy">
+      <h3>The UV Editor, by UV, shell, edge or face</h3>
+      <p class="lead">Planar, cylindrical, spherical and automatic projections, unfold, layout, cut and sew.</p>
+      <p>Move, rotate and scale in UV space, normalize and flip, several UV sets, and the texture behind the grid.</p>
+    </div>
+    <div class="spread-media">
+      <figure class="wide"><img src="img/uv-editor.png" alt="The UV Editor after automatic projection and layout" loading="lazy"><figcaption><b>UV Editor</b> Automatic projection, then layout.</figcaption></figure>
+    </div>
+  </article>
+
+  <article class="spread c-rig" id="rigging">
+    <div class="tab"><b>03</b>Rigging</div>
+    <div class="spread-copy">
+      <h3>Joints, IK, constraints, skinning and every deformer</h3>
+      <p class="lead">Production rigs open from their files and pose.</p>
+      <p>Joints (orient, mirror, insert, segment scale compensate), RP, SC and spline IK, every constraint, smooth skin with
+        weight painting, mirror and copy, dual quaternion. blendShape in full (Shape Editor, in-betweens, live targets),
+        lattice, wrap, wire, delta mush, softMod, clusters, nonlinears, sculpt, jiggle, shrinkWrap, proximityWrap,
+        curveWarp. HumanIK characters with definitions, control rig and retargeting. Controls keep their colours.</p>
+    </div>
+    <div class="spread-media">
+      <figure class="wide"><img src="img/quadruped-rig.png" alt="A quadruped skeleton posed with the rotate tool" loading="lazy"><figcaption><b>Skeleton</b> A quadruped posed with the rotate tool.</figcaption></figure>
+      <figure><img src="img/rigging.png" alt="Joints, smooth skin and an RP IK handle" loading="lazy"><figcaption><b>Skin and IK</b> Joints, smooth skin and an RP IK handle.</figcaption></figure>
+      <figure><img src="img/paint-weights.png" alt="Paint Skin Weights" loading="lazy"><figcaption><b>Paint Skin Weights</b> Influences and brush in Tool Settings.</figcaption></figure>
+    </div>
+  </article>
+
+  <article class="spread c-anim" id="animation">
+    <div class="tab"><b>04</b>Animation</div>
+    <div class="spread-copy">
+      <h3>Keys, curves and layers</h3>
+      <p class="lead">Keys with weighted tangents and infinities, in the Graph Editor and the Dope Sheet.</p>
+      <p>Set driven keys, breakdowns, copy and paste keys, baking, motion paths, motion trails, animation layers (additive,
+        override, merge, extract), character sets and clips, and playblast to images or a movie.</p>
+    </div>
+    <div class="spread-media">
+      <figure class="wide"><video src="img/clip-arm.mp4" poster="img/clip-arm.jpg" autoplay muted loop playsinline preload="metadata"></video><figcaption><b>Playback</b> A keyed IK arm with a pole vector and coloured controls.</figcaption></figure>
+      <figure><img src="img/graph-editor.png" alt="Graph Editor" loading="lazy"><figcaption><b>Graph Editor</b> Keyed channels, key ticks on the time slider.</figcaption></figure>
+      <figure><img src="img/dope-sheet.png" alt="Dope Sheet with a breakdown" loading="lazy"><figcaption><b>Dope Sheet</b> A breakdown in green.</figcaption></figure>
+    </div>
+  </article>
+
+  <article class="spread c-dyn" id="dynamics">
+    <div class="tab"><b>05</b>Dynamics</div>
+    <div class="spread-copy">
+      <h3>Cloth, particles and rigid bodies in one solver</h3>
+      <p class="lead">They all collide with and push each other in the same step.</p>
+      <p>Cloth on skinned or animated meshes with material presets, painted maps, colliders and constraints; emitters and
+        fields; active and passive rigid bodies; caching to disk. It never explodes: a point it can't place leaves the
+        simulation for a while and comes back, marked in the view. Older dynamics nodes in <code>.ma</code> files load into it.</p>
+    </div>
+    <div class="spread-media">
+      <figure class="wide"><img src="img/ui-dynamics.png" alt="A cloth draped over a ball, with the cloth's attributes in the Attribute Editor" loading="lazy"><figcaption><b>Dynamics menu set</b> The sheet at frame 30, its cloth attributes in the Attribute Editor.</figcaption></figure>
+      <figure><video src="img/clip-rigid.mp4" poster="img/clip-rigid.jpg" autoplay muted loop playsinline preload="none"></video><figcaption><b>Rigid bodies</b> Boxes falling into a cloth hammock.</figcaption></figure>
+      <figure><video src="img/clip-particles.mp4" poster="img/clip-particles.jpg" autoplay muted loop playsinline preload="none"></video><figcaption><b>Particles</b> An emitter, turbulence and a floor collider.</figcaption></figure>
+    </div>
+  </article>
+
+  <article class="spread c-ren" id="rendering">
+    <div class="tab"><b>06</b>Rendering</div>
+    <div class="spread-copy">
+      <h3>Harold, a physically based path tracer</h3>
+      <p class="lead">Every material and light in a scene renders through it, on the CPU.</p>
+      <p>The standard surface with subsurface, coat, sheen, transmission and thin film; area, sky dome with HDR images, mesh
+        and photometric lights; subdivision, displacement, motion blur and depth of field; AOVs into multi-layer EXR;
+        interactive rendering in the Render View as the scene changes, and batch rendering with no display. The viewport
+        lights a matte surface exactly as a render does: Use All Lights on 7, with decay, spot cones and highlights.</p>
+    </div>
+    <div class="spread-media">
+      <figure class="wide"><img src="img/ui-render.png" alt="The Harold Render View over the main window" loading="lazy"><figcaption><b>Render View</b> Five materials under a sky dome, rendering progressively.</figcaption></figure>
+      <figure class="wide"><img src="img/harold.png" alt="Two rigs and a row of materials rendered with Harold" loading="lazy"><figcaption><b>Harold</b> Two rigs and a row of materials, with a sky and a key light.</figcaption></figure>
+      <figure><img src="img/harold-cornell.png" alt="The Cornell box rendered with Harold" loading="lazy"><figcaption><b>Cornell box</b> One of the example scenes.</figcaption></figure>
+      <figure><img src="img/lights-view.png" alt="Lights in the viewport" loading="lazy"><figcaption><b>Viewport lights</b> Use All Lights, with blinn and phong highlights.</figcaption></figure>
+    </div>
+  </article>
+
+  <article class="spread c-usd" id="pipeline">
+    <div class="tab"><b>07</b>Pipeline</div>
+    <div class="spread-copy">
+      <h3><code>.ma</code> files, references and USD</h3>
+      <p class="lead">Files read and written in the standard layout.</p>
+      <p>Deformer chains, constraints, utility nodes, expressions, materials, NURBS, drawing overrides and references with
+        their edits; namespaces, instances, locked nodes, Z up. USD (<code>.usd</code>, <code>.usda</code>,
+        <code>.usdc</code>, <code>.usdz</code>) read and written with transforms, meshes, skeletons, blend shapes, materials
+        and animation, or opened as a stage in the scene: prims to select and edit, variants, payloads, a Layer Editor, and a
+        <code>pxr</code> module for scripts.</p>
+    </div>
+    <div class="spread-media">
+      <figure class="wide"><img src="img/rig-file.png" alt="A character rig opened from a .ma file" loading="lazy"><figcaption><b>.ma</b> A character rig opened from its file with its textures.</figcaption></figure>
+    </div>
+  </article>
+
+  <article class="spread c-code" id="scripting">
+    <div class="tab"><b>08</b>Scripting</div>
+    <div class="spread-copy">
+      <h3>MEL, Python, the API and plug-ins</h3>
+      <p class="lead">Existing scripts import unchanged.</p>
+      <p>MEL (procedures, arrays, control flow, backticks, expressions) and Python with <code>aztek.cmds</code> and the
+        compatibility modules; an API 2.0 subset, Python plug-ins with <code>MPxCommand</code> and <code>MPxNode</code>,
+        <code>scriptJob</code>, <code>scriptNode</code>, <code>evalDeferred</code>. Windows, layouts and controls built from
+        scripts become Qt widgets, with <code>AE&lt;type&gt;Template</code> procedures and <code>workspaceControl</code> docking.</p>
+<pre><code>from aztek import cmds
+cube = cmds.polyCube(w=2)[0]
+cmds.setKeyframe(cube, at='ty', t=1, v=0)
+cmds.setKeyframe(cube, at='ty', t=24, v=5)</code></pre>
+    </div>
+    <div class="spread-media">
+      <figure class="wide"><video src="img/clip-scripting.mp4" poster="img/clip-scripting.jpg" autoplay muted loop playsinline preload="none"></video><figcaption><b>Script Editor</b> A MEL script building cubes with expressions, then playing them.</figcaption></figure>
+      <figure class="wide"><img src="img/script-window.png" alt="A window built from MEL" loading="lazy"><figcaption><b>Script-built UI</b> Sliders, a colour slider and buttons driving a procedure.</figcaption></figure>
+    </div>
+  </article>
+
+  <article class="spread c-ui" id="interface">
+    <div class="tab"><b>09</b>Interface</div>
+    <div class="spread-copy">
+      <h3>Where your hands expect it</h3>
+      <p class="lead">Menu sets, shelves, hotkeys, marking menus and the hotbox.</p>
+      <p>Channel box, outliner, Attribute Editor, Node Editor, Tool Settings, Hotkey Editor, panel layouts and workspaces.
+        Manipulators on history and deformer nodes (T), with in-view numbers.</p>
+    </div>
+    <div class="spread-media">
+      <figure><img src="img/marking-menu.png" alt="Marking menu" loading="lazy"><figcaption><b>Marking menus</b> On the right button.</figcaption></figure>
+      <figure><img src="img/node-editor.png" alt="Node Editor" loading="lazy"><figcaption><b>Node Editor</b> Graph the selection, wire attributes.</figcaption></figure>
+      <figure class="wide"><img src="img/four-view.png" alt="Four views" loading="lazy"><figcaption><b>Four views</b> Space to toggle.</figcaption></figure>
+    </div>
+  </article>
 </section>
 
 <section class="feedback" id="feedback">
@@ -87,185 +301,20 @@ git push --mirror &lt;your repository's URL&gt;</code></pre>
   <img src="img/feedback.png" alt="The This doesn't feel right! window over the main window" loading="lazy">
 </section>
 
-<div class="fret" aria-hidden="true"></div>
-
-<section class="features" id="features">
-  <h2>What's in it</h2>
-
-  <article class="feature">
-    <div class="copy">
-      <h3>Polygon modelling</h3>
-      <p>The standard polygon commands with construction history. Quad Draw, Multi-Cut, Insert and Offset Edge Loop, Target Weld,
-        Slide Edge, Crease, Create and Append Polygon; symmetry, soft selection, eighteen sculpting brushes.</p>
-    </div>
-    <img src="img/modelling.png" alt="Component editing with construction history and the move manipulator" loading="lazy">
-  </article>
-
-  <article class="feature">
-    <div class="copy">
-      <h3>Soft selection and Quad Draw</h3>
-      <p>B toggles soft selection, with the falloff shown on the vertices. Quad Draw retopologises on a live surface.</p>
-    </div>
-    <div class="pair">
-      <img src="img/soft-select.png" alt="Soft selection falloff on a plane" loading="lazy">
-      <img src="img/quad-draw.png" alt="Quad Draw on a live surface" loading="lazy">
-    </div>
-  </article>
-
-  <article class="feature">
-    <div class="copy">
-      <h3>NURBS</h3>
-      <p>Curves (CV and EP tools, rebuild, attach, detach, offset, fillets, projection, trims) and surfaces (primitives, loft,
-        revolve, extrude, boundary, birail, <code>nurbsToPoly</code>), with CVs, edit points and isoparms as components.</p>
-    </div>
-    <img src="img/nurbs.png" alt="NURBS surfaces and curves" loading="lazy">
-  </article>
-
-  <article class="feature">
-    <div class="copy">
-      <h3>UVs</h3>
-      <p>Planar, cylindrical, spherical and automatic projections, unfold, layout, cut and sew in the UV Editor, by UV, shell,
-        edge or face.</p>
-    </div>
-    <img src="img/uv-editor.png" alt="The UV Editor after automatic projection and layout" loading="lazy">
-  </article>
-
-  <article class="feature">
-    <div class="copy">
-      <h3>Materials and textures</h3>
-      <p>lambert, blinn, phong, phongE and surfaceShader with file textures and place2dTexture, assigned to objects or faces.
-        Textured mode (6) in the viewport and the Hypershade.</p>
-    </div>
-    <img src="img/materials.png" alt="Materials and file textures in the viewport" loading="lazy">
-  </article>
-
-  <article class="feature">
-    <div class="copy">
-      <h3>Rigging</h3>
-      <p>Joints (orient, mirror, insert, segment scale compensate), RP, SC and spline IK, every constraint, smooth skin with
-        weight painting, mirror and copy, dual quaternion; a HumanIK subset (skeleton, definition, control rig, retargeting).</p>
-    </div>
-    <img src="img/quadruped-rig.png" alt="A quadruped skeleton posed with the rotate tool" loading="lazy">
-  </article>
-
-  <article class="feature">
-    <div class="copy">
-      <h3>Skinning and deformers</h3>
-      <p>Paint Skin Weights with the influence list in Tool Settings. blendShape in full (Shape Editor, in-betweens, live
-        targets), lattice, wrap, wire, delta mush, softMod, clusters, nonlinears, sculpt, jiggle, shrinkWrap, proximityWrap,
-        curveWarp and more.</p>
-    </div>
-    <div class="pair">
-      <img src="img/rigging.png" alt="Joints, smooth skin and an RP IK handle" loading="lazy">
-      <img src="img/paint-weights.png" alt="Paint Skin Weights" loading="lazy">
-    </div>
-  </article>
-
-  <article class="feature">
-    <div class="copy">
-      <h3>Animation</h3>
-      <p>Keys with weighted tangents and infinities, Graph Editor, Dope Sheet, set driven keys, breakdowns, copy and paste
-        keys, baking, motion paths, animation layers, character sets and clips, playblast.</p>
-    </div>
-    <div class="pair">
-      <img src="img/graph-editor.png" alt="Graph Editor" loading="lazy">
-      <img src="img/dope-sheet.png" alt="Dope Sheet with a breakdown" loading="lazy">
-    </div>
-  </article>
-
-  <article class="feature">
-    <div class="copy">
-      <h3><code>.ma</code> files</h3>
-      <p>Read and written in the standard layout: deformer chains, constraints, utility nodes, expressions, materials, NURBS,
-        drawing overrides and references with their edits; namespaces, instances, locked nodes, Z up.</p>
-    </div>
-    <img src="img/rig-file.png" alt="A character rig opened from a .ma file" loading="lazy">
-  </article>
-
-  <article class="feature">
-    <div class="copy">
-      <h3>Scripting</h3>
-      <p>MEL (procedures, arrays, control flow, backticks, expressions) and Python with <code>aztek.cmds</code>,
-        compatibility modules so existing scripts import unchanged, and an API 2.0 subset. Python plug-ins with <code>MPxCommand</code> and
-        <code>MPxNode</code>; <code>scriptJob</code>, <code>scriptNode</code>, <code>evalDeferred</code>.</p>
-<pre><code>from aztek import cmds
-cube = cmds.polyCube(w=2)[0]
-cmds.setKeyframe(cube, at='ty', t=1, v=0)
-cmds.setKeyframe(cube, at='ty', t=24, v=5)</code></pre>
-    </div>
-    <img src="img/scripting.gif" alt="A MEL script in the Script Editor building cubes with expressions, then playing them" loading="lazy">
-  </article>
-
-  <article class="feature">
-    <div class="copy">
-      <h3>Script-built interface</h3>
-      <p><code>window</code>, layouts, controls, menus and dialogs from MEL or Python become Qt widgets. Attribute-bound
-        controls, <code>AE&lt;type&gt;Template</code> procedures, <code>workspaceControl</code> docking, editors and panels
-        created by script.</p>
-    </div>
-    <img src="img/script-window.png" alt="A window built from MEL" loading="lazy">
-  </article>
-
-  <article class="feature">
-    <div class="copy">
-      <h3>The interface you know</h3>
-      <p>Menu sets, shelves, hotkeys, marking menus, the hotbox, channel box, outliner, Attribute Editor, Node Editor, Tool
-        Settings and panel layouts, where your hands expect them.</p>
-    </div>
-    <div class="pair">
-      <img src="img/marking-menu.png" alt="Marking menu" loading="lazy">
-      <img src="img/node-editor.png" alt="Node Editor" loading="lazy">
-    </div>
-  </article>
-</section>
-
 <section class="works" id="works">
   <h2>In the works</h2>
   <div class="works-grid">
-    <div><h3>Dynamics</h3><p>One solver for cloth, particles and rigid bodies, in place of several overlapping systems.
-      Files that use any of the older systems load into it.</p></div>
-    <div><h3>Bicurious</h3><p>Liquids, smoke, fire and procedural graphs inside that same solver, colliding with and pushing
-      cloth, particles and rigid bodies.</p></div>
-    <div><h3>Harold</h3><p>Aztek's own renderer.</p></div>
-    <div><h3>C++ plug-in kit</h3><p>Rebuild a plug-in from its source against Aztek's headers.</p></div>
+    <div class="c-dyn"><h3>Bicurious</h3><p>Liquids, smoke, fire and procedural graphs inside the same solver as cloth,
+      particles and rigid bodies, colliding with and pushing them.</p></div>
+    <div class="c-ren"><h3>Harold</h3><p>Render layers and render setup, hair and curves, USD stages in renders.</p></div>
+    <div class="c-dyn"><h3>Dynamics speed</h3><p>Large cloth with self collision at interactive rates.</p></div>
+    <div class="c-code"><h3>C++ plug-in kit</h3><p>Rebuild a plug-in from its source against Aztek's headers. Commands,
+      nodes and deformers load; more classes are coming.</p></div>
   </div>
 </section>
 
-<div class="fret" aria-hidden="true"></div>
-
-<section class="download" id="download">
-  <h2>Download</h2>
-  <p>Fresh packages from GitHub Actions at least every hour while the main branch moves.</p>
-  <div class="dl-grid">
-    <a class="dl" id="dl-windows" data-asset="setup-x64.exe" href="#download" aria-disabled="true">
-      <span class="os">Windows installer</span><span class="file">setup .exe, 64 bit</span>
-    </a>
-    <a class="dl" data-asset="windows-x86_64.zip" href="#download" aria-disabled="true">
-      <span class="os">Windows zip</span><span class="file">no install needed</span>
-    </a>
-    <a class="dl" id="dl-rocky9" data-asset="el9.x86_64.rpm" href="#download" aria-disabled="true">
-      <span class="os">Rocky Linux 9</span><span class="file">.rpm</span>
-    </a>
-    <a class="dl" data-asset="el8.x86_64.rpm" href="#download" aria-disabled="true">
-      <span class="os">Rocky Linux 8</span><span class="file">.rpm, with its own Qt</span>
-    </a>
-    <a class="dl" id="dl-linux" data-asset="ubuntu24.04" href="#download" aria-disabled="true">
-      <span class="os">Ubuntu 24.04</span><span class="file">.deb</span>
-    </a>
-    <a class="dl" data-asset="ubuntu22.04" href="#download" aria-disabled="true">
-      <span class="os">Ubuntu 22.04</span><span class="file">.deb</span>
-    </a>
-    <a class="dl" data-asset="linux-x86_64.tar.gz" href="#download" aria-disabled="true">
-      <span class="os">Linux</span><span class="file">.tar.gz, needs Qt 6</span>
-    </a>
-    <a class="dl" href="https://github.com/srlegrand/Aztek">
-      <span class="os">Source</span><span class="file">github.com/srlegrand/Aztek</span>
-    </a>
-  </div>
-  <p class="small">Windows: run the installer, or unzip and run <code>aztek.exe</code>. Rocky Linux: <code>sudo dnf install ./aztek-*.rpm</code> (Rocky 9 needs EPEL for Qt). Ubuntu: <code>sudo apt install ./aztek_*.deb</code>. All need a Vulkan driver. All builds:
-    <a href="https://github.com/srlegrand/Aztek/releases">Releases</a>.</p>
-
-  <h3>Build from source</h3>
+<section class="build" id="build">
+  <h2>Build from source</h2>
 <pre><code>git clone https://github.com/srlegrand/Aztek.git
 cd Aztek
 ./build.sh --deps --run      # Linux
@@ -293,32 +342,16 @@ build.bat -Run               # Windows</code></pre>
 
 <script>
 (function () {
-  var isWin = /Windows/i.test(navigator.userAgent);
-  var isLinux = /Linux/i.test(navigator.userAgent) && !/Android/i.test(navigator.userAgent);
-  var main = document.getElementById('dl-main');
-  if (isWin) {
-    main.dataset.from = 'dl-windows';
-    main.href = document.getElementById('dl-windows').href;
-    main.textContent = 'Download for Windows';
-    document.getElementById('dl-windows').classList.add('mine');
-  } else if (isLinux) {
-    main.dataset.from = 'dl-linux';
-    main.href = document.getElementById('dl-linux').href;
-    main.textContent = 'Download for Linux';
-    document.getElementById('dl-linux').classList.add('mine');
-  }
-  // Each button goes straight to its file, from the newest release that has it. One that no release has yet says so,
-  // and goes nowhere.
+  // Each download goes straight to its file, from the newest release that has it. One that no release has yet says so.
   var links = document.querySelectorAll('a[data-asset]');
   function unavailable(link) {
     link.classList.add('missing');
     link.setAttribute('aria-disabled', 'true');
-    link.href = '#download';
     var f = link.querySelector('.file');
     if (f) f.textContent = 'not built yet';
   }
   fetch('https://api.github.com/repos/srlegrand/Aztek/releases?per_page=30')
-    .then(function (r) { return r.ok ? r.json() : []; })
+    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
     .then(function (list) {
       list = (list || []).filter(function (x) { return !x.draft; });
       list.sort(function (a, b) { return new Date(b.published_at) - new Date(a.published_at); });
@@ -330,21 +363,11 @@ build.bat -Run               # Windows</code></pre>
         }
         if (!hit) return unavailable(link);
         link.href = hit.browser_download_url;
-        link.removeAttribute('aria-disabled');
         link.title = hit.name + ' (' + from.name + ')';
       });
-      if (main.dataset.from) {
-        var mine = document.getElementById(main.dataset.from);
-        if (mine.classList.contains('missing')) {
-          main.textContent = 'Not built yet for this system';
-          main.href = '#download';
-        } else {
-          main.href = mine.href;
-        }
-      }
-      if (list[0] && list[0].name) document.getElementById('build-line').textContent = list[0].name + ', built ' + new Date(list[0].published_at).toISOString().slice(0, 10).split('-').reverse().join('/');
+      if (list[0] && list[0].name) document.getElementById('build-line').textContent = 'Newest: ' + list[0].name + ', built ' + new Date(list[0].published_at).toISOString().slice(0, 10).split('-').reverse().join('/') + '. Built from every change to the main branch.';
     })
-    .catch(function () { links.forEach(unavailable); });
+    .catch(function () { /* links stay on the releases page */ });
 })();
 </script>
 </body>

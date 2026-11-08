@@ -7,7 +7,7 @@ OUT=${1:-_site}
 rm -rf "$OUT"
 mkdir -p "$OUT/img"
 cp site/index.html site/style.css "$OUT/"
-cp docs/*.png docs/*.gif "$OUT/img/"
+cp docs/*.png docs/*.gif docs/*.jpg docs/*.mp4 "$OUT/img/"
 cp app/icons/aztek-icon.png "$OUT/img/"
 touch "$OUT/.nojekyll"
 echo "Site in $OUT"
