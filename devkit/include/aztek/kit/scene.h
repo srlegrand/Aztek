@@ -312,11 +312,13 @@ public:
     MStatus doIt();
     MStatus undoIt();
 
-protected:
+    // The kit's own: one queued edit.
     struct Op {
         std::function<MStatus()> do_;
         std::function<MStatus()> undo_;
     };
+
+protected:
     void azQueue(const std::function<MStatus()>& d, const std::function<MStatus()>& u);
     MObject azCreate(const std::string& type, int64_t parent, MStatus* status);
     std::vector<Op> ops_;
