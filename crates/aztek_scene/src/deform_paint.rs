@@ -38,7 +38,12 @@ pub enum Slot {
     Target(i32),
     /// A skinCluster's blendWeights, for skinningMethod 2.
     SkinBlend,
+    /// A per point map held in the node's own attribute, by index: cloth's input attract, mass and pins.
+    Map(u16),
 }
+
+/// Cloth's paintable maps.
+const CLOTH_MAPS: &[&str] = &["inputAttractPerVertex", "massPerVertex", "pinPerVertex"];
 
 /// Whether a deformer type has weights to paint.
 fn paintable(ty: &str) -> bool {
@@ -55,7 +60,11 @@ pub fn paintables(g: &Graph, mesh: NodeId) -> Vec<String> {
             continue;
         }
         let name = n.name().to_string();
-        if ty == "blendShape" {
+        if ty == crate::dynamics::CLOTH {
+            for m in CLOTH_MAPS {
+                out.push(format!("{ty}.{name}.{m}"));
+            }
+        } else if ty == "blendShape" {
             out.push(format!("blendShape.{name}.baseWeights"));
             for t in blend_of(g, h).targets {
                 out.push(format!("blendShape.{name}.targetWeights[{}]", t.index));
@@ -74,6 +83,7 @@ pub fn resolve(g: &Graph, attr: &str, mesh: NodeId) -> Option<(NodeId, Slot)> {
     let id = g.find(node).ok().flatten()?;
     let n = deform::node_on(g, id, mesh)?;
     let slot = match what {
+        m if CLOTH_MAPS.contains(&m) => Slot::Map(g.node(n)?.ty().attr_index(m)? as u16),
         "weights" | "baseWeights" => Slot::Weights,
         "paintTargetWeights" => Slot::Target(g.node(n)?.data().int(PAINT_TARGET) as i32),
         w => Slot::Target(w.strip_prefix("targetWeights[")?.strip_suffix(']')?.parse().ok()?),
@@ -98,8 +108,11 @@ pub fn read(g: &Graph, n: NodeId, slot: Slot, capacity: usize) -> Vec<f64> {
         Slot::Weights => g.node(n).and_then(|x| floats_of(x.data(), WEIGHTS)).map(|w| w.0.clone()),
         Slot::Target(i) => blend_of(g, n).targets.into_iter().find(|t| t.index == i).and_then(|t| t.weights),
         Slot::SkinBlend => g.node(n).and_then(|x| floats_of(x.data(), crate::skin::SK_BLEND)).map(|w| w.0.clone()),
+        Slot::Map(a) => g.node(n).and_then(|x| floats_of(x.data(), a as usize)).map(|w| w.0.clone()),
     };
-    let unset = if slot == Slot::SkinBlend { 0.0 } else { 1.0 };
+    // Unpainted: no blend, no pins; everything else at full strength.
+    let is_pins = matches!(slot, Slot::Map(a) if g.node(n).is_some_and(|x| x.ty().attrs[a as usize].name == "pinPerVertex"));
+    let unset = if slot == Slot::SkinBlend || is_pins { 0.0 } else { 1.0 };
     let mut w = stored.unwrap_or_else(|| vec![unset; capacity]);
     w.resize(capacity, 0.0);
     w
@@ -110,6 +123,7 @@ pub fn write(g: &mut Graph, n: NodeId, slot: Slot, w: Vec<f64>) -> CmdResult<()>
     match slot {
         Slot::Weights => set_floats(g, n, WEIGHTS, w),
         Slot::SkinBlend => set_floats(g, n, crate::skin::SK_BLEND, w),
+        Slot::Map(a) => set_floats(g, n, a as usize, w),
         Slot::Target(i) => {
             let mut b = blend_of(g, n);
             let Some(t) = b.targets.iter_mut().find(|t| t.index == i) else { fail!("no target {i} on {}", g.path(n)) };

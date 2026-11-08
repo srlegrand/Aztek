@@ -207,3 +207,27 @@ fn a_tilted_box_lands_on_its_corners_not_through_them() {
     let low = bb[1].as_f64().unwrap();
     assert!(low > -0.03 && low < 0.1, "the lowest corner at {low}");
 }
+
+#[test]
+fn painted_pins_hold_the_cloth_where_painted() {
+    let mut s = Session::new();
+    run(&mut s, "playbackOptions", json!({"minTime": 1, "maxTime": 60}));
+    run(&mut s, "polyPlane", json!({"name": "flag", "width": 2, "height": 2, "sx": 8, "sy": 8}));
+    frame(&mut s, 1.0);
+    run(&mut s, "createCloth", json!({"args": ["flag"]}));
+    run(&mut s, "select", json!({"args": ["flag"]}));
+    let list = run(&mut s, "artAttrCtx", json!({"query": true, "queried": ["paintableAttrs"]}));
+    assert!(list.to_string().contains("cloth.cloth1.pinPerVertex"), "{list}");
+    // Pins painted at one corner only.
+    run(&mut s, "artAttrCtx", json!({"edit": true, "attrSelected": "cloth.cloth1.pinPerVertex", "value": 1.0, "radius": 0.3, "selectedattroper": "absolute", "stampProfile": "solid"}));
+    let stamped = run(&mut s, "attrPaintStamp", json!({"args": ["flag"], "position": [-1.0, 0.0, -1.0]}));
+    assert!(stamped.as_i64().unwrap() > 0, "{stamped}");
+    let start = points(&mut s, "flag");
+    let pinned = (0..start.len()).min_by(|&a, &b| (start[a] - DVec3::new(-1.0, 0.0, -1.0)).length().total_cmp(&(start[b] - DVec3::new(-1.0, 0.0, -1.0)).length())).unwrap();
+    for f in 1..=24 {
+        frame(&mut s, f as f64);
+    }
+    let p = points(&mut s, "flag");
+    assert!((p[pinned] - start[pinned]).length() < 1e-6, "the pinned corner holds: {} from {}", p[pinned], start[pinned]);
+    assert!(lowest(&p) < -0.5, "the rest hangs from it: {}", lowest(&p));
+}
