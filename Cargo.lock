@@ -113,6 +113,8 @@ dependencies = [
  "glam 0.29.3",
  "gpu-allocator",
  "image",
+ "libc",
+ "libloading",
  "log",
  "naga",
  "pyo3",

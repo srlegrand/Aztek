@@ -218,11 +218,14 @@ public:
     MStatus getSelectionStrings(MStringArray& out) const;
     MStatus getSelectionStrings(unsigned int i, MStringArray& out) const;
 
-    // The kit's own: the items as the host names them.
+    // The kit's own: the items as the host names them, and each one's component (null for none).
     const std::vector<std::string>& azItems() const { return items_; }
+    const std::vector<MObject>& azComponents() const { return comps_; }
+    void azAdd(const std::string& name, const MObject& component);
 
 private:
     std::vector<std::string> items_;
+    std::vector<MObject> comps_;
 };
 
 class MGlobal {
