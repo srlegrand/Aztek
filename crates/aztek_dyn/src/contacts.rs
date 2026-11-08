@@ -26,6 +26,9 @@ const SOFT_RISE: f64 = 0.25;
 
 /// The gap a contact should have after this substep: the thickness, but no more than a little above where it started
 /// or is now, and never below the surface.
+/// How much of a point's estimated motion its search box keeps all round, beyond the sweep.
+const SWEEP_SLACK: f64 = 0.25;
+
 #[inline]
 fn zone_target(gap_now: f64, gap_start: f64, thick: f64) -> f64 {
     thick.min(gap_start.max(gap_now.max(0.0)) + SOFT_RISE * thick)
@@ -234,7 +237,8 @@ impl FrameData {
             // keeps its bounds small.
             let movers: Vec<DVec3> = (0..n).filter(|&i| s.pt.inv_mass[i] > 0.0).map(|i| vel[i]).filter(|v| finite(*v)).collect();
             let mean_v = if movers.is_empty() { DVec3::ZERO } else { movers.iter().sum::<DVec3>() / movers.len() as f64 };
-            let motion = |i: usize| crate::util::clamp_len((vel[i] - mean_v) * dt, vmax * dt).length();
+            let step_of = |i: usize| crate::util::clamp_len((vel[i] - mean_v) * dt, vmax * dt);
+            let motion = |i: usize| step_of(i).length();
             // Collider points do not share that mean: against them the cloth moves by all of it.
             let mean_motion = crate::util::clamp_len(mean_v * dt, vmax * dt).length();
             let tri_bounds: Vec<Aabb> = dyn_tris
@@ -242,14 +246,18 @@ impl FrameData {
                 .with_min_len(PAR_CHUNK)
                 .zip(dyn_body.par_iter())
                 .map(|(t, &b)| {
+                    // Swept: where it is and where its motion takes it, with a quarter of that motion around for
+                    // the estimate being off.
                     let mut bb = Aabb::EMPTY;
                     let mut m = 0.0f64;
                     for &k in t {
-                        bb.add(s.pt.x[k as usize]);
-                        m = m.max(motion(k as usize));
+                        let (x, d) = (s.pt.x[k as usize], step_of(k as usize));
+                        bb.add(x);
+                        bb.add(x + d);
+                        m = m.max(d.length());
                     }
                     let st = &s.bodies[b as usize].settings;
-                    bb.grow(st.thickness.max(st.self_thickness) + m)
+                    bb.grow(st.thickness.max(st.self_thickness) + m * SWEEP_SLACK)
                 })
                 .collect();
             if fresh || cache.cloth.len != tri_bounds.len() {
@@ -300,7 +308,13 @@ impl FrameData {
                     };
                     let mut bb = Aabb::EMPTY;
                     bb.add(x);
-                    let reach_box = bb.grow(reach_r);
+                    let reach_box = if is_kin {
+                        bb.grow(reach_r)
+                    } else {
+                        let d = step_of(k);
+                        bb.add(x + d);
+                        bb.grow(s.pt.radius[k] + d.length() * SWEEP_SLACK)
+                    };
                     cloth_bvh.query(&reach_box, &tri_bounds, |t| {
                         if DEBUG_COUNT.load(std::sync::atomic::Ordering::Relaxed) > 0 {
                             VISITED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -336,6 +350,11 @@ impl FrameData {
                         // Beyond an edge by more than the thickness: the neighbour holds it, unless a collider point
                         // is close enough to the edge to slide over it before the next search.
                         if feat != Feature::Face && d.length() > thick && !(is_kin && geom::over_face(x, a, b, c, 0.1)) {
+                            return;
+                        }
+                        // The solve acts over the face only: a point well beyond it (most of what a crumpled garment
+                        // finds) cannot get there before the next search.
+                        if !is_kin && feat != Feature::Face && !geom::over_face(x, a, b, c, 0.5) {
                             return;
                         }
                         if d.length() > thick + reach_r + tri_motion {
