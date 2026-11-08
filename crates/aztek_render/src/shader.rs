@@ -694,6 +694,8 @@ pub struct Standard {
     pub thin_film_ior: Input,
     pub emission: Input,
     pub emission_color: Input,
+    /// Light the surface gives itself, as the viewport's ambient colour: shown, but not sampled as a light.
+    pub ambient: Input,
     pub opacity: Input,
     pub thin_walled: bool,
     pub normal: NormalMod,
@@ -747,6 +749,7 @@ impl Default for Standard {
             thin_film_ior: c(1.5),
             emission: c(0.0),
             emission_color: c(1.0),
+            ambient: c(0.0),
             opacity: c(1.0),
             thin_walled: false,
             normal: NormalMod::None,
@@ -797,6 +800,7 @@ pub struct Params {
     pub thin_film_thickness: f32,
     pub thin_film_ior: f32,
     pub emission: Vec3,
+    pub ambient: Vec3,
     pub opacity: Vec3,
     pub thin_walled: bool,
     /// The shading normal after bump or normal map, and the coat's.

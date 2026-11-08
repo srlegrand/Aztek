@@ -11,7 +11,6 @@ Requests waiting or in progress, newest detail kept. Move to Done with the date 
 - C++ plug-in kit (agent).
 
 ## Waiting
-- One light model: viewport lights render the same in Harold (decay, intensity, colour, spot cone, ambient, background); the spot light is missing from renders (agent).
 - Shift+click on an expand arrow fully expands (and collapses) everything below it, in every hierarchy: Outliner, Hypershade, Reference Editor, Node Editor lists, Graph Editor and Dope Sheet outlines, layer editors, Attribute Editor sections.
 - Harold: render layers and render setup; hair and curves; quieter subsurface; USD stages in renders; an evicting texture tile cache; vector displacement and autobump; denoiser off the interface thread.
 - Bicurious: something like Bifrost built into the dynamics, not a separate system. Liquids, smoke, fire and procedural graphs share the one solver, colliding with and affecting cloth, particles and rigid bodies. Start after the unified solver merges.
@@ -43,6 +42,7 @@ Requests waiting or in progress, newest detail kept. Move to Done with the date 
 
 
 ## Done
+- 08/11/2026 One light model: the viewport's lights render the same in Harold (decay rates, intensity, colour, spot cone and dropoff, ambient, area, volume, default lighting, ambient colour, black background); parity test against the shared formula.
 - 07/11/2026 Harold renderer, first parts: path tracer, standard surface, every material and light translated, Render View with IPR, Render Settings, AOVs to EXR, batch rendering; see docs/HAROLD.md for what is shallower.
 - 07/11/2026 History from every route: Smooth, Mirror, Reduce, Extract no longer wipe it; `G` after each; Hypergraph shows the whole chain.
 - 07/11/2026 Smooth Preview wire as asked.

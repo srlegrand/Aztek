@@ -429,6 +429,111 @@ pub fn scene_light(g: &mut Graph, shape: NodeId) -> Option<SceneLight> {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
+// The light model
+
+/// Falloff with distance: none at rate 0, else one over distance to the rate (1 linear, 2 quadratic, 3 cubic).
+pub fn decay_factor(rate: i32, d: f64) -> f64 {
+    if rate <= 0 {
+        1.0
+    } else {
+        1.0 / d.max(0.001).powi(rate)
+    }
+}
+
+/// A spot light's edge: nothing outside the outer cone, all inside the inner, linear between, then cos^dropoff.
+pub fn spot_factor(l: &SceneLight, cos_axis: f64) -> f64 {
+    let (outer, inner) = spot_cones(l);
+    let edge = ((cos_axis - outer) / (inner - outer).max(1e-5)).clamp(0.0, 1.0);
+    edge * cos_axis.max(0.0).powf(l.dropoff)
+}
+
+/// Cosines of a spot's outer and inner cone: a positive penumbra widens the edge outside the cone, a negative one inside.
+pub fn spot_cones(l: &SceneLight) -> (f64, f64) {
+    let half = l.cone_deg * 0.5;
+    let (inner, outer) = if l.penumbra_deg >= 0.0 { (half, half + l.penumbra_deg) } else { (half + l.penumbra_deg, half) };
+    (outer.clamp(0.0, 180.0).to_radians().cos(), inner.clamp(0.0, 180.0).to_radians().cos())
+}
+
+/// How far through a volume light's shape a point in its unit space is: 0 at its middle, 1 at its boundary.
+pub fn volume_reach(u: DVec3, shape: i32) -> f64 {
+    match shape {
+        0 => u.x.abs().max(u.y.abs()).max(u.z.abs()),
+        1 => u.length(),
+        _ => {
+            let radius = if shape == 2 { 1.0 } else { (1.0 - (u.z + 1.0) * 0.5).clamp(0.0, 1.0) };
+            (u.truncate().length() / radius.max(0.001)).max(u.z.abs())
+        }
+    }
+}
+
+/// What diffuse takes from one light at a point with normal n (facing the viewer's side): the viewport's lighting, and
+/// the renderer's direct lighting on a matte surface with no shadow, are this times the surface's colour and diffuse.
+/// The viewport's shader (`aztek_host` render.rs) is the same formula in GLSL; keep the two in step.
+pub fn viewport_diffuse(l: &SceneLight, p: DVec3, n: DVec3) -> DVec3 {
+    let pos = l.world.w_axis.truncate();
+    let axis = (-l.world.z_axis.truncate()).normalize_or_zero();
+    let mut c = DVec3::from_array(l.color.map(f64::from));
+    let mut diff = DVec3::ZERO;
+    let lv;
+    match l.kind {
+        Kind::Ambient => {
+            lv = (pos - p).normalize_or_zero();
+            diff += c * (1.0 - l.ambient_shade);
+            c *= l.ambient_shade;
+        }
+        Kind::Directional => lv = -axis,
+        Kind::Point => {
+            let to = pos - p;
+            let d = to.length();
+            lv = to / d.max(1e-4);
+            c *= decay_factor(l.decay, d);
+        }
+        Kind::Spot => {
+            let to = pos - p;
+            let d = to.length();
+            lv = to / d.max(1e-4);
+            c *= decay_factor(l.decay, d) * spot_factor(l, (-lv).dot(axis));
+        }
+        Kind::Area => {
+            // The rectangle's nearest point to the surface stands for all of it, lit from one side.
+            let (u, v) = (l.world.x_axis.truncate(), l.world.y_axis.truncate());
+            let r = p - pos;
+            let q = pos + u * (r.dot(u) / u.length_squared().max(1e-6)).clamp(-1.0, 1.0) + v * (r.dot(v) / v.length_squared().max(1e-6)).clamp(-1.0, 1.0);
+            let to = q - p;
+            let d = to.length();
+            lv = to / d.max(1e-4);
+            c *= decay_factor(l.decay, d) * (-lv).dot(axis).max(0.0);
+            if l.by_area {
+                c *= u.length() * v.length();
+            }
+        }
+        Kind::Volume => {
+            let unit = l.world.inverse().transform_point3(p);
+            let fade = (1.0 - volume_reach(unit, l.volume_shape)).clamp(0.0, 1.0);
+            c *= fade;
+            let to = pos - p;
+            let mut dir = if to.length() > 1e-4 { to.normalize() } else { n };
+            if l.volume_dir == 2 {
+                dir = -axis;
+            } else if l.volume_dir == 1 {
+                dir = -dir;
+            }
+            lv = dir;
+            if l.volume_ambient {
+                diff += c;
+                c = DVec3::ZERO;
+            }
+        }
+    }
+    // The all-round parts above are taken whatever emitDiffuse says, as in the shader.
+    let nl = n.dot(lv);
+    if nl > 0.0 && l.diffuse {
+        diff += c * nl;
+    }
+    diff
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
 // Icons
 
 fn ring(c: DVec3, u: DVec3, v: DVec3, r: f64, n: usize, out: &mut Vec<(DVec3, DVec3)>) {

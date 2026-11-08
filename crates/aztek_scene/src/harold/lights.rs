@@ -44,6 +44,7 @@ fn dome_image(mb: &mut MatBuilder, id: NodeId) -> Option<TextureKey> {
 
 pub fn translate(mb: &mut MatBuilder, scene: &mut Scene, warnings: &mut Vec<String>) -> Vec<(Light, NodeId)> {
     let mut out = Vec::new();
+    let physical = mb.nb.g.find(super::settings::OPTIONS).ok().flatten().is_some_and(|o| get_b(mb.nb.g, o, "physicalLights", false));
     let shapes = crate::lights::all_shapes(mb.nb.g);
     for shape in shapes {
         if !super::visible(mb.nb.g, shape) {
@@ -60,6 +61,20 @@ pub fn translate(mb: &mut MatBuilder, scene: &mut Scene, warnings: &mut Vec<Stri
         let color = get_v(g, shape, "color", Vec3::ONE) * intensity * 2f32.powf(exposure);
         let radius = get_f(g, shape, "aiRadius", 0.0) as f32;
         let normalize = get_b(g, shape, "aiNormalize", true) && get_b(g, shape, "normalize", true);
+        // The reference's six lights light as the viewport lights them, unless physical lights are asked for.
+        if !physical && !ty.starts_with("ai") {
+            if let Some(sl) = crate::lights::scene_light(g, shape) {
+                let angle = get_f(g, shape, "aiAngle", 0.0) as f32;
+                let mut l = viewport_light(&sl, &name, radius, angle, exposure);
+                let (decay, diffuse, specular) = (l.decay, l.diffuse, l.specular);
+                fill_common(g, shape, &mut l, scene);
+                l.decay = decay;
+                l.diffuse = diffuse * get_f(g, shape, "aiDiffuse", 1.0) as f32;
+                l.specular = specular * get_f(g, shape, "aiSpecular", 1.0) as f32;
+                out.push((l, shape));
+                continue;
+            }
+        }
         let shape_of = match ty.as_str() {
             "pointLight" => Shape::Point { pos, radius },
             "spotLight" => {
@@ -74,8 +89,8 @@ pub fn translate(mb: &mut MatBuilder, scene: &mut Scene, warnings: &mut Vec<Stri
             }
             "ambientLight" => Shape::Ambient { pos, shade: get_f(g, shape, "ambientShade", 0.45) as f32 },
             "volumeLight" => {
-                let s = w.to_scale_rotation_translation().0;
-                Shape::Volume { pos, radius: s.max_element().max(1e-3) }
+                let Some(sl) = crate::lights::scene_light(g, shape) else { continue };
+                Shape::Volume { pos, to_unit: w.inverse(), shape: sl.volume_shape, mode: sl.volume_dir, ambient: sl.volume_ambient, axis: fwd }
             }
             "areaLight" | "aiAreaLight" => {
                 let kind = if ty == "aiAreaLight" { get_f(g, shape, "aiTranslator", 0.0) as i64 } else { 0 };
@@ -171,6 +186,48 @@ pub fn translate(mb: &mut MatBuilder, scene: &mut Scene, warnings: &mut Vec<Stri
         out.push((l, shape));
     }
     out
+}
+
+/// One of the reference's lights as the viewport lights it. The viewport's matte surface takes colour times light times
+/// the cosine, where the renderer's divides by pi: so the light's colour here is pi times the viewport's. Lights with a
+/// surface are sized so that, far off, they light as the viewport's single point of them does.
+pub fn viewport_light(sl: &crate::lights::SceneLight, name: &str, radius: f32, angle_deg: f32, exposure: f32) -> Light {
+    use crate::lights::Kind;
+    let w = sl.world.as_mat4();
+    let pos = w.transform_point3(Vec3::ZERO);
+    let axis = w.transform_vector3(-Vec3::Z).normalize_or_zero();
+    let c = Vec3::from_array(sl.color) * std::f32::consts::PI * 2f32.powf(exposure);
+    let shape = match sl.kind {
+        Kind::Ambient => Shape::Ambient { pos, shade: sl.ambient_shade as f32 },
+        Kind::Directional => Shape::Distant { dir: -axis, cos_half: (angle_deg.to_radians() * 0.5).cos() },
+        Kind::Point => Shape::Point { pos, radius },
+        Kind::Spot => {
+            let (outer, inner) = crate::lights::spot_cones(sl);
+            Shape::Spot { pos, radius, frame: Frame::from_n(axis), cos_outer: outer as f32, cos_inner: inner as f32, dropoff: sl.dropoff as f32 }
+        }
+        Kind::Area => {
+            let corner = w.transform_point3(Vec3::new(-1.0, -1.0, 0.0));
+            let u = w.transform_point3(Vec3::new(1.0, -1.0, 0.0)) - corner;
+            let v = w.transform_point3(Vec3::new(-1.0, 1.0, 0.0)) - corner;
+            let area = u.cross(v).length().max(1e-9);
+            // The viewport's light is pi c from the nearest point; spread over the area, times the half sides when
+            // the light isn't normalised.
+            let k = if sl.by_area { u.length() * v.length() * 0.25 } else { 1.0 };
+            let mut l = Light::new(name, Shape::Quad { corner, u, v, n: axis, two_sided: false, spread: 1.0 }, c * k / area);
+            l.decay = sl.decay as f32;
+            l.diffuse = sl.diffuse as i32 as f32;
+            l.specular = sl.specular as i32 as f32;
+            return l;
+        }
+        Kind::Volume => Shape::Volume { pos, to_unit: w.inverse(), shape: sl.volume_shape, mode: sl.volume_dir, ambient: sl.volume_ambient, axis },
+    };
+    let mut l = Light::new(name, shape, c);
+    // Decay: point and spot lights by their rate; directional, ambient and volume lights don't fall off.
+    l.decay = if matches!(sl.kind, Kind::Point | Kind::Spot) { sl.decay as f32 } else { 0.0 };
+    // The all-round part of ambient and volume lights is taken whatever emitDiffuse says, as the viewport does.
+    l.diffuse = if sl.diffuse || matches!(sl.kind, Kind::Ambient) { 1.0 } else { 0.0 };
+    l.specular = sl.specular as i32 as f32;
+    l
 }
 
 fn fill_common(g: &mut Graph, shape: NodeId, l: &mut Light, scene: &mut Scene) {

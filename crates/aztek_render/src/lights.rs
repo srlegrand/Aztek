@@ -1,6 +1,7 @@
 //! Lights, each sampled for direct lighting and, where it has a surface, found by rays so that its light is weighted by
-//! multiple importance sampling against the material's own samples. Intensities follow Arnold's convention: colour
-//! times intensity times two to the exposure, quadratic falloff, area lights divided by their area when normalised.
+//! multiple importance sampling against the material's own samples. A light's colour is radiant intensity for point
+//! lights (radiance for lights with a surface); `decay` is the exponent of its falloff with distance. The scene's
+//! translation sets these so a light lights a matte surface as the viewport's lighting does.
 
 use std::sync::Arc;
 
@@ -171,8 +172,10 @@ pub enum Shape {
     Mesh { inst: u32, tris: Vec<u32>, cdf: Vec<f32>, area: f32 },
     /// Maya's ambient light: light from all around unshadowed, and the shade part from its position.
     Ambient { pos: Vec3, shade: f32 },
-    /// Maya's volume light: light from its centre that fades to nothing at the volume's edge.
-    Volume { pos: Vec3, radius: f32 },
+    /// The reference's volume light: light inside a box, sphere, cylinder or cone (shape 0 to 3) in the unit space of
+    /// `to_unit`, fading from the middle to the boundary; coming from the centre (mode 0), towards it (1) or down the
+    /// axis (2); or from all round, unshadowed, when `ambient`.
+    Volume { pos: Vec3, to_unit: Mat4, shape: i32, mode: i32, ambient: bool, axis: Vec3 },
 }
 
 #[derive(Clone, Debug)]
@@ -211,8 +214,18 @@ impl Light {
         match &self.shape {
             Shape::Point { radius, .. } | Shape::Spot { radius, .. } => *radius <= 0.0,
             Shape::Distant { cos_half, .. } => *cos_half >= 1.0,
-            Shape::Volume { .. } => true,
+            Shape::Volume { ambient, .. } => !ambient,
             _ => false,
+        }
+    }
+
+    /// Lights with a surface fall off with the square of distance by geometry; another decay rate takes the
+    /// difference, so the light falls off by its rate as a point light of the same rate does.
+    pub fn surface_decay(&self, d: f32) -> f32 {
+        if (self.decay - 2.0).abs() < 1e-6 {
+            1.0
+        } else {
+            d.max(1e-3).powf(2.0 - self.decay)
         }
     }
 
@@ -354,7 +367,7 @@ impl Light {
             Shape::Point { pos, radius } => {
                 if *radius > 0.0 {
                     let (wi, t, pdf) = sphere_sample(*pos, *radius, p, u)?;
-                    let le = self.color / (PI * radius * radius);
+                    let le = self.color / (PI * radius * radius) * self.surface_decay(t);
                     return none(wi, t, le, pdf, false);
                 }
                 let to = *pos - p;
@@ -374,7 +387,7 @@ impl Light {
                         return None;
                     }
                     let area = PI * radius * radius;
-                    (wi, dist, self.color / area, dist * dist / (cos_l * area), false)
+                    (wi, dist, self.color / area * self.surface_decay(dist), dist * dist / (cos_l * area), false)
                 } else {
                     let to = *pos - p;
                     let d = to.length();
@@ -413,7 +426,7 @@ impl Light {
                     return None;
                 }
                 let area = eu.cross(*ev).length();
-                let le = self.color * spread_falloff(cos_l, *spread);
+                let le = self.color * spread_falloff(cos_l, *spread) * self.surface_decay(dist);
                 none(wi, dist, le, dist * dist / (cos_l * area), false)
             }
             Shape::Disk { center, frame, radius, two_sided } => {
@@ -430,7 +443,7 @@ impl Light {
                     return None;
                 }
                 let area = PI * radius * radius;
-                none(wi, dist, self.color, dist * dist / (cos_l * area), false)
+                none(wi, dist, self.color * self.surface_decay(dist), dist * dist / (cos_l * area), false)
             }
             Shape::Cylinder { a, b, radius } => {
                 let axis = *b - *a;
@@ -447,7 +460,7 @@ impl Light {
                     return None;
                 }
                 let area = TAU * radius * len;
-                none(wi, dist, self.color, dist * dist / (cos_l * area), false)
+                none(wi, dist, self.color * self.surface_decay(dist), dist * dist / (cos_l * area), false)
             }
             Shape::Dome { to_local, image, dist } => {
                 let (wi, pdf) = match dist {
@@ -478,20 +491,32 @@ impl Light {
                 if u.x < 0.5 {
                     let f = Frame::from_n(n);
                     let d = crate::math::cosine_hemisphere(Vec2::new(u.x * 2.0, u.y));
-                    let s = LightSample { wi: f.to_world(d), dist: f32::INFINITY, le: self.color * (1.0 - shade) / PI, pdf: d.z / PI * 0.5, delta: false, unshadowed: true, mesh: None };
+                    // No ray finds this light, so its own samples are the only ones: full weight, as a delta light's.
+                    let s = LightSample { wi: f.to_world(d), dist: f32::INFINITY, le: self.color * (1.0 - shade) / PI, pdf: d.z / PI * 0.5, delta: true, unshadowed: true, mesh: None };
                     return Some(s);
                 }
                 let to = *pos - p;
                 let dist = to.length();
                 Some(LightSample { wi: to / dist, dist, le: self.color * *shade * 2.0, pdf: 1.0, delta: true, unshadowed: true, mesh: None })
             }
-            Shape::Volume { pos, radius } => {
-                let to = *pos - p;
-                let d = to.length();
-                if d >= *radius {
+            Shape::Volume { pos, to_unit, shape, mode, ambient, axis } => {
+                let fade = (1.0 - volume_reach(to_unit.transform_point3(p), *shape)).clamp(0.0, 1.0);
+                if fade <= 0.0 {
                     return None;
                 }
-                none(to / d.max(1e-9), d, self.color * (1.0 - d / radius), 1.0, true)
+                if *ambient {
+                    let f = Frame::from_n(n);
+                    let d = crate::math::cosine_hemisphere(u);
+                    return Some(LightSample { wi: f.to_world(d), dist: f32::INFINITY, le: self.color * fade / PI, pdf: d.z / PI, delta: true, unshadowed: true, mesh: None });
+                }
+                let to = *pos - p;
+                let d = to.length();
+                let toward = if d > 1e-4 { to / d } else { n };
+                match mode {
+                    1 => Some(LightSample { wi: -toward, dist: f32::INFINITY, le: self.color * fade, pdf: 1.0, delta: true, unshadowed: true, mesh: None }),
+                    2 => Some(LightSample { wi: -*axis, dist: f32::INFINITY, le: self.color * fade, pdf: 1.0, delta: true, unshadowed: true, mesh: None }),
+                    _ => none(toward, d, self.color * fade, 1.0, true),
+                }
             }
         }
     }
@@ -542,7 +567,7 @@ impl Light {
         match &self.shape {
             Shape::Point { pos, radius } if *radius > 0.0 => {
                 let t = ray_sphere(*pos, *radius, ray, tmax)?;
-                Some((t, self.color / (PI * radius * radius), sphere_pdf(*pos, *radius, ray.o)))
+                Some((t, self.color / (PI * radius * radius) * self.surface_decay(t), sphere_pdf(*pos, *radius, ray.o)))
             }
             Shape::Quad { corner, u, v, n, two_sided, spread } => {
                 let denom = ray.d.dot(*n);
@@ -566,7 +591,7 @@ impl Light {
                 if cos_l <= 0.0 {
                     return None;
                 }
-                Some((t, self.color * spread_falloff(cos_l, *spread), self.pdf_area(t, cos_l)))
+                Some((t, self.color * spread_falloff(cos_l, *spread) * self.surface_decay(t), self.pdf_area(t, cos_l)))
             }
             Shape::Disk { center, frame, radius, two_sided } => {
                 let denom = ray.d.dot(frame.n);
@@ -584,7 +609,7 @@ impl Light {
                 if cos_l <= 0.0 {
                     return None;
                 }
-                Some((t, self.color, self.pdf_area(t, cos_l)))
+                Some((t, self.color * self.surface_decay(t), self.pdf_area(t, cos_l)))
             }
             Shape::Cylinder { a, b, radius } => {
                 let axis = (*b - *a).normalize();
@@ -613,7 +638,7 @@ impl Light {
                     if cos_l <= 0.0 {
                         return None;
                     }
-                    return Some((t, self.color, self.pdf_area(t, cos_l)));
+                    return Some((t, self.color * self.surface_decay(t), self.pdf_area(t, cos_l)));
                 }
                 None
             }
@@ -646,20 +671,29 @@ impl Light {
     }
 }
 
-/// Maya's spot falloff: full inside the inner cone, smooth to nothing at the outer, and cos^dropoff.
+/// A spot's falloff: full inside the inner cone, linear to nothing at the outer, and cos^dropoff.
 pub fn spot_falloff(c: f32, cos_outer: f32, cos_inner: f32, dropoff: f32) -> f32 {
     if c <= cos_outer {
         return 0.0;
     }
-    let mut f = 1.0;
-    if c < cos_inner {
-        let t = ((c - cos_outer) / (cos_inner - cos_outer).max(1e-6)).clamp(0.0, 1.0);
-        f = t * t * (3.0 - 2.0 * t);
-    }
+    // Linear across the penumbra, as the viewport's.
+    let mut f = ((c - cos_outer) / (cos_inner - cos_outer).max(1e-5)).clamp(0.0, 1.0);
     if dropoff > 0.0 {
         f *= c.max(0.0).powf(dropoff);
     }
     f
+}
+
+/// How far through a volume light's shape a unit space point is: 0 at its middle, 1 at its boundary.
+pub fn volume_reach(u: Vec3, shape: i32) -> f32 {
+    match shape {
+        0 => u.x.abs().max(u.y.abs()).max(u.z.abs()),
+        1 => u.length(),
+        _ => {
+            let radius = if shape == 2 { 1.0 } else { (1.0 - (u.z + 1.0) * 0.5).clamp(0.0, 1.0) };
+            (glam::Vec2::new(u.x, u.y).length() / radius.max(0.001)).max(u.z.abs())
+        }
+    }
 }
 
 /// Arnold's quad light spread: 1 is diffuse, smaller focuses the light along the normal.

@@ -88,7 +88,10 @@ impl Tracer<'_> {
                 // The background: domes seen by the camera, alpha stays clear.
                 let mut g = [Vec3::ZERO; MAX_GROUPS];
                 let prev = Prev { pdf: 1.0, delta: true, bsdf_count: 1.0, first: false, cat: Category::Diffuse, n: ray.d, silent: false };
-                let bg = self.lights_along(&ray, f32::INFINITY, &prev, 0, true, &mut g, throughput);
+                let mut bg = self.lights_along(&ray, f32::INFINITY, &prev, 0, true, &mut g, throughput);
+                if !s.lights.iter().any(|l| l.is_dome() && l.camera > 0.0) {
+                    bg += throughput * o.background;
+                }
                 out.slots[BACKGROUND] += bg;
                 out.color += bg;
                 for (x, y) in out.groups.iter_mut().zip(g.iter()) {

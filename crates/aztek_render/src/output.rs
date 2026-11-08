@@ -59,7 +59,11 @@ pub fn to_rgba8(px: &[Vec4], exposure: f32, gamma: f32) -> Vec<u8> {
 
 /// Writes one image of pixels in 8 bits.
 pub fn write_ldr(path: &Path, w: u32, h: u32, px: &[Vec4], fmt: Format) -> Result<(), String> {
-    let bytes = to_rgba8(px, 0.0, 1.0);
+    let mut bytes = to_rgba8(px, 0.0, 1.0);
+    // Eight bit images are seen as they are, not composited: opaque, the background already in them. EXR keeps alpha.
+    for a in bytes.iter_mut().skip(3).step_by(4) {
+        *a = 255;
+    }
     if let Some(dir) = path.parent() {
         let _ = std::fs::create_dir_all(dir);
     }

@@ -380,7 +380,7 @@ impl Bsdf {
                 spec_rough = spec_rough + (1.0 - spec_rough) * (coat * p.coat_affect_roughness * p.coat_roughness);
             }
         }
-        b.emission = p.emission * under;
+        b.emission = p.emission * under + p.ambient;
 
         // Sheen over the base.
         let sheen = p.sheen.clamp(0.0, 1.0);

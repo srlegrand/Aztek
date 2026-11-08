@@ -51,14 +51,25 @@ scene holds is rendered by it; there is no choice of renderer.
   the colour mapped to albedo, radius and scale, anisotropy (translucency when thin walled); sheen; coat with its own
   normal, colour, IOR and the affect colour and roughness controls; emission; opacity; bump and normal maps. Layers
   combine by albedo scaling.
-- **Lights.** Point (sphere at `aiRadius`), spot (cone, penumbra, dropoff, radius), directional (`aiAngle`), area (quad,
-  disc, cylinder; normalised by area unless `aiNormalize` is off; `aiSpread`), the reference's ambient (light from all around,
-  unshadowed, and `ambientShade` of it from its position) and volume (light from its centre fading to nothing at the
-  volume's edge), sky dome (colour or a latitude-longitude image, importance sampled), mesh lights, photometric with
-  IES files, and every glowing surface sampled as a light. Colour times intensity times two to `aiExposure`, quadratic
-  falloff (`aiDecayType` constant for none). Shadows with `shadowColor` and `aiShadowDensity`; `aiCastShadows`,
-  `emitDiffuse`, `emitSpecular`, `aiDiffuse`, `aiSpecular`, `aiSss`, `aiVolume`, `aiTransmission`, `aiMaxBounces`;
-  `aiAov` puts a light in a light group.
+- **Lights.** One light model with the viewport: the reference's six lights light a matte surface in a render exactly as
+  they light it in the viewport (Use All Lights, 7), and a render adds only what a path tracer has: shadows, bounce
+  light, soft light from lights with a size. `decayRate` none, linear, quadratic or cubic; colour times intensity;
+  spot cone, penumbra (linear across it, either sign) and dropoff; ambient with `ambientShade`; area lights as the
+  viewport's, sized so that far off they light as its one point does, `normalize` honoured; volume lights in a box,
+  sphere, cylinder or cone, fading to their boundary, lighting outward, inward or down their axis, or all round with
+  emit ambient; `emitDiffuse` and `emitSpecular`; light linking. The viewport's formula is
+  `aztek_scene::lights::viewport_diffuse`, the shader's GLSL its copy; `tests/light_parity.rs` compares the renderer
+  with it for every type, decay rate and setting. A scene with no lights renders with the viewport's default lighting
+  (a key and a fill that follow the camera, and a little all round). `physicalLights` on the options node switches
+  to physical units instead: quadratic falloff, intensity as radiant intensity, `aiDecayType` honoured.
+  Harold's own lights: point radius (`aiRadius`), directional angle (`aiAngle`), sky dome (colour or a latitude-longitude
+  image, importance sampled), Harold area lights (quad, disc, cylinder, normalised by area unless `aiNormalize` is off,
+  `aiSpread`), mesh lights, photometric with IES files, and every glowing surface sampled as a light; these use
+  physical units, times two to `aiExposure`. Shadows with `shadowColor` and `aiShadowDensity`; `aiCastShadows`,
+  `aiDiffuse`, `aiSpecular`, `aiSss`, `aiVolume`, `aiTransmission`, `aiMaxBounces`; `aiAov` puts a light in a light
+  group. Specular highlights are the standard surface's, not the viewport's blinn and phong shapes.
+- **Background.** Camera rays that meet nothing see the options' `background` colour (black by default) where there is
+  no sky dome. EXR keeps alpha; eight bit images are written opaque.
 - **Atmosphere.** A homogeneous fog over the scene's bounds from the `aiAtmosphereVolume` connected to the options'
   `atmosphere`: density, colour, anisotropy, lit by every light with shadows.
 - **Textures.** `file` and `aiImage`: PNG, JPEG, TGA, TIFF, BMP, HDR and EXR; sRGB, linear and raw by `colorSpace`;
@@ -82,7 +93,7 @@ named in a warning.
 
 | Material | Becomes | Not honoured |
 | --- | --- | --- |
-| lambert | base `diffuse`, base colour `color`, no specular | ambient colour, translucence, glow |
+| lambert | base `diffuse`, base colour `color`, no specular, ambient colour added as the viewport adds it | translucence, glow |
 | blinn | lambert's, specular colour twice `specularColor`, roughness from eccentricity | as lambert's, reflected colour |
 | phong | roughness from the cosine power (alpha squared is 2 / (n + 2)) | as blinn's |
 | phongE | roughness from `roughness` | as blinn's |
