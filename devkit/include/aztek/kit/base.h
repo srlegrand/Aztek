@@ -36,6 +36,7 @@ typedef MUintPtrSz MCallbackId;
 namespace az {
 struct ObjectData;
 struct AttrSpec;
+struct MeshData;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

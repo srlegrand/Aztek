@@ -7,6 +7,8 @@
 #include <maya/MObject.h>
 #include <maya/MString.h>
 #include <maya/MStatus.h>
+#include <aztek/kit/all.h>
+#include <deque>
 #include <map>
 #include <string>
 #include <vector>
@@ -145,6 +147,82 @@ struct MeshData {
     void loadPoints();
     AzMesh* commit();  // the handle with the edited points
 };
+
+
+extern MTime::Unit uiTimeUnit;
+
+// A node type the plug-in registered.
+struct NodeClass {
+    std::string name;
+    MTypeId id;
+    MCreatorFunction creator = 0;
+    int kind = 0;  // AZ_NODE_DEPEND or AZ_NODE_DEFORMER
+    std::vector<std::shared_ptr<AttrSpec> > attrs;  // as added
+    std::vector<std::pair<AttrSpec*, AttrSpec*> > affects;
+    // Each attribute's index on the host's type, and the component of a vec3 child.
+    std::map<const AttrSpec*, int> index;
+    std::map<const AttrSpec*, int> component;
+    std::map<int, std::shared_ptr<AttrSpec> > byIndex;
+    AzNodeClass cls;
+    std::map<int64_t, MPxNode*> instances;
+};
+
+std::vector<NodeClass*>& nodeClasses();
+NodeClass* classOfNode(int64_t node);   // null when not one of this plug-in's
+NodeClass* classNamed(const std::string& name);
+NodeClass* classOfId(const MTypeId& id);
+// The host's index of an attribute on a type, with the component of a vec3 child; -1 when it isn't there.
+int indexOf(NodeClass* cls, const AttrSpec* spec, int* component);
+// The deformer attributes every deformer has.
+std::shared_ptr<AttrSpec> builtinAttr(const char* name);
+
+// One compute: the host's block and storage for what handles give out by reference.
+struct BlockImpl {
+    AzBlock* block = 0;
+    NodeClass* cls = 0;
+    int64_t node = -1;
+    std::deque<bool> b;
+    std::deque<char> c;
+    std::deque<unsigned char> uc;
+    std::deque<short> sh;
+    std::deque<int> i;
+    std::deque<int64_t> i64;
+    std::deque<float> f;
+    std::deque<double> d;
+    struct S2 { short v[2]; };
+    struct S3 { short v[3]; };
+    struct I2 { int v[2]; };
+    struct I3 { int v[3]; };
+    struct F2 { float v[2]; };
+    struct F3 { float v[3]; };
+    struct D2 { double v[2]; };
+    struct D3 { double v[3]; };
+    std::deque<S2> s2;
+    std::deque<S3> s3;
+    std::deque<I2> i2;
+    std::deque<I3> i3;
+    std::deque<F2> f2;
+    std::deque<F3> f3;
+    std::deque<D2> d2;
+    std::deque<D3> d3;
+    std::deque<MVector> vec;
+    std::deque<MFloatVector> fvec;
+    std::deque<MMatrix> mat;
+    std::deque<MFloatMatrix> fmat;
+    std::deque<MString> str;
+    // Meshes handed out, by attribute and element, so edits through MFnMesh reach what gets written.
+    std::map<std::pair<int, int>, MObject> meshes;
+};
+
+// The compute running on this thread, so plugs of its node read from its block.
+BlockImpl*& currentBlock();
+BlockImpl& looseStorage();
+
+// The current command's result.
+Json& commandResult();
+
+// A crash-guarded call into plug-in code: AZ_OK, AZ_FAILURE (with the message in error) or AZ_CRASHED.
+int guarded(int (*fn)(void*), void* ctx, std::string& error);
 
 }
 
