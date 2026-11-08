@@ -134,7 +134,8 @@ public:
     std::string azAttrPath() const;
     int64_t azNode() const { return node_; }
     const std::shared_ptr<az::AttrSpec>& azSpec() const { return spec_; }
-    int azElement() const { return element_; }
+    // The element the host reads: the plug's own, or that of the array compound it is a child of.
+    int azElement() const { return element_ >= 0 ? element_ : parentElement_; }
     static MPlug azMake(int64_t node, const std::string& attr, const std::shared_ptr<az::AttrSpec>& spec, int element, int parentElement = -1);
 
 private:

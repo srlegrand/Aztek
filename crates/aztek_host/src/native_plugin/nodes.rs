@@ -104,7 +104,12 @@ pub(crate) unsafe extern "C" fn register_command(plugin: *mut c_void, name: *con
                 "list" => ArgType::List,
                 _ => ArgType::Any,
             };
-            def = def.flag(FlagDef::new(&t("name"), &t("short"), ty, Value::Null, ""));
+            let mut fd = FlagDef::new(&t("name"), &t("short"), ty, Value::Null, "");
+            // A flag of several values: MEL reads that many tokens after it.
+            if let Some(n) = f.get("arity").and_then(Value::as_u64).filter(|&n| n > 1) {
+                fd.arity = n.min(255) as u8;
+            }
+            def = def.flag(fd);
         }
         c.s.register(def);
         keep_commands(&c.s);
@@ -264,6 +269,27 @@ impl NativeNode {
     }
 }
 
+impl NativeNode {
+    /// The plug-in's object for the node: made when the node gets its id, on the thread making the node, as Maya makes
+    /// it with the node. Creators aren't known to be thread-safe, so under the global lock.
+    fn make(&mut self) {
+        if !self.inst.is_null() || self.id == NO_NODE || self.entry.crashed.load(Ordering::Relaxed) {
+            return;
+        }
+        let e = self.entry.clone();
+        let Some(create) = e.cls.create else { return };
+        let _g = GLOBAL.lock().unwrap_or_else(|x| x.into_inner());
+        let mut err: *mut c_char = std::ptr::null_mut();
+        self.inst = unsafe { create(e.cls.ctx, self.id as i64, &mut err) };
+        let err = take(err);
+        if self.inst.is_null() {
+            self.report(format!("// Error: the plug-in {} could not make a {} node: {err} //", e.owner, e.name), LineKind::Error);
+            return;
+        }
+        self.sched = e.cls.scheduling.map_or(3, |f| unsafe { f(e.cls.ctx, self.inst) });
+    }
+}
+
 impl NodeBehavior for NativeNode {
     fn compute(&mut self, ctx: &EvalContext, d: &mut NodeData) {
         let e = self.entry.clone();
@@ -282,20 +308,12 @@ impl NodeBehavior for NativeNode {
             pass(d);
             return;
         }
-        let (Some(create), Some(compute)) = (e.cls.create, e.cls.compute) else { return };
+        let Some(compute) = e.cls.compute else { return };
         let _flag = ComputeFlag::on();
+        self.make();
         if self.inst.is_null() {
-            // Creators aren't known to be thread-safe: a node is made under the global lock.
-            let _g = GLOBAL.lock().unwrap_or_else(|x| x.into_inner());
-            let mut err: *mut c_char = std::ptr::null_mut();
-            self.inst = unsafe { create(e.cls.ctx, self.id as i64, &mut err) };
-            let err = take(err);
-            if self.inst.is_null() {
-                self.report(format!("// Error: {}: the plug-in {} could not make the node: {err} //", self.name, e.owner), LineKind::Error);
-                pass(d);
-                return;
-            }
-            self.sched = e.cls.scheduling.map_or(3, |f| unsafe { f(e.cls.ctx, self.inst) });
+            pass(d);
+            return;
         }
         let _g = match self.sched {
             0 => None,
@@ -341,6 +359,7 @@ impl NodeBehavior for NativeNode {
     }
     fn set_node_id(&mut self, id: NodeId) {
         self.id = id;
+        self.make();
     }
     fn set_node_name(&mut self, name: &str) {
         if self.name != name {

@@ -9,6 +9,7 @@
 #include <maya/MStatus.h>
 #include <aztek/kit/all.h>
 #include <deque>
+#include <mutex>
 #include <map>
 #include <string>
 #include <vector>
@@ -165,6 +166,7 @@ struct NodeClass {
     std::map<int, std::shared_ptr<AttrSpec> > byIndex;
     AzNodeClass cls;
     std::map<int64_t, MPxNode*> instances;
+    std::mutex lock;  // instances
 };
 
 std::vector<NodeClass*>& nodeClasses();
