@@ -138,6 +138,33 @@ fn fuzz_never_explodes() {
         for p in &mut pts {
             *p += DVec3::new(rng.signed(), rng.signed(), rng.signed()) * 0.02;
         }
+        // As modelled garments are, half the time: a seam of coincident points stitched by quads of no area, and points
+        // pulled to within a hair of a neighbour, making edges of almost no length and sliver triangles.
+        if rng.float() < 0.5 && n >= 2 {
+            let w = n + 1;
+            let seam = 1 + (rng.float() * (n - 1) as f64) as usize;
+            let dup: Vec<u32> = (0..w).map(|j| {
+                pts.push(pts[j * w + seam]);
+                (pts.len() - 1) as u32
+            }).collect();
+            for f in faces.iter_mut() {
+                if f.iter().all(|&v| (v as usize % w) >= seam && (v as usize) < w * w) {
+                    for v in f.iter_mut() {
+                        if (*v as usize) % w == seam {
+                            *v = dup[*v as usize / w];
+                        }
+                    }
+                }
+            }
+            for j in 0..n {
+                faces.push(vec![(j * w + seam) as u32, dup[j], dup[j + 1], ((j + 1) * w + seam) as u32]);
+            }
+            for _ in 0..pts.len() / 8 {
+                let a = (rng.float() * (w * w) as f64) as usize % (w * w);
+                let b = if a % w + 1 < w { a + 1 } else { a - 1 };
+                pts[a] = pts[b] + DVec3::new(rng.signed(), rng.signed(), rng.signed()) * 1e-6;
+            }
+        }
         for f in faces.iter_mut() {
             if rng.float() < 0.1 {
                 f[1] = f[0];
