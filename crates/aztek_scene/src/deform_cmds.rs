@@ -55,7 +55,8 @@ fn create_plugin(s: &mut Session, a: &Args, ty: &str) -> CmdResult {
     if targets.is_empty() {
         fail!("deformer: nothing to deform");
     }
-    let name = a.string("name", ty);
+    // Named as Maya names a new node: the type and a number.
+    let name = a.string("name", &format!("{ty}1"));
     let g = &mut s.graph;
     let (mesh, pts) = targets.remove(0);
     let n = deform::insert_at(g, mesh, ty, &name, deform::Place::from_args(a))?;
