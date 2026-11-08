@@ -337,3 +337,21 @@ fn ambient_colour_as_the_viewport() {
     let c = centre(&film);
     assert!((c.x - 0.25).abs() < 1e-3 && (c.y - 0.3).abs() < 1e-3 && (c.z - 0.2).abs() < 1e-3, "{c}");
 }
+
+/// With no lights, the viewport's default lighting: a key and a fill that follow the camera, and a little all round.
+/// A plane facing the camera: lambert1's 0.4 times (0.12 + 0.95 (0.75 k.z + 0.3 f.z)), k and f the two directions in
+/// view space.
+#[test]
+fn default_lighting_as_the_viewport() {
+    let mut s = scene();
+    run(&mut s, "polyPlane", json!({"width": 40, "height": 40}));
+    small(&mut s, 2);
+    set(&mut s, "topShape.orthographicWidth", json!(0.2));
+    set(&mut s, "defaultArnoldRenderOptions.GIDiffuseDepth", json!(0));
+    let (film, _) = render(&mut s, "top");
+    let k = glam::Vec3::new(-0.45, 0.6, 0.65).normalize();
+    let f = glam::Vec3::new(0.6, -0.2, 0.75).normalize();
+    let expect = 0.4 * (0.12 + 0.95 * (0.75 * k.z + 0.3 * f.z));
+    let c = centre(&film);
+    assert!((c.x - expect).abs() / expect < 0.01, "{} vs {expect}", c.x);
+}

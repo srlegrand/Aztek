@@ -491,7 +491,8 @@ impl Light {
                 if u.x < 0.5 {
                     let f = Frame::from_n(n);
                     let d = crate::math::cosine_hemisphere(Vec2::new(u.x * 2.0, u.y));
-                    let s = LightSample { wi: f.to_world(d), dist: f32::INFINITY, le: self.color * (1.0 - shade) / PI, pdf: d.z / PI * 0.5, delta: false, unshadowed: true, mesh: None };
+                    // No ray finds this light, so its own samples are the only ones: full weight, as a delta light's.
+                    let s = LightSample { wi: f.to_world(d), dist: f32::INFINITY, le: self.color * (1.0 - shade) / PI, pdf: d.z / PI * 0.5, delta: true, unshadowed: true, mesh: None };
                     return Some(s);
                 }
                 let to = *pos - p;
@@ -506,7 +507,7 @@ impl Light {
                 if *ambient {
                     let f = Frame::from_n(n);
                     let d = crate::math::cosine_hemisphere(u);
-                    return Some(LightSample { wi: f.to_world(d), dist: f32::INFINITY, le: self.color * fade / PI, pdf: d.z / PI, delta: false, unshadowed: true, mesh: None });
+                    return Some(LightSample { wi: f.to_world(d), dist: f32::INFINITY, le: self.color * fade / PI, pdf: d.z / PI, delta: true, unshadowed: true, mesh: None });
                 }
                 let to = *pos - p;
                 let d = to.length();
