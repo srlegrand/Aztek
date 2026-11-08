@@ -26,8 +26,18 @@ fn main() {
     let bv = run(&mut s, "polyEvaluate", json!({"args": [a[2]], "vertex": true}));
     eprintln!("garment {} vertices, body {} vertices", v, bv);
     run(&mut s, "createCloth", json!({"args": [a[1]]}));
-    run(&mut s, "collider", json!({"args": [a[2]]}));
-    run(&mut s, "setAttr", json!({"args": ["cloth1.inputMeshAttract", 0.02]}));
+    if std::env::var("NOCOL").is_err() {
+        run(&mut s, "collider", json!({"args": [a[2]]}));
+    }
+    let attract: f64 = std::env::var("ATTRACT").ok().and_then(|v| v.parse().ok()).unwrap_or(0.02);
+    run(&mut s, "setAttr", json!({"args": ["cloth1.inputMeshAttract", attract]}));
+    if std::env::var("NOSELF").is_ok() {
+        run(&mut s, "setAttr", json!({"args": ["cloth1.selfCollide", false]}));
+    }
+    if let Ok(t) = std::env::var("THICK") {
+        run(&mut s, "setAttr", json!({"args": ["cloth1.thickness", t.parse::<f64>().unwrap()]}));
+    }
+    eprintln!("thickness {}", run(&mut s, "getAttr", json!({"args": ["cloth1.thickness"]})));
     if let Some(k) = std::env::var("EVERY").ok().and_then(|v| v.parse::<i64>().ok()) {
         run(&mut s, "setAttr", json!({"args": ["solverShape1.contactEvery", k]}));
     }
