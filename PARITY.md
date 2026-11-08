@@ -2,7 +2,8 @@
 
 Aztek follows the reference application's behaviour for modelling, UVs, rigging and animation, plus viewport navigation,
 manipulators, the script editor and preferences, and renders with Harold, its own path tracer, in place of every renderer
-the reference carries. The product carries none of the reference's names, icons or branding.
+the reference carries. Dynamics depart on purpose: one solver stands for the reference's several dynamics systems, and
+their files load into it (see the dated section and docs/DYNAMICS.md). The product carries none of the reference's names, icons or branding.
 
 ## Reference and checks
 
@@ -878,3 +879,50 @@ subsurface noisier than it should be at default samples; USD stages not rendered
 memory limit rather than an evicting tile cache; no vector displacement or autobump; a simple non-local means
 denoiser run on the interface thread; light group AOVs by the light that started the light, mesh lights' direct light
 seen in reflections counted as indirect; rough metal at roughness 1 keeps 90% of the light (99.9% at 0.6).
+## Unified dynamics (07/11/2026)
+
+One solver (`aztek_dyn`, XPBD on particles in substeps) for cloth, particles and rigid bodies, which collide with and
+push each other. Dynamics menu set (F5) with Cloth, Particles, Rigid Bodies, Fields, Constraints, Cache and Solver
+menus; Dynamics shelf; cloth presets in the Attribute Editor; Interactive Playback. Details and numbers in
+docs/DYNAMICS.md.
+
+Done:
+- Cloth as a deformer on any incoming mesh (skinned, animated), stretch, compression, dihedral bending, area, input
+  attract with a per vertex map, pins, tearing, stretch limits and long range attachments; colliders with side
+  tracking so fast ones do not tunnel; self collision; impossible states handled per vertex with a blend to the input or
+  the neighbours and back, marked in the view and counted (`outOfSimulation`, `dynInfo`).
+- Particles from omni, directional, surface, volume, curve and point emitters with lifespans; drawn as points, spheres
+  or blobs; `particle`, `nParticle`, `getParticleAttr`, `setParticleAttr`, `connectDynamic`.
+- Rigid bodies, active and passive, from their mesh, a box, sphere or capsule; pin, hinge, spring and nail.
+- Fields: air, drag, gravity, newton, radial, turbulence, uniform, vortex, volume axis, with attenuation and maximum
+  distance.
+- Time as the reference: no solving backwards, the start frame starts again, a jump forward solves one frame, solved
+  frames kept in memory; a disk cache in Aztek's own format with create, append, replace and delete.
+- Files: nucleus, nCloth, nParticle, particle, nRigid, rigidBody, rigidSolver, the Bullet solver and rigid body,
+  pointEmitter and the nine fields read into the one system with settings mapped by name and unused ones kept; hair,
+  fluids, nComponent, caches and the like held and written back unchanged. Own nodes round trip exactly.
+- Tests: analytic free fall and pendulum, drape, rigid stack, determinism across thread counts, squeeze, pushed
+  through, 24 random fuzz cases with extreme inputs, scene and file tests.
+
+Not honoured from the older systems (kept in the file, not used): nCloth lift, stickiness, pressure, rigidity, wind
+shadow, self collision flags, per vertex maps but input attract and mass; nucleus wind noise, plane bounce, plane
+normal, collision layers; particle ramps; per particle creation and runtime expressions (kept as text, not run);
+field volume shapes and falloff curves; rigid solver settings; Bullet constraints and soft bodies; the components of
+dynamic constraints from files; hair, fluid and molecular matter simulation.
+
+Shallower than the reference, most important first:
+1. Speed: a 3,000 vertex shirt on a 15,000 vertex skinned body solves in 130 to 190 ms a frame, 12,000 vertices in 240
+   to 320 ms; a free 20,000 vertex drape landing on a sphere with self collision takes 140 to 270 ms and more as it
+   folds, as contact search grows with relative motion.
+2. Fine cloth stretches under its own weight where nothing pins it: at 20,000 vertices the mean edge ends about 1.1
+   times rest and single edges near the contact reach several times, where the impossible state handling then takes
+   them out. The stretch limits measure across a curve rather than along it.
+3. Rigid bodies on cloth are springy: boxes dropped on a hammock rebound and slide apart.
+4. Self collision is vertex against triangle only, no edge against edge.
+5. Torn edges stop pulling but the mesh is not split.
+6. Rigid bodies find their object by its path, so renaming it breaks the link.
+7. Per particle expressions, ramps and the instancer are not there; particles keep colour and opacity per particle but
+   nothing sets them but `setParticleAttr`.
+8. The disk cache is Aztek's own format; `.mcx` caches are not read.
+9. Nothing has been compared against a running copy of the reference.
+

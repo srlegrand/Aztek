@@ -5,7 +5,9 @@ Requests waiting or in progress, newest detail kept. Move to Done with the date 
 ## In progress
 - Deformation speed: viewport staleness fixed; root control on Lou still about 115 ms a change; smooth preview subdivides from scratch each deformation.
 
-- Unified dynamics: cloth, particles, rigid bodies in one solver (agent).
+- Unified dynamics: in (see docs/DYNAMICS.md). Left: speed at 20,000 vertices with self collision (contact search
+  dominates), cloth springy under heavy rigid bodies, per particle expressions not run, dynamic constraints from files
+  not rebuilt, rigid bodies follow their object by name, `.mcx` caches not read.
 - C++ plug-in kit (agent).
 
 ## Waiting

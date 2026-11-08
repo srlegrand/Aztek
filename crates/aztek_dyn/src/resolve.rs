@@ -4,8 +4,8 @@
 //! stopped being finite. Each adds to a trouble score that decays by 0.6 a frame; at 2 the vertex leaves.
 //!
 //! Leaving, its simulation weight ramps from 1 to 0 over `blend_frames`, smoothed at both ends, and its position blends
-//! towards the fallback: its animated input, or the average of its neighbours (Auto takes the input unless the input is
-//! itself inside something). Out, it is checked each frame at the fallback place; after `return_frames` frames in a
+//! towards the fallback: its animated input, or the average of its neighbours (Auto takes the input where it is near and
+//! not itself inside something). Out, it is checked each frame at the fallback place; after `return_frames` frames in a
 //! possible state in a row it ramps back the same way. It comes back after `most_frames_out` frames whatever happens,
 //! learning its sides from where it is, so none stays out for good. While out, constraints treat it as kinematic.
 
@@ -17,12 +17,15 @@ use crate::util::smoothstep;
 
 /// Moves vertices that are not fully simulated towards their fallback, by their weight this substep.
 pub(crate) fn blend(s: &mut Solver, a1: f64, h: f64) {
+    s.blend_ws.clear();
+    s.blend_ws.resize(s.pt.len(), 1.0);
     for i in 0..s.pt.len() {
         let r = s.pt.rs[i];
         if r.w >= 1.0 && r.w_prev >= 1.0 {
             continue;
         }
         let ws = smoothstep(r.w_prev + (r.w - r.w_prev) * a1);
+        s.blend_ws[i] = ws;
         // The fallback moves no faster than anything simulated may.
         let x = s.pt.x[i];
         let fb = x + crate::util::clamp_len(fallback_target(s, i) - x, s.settings.max_velocity * h);
@@ -43,28 +46,13 @@ pub(crate) fn fallback_target(s: &Solver, i: usize) -> DVec3 {
             if around.is_empty() {
                 return s.anim_now[i];
             }
-            // Neighbours that are themselves out pull less, so a patch that left together settles on its input.
+            // The plain average of where the neighbours are: next to simulated ones it relaxes to a smooth patch
+            // between them, and with none it can only gather in, never drift.
             let mut sum = DVec3::ZERO;
-            let mut wsum = 0.0;
             for &k in around {
-                let g = body.start + k as usize;
-                let w = 0.05 + s.pt.rs[g].w;
-                sum += s.pt.p[g] * w;
-                wsum += w;
+                sum += s.pt.p[body.start + k as usize];
             }
-            // Among neighbours that are mostly out themselves there is nothing to follow: hold still, so a patch
-            // that left together cannot drift.
-            if wsum - 0.05 * (around.len() as f64) < 0.5 {
-                return s.pt.x[i];
-            }
-            let avg = sum / wsum;
-            // Keep the input's offset from its own neighbours, so the fallback has the input's shape locally.
-            let mut asum = DVec3::ZERO;
-            for &k in around {
-                asum += body.anim_prev[k as usize].lerp(body.anim[k as usize], 1.0);
-            }
-            let detail = body.anim[l] - asum / around.len() as f64;
-            avg + detail
+            sum / around.len() as f64
         }
         _ => s.pt.x0[i],
     }

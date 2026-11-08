@@ -18,7 +18,7 @@ The tools we build our work on shouldn't belong to whoever bought them last. Too
 A modelling, UV, rigging and animation application with the industry-standard commands, hotkeys, menus and file format. Rust core (scene graph, commands,
 geometry, Vulkan viewport), Qt Widgets shell in C++, a MEL interpreter, and embedded Python with `aztek.cmds`,
 compatibility modules so existing scripts import unchanged, and an API 2.0 subset. Reads and writes `.ma` files. [PARITY.md](PARITY.md) has the behaviour
-target and status, including known differences; [docs/COMMANDS.md](docs/COMMANDS.md) lists all 963 commands.
+target and status, including known differences; [docs/COMMANDS.md](docs/COMMANDS.md) lists all 1103 commands.
 
 Website: [srlegrand.github.io/Aztek](https://srlegrand.github.io/Aztek/). Downloads: [latest build](https://github.com/srlegrand/Aztek/releases/latest) for Windows and Linux. Licence: [MIT-0](LICENSE).
 
@@ -81,6 +81,10 @@ filled in with. GitHub takes files up to 25 MB and images up to 10 MB.
   copy and paste keys, baking, motion paths, animation layers with their editor (additive, override, passthrough, merge, extract), character sets and clips.
 - **Deformers:** blendShape in full (Shape Editor, in-between and live targets), sculpt, jiggle, shrinkWrap, proximityWrap,
   curveWarp, wrinkle, morph and more; deformer weights painted with the Paint Attribute tool or exported.
+- **Dynamics:** one solver for cloth, particles and rigid bodies, which all collide with and push each other. Cloth
+  on skinned or animated meshes with material presets, colliders, emitters, fields and constraints; it never explodes,
+  and a vertex it cannot place leaves the simulation for a while and comes back, marked in the view. Older dynamics
+  nodes in `.ma` files load into it. See [docs/DYNAMICS.md](docs/DYNAMICS.md).
 - **Lights:** ambient, directional, point, spot, area and volume lights with their icons, attributes and `.ma` layout; Use All Lights (7), Use Selected Lights, flat and no lights in the viewport, with decay, spot cones, blinn and phong highlights and light linking; shadows in renders.
 - **Rendering:** Harold, a physically based path tracer on the CPU: the standard surface with subsurface, coat, sheen,
   transmission and thin film; area, sky dome with HDR images, mesh and photometric lights; subdivision, displacement,
@@ -133,7 +137,7 @@ Left to right: a Venom rig, whose download names no author; Toph, a fan art rig 
 
 ## Examples
 
-File > Examples opens scenes from the `examples` folder: modelling history, materials and textures, a small coloured and keyed arm rig, and nested references with their edits, all the default lights, glass and metal spheres under a sky image, and a Cornell box for rendering. `examples/tools/make_examples.mel` writes them.
+File > Examples opens scenes from the `examples` folder: modelling history, materials and textures, a small coloured and keyed arm rig, and nested references with their edits, and all the default lights; cloth draped on a ball, particles with fields, and boxes dropped on a hammock. `examples/tools/make_examples.mel` writes them.
 
 ## Screens
 

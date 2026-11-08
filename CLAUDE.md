@@ -43,6 +43,11 @@ released by Simon (srlegrand) at https://github.com/srlegrand/Aztek. PARITY.md h
   `surfaces.rs` (NURBS), `sculpt.rs`, `hik*.rs` (HumanIK: nodes, slots, retarget, commands), `ma_file.rs` and `ma_file/deformers.rs` (.ma read and
   write), `references.rs`, `ref_cmds.rs` (polyEvaluate, listConnections, filterExpand, ...). New commands register in
   `session.rs`.
+- `crates/aztek_dyn` the dynamics solver: one XPBD solve for cloth, particles and rigid bodies (`solver.rs`,
+  `constraints.rs`, `contacts.rs`, `resolve.rs` for impossible states, `rigid.rs`, `fields.rs`, `emit.rs`, `cache.rs`).
+  The scene wraps it in `dynamics.rs` (nodes), `dyn_solve.rs` (stepping with time from an evaluate hook),
+  `dyn_cmds.rs` and `dyn_particles.rs` (commands) and `ma_file/dynamics.rs` (older systems' nodes read into it);
+  `aztek_host/src/dyn_draw.rs` draws it. See docs/DYNAMICS.md.
 - `crates/aztek_usd` USD on the native `openusd` crate: `export*.rs` and `import*.rs` (`mayaUSDExport`, `mayaUSDImport`),
   `stages.rs` (open stages by node, undo through the scene's stack), `proxy.rs` (`mayaUsdProxyShape`), `prims.rs` and
   `prim_cmds.rs` (prims named `proxy,/path`, `usdPrim`, `usdAttr`, wrapping `select`, `move` and the like), `layers.rs`,

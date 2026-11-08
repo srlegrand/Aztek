@@ -463,7 +463,12 @@ pub(crate) fn solve_pairs(s: &mut Solver, _h: f64, a0: f64, a1: f64) {
             let tx = tri.map(|g| x[g as usize]);
             let gap = (pp - q).dot(n);
             let target = zone_target(gap, (xp - geom::at(bw, tx[0], tx[1], tx[2])).dot(n), c.thick);
-            let cval = gap - target;
+            // Far through on the wrong side, the side learnt at the search no longer says which way is out: leave it,
+            // as a collider does. And no push moves more than twice the thickness in a step.
+            if gap < -2.0 * c.thick {
+                return out;
+            }
+            let cval = (gap - target).max(-2.0 * c.thick);
             if cval >= 0.0 {
                 return out;
             }
@@ -504,7 +509,7 @@ pub(crate) fn solve_pairs(s: &mut Solver, _h: f64, a0: f64, a1: f64) {
             let (wa, wb) = (im[a], im[b]);
             let d = p[a] - p[b];
             let l = d.length();
-            let target = zone_target(l, (x[a] - x[b]).length(), c.r);
+            let target = zone_target(l, (x[a] - x[b]).length(), c.r).min(l + c.r);
             if l >= target || !(wa + wb > 0.0) || l < 1e-12 {
                 return out;
             }

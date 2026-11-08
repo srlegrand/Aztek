@@ -271,6 +271,8 @@ pub struct Solver {
     pub(crate) normals: Vec<DVec3>,
     pub(crate) v_int: Vec<DVec3>,
     pub(crate) rest_now: Vec<Option<Vec<f64>>>,
+    /// Each particle's weight in the simulation this substep: what blending to a fallback leaves of its speed.
+    pub(crate) blend_ws: Vec<f64>,
 }
 
 impl Default for Solver {
@@ -298,6 +300,7 @@ impl Solver {
             normals: Vec::new(),
             v_int: Vec::new(),
             rest_now: Vec::new(),
+            blend_ws: Vec::new(),
         }
     }
 
@@ -754,7 +757,10 @@ impl Solver {
                     let most = (vmax * h * 2.0).max(self.pt.radius[i] * 2.0);
                     p = x + clamp_len(p - x, most);
                 }
-                let mut v = if fixed { DVec3::ZERO } else { (p - x) / h };
+                // Out of the simulation, a point has none of its own speed: what blending moved it by is not motion
+                // to carry back in.
+                let keep = self.blend_ws.get(i).copied().unwrap_or(1.0);
+                let mut v = if fixed { DVec3::ZERO } else { (p - x) / h * keep };
                 let clamped = v.length_squared() > vmax * vmax;
                 v = clamp_len(v, vmax);
                 let nrm = self.pt.sig[i].normal;

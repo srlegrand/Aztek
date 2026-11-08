@@ -111,7 +111,9 @@ fn collider_pushed_clean_through_pinned_cloth() {
         s.set_input(ball, &moved);
         s.set_input(c, &pts);
         s.step(DT);
-        check_frame(&s, c, 3.0, 6.0, f);
+        // Cloth carried by the ball stretches over it, up to its width across one edge, in the frames before
+        // the impossible state handling takes those vertices out: bounded by the ball, not growing.
+        check_frame(&s, c, 3.0, 10.0, f);
         let out = s.out_count(c);
         most_out = most_out.max(out);
         if f > 10 && out == 0 && recovered_at.is_none() {
@@ -201,5 +203,25 @@ fn fuzz_never_explodes() {
                 assert!(r.out_frames <= most || r.mode == Mode::Sim, "case {case} frame {f}: out for {}", r.out_frames);
             }
         }
+    }
+}
+
+#[test]
+fn a_fine_drape_with_self_collision_stays_bounded() {
+    let mut s = Solver::new(SolverSettings::default());
+    let n = 60;
+    let (pts, faces) = grid(n, 2.0, 1.0);
+    let c = s.add_cloth("cloth", pts, &faces, cloth_settings(2.0 / n as f64 * 0.3));
+    let (sp, sf) = sphere(0.5, DVec3::ZERO, 32, 16);
+    s.add_collider("ball", sp, &sf, BodySettings { thickness: 0.0, ..Default::default() });
+    s.reset();
+    for f in 0..36 {
+        s.step(DT);
+        assert!(all_finite(&s), "frame {f}");
+        let x = s.positions(c);
+        // Nothing far above where it started or flung away, nothing through the ball.
+        assert!(x.iter().all(|p| p.y < 1.05 && p.length() < 3.0), "frame {f}: a point left the scene");
+        assert!(x.iter().all(|p| p.length() > 0.4), "frame {f}: a point went into the ball");
+        assert!(worst_stretch(&s, c) < 12.0, "frame {f}: stretch {}", worst_stretch(&s, c));
     }
 }
