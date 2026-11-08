@@ -65,18 +65,34 @@ MObject MDGModifier::azCreate(const std::string& type, int64_t parent, MStatus* 
     Json made = command("createNode", args1(type), f, &s);
     if (st) *st = s;
     if (!s) return MObject();
-    MObject obj = nodeObject(idNamed(made));
+    int64_t made_id = idNamed(made);
+    // A shape made with no parent comes under a new transform, and that is what is given back, as Maya does.
+    if (parent < 0) {
+        Json info = nodeInfo(made_id);
+        int64_t up = info["parent"].integer(0);
+        bool shape = false;
+        for (size_t i = 0; i < info["chain"].size(); ++i) shape = shape || info["chain"][i].str() == "shape";
+        if (shape && up > 0) made_id = up;
+    }
+    MObject obj = nodeObject(made_id);
     std::shared_ptr<ObjectData> d = obj.azData();
     std::shared_ptr<bool> exists = std::make_shared<bool>(true);
     std::shared_ptr<std::string> name = std::make_shared<std::string>(nodeInfo(d->node)["name"].str());
     azQueue(
         [d, exists, type, f, name]() -> MStatus {
             if (*exists) return MS::kSuccess;
-            Json g = f;
-            g.set("name", *name);
             MStatus s2;
-            Json m = command("createNode", args1(type), g, &s2);
-            if (s2) d->node = idNamed(m);
+            Json m = command("createNode", args1(type), f, &s2);
+            if (!s2) return s2;
+            int64_t id = idNamed(m);
+            Json info = nodeInfo(id);
+            bool shape = false;
+            for (size_t i = 0; i < info["chain"].size(); ++i) shape = shape || info["chain"][i].str() == "shape";
+            if (shape && !f.has("parent") && info["parent"].integer(0) > 0) id = info["parent"].integer(0);
+            d->node = id;
+            Json r = args1(nodePath(id));
+            r.push(*name);
+            command("rename", r, Json::object(), &s2);
             *exists = true;
             return s2;
         },

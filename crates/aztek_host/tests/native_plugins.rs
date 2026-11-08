@@ -65,6 +65,9 @@ fn samples_load_and_work() {
     assert_eq!(mel(&mut c, "pluginInfo -q -vendor helloCmd;"), json!("Aztek samples"));
     assert_eq!(mel(&mut c, "azHello -name \"mark\" -c 2;"), json!(["mark1", "mark2"]));
     assert_eq!(mel(&mut c, "objExists mark2;"), json!(true));
+    // MDagModifier gives back the transform it makes over a shape: the rename lands there, and the shape is below.
+    assert_eq!(mel(&mut c, "nodeType mark2;"), json!("transform"));
+    assert_eq!(mel(&mut c, "listRelatives -s mark2;").as_array().map(|a| a.len()), Some(1));
     mel(&mut c, "undo;");
     assert_eq!(mel(&mut c, "objExists mark1;"), json!(false));
     mel(&mut c, "redo;");
