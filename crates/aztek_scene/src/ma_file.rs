@@ -3259,6 +3259,10 @@ pub fn read_text(s: &mut Session, text: &str, import: bool) -> Vec<String> {
     // The plug-ins the file names, before its nodes. One that can't be found only matters if the file holds a type nobody knows.
     if s.commands.find("loadPlugin").is_some() {
         for name in &doc.requires {
+            // Part of Aztek, not a plug-in: files name it so the reference knows what they want.
+            if name == "aztekDynamics" {
+                continue;
+            }
             let loaded = s.run("loadPlugin", json!({"args": [name], "quiet": true}));
             let found = loaded.as_ref().is_ok_and(|v| v.as_array().is_some_and(|l| !l.is_empty()));
             if !found && doc.nodes.iter().any(|n| types::find(&n.ty).is_none()) {
