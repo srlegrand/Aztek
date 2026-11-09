@@ -90,6 +90,8 @@ filled in with. GitHub takes files up to 25 MB and images up to 10 MB.
   retargeting between skeletons of different sizes. Controls keep their colours: drawing overrides, templates, reference display,
   display layer colours and wireframe colours.
 
+  ![A production rig opened from its .ma file with its textures, posed with its own controls](docs/clip-rig-pose.gif)
+
   ![A quadruped skeleton posed with the rotate tool](docs/quadruped-rig.png)
 - **Deformers:** blendShape in full (Shape Editor, in-between and live targets), lattice, wrap, wire, delta mush, softMod,
   nonlinears, clusters, sculpt, jiggle, shrinkWrap, proximityWrap, curveWarp, wrinkle, morph and more; deformer weights painted
@@ -121,6 +123,8 @@ filled in with. GitHub takes files up to 25 MB and images up to 10 MB.
   motion blur and depth of field; light and data AOVs into multi-layer EXR; interactive rendering in the Render View as
   the scene changes, Render Settings, and batch rendering with no display (`aztek -render`). Every material and light
   in a scene renders through it. See [docs/HAROLD.md](docs/HAROLD.md).
+
+  ![The Render View keeping up with the camera as it moves round a rig](docs/clip-ipr.gif)
 
   ![Two rigs and a row of materials rendered with Harold](docs/harold.png)
 - **Materials and textures:** a physically based standard surface, and lambert, blinn, phong, phongE and surfaceShader with file textures and place2dTexture, assigned to objects or faces; Textured mode (6) in the viewport; Hypershade lists; the image behind the UV Editor.
