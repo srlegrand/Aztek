@@ -781,7 +781,7 @@ def _():
 # ========================================================================================================== dynamics
 @scene("dynamics", "cloth_flag")
 def _():
-    # A 6 by 4 metre flag nailed along a pole, in the solver's wind.
+    # A 6 by 4 metre flag nailed along a pole, in a 5 m/s breeze.
     pole = mc.polyCylinder(n="pole", r=8, h=1000, sx=12)[0]
     mc.move(0, 500, 0, pole)
     flag = mc.polyPlane(n="flag", w=600, h=400, sx=36, sy=24, ax=(0, 0, 1))[0]
@@ -790,9 +790,11 @@ def _():
     edge = [v for v in mc.ls(flag + ".vtx[*]", fl=True) if mc.pointPosition(v)[0] < 9]
     mc.dynamicConstraint(*edge, type="nail")
     sol = mc.ls(type="solver")[0]
-    mc.setAttr(sol + ".windSpeed", 250)
+    mc.setAttr(sol + ".windSpeed", 5)
     mc.setAttr("flagCloth.stretchResistance", 80)
     mc.setAttr("flagCloth.bendResistance", 0.5)
+    mc.setAttr("flagCloth.drag", 0.08)
+    mc.setAttr("flagCloth.tangentialDrag", 0.01)
     mc.setAttr(sol + ".windDirection", 1, 0, 0.35)
     mat("flagMat", (0.85, 0.12, 0.12), flag, "lambert")
     mat("poleMat", (0.8, 0.8, 0.8), pole)

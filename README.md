@@ -24,9 +24,9 @@ Website: [srlegrand.github.io/Aztek](https://srlegrand.github.io/Aztek/). Licenc
 
 **Download** from the [latest release](https://github.com/srlegrand/Aztek/releases/latest): Windows installer or zip, Rocky Linux 9 and 8 `.rpm`, Ubuntu 24.04 and 22.04 `.deb`, Linux `.tar.gz`, and an early macOS build for Apple silicon. Install steps are under [Install](#install).
 
-| Modelling history | A flag in the wind | Grox, keyed |
+| Modelling history | A flag in a breeze | A tower knocked down |
 | --- | --- | --- |
-| ![Extrude, width and bevel keyed on their history nodes](docs/clip-modelling.gif) | ![A cloth flag nailed to its pole, in the wind](docs/clip-flag.gif) | ![Grox's IK arms, hands, head, jaw, blink and tail keyed and played back](docs/clip-grox.gif) |
+| ![Extrude, width and bevel keyed on their history nodes](docs/clip-modelling.gif) | ![A cloth flag nailed to its pole, in a breeze](docs/clip-flag.gif) | ![A tower of blocks knocked down by a heavy ball](docs/clip-tower.gif) |
 
 ![A production rig opened from its .ma file](docs/production-rig.png)
 
@@ -90,8 +90,6 @@ filled in with. GitHub takes files up to 25 MB and images up to 10 MB.
   retargeting between skeletons of different sizes. Controls keep their colours: drawing overrides, templates, reference display,
   display layer colours and wireframe colours.
 
-  ![Grox, the example character, posed with both IK arms raised](docs/grox-ui.png)
-
   ![A quadruped skeleton posed with the rotate tool](docs/quadruped-rig.png)
 - **Deformers:** blendShape in full (Shape Editor, in-between and live targets), lattice, wrap, wire, delta mush, softMod,
   nonlinears, clusters, sculpt, jiggle, shrinkWrap, proximityWrap, curveWarp, wrinkle, morph and more; deformer weights painted
@@ -112,9 +110,9 @@ filled in with. GitHub takes files up to 25 MB and images up to 10 MB.
   and a vertex it cannot place leaves the simulation for a while and comes back, marked in the view. Older dynamics
   nodes in `.ma` files load into it. See [docs/DYNAMICS.md](docs/DYNAMICS.md).
 
-  | Cloth, rendered with Harold | A tower knocked down | Rigid bodies on cloth | Particles |
-  | --- | --- | --- | --- |
-  | ![A sheet dropped on a ball](docs/clip-cloth.gif) | ![A tower of blocks knocked down by a heavy ball](docs/clip-tower.gif) | ![Boxes dropped into a cloth hammock](docs/clip-rigid.gif) | ![Particles from an emitter with turbulence and a floor collider](docs/clip-particles.gif) |
+  | Cloth, rendered with Harold | Rigid bodies on cloth | Particles |
+  | --- | --- | --- |
+  | ![A sheet dropped on a ball](docs/clip-cloth.gif) | ![Boxes dropped into a cloth hammock](docs/clip-rigid.gif) | ![Particles from an emitter with turbulence and a floor collider](docs/clip-particles.gif) |
 
 **Rendering and look development**
 
@@ -125,8 +123,6 @@ filled in with. GitHub takes files up to 25 MB and images up to 10 MB.
   in a scene renders through it. See [docs/HAROLD.md](docs/HAROLD.md).
 
   ![Two rigs and a row of materials rendered with Harold](docs/harold.png)
-
-  ![Grox rendered with Harold under a sky dome and two directional lights](docs/grox-render.jpg)
 - **Materials and textures:** a physically based standard surface, and lambert, blinn, phong, phongE and surfaceShader with file textures and place2dTexture, assigned to objects or faces; Textured mode (6) in the viewport; Hypershade lists; the image behind the UV Editor.
 
   ![Materials and a file texture in Textured mode](docs/materials.png)
@@ -186,7 +182,7 @@ Script Editor. Every one opens without a warning; a test plays each.
 
 ![Twelve of the example scenes in the viewport](docs/examples.jpg)
 
-![File > Examples > Rigging](docs/examples-menu.png)
+![File > Examples > Modelling](docs/examples-menu.png)
 
 - **Modelling:** every polygon primitive; a castle tower from one cylinder (extrude, inset, bevel, all as history);
   booleans; edge loops, a bridge and welds; a spaceship half mirrored live; smooth mesh preview with creases;
@@ -195,8 +191,7 @@ Script Editor. Every one opens without a warning; a test plays each.
 - **Rigging:** every constraint; an IK leg with a reverse foot; a spline IK tail; nonlinear deformers; lattice, wire,
   wrap, cluster and softMod; linear against dual quaternion skinning; blend shapes with an in-between; set driven keys;
   delta mush and jiggle; a small keyed arm rig.
-- **Characters:** Grox, a horned brute with a production-style rig (IK/FK arms and legs, reverse feet, stretch, space
-  switches, a tail, horns, blinks, proxy geometry), rough on purpose, and a keyed walking robot.
+- **Characters:** a keyed walking robot.
 - **Animation:** a bouncing ball, a motion path, animation layers, expressions, pendulums on cycles.
 - **Dynamics:** a flag in the wind, cloth on a moving collider, cloth draped on a ball, boxes on a hammock, bouncing
   particles, a particle vortex, particles with fields, a tower knocked down.
@@ -206,7 +201,7 @@ Script Editor. Every one opens without a warning; a test plays each.
 - **Scripts:** a spiral staircase, scattered rocks, a rename window in MEL, a selection scriptJob, a mesh report with
   the API, a Python plug-in command, a turntable playblast.
 
-`examples/tools/make_showcase.py` and `make_examples.mel` write the scenes; `examples/tools/grox` builds Grox.
+`examples/tools/make_showcase.py` and `make_examples.mel` write the scenes.
 
 ## Screens
 
