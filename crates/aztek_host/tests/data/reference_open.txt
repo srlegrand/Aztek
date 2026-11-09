@@ -1,6 +1,2 @@
 # Calls that don't yet match the reference, with the PLAN.md item that fixes each. This list can only shrink.
-smooth.attr  # 1.12
-smooth.level  # 1.12
-smooth.query  # 1.12
-smooth.query.attr  # 1.12
 instance.parents  # 1.14

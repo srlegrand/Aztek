@@ -15,6 +15,10 @@ Done 09/11/2026 (PLAN 1.9 to 1.11). Whether `-e` or `-q` means edit and query no
 
 `polyEvaluate`: `-v -e -f -t -uv -s -b -b2 -a -wa -vc -ec -fc -uvc -tc -bc -bc2 -us -uid -uis -aus -as`, with `-uvs` accepted for the current set and `-ds` accepted. Several flags give a dictionary by long name in Python and an array in MEL in the order given. `-s` counts mesh shells, where it counted UV shells; `-us` counts those. Lengths and areas are in the current unit: unverified (`units.m.polyEvaluate.b`).
 
+## Smooth preview and shading flags
+
+Done 09/11/2026 (PLAN 1.12, 1.13). Smooth preview is `displaySmoothMesh` (0, 1, 2) and `smoothLevel` on the shape, with `useSmoothPreviewForRender` and `renderSmoothLevel` for Harold. `displaySmoothness -po` maps 1, 2, 3 onto it and `-q -po` answers per object. `smoothPreview` stays as a command and as an alias for old files and scripts. `shadingNode` takes `-isColorManaged` and `-asRendering`; `hyperShade` has `-listUpstreamShaderNodes`, `-listDownstreamShaderNodes`, `-shaderNetwork` and `-duplicate`. Its window flags are accepted and do nothing.
+
 ## Units
 
 Done 09/11/2026 (PLAN 1.1). What's stored is centimetres and radians. A command called from a script or the interface is in the current units, and `execute` converts its flags, arguments and results by tags in `crates/aztek_scene/src/unit_tables.rs`; commands called by other commands, viewport tools and the Python API are in stored units. `currentUnit` lives in `aztek_ops::units`, per scene: a new scene goes back to cm and degrees, opening a file takes on the file's.

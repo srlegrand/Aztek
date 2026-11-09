@@ -162,8 +162,21 @@ fn plug_unit(s: &Session, name: &str) -> Option<aztek_ops::units::Unit> {
     (unit != aztek_ops::units::Unit::None).then_some(unit)
 }
 
+/// smoothPreview, Aztek's old name: the levels showing, 0 for none, over displaySmoothMesh and smoothLevel.
+fn old_smooth_plug(s: &Session, name: &str) -> Option<NodeId> {
+    let (node, attr) = name.rsplit_once('.')?;
+    if attr != "smoothPreview" {
+        return None;
+    }
+    let id = s.graph.find(node).ok().flatten()?;
+    s.graph.node(id).is_some_and(|n| n.ty().is_a("mesh")).then_some(id)
+}
+
 fn get_attr(s: &mut Session, a: &Args, prev: &aztek_ops::RunFn<Session>) -> CmdResult {
     let Some(name) = a.pos_str(0).map(str::to_string) else { fail!("getAttr: expected a plug") };
+    if let Some(id) = old_smooth_plug(s, &name) {
+        return Ok(json!(crate::mesh_nodes::MeshNode::preview_level(s.graph.node(id).unwrap())));
+    }
     // A deformer's per-point weights, kept together rather than as plugs.
     if let Some(r) = crate::deform_paint::get_weights(&mut s.graph, &name) {
         return r;
@@ -256,6 +269,10 @@ fn read_args(g: &mut Graph, a: &Args) -> CmdResult {
 
 fn set_attr(s: &mut Session, a: &Args, prev: &aztek_ops::RunFn<Session>) -> CmdResult {
     let Some(name) = a.pos_str(0).map(str::to_string) else { fail!("setAttr: expected (plug, value)") };
+    if let (Some(id), Some(level)) = (old_smooth_plug(s, &name), a.positional.get(1).and_then(Value::as_i64)) {
+        crate::mesh_nodes::MeshNode::set_preview(&mut s.graph, id, level)?;
+        return Ok(Value::Null);
+    }
     // A child that's driven makes the whole plug driven.
     if let Ok(p) = s.graph.plug(&name) {
         if aztek_ops::units::user_call() && p.component < 0 && s.graph.attr(&p).ty == PlugType::Vec3 && (0..3).any(|k| s.graph.source(&PlugRef::component(p.node, p.attr, k)).is_some()) {

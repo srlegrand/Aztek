@@ -90,7 +90,7 @@ fn shape_state(g: &Graph, id: NodeId) -> Option<(Arc<Mesh>, glam::DMat4, i32)> {
     if n.ty().is_a("nurbsSurface") {
         return Some((n.data().mesh(SurfaceShape::OUT_MESH).cloned()?, world, 0));
     }
-    Some((n.data().mesh(MeshNode::OUT_MESH).cloned()?, world, n.int(MeshNode::SMOOTH_PREVIEW).clamp(0, 3) as i32))
+    Some((n.data().mesh(MeshNode::OUT_MESH).cloned()?, world, MeshNode::render_level(n) as i32))
 }
 
 /// Shapes to render: visible, not intermediate, not templated meshes and NURBS surfaces.
@@ -119,9 +119,8 @@ fn subdiv_levels(g: &mut Graph, id: NodeId, smooth: i32, ignore: bool) -> u32 {
     if ty == 1 {
         return get_f(g, id, "aiSubdivIterations", 1.0).clamp(0.0, 6.0) as u32;
     }
-    if smooth >= 2 {
-        // Smooth preview's default render level, Maya's smoothLevel of 2.
-        return get_f(g, id, "smoothLevel", 2.0).clamp(1.0, 4.0) as u32;
+    if smooth >= 1 {
+        return smooth as u32;
     }
     0
 }
