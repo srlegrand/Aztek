@@ -1294,6 +1294,7 @@ pub fn register(c: &mut Commands<Session>) {
         Ok(Value::Null)
     }));
 
+    c.register(Cmd::new("InvertSelection", "The runtime command for invertSelection.", |s, _| s.run("invertSelection", json!({}))));
     c.register(Cmd::new(
         "invertSelection",
         "Invert the selection: the unselected components of the current kind on the hilited meshes, or in object mode every \
@@ -1306,6 +1307,7 @@ pub fn register(c: &mut Commands<Session>) {
                 let shown: Vec<NodeId> = g
                     .nodes()
                     .into_iter()
+                    .filter(|&id| !crate::dag::is_shape(g, id) && !crate::cameras::is_default_camera(g, id))
                     .filter(|&id| g.node(id).is_some_and(|n| n.ty().dag) && iso.as_ref().map_or(true, |s| s.shows(id)))
                     .collect();
                 g.select(&shown, SelectMode::Toggle);

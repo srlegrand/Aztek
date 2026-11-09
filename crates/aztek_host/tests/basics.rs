@@ -92,7 +92,6 @@ fn centre_pivot() {
 }
 
 #[test]
-#[ignore = "PLAN 1.6: move on pivots takes -a"]
 fn move_pivots_absolute() {
     let mut c = core();
     mel(&mut c, "polyCube; move 3 0 0;");
@@ -134,7 +133,7 @@ fn duplicate_and_instance() {
     assert_eq!(mel(&mut c, "duplicate pCube1;"), json!(["pCube2"]));
     near(mel(&mut c, "getAttr pCube2.tx;"), &[1.0]);
     assert_eq!(mel(&mut c, "instance pCube1;"), json!(["pCube3"]));
-    assert_eq!(mel(&mut c, "listRelatives -s pCube3;"), json!(["pCube3|pCubeShape1"])); // unverified: an instanced shape is named by its path
+    assert_eq!(mel(&mut c, "listRelatives -s pCube3;"), json!(["pCubeShape1"])); // unverified: leaf names unless -path or -fullPath
     // Duplicate with transform repeats the last duplicate's offset.
     mel(&mut c, "select -r pCube1; duplicate; move -r 1 0 0;");
     mel(&mut c, "duplicate -st;");
@@ -153,7 +152,6 @@ fn instances_share_one_shape() {
 }
 
 #[test]
-#[ignore = "PLAN 1.5: a duplicate's shape takes the next free shape name"]
 fn duplicate_names_the_shape() {
     let mut c = core();
     mel(&mut c, "polyCube; duplicate pCube1;");
@@ -208,7 +206,6 @@ fn rename_plain() {
 }
 
 #[test]
-#[ignore = "PLAN 1.4: # in rename is the next free number"]
 fn rename_hashes() {
     let mut c = core();
     mel(&mut c, "polyCube; polyCube; polyCube;");
@@ -218,7 +215,6 @@ fn rename_hashes() {
 }
 
 #[test]
-#[ignore = "PLAN 1.5: duplicates keep the number's padding"]
 fn duplicate_keeps_padding() {
     let mut c = core();
     mel(&mut c, "polyCube -n arm_01;");
@@ -343,7 +339,6 @@ fn select_add_toggle_deselect() {
 }
 
 #[test]
-#[ignore = "PLAN 1.7: InvertSelection inverts"]
 fn invert_selection() {
     let mut c = core();
     mel(&mut c, "polyCube; polyCube; polyCube; select -r pCube1;");
@@ -378,7 +373,6 @@ fn add_lock_delete_attributes() {
 // Hotkeys
 
 #[test]
-#[ignore = "PLAN 1.8: hotkey -q reads the key from -k"]
 fn hotkey_query() {
     let mut c = core();
     mel(&mut c, "polyCube; select -r pCube1;");

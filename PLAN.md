@@ -57,14 +57,14 @@ Each was reproduced on 08/11/2026 through `maya.cmds` in the built app.
   Ctrl+G path.
 - [x] 1.3 (09/11/2026: PARITY.md's difference removed) `group` puts the new group under the members' shared parent and its pivot at the world origin, as the
   reference does (PARITY.md says it goes under the world because tests rely on it: fix the tests).
-- [ ] 1.4 `rename` with `#` replaces the hashes with the next free number (`thing#` gives `thing1`), padded by the count
+- [x] 1.4 (09/11/2026: also in -n names through the same helper when they get it; rename only for now) `rename` with `#` replaces the hashes with the next free number (`thing#` gives `thing1`), padded by the count
   of hashes (`thing###` gives `thing001`).
-- [ ] 1.5 Duplicate naming: a trailing number increments and keeps its padding as the reference does (`arm_01` gave
+- [x] 1.5 (09/11/2026: padding kept; a copied shape takes the next free shape name; listRelatives gives leaf names unless -path or -fullPath) Duplicate naming: a trailing number increments and keeps its padding as the reference does (`arm_01` gave
   `arm_1`). `listRelatives` without `-path` or `-fullPath` gives short leaf names, where Aztek gives paths. Confirm the rule with a capture, including `_L_01` style names and names ending in a digit after a letter.
-- [ ] 1.6 `move` and `xform` on `.rotatePivot` and `.scalePivot` take `-a`, `-r`, `-ws`, `-os`, `-rpr`, `-spr` like any
+- [x] 1.6 (09/11/2026: `move` on pivots with -a, -r, -ws, -os, each pivot on its own) `move` and `xform` on `.rotatePivot` and `.scalePivot` take `-a`, `-r`, `-ws`, `-os`, `-rpr`, `-spr` like any
   move. `move -a 0 0 0 pCube1.scalePivot pCube1.rotatePivot` currently fails with "unknown flag 'absolute'".
-- [ ] 1.7 `InvertSelection` inverts (objects in object mode, components in component mode, respecting the masks).
-- [ ] 1.8 `hotkey -q` reads the key from `-k` and never from the selection.
+- [x] 1.7 (09/11/2026: `InvertSelection` runs `invertSelection`; objects leave out shapes and default cameras) `InvertSelection` inverts (objects in object mode, components in component mode, respecting the masks).
+- [x] 1.8 (09/11/2026: `hotkey -q` reads -k and its modifiers) `hotkey -q` reads the key from `-k` and never from the selection.
 - [ ] 1.9 Short flags that collide with the edit flag: `polyEvaluate -e` (edges) returns None. Audit every command for
   short flags `e`, `q`, `c` that mean something else in that command, and take the command's own meaning.
 - [ ] 1.10 Tests that pin a divergence: `polyBevel31` (the reference makes `polyBevel1`), `group` under the world,

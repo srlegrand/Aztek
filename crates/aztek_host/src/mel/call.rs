@@ -138,6 +138,7 @@ fn query_takes_value(cmd: &str, flag: &str) -> bool {
         ("skinPercent", "transform" | "ignoreBelow")
             | ("keyframe", "attribute" | "time" | "index")
             | ("keyTangent", "attribute" | "time")
+            | ("hotkey", "keyShortcut")
     )
 }
 

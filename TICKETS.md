@@ -15,6 +15,7 @@ Requests waiting or in progress, newest detail kept. Move to Done with the date 
   `nurbsSquare -sl2` and `vortex -ax/-ay/-az` are missing; `connectDynamic -f` with a field's transform fails;
   `displaySmoothness -po` neither sets nor answers smooth preview; `scriptJob -listJobs` lists ids, not the Python
   function; opening a dynamics example in the app says the aztekDynamics plug-in wasn't found (the file `requires` it).
+- `#` in `-n` flags when creating nodes (`polyCube -n thing#`): `rename` has it (PLAN 1.4).
 - Missing commands found running the capture kit in Aztek (09/11/2026): `allNodeTypes`, `assignCommand`, `hotkeySet`, `imagePlane`, `runTimeCommand -dca` and `-uca`.
 - PLAN.md (08/11/2026): parity review's work queue. Phase 0 and 1 before anything else that isn't a ticket.
 - Cloth feels wrong at scale: a cloth bigger than the grid acts stiff, small or heavy even as silk. Units, gravity, bending and presets must scale (agent, top priority). Real-world units by default from `currentUnit`: 1 cm of geometry is 1 cm of cloth, so nobody works in 10 cm = 1 m.
@@ -68,6 +69,21 @@ Requests waiting or in progress, newest detail kept. Move to Done with the date 
 - 1.3. Done: `group` under the members' shared parent, pivots at the world origin, members keep their world place
   Not done: `-em` pivots stay local
   Why: the reference's empty group has no members to place it
+- 1.4. Done: `rename` turns each run of # into the next free number, padded by its length
+  Not done: `polyCube -n thing#` not done
+  Why: the item names rename; ticket added
+- 1.5. Done: `arm_01` copies to `arm_02`, `ctl_L_009` to `ctl_L_010`, `pCube2` has `pCubeShape2`, `listRelatives` leaf names
+  Not done: padding rules unverified against a capture
+  Why: calls.json holds them until Simon runs the kit
+- 1.6. Done: `move -a 0 0 0 obj.rp obj.sp`, either pivot alone, relative and object space
+  Not done: `-rpr` and `-spr` are accepted and do nothing on pivots
+  Why: nothing in the reference's docs says what they mean there
+- 1.7. Done: objects and components invert
+  Not done: masks only by component kind, not selectType's object masks
+  Why: needs capture of what a mask does to an invert
+- 1.8. Done: `hotkey -q -k F12 -n`, `-rn`, from MEL and Python
+  Not done: hotkey sets (`hotkeySet`) not there
+  Why: ticket from the capture kit
 
 ## Done
 - 08/11/2026 One light model: the viewport's lights render the same in Harold (decay rates, intensity, colour, spot cone and dropoff, ambient, area, volume, default lighting, ambient colour, black background); parity test against the shared formula.

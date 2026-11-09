@@ -1183,14 +1183,36 @@ impl Graph {
         }
         let digits = wanted.len() - wanted.bytes().rev().take_while(u8::is_ascii_digit).count();
         let stem = &wanted[..digits];
+        let width = wanted.len() - digits;
         let mut n: i64 = if digits < wanted.len() {
             wanted[digits..].parse().unwrap_or(1)
         } else {
             1
         };
         loop {
-            let candidate = format!("{stem}{n}");
+            // A trailing number keeps its padding: arm_01 gives arm_02, ctl_009 gives ctl_010.
+            let candidate = format!("{stem}{n:0width$}");
             if !taken(&candidate) {
+                return candidate;
+            }
+            n += 1;
+        }
+    }
+
+    /// `thing#` as the next free name: each run of hashes is a number padded to its length, counted from 1.
+    pub fn resolve_hashes(&self, wanted: &str) -> String {
+        let Some(start) = wanted.find('#') else { return wanted.to_string() };
+        let len = wanted[start..].bytes().take_while(|b| *b == b'#').count();
+        let (head, tail) = (&wanted[..start], &wanted[start + len..]);
+        let mut n = 1;
+        loop {
+            let candidate = format!("{head}{n:0len$}{tail}");
+            if candidate.contains('#') {
+                let inner = self.resolve_hashes(&candidate);
+                if !self.names.contains_key(&inner) {
+                    return inner;
+                }
+            } else if !self.names.contains_key(&candidate) {
                 return candidate;
             }
             n += 1;
@@ -1228,6 +1250,11 @@ impl Graph {
     }
 
     /// What `wanted` would become for a node under `parent` (NO_NODE for a root or a non-DAG node).
+    /// The next name no node in the scene holds, counting on from `wanted`'s trailing number.
+    pub fn next_scene_name(&self, wanted: &str) -> String {
+        self.unique_name(wanted, NO_NODE, NO_NODE, true)
+    }
+
     pub fn available_name(&self, wanted: &str, parent: NodeId) -> String {
         self.unique_name(wanted, parent, NO_NODE, self.naming.unique_names)
     }

@@ -17,11 +17,14 @@ const B: ArgType = ArgType::Bool;
 const S: ArgType = ArgType::String;
 const A: ArgType = ArgType::Any;
 
-fn name_of(g: &Graph, id: NodeId, full: bool) -> String {
-    if full {
+/// A relative as listRelatives names it: its leaf name, even if that isn't unique, a path only when asked for.
+fn relative_name(g: &Graph, id: NodeId, a: &Args) -> String {
+    if a.bool("fullPath") {
         g.full_path(id)
-    } else {
+    } else if a.bool("path") || !aztek_ops::units::user_call() {
         g.path(id)
+    } else {
+        g.node(id).map_or_else(String::new, |n| n.name().to_string())
     }
 }
 
@@ -39,7 +42,7 @@ fn node_of(g: &Graph, name: &str, cmd: &str) -> CmdResult<NodeId> {
 
 fn list_relatives(s: &mut Session, a: &Args) -> CmdResult {
     let g = &s.graph;
-    let (full, types_wanted) = (a.bool("fullPath"), type_list(a, "type"));
+    let types_wanted = type_list(a, "type");
     let ni = a.bool("noIntermediate");
     let mut out: Vec<NodeId> = Vec::new();
     for name in objects(s, a) {
@@ -69,7 +72,7 @@ fn list_relatives(s: &mut Session, a: &Args) -> CmdResult {
             && (!ni || !n.ty().dag || !n.bool(DagNode::INTERMEDIATE_OBJECT))
             && (types_wanted.is_empty() || types_wanted.iter().any(|t| n.ty().is_a(t)))
     });
-    Ok(json!(out.iter().map(|&x| name_of(g, x, full)).collect::<Vec<_>>()))
+    Ok(json!(out.iter().map(|&x| relative_name(g, x, a)).collect::<Vec<_>>()))
 }
 
 /// listConnections: walking through unitConversion nodes when asked, a shape reported as its transform unless -sh.
@@ -398,9 +401,10 @@ fn unique_everywhere(g: &Graph, wanted: &str) -> String {
     }
     let digits = wanted.len() - wanted.bytes().rev().take_while(u8::is_ascii_digit).count();
     let stem = &wanted[..digits];
+    let width = wanted.len() - digits;
     let mut k: u64 = wanted[digits..].parse().unwrap_or(1);
     loop {
-        let name = format!("{stem}{k}");
+        let name = format!("{stem}{k:0width$}");
         if g.find_all(&name).is_empty() {
             return name;
         }
