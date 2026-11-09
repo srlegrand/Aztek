@@ -257,6 +257,9 @@ pub mod flags {
     pub const IMAGE: u32 = 1 << 15;
     /// A message plug: a link between nodes that carries no value, so it orders nothing and dirties nothing.
     pub const MESSAGE: u32 = 1 << 16;
+    /// A number or a vector, whichever is connected: unitConversion's input and output, which carry a rotation's three
+    /// angles as readily as one value.
+    pub const GENERIC: u32 = 1 << 17;
 }
 
 #[derive(Clone, Debug)]

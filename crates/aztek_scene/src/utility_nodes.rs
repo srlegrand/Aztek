@@ -25,6 +25,11 @@ fn base(name: &str, short: &str, ty: PlugType, default: PlugValue, fl: u32) -> A
     AttrDef { name: name.into(), short_name: short.into(), ty, default_value: default, flags: fl, ..Default::default() }
 }
 
+fn generic(mut a: AttrDef) -> AttrDef {
+    a.flags |= flags::GENERIC;
+    a
+}
+
 fn fin(name: &str, short: &str, d: f64) -> AttrDef {
     base(name, short, PlugType::Float, PlugValue::Float(d), IN)
 }
@@ -401,7 +406,25 @@ fn binary_float(name: &'static str, doc: &'static str, c: Compute) -> Spec {
     Spec(name, "utility/general", doc, vec![fin("input1", "i1", 0.0), fin("input2", "i2", 0.0), fout("output", "o")], c)
 }
 
+/// Later releases of the reference add "DL" twins of these nodes, the same attributes and the same result.
+const TWINS: &[(&str, &str, &str)] = &[
+    ("addDL", "addDoubleLinear", "input1 + input2: the later twin of addDoubleLinear."),
+    ("multDL", "multDoubleLinear", "input1 * input2: the later twin of multDoubleLinear."),
+    ("distanceBetweenDL", "distanceBetween", "The distance between two points: the later twin of distanceBetween."),
+    ("angleBetweenDL", "angleBetween", "The rotation from vector1 to vector2: the later twin of angleBetween."),
+];
+
 fn table() -> Vec<Spec> {
+    let mut t = base_table();
+    for (twin, of, doc) in TWINS {
+        if let Some(Spec(_, class, _, attrs, compute)) = t.iter().find(|s| s.0 == *of).map(|s| Spec(s.0, s.1, s.2, s.3.clone(), s.4)) {
+            t.push(Spec(twin, class, doc, attrs, compute));
+        }
+    }
+    t
+}
+
+fn base_table() -> Vec<Spec> {
     vec![
         Spec("multiplyDivide", "utility/general", "Multiplies, divides or raises input1 by input2, per channel.",
             vec![en("operation", "op", 1, &["noOperation", "multiply", "divide", "power"]), vin("input1", "i1", [0.0; 3]), vin("input2", "i2", [1.0; 3]), vout("output", "o")],
@@ -520,10 +543,13 @@ fn table() -> Vec<Spec> {
                 set(d, "outAlpha", (o.x + o.y + o.z) / 3.0);
             }),
         Spec("unitConversion", "utility/general", "input times conversionFactor. Angles are degrees everywhere here, so only a factor beyond the change of angle units needs one.",
-            vec![fin("input", "i", 0.0), fin("conversionFactor", "cf", 1.0), fout("output", "o")],
+            vec![generic(fin("input", "i", 0.0)), fin("conversionFactor", "cf", 1.0), generic(fout("output", "o"))],
             |d| {
-                let o = f(d, "input") * f(d, "conversionFactor");
-                set(d, "output", o);
+                let (cf, a) = (f(d, "conversionFactor"), at(d, "input"));
+                match d.value(a).clone() {
+                    PlugValue::Vec3(v) => set(d, "output", PlugValue::Vec3(v * cf)),
+                    other => set(d, "output", other.scalar().unwrap_or(0.0) * cf),
+                }
             }),
         Spec("blendTwoAttr", "utility/general", "Blends input[current] toward input[current + 1] by attributesBlender.",
             vec![iin("current", "c", 0), multi(fin("input", "i", 0.0)), fin("attributesBlender", "ab", 0.0), fout("output", "o")],
@@ -621,10 +647,13 @@ fn table() -> Vec<Spec> {
                 set(d, "output", o);
             }),
         Spec("unitConversion", "utility/general", "input * conversionFactor. Aztek inserts none of these itself.",
-            vec![fin("input", "i", 0.0), fin("conversionFactor", "cf", 1.0), fout("output", "o")],
+            vec![generic(fin("input", "i", 0.0)), fin("conversionFactor", "cf", 1.0), generic(fout("output", "o"))],
             |d| {
-                let o = f(d, "input") * f(d, "conversionFactor");
-                set(d, "output", o);
+                let (cf, a) = (f(d, "conversionFactor"), at(d, "input"));
+                match d.value(a).clone() {
+                    PlugValue::Vec3(v) => set(d, "output", PlugValue::Vec3(v * cf)),
+                    other => set(d, "output", other.scalar().unwrap_or(0.0) * cf),
+                }
             }),
         Spec("pairBlend", "utility/general", "Blends two translations and rotations by weight: 0 is the first, 1 the second.",
             vec![

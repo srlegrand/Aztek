@@ -432,7 +432,7 @@ impl Renderer {
                     .cull_mode(if kind == Kind::ShadedCull { vk::CullModeFlags::BACK } else { vk::CullModeFlags::NONE })
                     .front_face(vk::FrontFace::CLOCKWISE)
                     .line_width(1.0);
-                let ms = vk::PipelineMultisampleStateCreateInfo::default().rasterization_samples(vk::SampleCountFlags::TYPE_1);
+                let ms = vk::PipelineMultisampleStateCreateInfo::default().rasterization_samples(gpu.samples);
                 let on_top = matches!(kind, Kind::LinesOnTop | Kind::PointsOnTop);
                 let ds = vk::PipelineDepthStencilStateCreateInfo::default()
                     .depth_test_enable(!on_top)
@@ -513,7 +513,7 @@ impl Renderer {
                         .cull_mode(if cull { vk::CullModeFlags::BACK } else { vk::CullModeFlags::NONE })
                         .front_face(vk::FrontFace::CLOCKWISE)
                         .line_width(1.0);
-                    let ms = vk::PipelineMultisampleStateCreateInfo::default().rasterization_samples(vk::SampleCountFlags::TYPE_1);
+                    let ms = vk::PipelineMultisampleStateCreateInfo::default().rasterization_samples(gpu.samples);
                     let ds = vk::PipelineDepthStencilStateCreateInfo::default()
                         .depth_test_enable(true)
                         .depth_write_enable(matches!(kind, Kind::Material | Kind::MaterialCull))

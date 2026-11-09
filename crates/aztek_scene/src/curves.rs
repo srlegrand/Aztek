@@ -728,7 +728,12 @@ pub fn register_types() {
                 store_bool("dispHull", false, "Show the hull."),
                 store_bool("dispEP", false, "Show edit points."),
                 AttrDef { flags: stored, ..f_in("lineWidth", "lw", -1.0, "Line width; -1 uses the default.") },
-                crate::attr_defs::vec3_attr("controlPoints", "cp", DVec3::ZERO, flags::INPUT | flags::HIDDEN | flags::ARRAY, "A CV's place in object space, when something drives it."),
+                AttrDef {
+                    // The reference's names for a control point's parts.
+                    child_names: ["xValue".into(), "yValue".into(), "zValue".into()],
+                    child_short: ["xv".into(), "yv".into(), "zv".into()],
+                    ..crate::attr_defs::vec3_attr("controlPoints", "cp", DVec3::ZERO, flags::INPUT | flags::HIDDEN | flags::ARRAY, "A CV's place in object space, when something drives it.")
+                },
                 AttrDef { flags: flags::OUTPUT | flags::HIDDEN | flags::ARRAY, ..float_out("editPoints.xValueEp", "eps.xve", "An edit point's X.") },
                 AttrDef { flags: flags::OUTPUT | flags::HIDDEN | flags::ARRAY, ..float_out("editPoints.yValueEp", "eps.yve", "An edit point's Y.") },
                 AttrDef { flags: flags::OUTPUT | flags::HIDDEN | flags::ARRAY, ..float_out("editPoints.zValueEp", "eps.zve", "An edit point's Z.") },

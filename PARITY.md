@@ -1085,3 +1085,30 @@ data types; NURBS geometry data. Found on the way and fixed for `.ma`: mesh poin
 without the file's linear unit, so a mesh in a metre scene came out a hundredth of its size; a display layer's colour
 set a channel at a time wasn't read. Still to do in `.ma`: camera distances (`.coi`, `.ow`, clip planes) don't take
 the file's linear unit.
+
+### Rigs from later releases, outliner keys, viewport (09/11/2026)
+
+Three production rigs saved by a 2027 release open at rest and pose. What they needed:
+- unitConversion carries a rotation's three angles as well as one value (its input and output take either), as the
+  reference's does; 146 connections per rig went through one.
+- addDL, multDL, distanceBetweenDL and angleBetweenDL, the later releases' twins of the double-linear nodes.
+- A nurbsCurve's control points by their parts, `.cp[3].xv`, which eyelid and lip rigs drive.
+- Constraints count the driven object's offsetParentMatrix, as the reference's do: a buffer group placed by its
+  offsetParentMatrix and point-constrained sat that far off twice.
+- The transform's own space-switch attribute was called `space`, the name rigs give their own enum: it is now
+  `aztekSpace`.
+- A plug-in named in `requires` with its node types warns only when one of those types is used and unknown.
+The worst body went from 721 units off its rest shape to under 2. Not yet: colorCorrect (shading only), ngSkinTools'
+layer data (the skinCluster's own weights are used).
+
+Outliner: F frames its selection (opens what is above and scrolls to it), the arrow keys walk the list, Shift-click on
+an arrow opens or closes the whole hierarchy under it, as do Shift+Right and Shift+Left. A change of selection or a
+value no longer rebuilds the tree, and nothing is rebuilt while a button is held over a view.
+
+Viewport: 4x multisampling (AZTEK_MSAA=1, 2, 4 or 8 for another count; fewer where the device allows fewer).
+Evaluation keeps the orders of the last 32 passes instead of one, so a drag's repeated passes (a wire sampling its
+drivers before the scene evaluates) stop working the order out again; an aim constraint reads its object's translate
+from whatever drives it in the same pass instead of a second evaluation after each frame. Dragging a rig's body control
+went from 114 to 75 ms a step on two cores, an arm from 34 to 17.
+
+The Script Editor's history is kept from start-up: opening it shows everything since, as the reference's does.

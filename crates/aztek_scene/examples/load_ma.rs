@@ -12,8 +12,23 @@ fn main() {
     let t = Instant::now();
     let warnings = ma_file::open_scene(&mut s, &path).expect("open");
     eprintln!("open {:.2}s, {} warnings", t.elapsed().as_secs_f64(), warnings.len());
+    // AZTEK_SET="node.attr=value,...": values set before the checks, to find which part of a rig is wrong.
+    for item in std::env::var("AZTEK_SET").unwrap_or_default().split(',').filter(|x| !x.is_empty()) {
+        if let Some((plug, v)) = item.split_once('=') {
+            let r = s.run("setAttr", serde_json::json!({"args": [plug, v.parse::<f64>().unwrap_or(0.0)]}));
+            eprintln!("setAttr {plug} {v}: {}", if r.is_ok() { "ok".to_string() } else { format!("{r:?}") });
+        }
+    }
     let t = Instant::now();
     s.graph.evaluate();
+    // AZTEK_GET="node.attr,...": values printed after evaluating, then the checks are skipped.
+    let gets = std::env::var("AZTEK_GET").unwrap_or_default();
+    if !gets.is_empty() {
+        for plug in gets.split(',') {
+            println!("{plug} = {}", s.run("getAttr", serde_json::json!({"args": [plug]})).map(|v| v.to_string()).unwrap_or_else(|e| e.to_string()));
+        }
+        return;
+    }
     eprintln!("evaluate {:.2}s", t.elapsed().as_secs_f64());
     let mut kinds: BTreeMap<String, usize> = BTreeMap::new();
     for w in &warnings {
@@ -80,6 +95,28 @@ fn bind_check(s: &mut Session) {
     println!("bind check: {skins} skins, {total} influences, {} joints off", bad.len());
     let limit = std::env::var("BIND_ALL").map_or(60, |_| usize::MAX);
     for (name, (m, r)) in bad.iter().take(limit) {
+        println!("  {m:10.3} {r:7.3}  {name}");
+    }
+    // Where it starts: wrong influences whose ancestors are all right (or aren't influences).
+    let off: std::collections::HashSet<&str> = bad.iter().map(|(n, _)| n.as_str()).collect();
+    let mut roots = Vec::new();
+    for (name, e) in &bad {
+        let Ok(Some(id)) = g.find(name) else { continue };
+        let mut up = g.parent(id);
+        let mut clean = true;
+        while up != aztek_scene::plug::NO_NODE {
+            if g.node(up).is_some_and(|n| off.contains(n.name())) {
+                clean = false;
+                break;
+            }
+            up = g.parent(up);
+        }
+        if clean {
+            roots.push((name.clone(), *e));
+        }
+    }
+    println!("first wrong: {}", roots.len());
+    for (name, (m, r)) in roots.iter().take(limit) {
         println!("  {m:10.3} {r:7.3}  {name}");
     }
 }

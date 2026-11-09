@@ -183,6 +183,11 @@ pub struct Gpu {
     pub depth_image: vk::Image,
     pub depth_view: vk::ImageView,
     pub depth_alloc: Option<Allocation>,
+    /// Samples per pixel the view draws with; above one, it draws into `msaa_image` and resolves into the swapchain image.
+    pub samples: vk::SampleCountFlags,
+    pub msaa_image: vk::Image,
+    pub msaa_view: vk::ImageView,
+    pub msaa_alloc: Option<Allocation>,
     pub render_pass: vk::RenderPass,
     pub framebuffers: Vec<vk::Framebuffer>,
     pub pool: vk::CommandPool,
@@ -206,28 +211,47 @@ impl Gpu {
             .find(|f| f.format == vk::Format::B8G8R8A8_UNORM || f.format == vk::Format::R8G8B8A8_UNORM)
             .unwrap_or(&formats[0])
             .format;
-        let attachments = [
+        let samples = sample_count(&shared);
+        let multi = samples != vk::SampleCountFlags::TYPE_1;
+        // With several samples: draw into a multisampled image (0) with depth (1), resolved into the swapchain image (2).
+        let mut attachments = vec![
             vk::AttachmentDescription::default()
                 .format(format)
-                .samples(vk::SampleCountFlags::TYPE_1)
+                .samples(samples)
                 .load_op(vk::AttachmentLoadOp::CLEAR)
-                .store_op(vk::AttachmentStoreOp::STORE)
+                .store_op(if multi { vk::AttachmentStoreOp::DONT_CARE } else { vk::AttachmentStoreOp::STORE })
                 .initial_layout(vk::ImageLayout::UNDEFINED)
-                .final_layout(vk::ImageLayout::PRESENT_SRC_KHR),
+                .final_layout(if multi { vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL } else { vk::ImageLayout::PRESENT_SRC_KHR }),
             vk::AttachmentDescription::default()
                 .format(DEPTH_FORMAT)
-                .samples(vk::SampleCountFlags::TYPE_1)
+                .samples(samples)
                 .load_op(vk::AttachmentLoadOp::CLEAR)
                 .store_op(vk::AttachmentStoreOp::DONT_CARE)
                 .initial_layout(vk::ImageLayout::UNDEFINED)
                 .final_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL),
         ];
+        if multi {
+            attachments.push(
+                vk::AttachmentDescription::default()
+                    .format(format)
+                    .samples(vk::SampleCountFlags::TYPE_1)
+                    .load_op(vk::AttachmentLoadOp::DONT_CARE)
+                    .store_op(vk::AttachmentStoreOp::STORE)
+                    .initial_layout(vk::ImageLayout::UNDEFINED)
+                    .final_layout(vk::ImageLayout::PRESENT_SRC_KHR),
+            );
+        }
         let color_ref = [vk::AttachmentReference::default().attachment(0).layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)];
         let depth_ref = vk::AttachmentReference::default().attachment(1).layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-        let subpass = [vk::SubpassDescription::default()
+        let resolve_ref = [vk::AttachmentReference::default().attachment(2).layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)];
+        let mut sp = vk::SubpassDescription::default()
             .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
             .color_attachments(&color_ref)
-            .depth_stencil_attachment(&depth_ref)];
+            .depth_stencil_attachment(&depth_ref);
+        if multi {
+            sp = sp.resolve_attachments(&resolve_ref);
+        }
+        let subpass = [sp];
         let dep = [vk::SubpassDependency::default()
             .src_subpass(vk::SUBPASS_EXTERNAL)
             .dst_subpass(0)
@@ -260,6 +284,10 @@ impl Gpu {
             depth_image: vk::Image::null(),
             depth_view: vk::ImageView::null(),
             depth_alloc: None,
+            samples,
+            msaa_image: vk::Image::null(),
+            msaa_view: vk::ImageView::null(),
+            msaa_alloc: None,
             render_pass,
             framebuffers: Vec::new(),
             pool,
@@ -294,6 +322,14 @@ impl Gpu {
                     let _ = self.shared.allocator.lock().unwrap().free(a);
                 }
                 self.depth_view = vk::ImageView::null();
+            }
+            if self.msaa_view != vk::ImageView::null() {
+                self.device.destroy_image_view(self.msaa_view, None);
+                self.device.destroy_image(self.msaa_image, None);
+                if let Some(a) = self.msaa_alloc.take() {
+                    let _ = self.shared.allocator.lock().unwrap().free(a);
+                }
+                self.msaa_view = vk::ImageView::null();
             }
         }
     }
@@ -365,7 +401,7 @@ impl Gpu {
                     .extent(vk::Extent3D { width: extent.width, height: extent.height, depth: 1 })
                     .mip_levels(1)
                     .array_layers(1)
-                    .samples(vk::SampleCountFlags::TYPE_1)
+                    .samples(self.samples)
                     .usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT),
                 None,
             )?;
@@ -387,8 +423,36 @@ impl Gpu {
                     .subresource_range(vk::ImageSubresourceRange::default().aspect_mask(vk::ImageAspectFlags::DEPTH).level_count(1).layer_count(1)),
                 None,
             )?;
+            let multi = self.samples != vk::SampleCountFlags::TYPE_1;
+            if multi {
+                self.msaa_image = self.device.create_image(
+                    &vk::ImageCreateInfo::default()
+                        .image_type(vk::ImageType::TYPE_2D)
+                        .format(self.format)
+                        .extent(vk::Extent3D { width: extent.width, height: extent.height, depth: 1 })
+                        .mip_levels(1)
+                        .array_layers(1)
+                        .samples(self.samples)
+                        .usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSIENT_ATTACHMENT),
+                    None,
+                )?;
+                let req = self.device.get_image_memory_requirements(self.msaa_image);
+                let alloc = self.shared.allocator.lock().unwrap().allocate(&AllocationCreateDesc {
+                    name: "msaa colour",
+                    requirements: req,
+                    location: MemoryLocation::GpuOnly,
+                    linear: false,
+                    allocation_scheme: AllocationScheme::GpuAllocatorManaged,
+                })?;
+                self.device.bind_image_memory(self.msaa_image, alloc.memory(), alloc.offset())?;
+                self.msaa_alloc = Some(alloc);
+                self.msaa_view = self.device.create_image_view(
+                    &vk::ImageViewCreateInfo::default().image(self.msaa_image).view_type(vk::ImageViewType::TYPE_2D).format(self.format).subresource_range(color_range()),
+                    None,
+                )?;
+            }
             for &v in &self.views {
-                let att = [v, self.depth_view];
+                let att: Vec<vk::ImageView> = if multi { vec![self.msaa_view, self.depth_view, v] } else { vec![v, self.depth_view] };
                 self.framebuffers.push(self.device.create_framebuffer(
                     &vk::FramebufferCreateInfo::default()
                         .render_pass(self.render_pass)
@@ -467,14 +531,17 @@ impl Gpu {
                 vk::ClearValue { color: vk::ClearColorValue { float32: clear } },
                 // Reversed Z: far is 0.
                 vk::ClearValue { depth_stencil: vk::ClearDepthStencilValue { depth: 0.0, stencil: 0 } },
+                // The resolve target, not cleared.
+                vk::ClearValue { color: vk::ClearColorValue { float32: clear } },
             ];
+            let clears = if self.samples == vk::SampleCountFlags::TYPE_1 { &clears[..2] } else { &clears[..] };
             self.device.cmd_begin_render_pass(
                 self.cmd,
                 &vk::RenderPassBeginInfo::default()
                     .render_pass(self.render_pass)
                     .framebuffer(self.framebuffers[index as usize])
                     .render_area(vk::Rect2D { offset: vk::Offset2D::default(), extent: self.extent })
-                    .clear_values(&clears),
+                    .clear_values(clears),
                 vk::SubpassContents::INLINE,
             );
             Some(index)
@@ -587,4 +654,17 @@ impl Drop for Gpu {
 
 pub fn color_range() -> vk::ImageSubresourceRange {
     vk::ImageSubresourceRange::default().aspect_mask(vk::ImageAspectFlags::COLOR).level_count(1).layer_count(1)
+}
+
+/// Samples per pixel for the viewport: 4, or what the device allows below that. AZTEK_MSAA=1, 2, 4 or 8 asks for another.
+fn sample_count(shared: &Shared) -> vk::SampleCountFlags {
+    let limits = unsafe { shared.instance.get_physical_device_properties(shared.phys) }.limits;
+    let allowed = limits.framebuffer_color_sample_counts & limits.framebuffer_depth_sample_counts;
+    let want: u32 = std::env::var("AZTEK_MSAA").ok().and_then(|v| v.parse().ok()).unwrap_or(4);
+    for (n, flag) in [(8, vk::SampleCountFlags::TYPE_8), (4, vk::SampleCountFlags::TYPE_4), (2, vk::SampleCountFlags::TYPE_2)] {
+        if want >= n && allowed.contains(flag) {
+            return flag;
+        }
+    }
+    vk::SampleCountFlags::TYPE_1
 }

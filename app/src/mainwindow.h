@@ -3,6 +3,7 @@
 #pragma once
 #include <QHash>
 #include <QJsonObject>
+#include <QJsonArray>
 #include <QMainWindow>
 #include <QSet>
 #include <functional>
@@ -175,6 +176,8 @@ private:
 
     PanelLayout* panels_ = nullptr;
     ScriptEditor* script_editor_ = nullptr;
+    // Script history from the start, held until the Script Editor first opens.
+    QJsonArray log_before_editor_;
     QWidget* script_window_ = nullptr;
     QWidget* graph_window_ = nullptr;
     QWidget* uv_window_ = nullptr;

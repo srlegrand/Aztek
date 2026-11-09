@@ -795,8 +795,9 @@ impl Transform {
                 ),
                 rotation_interpolation_attr(0),
                 AttrDef {
-                    name: "space".into(),
-                    short_name: "spc".into(),
+                    // Not "space": rigs from the reference add their own attribute by that name.
+                    name: "aztekSpace".into(),
+                    short_name: "azsp".into(),
                     ty: PlugType::Enum,
                     default_value: PlugValue::Int(0),
                     flags: keyable | flags::HIDDEN | flags::RESET_ON_DISCONNECT,
@@ -806,8 +807,8 @@ impl Transform {
                     ..Default::default()
                 },
                 AttrDef {
-                    name: "spaceFrames".into(),
-                    short_name: "spf".into(),
+                    name: "aztekSpaceFrames".into(),
+                    short_name: "azspf".into(),
                     ty: PlugType::Data,
                     default_value: PlugValue::Data(None),
                     flags: flags::INPUT | flags::HIDDEN,

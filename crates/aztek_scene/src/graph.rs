@@ -703,8 +703,8 @@ impl EvalView<'_> {
                 da.clamp(slot);
                 continue;
             }
-            // Numeric types convert across connections.
-            if std::mem::discriminant(slot) == std::mem::discriminant(sv) {
+            // Numeric types convert across connections; a generic plug takes what comes.
+            if std::mem::discriminant(slot) == std::mem::discriminant(sv) || (da.has(flags::GENERIC) && matches!(sv, PlugValue::Vec3(_) | PlugValue::Float(_))) {
                 *slot = sv.clone();
             } else if let (Some(s), Some(_)) = (sv.scalar(), slot.scalar()) {
                 slot.assign_scalar(s);
@@ -783,7 +783,9 @@ pub struct Graph {
     nodes: IdMap<Box<Node>>,
     /// Moves whenever connections, parents or nodes change, which is what an evaluation order rests on.
     wiring: u64,
-    plan: EvalPlan,
+    /// Evaluation orders lately used, latest first. A drag repeats the same few passes every frame (a wire samples its
+    /// drivers, then the scene evaluates), so each finds its order here instead of working it out again.
+    plans: Vec<EvalPlan>,
     /// Short name -> nodes.
     names: HashMap<String, Vec<NodeId>>,
     rel: IdMap<Relations>,
@@ -905,7 +907,7 @@ impl Graph {
             evaluation_suspended: false,
             nodes: Default::default(),
             wiring: 0,
-            plan: Default::default(),
+            plans: Vec::new(),
             names: HashMap::new(),
             rel: Default::default(),
             roots: Vec::new(),
@@ -2544,7 +2546,7 @@ impl Graph {
     /// only on what drives it, so `pCube1.tx -> multiplyDivide1 -> pCube1.ty` is fine and
     /// `pCube1.worldMatrix -> multMatrix1 -> pCube1.tx` is not. A direct attribute to attribute link back to `dst`'s node
     /// stays refused, as it always was here.
-    fn reads_depend_on(&self, src: &PlugRef, dst: &PlugRef) -> bool {
+    pub(crate) fn reads_depend_on(&self, src: &PlugRef, dst: &PlugRef) -> bool {
         let dst_computes_nothing = self.node(dst.node).is_some_and(|n| computes_nothing(n.type_arc(), dst.attr));
         let mut stack = vec![(*src, src.node != dst.node)];
         let mut seen_nodes = HashSet::new();
@@ -2680,7 +2682,8 @@ impl Graph {
                 PlugType::Float | PlugType::Int | PlugType::Bool | PlugType::Enum
             )
         };
-        if st != dt && !(numeric(st) && numeric(dt)) {
+        let generic = (sa.has(flags::GENERIC) || da.has(flags::GENERIC)) && [st, dt].iter().all(|&t| numeric(t) || t == PlugType::Vec3);
+        if st != dt && !(numeric(st) && numeric(dt)) && !generic {
             return Err(GraphError::invalid(format!(
                 "type mismatch: {} -> {}",
                 type_name(st),
@@ -3607,10 +3610,12 @@ impl Graph {
         }
         dirty.sort_unstable();
         // The order only depends on what's dirty and how things are wired, which a drag or playback repeats every frame.
-        let mut plan = std::mem::take(&mut self.plan);
-        if plan.wiring != self.wiring || plan.dirty != dirty || plan.levels.is_empty() {
-            plan = self.make_plan(dirty);
-        }
+        let wiring = self.wiring;
+        self.plans.retain(|p| p.wiring == wiring);
+        let plan = match self.plans.iter().position(|p| p.dirty == dirty && !p.levels.is_empty()) {
+            Some(i) => self.plans.remove(i),
+            None => self.make_plan(dirty),
+        };
         for level in &plan.levels {
             // Plain inputs read from other nodes, while those are all still in the map.
             let mut passed = HashMap::new();
@@ -3677,7 +3682,8 @@ impl Graph {
                 slot.assign_scalar(s);
             }
         }
-        self.plan = plan;
+        self.plans.insert(0, plan);
+        self.plans.truncate(32);
     }
 
     // ---------------------------------------------------------------------------------------------------------------

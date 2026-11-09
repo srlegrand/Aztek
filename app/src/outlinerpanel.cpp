@@ -14,6 +14,7 @@
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QLineEdit>
 #include <QMenu>
 #include <QMimeData>
@@ -39,8 +40,45 @@ QJsonObject args(const QJsonArray& a) {
 class OutlinerTree : public QTreeWidget {
 public:
     using QTreeWidget::QTreeWidget;
+    // F: the selected items opened out to and scrolled into view, as the reference's Outliner frames.
+    void frame_selected() {
+        QList<QTreeWidgetItem*> sel = selectedItems();
+        if (sel.isEmpty()) return;
+        for (QTreeWidgetItem* it : sel)
+            for (QTreeWidgetItem* up = it->parent(); up; up = up->parent()) up->setExpanded(true);
+        scrollToItem(sel.first(), QAbstractItemView::PositionAtCenter);
+        setCurrentItem(sel.first(), 0, QItemSelectionModel::NoUpdate);
+    }
+    // Shift on an item's arrow: everything under it opens or closes with it.
+    static void set_expanded_all(QTreeWidgetItem* it, bool open) {
+        it->setExpanded(open);
+        for (int i = 0; i < it->childCount(); ++i) set_expanded_all(it->child(i), open);
+    }
 protected:
+    void keyPressEvent(QKeyEvent* e) override {
+        if (e->key() == Qt::Key_F && !(e->modifiers() & (Qt::ControlModifier | Qt::AltModifier))) {
+            frame_selected();
+            return;
+        }
+        // Shift with Left or Right: the whole hierarchy under the current item closes or opens.
+        if ((e->key() == Qt::Key_Left || e->key() == Qt::Key_Right) && (e->modifiers() & Qt::ShiftModifier) && currentItem()) {
+            set_expanded_all(currentItem(), e->key() == Qt::Key_Right);
+            return;
+        }
+        QTreeWidget::keyPressEvent(e);
+    }
     void mousePressEvent(QMouseEvent* e) override {
+        // A click on the arrow with Shift held opens or closes the whole hierarchy under it.
+        if (e->button() == Qt::LeftButton && (e->modifiers() & Qt::ShiftModifier)) {
+            const QPoint at = e->position().toPoint();
+            if (QTreeWidgetItem* it = itemAt(at); it && it->childCount() > 0) {
+                const QRect r = visualItemRect(it);
+                if (at.x() < r.left() && at.x() >= r.left() - indentation()) {
+                    set_expanded_all(it, !it->isExpanded());
+                    return;
+                }
+            }
+        }
         if (e->button() == Qt::MiddleButton) {
             if (QTreeWidgetItem* it = itemAt(e->position().toPoint())) {
                 if (!it->isSelected()) {
@@ -199,7 +237,10 @@ Outliner::Outliner(QWidget* parent) : Panel(parent) {
         const QString path = it->data(0, Qt::UserRole).toString();
         expanded_.insert(path);
         // Prims are listed when asked for: a stage can hold far more than a tree should build.
-        if (!updating_ && it->childCount() == 1 && it->child(0)->data(0, Qt::UserRole).toString().isEmpty()) QTimer::singleShot(0, this, [this] { refresh(); });
+        if (!updating_ && it->childCount() == 1 && it->child(0)->data(0, Qt::UserRole).toString().isEmpty()) QTimer::singleShot(0, this, [this] {
+            last_shape_.clear();
+            refresh();
+        });
     });
     connect(tree_, &QTreeWidget::itemCollapsed, this, [this](QTreeWidgetItem* it) { expanded_.remove(it->data(0, Qt::UserRole).toString()); });
     connect(tree_, &QTreeWidget::itemChanged, this, [this](QTreeWidgetItem* it, int) {
@@ -389,11 +430,63 @@ void Outliner::add_prims(QTreeWidgetItem* parent, const QString& stage, const QS
     }
 }
 
+namespace {
+
+// The tree without its selection, and the selected paths: a change of selection alone needn't rebuild the tree.
+QJsonArray without_selection(const QJsonArray& nodes, QSet<QString>& selected) {
+    QJsonArray out;
+    for (const QJsonValue& v : nodes) {
+        QJsonObject o = v.toObject();
+        if (o["selected"].toBool()) selected.insert(o["path"].toString());
+        o.remove("selected");
+        if (o.contains("children")) o["children"] = without_selection(o["children"].toArray(), selected);
+        out.append(o);
+    }
+    return out;
+}
+
+} // namespace
+
 void Outliner::refresh() {
+    // While a button is held elsewhere (a drag in a view), the tree waits for the release: rebuilding it every step of
+    // a drag costs the view its frame rate, and nothing it lists changes until the drag is done.
+    if (QApplication::mouseButtons() != Qt::NoButton && !tree_->viewport()->underMouse()) {
+        if (!waiting_for_release_) {
+            waiting_for_release_ = true;
+            auto* t = new QTimer(this);
+            t->setInterval(80);
+            connect(t, &QTimer::timeout, this, [this, t] {
+                if (QApplication::mouseButtons() != Qt::NoButton) return;
+                t->deleteLater();
+                waiting_for_release_ = false;
+                schedule();
+            });
+            t->start();
+        }
+        return;
+    }
+    const QJsonArray nodes = query("outliner", intermediates_ ? "shapes intermediate" : shapes_ ? "shapes" : "").toArray();
+    QSet<QString> selected;
+    const QByteArray shape = QJsonDocument(without_selection(nodes, selected)).toJson(QJsonDocument::Compact);
+    // Only the selection changed (or nothing did): mark it on the rows there are, as moving an object changes nothing here.
+    const QString view = filter_->text() + "|" + item_filter_ + "|" + list_connection_ + "|" + QString::number(attrs_) + QString::number(show_icons_) + QString::number(hide_cameras_) + QString::number(dag_only_) + QStringList(hidden_types_.values()).join(",");
+    if (shape == last_shape_ && view == last_view_ && !attrs_ && list_connection_.isEmpty() && item_filter_.isEmpty()) {
+        updating_ = true;
+        std::function<void(QTreeWidgetItem*)> walk = [&](QTreeWidgetItem* it) {
+            const bool want = selected.contains(it->data(0, Qt::UserRole).toString());
+            if (it->isSelected() != want) it->setSelected(want);
+            for (int i = 0; i < it->childCount(); ++i) walk(it->child(i));
+        };
+        for (int i = 0; i < tree_->topLevelItemCount(); ++i) walk(tree_->topLevelItem(i));
+        updating_ = false;
+        return;
+    }
+    last_shape_ = shape;
+    last_view_ = view;
     updating_ = true;
     int scroll = tree_->verticalScrollBar()->value();
     tree_->clear();
-    for (const QJsonValue& n : query("outliner", intermediates_ ? "shapes intermediate" : shapes_ ? "shapes" : "").toArray()) add(nullptr, n.toObject());
+    for (const QJsonValue& n : nodes) add(nullptr, n.toObject());
     apply_list_limit();
     tree_->verticalScrollBar()->setValue(scroll);
     updating_ = false;

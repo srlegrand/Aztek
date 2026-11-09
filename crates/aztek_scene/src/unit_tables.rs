@@ -46,15 +46,15 @@ pub fn attr_unit(ty: &str, name: &str) -> Unit {
     match (ty, leaf) {
         ("pointConstraint" | "poleVectorConstraint" | "geometryConstraint" | "polyExtrudeFacet" | "polyExtrudeEdge" | "polyBevel" | "polyBevel3", "offset") => return Linear,
         ("orientConstraint" | "aimConstraint", "offset") => return Angle,
-        ("angleBetween", "angle") | ("polySoftEdge", "angle") | ("polyQuad", "angle") => return Angle,
+        ("angleBetween" | "angleBetweenDL", "angle") | ("polySoftEdge", "angle") | ("polyQuad", "angle") => return Angle,
         (t, "inputA" | "inputB" | "output") if t == "animBlendNodeAdditiveRotation" || t == "animBlendNodeAdditiveDA" => return Angle,
         (t, "inputA" | "inputB" | "output") if t == "animBlendNodeAdditiveDL" => return Linear,
-        (t, "euler") if t != "angleBetween" => return Unit::None,
+        (t, "euler") if t != "angleBetween" && t != "angleBetweenDL" => return Unit::None,
         (t, "rotation") if !matches!(t, "polyPlanarProj" | "polySphProj" | "polyCylProj" | "extrude") => return Unit::None,
         (t, "twist" | "roll") if t != "ikHandle" && !t.starts_with("deform") && t != "polyExtrudeFacet" && t != "polyExtrudeEdge" && t != "polyTorus" => return Unit::None,
-        (t, "distance") if t != "distanceBetween" && t != "distanceDimShape" => return Unit::None,
+        (t, "distance") if t != "distanceBetween" && t != "distanceBetweenDL" && t != "distanceDimShape" => return Unit::None,
         (t, "center") if t == "polySpherize" => return Linear,
-        (t, "point1" | "point2") if t != "distanceBetween" => return Unit::None,
+        (t, "point1" | "point2") if t != "distanceBetween" && t != "distanceBetweenDL" => return Unit::None,
         (t, "maxDistance" | "minDistance") if t != "closestPointOnSurface" => return Unit::None,
         _ => {}
     }

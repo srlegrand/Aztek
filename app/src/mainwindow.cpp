@@ -77,6 +77,18 @@ bool has_command(const QString& name) {
     return names.contains(name);
 }
 
+bool outliner_key(const QKeyEvent* k) {
+    const bool plain = !(k->modifiers() & (Qt::ControlModifier | Qt::AltModifier));
+    switch (k->key()) {
+    case Qt::Key_F: return plain && !(k->modifiers() & Qt::ShiftModifier);
+    case Qt::Key_Up: case Qt::Key_Down: case Qt::Key_Left: case Qt::Key_Right:
+    case Qt::Key_Home: case Qt::Key_End: case Qt::Key_PageUp: case Qt::Key_PageDown:
+    case Qt::Key_Return: case Qt::Key_Enter: case Qt::Key_F2:
+        return true;
+    default: return false;
+    }
+}
+
 bool typing_widget(QWidget* w) {
     return qobject_cast<QLineEdit*>(w) || qobject_cast<QPlainTextEdit*>(w) || qobject_cast<QAbstractSpinBox*>(w) || qobject_cast<QComboBox*>(w);
 }
@@ -131,7 +143,12 @@ MainWindow::MainWindow() {
     connect(Host::get(), &Host::sceneChanged, in_view_, &InViewEditor::update_values);
     connect(Host::get(), &Host::sceneChanged, this, &MainWindow::update_title);
     connect(Host::get(), &Host::logLines, this, [this](const QJsonArray& lines) {
+        // The history is kept from the start, as the reference's is, for the Script Editor whenever it opens.
         if (script_editor_) script_editor_->append(lines);
+        else {
+            for (const QJsonValue& l : lines) log_before_editor_.append(l);
+            while (log_before_editor_.size() > 20000) log_before_editor_.removeFirst();
+        }
         // The command line's result field shows the latest result or error.
         for (const QJsonValue& v : lines) {
             QJsonObject l = v.toObject();
@@ -1417,8 +1434,9 @@ void MainWindow::show_script_editor() {
         script_editor_ = new ScriptEditor(script_window_);
         l->addWidget(script_editor_);
         script_window_->resize(760, 560);
-        // Everything so far: the poller only hands over new lines, so ask the history again.
-        script_editor_->append(QJsonArray{QJsonObject{{"text", "// Script Editor: MEL. Ctrl+Enter runs, keypad Enter runs and clears."}, {"kind", 3}}});
+        // Everything so far, kept while the editor wasn't open.
+        script_editor_->append(log_before_editor_);
+        log_before_editor_ = QJsonArray();
     }
     script_window_->show();
     script_window_->raise();
@@ -1590,6 +1608,8 @@ bool MainWindow::eventFilter(QObject* o, QEvent* e) {
         // A number field has no use for a plain letter: it goes to the hotkeys.
         bool letter_in_number = qobject_cast<QAbstractSpinBox*>(focus) && k->key() >= Qt::Key_A && k->key() <= Qt::Key_Z && !(k->modifiers() & (Qt::ControlModifier | Qt::AltModifier));
         if (typing_widget(focus) && !letter_in_number) return QMainWindow::eventFilter(o, e);
+        // The Outliner keeps its own keys while it has the keyboard: F frames its selection, the arrows walk its list.
+        if (focus && focus->objectName() == "outliner" && outliner_key(k)) return QMainWindow::eventFilter(o, e);
         if (o != focus && focus) return QMainWindow::eventFilter(o, e);
         if (hotkey(k, e->type() == QEvent::KeyPress)) return true;
     }

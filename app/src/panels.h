@@ -57,6 +57,10 @@ private:
     QString list_connection_, item_filter_;
     void apply_list_limit();
     QSet<QString> hidden_types_;
+    // What the tree was last built from, to tell a change of selection from one of the tree.
+    QByteArray last_shape_;
+    QString last_view_;
+    bool waiting_for_release_ = false;
 };
 
 // The channels picked in the channel box, by attribute name (translateX...).

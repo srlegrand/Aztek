@@ -95,6 +95,8 @@ const T_TRANSLATE: usize = 28;
 const T_ROTATE_TRANSLATE: usize = 29;
 const T_OFFSET_PARENT: usize = 30;
 const T_SCALE: usize = 31;
+/// The driven object's offsetParentMatrix: what it is placed in is its parent's frame times this.
+const OFFSET_PARENT: usize = 32;
 
 /// A target's world matrix with its origin moved to its rotate pivot, which is where the reference constrains to.
 fn at_pivot(m: DMat4, rp: DVec3) -> DMat4 {
@@ -293,7 +295,8 @@ impl NodeBehavior for ConstraintNode {
         let ts = targets_in(d);
         let rest_on = d.bool(ENABLE_REST);
         let Some((share, rest)) = shares(&ts, rest_on) else { return };
-        let pm = d.matrix(PARENT_MATRIX);
+        // The driven object sits in its parent's frame moved by its offsetParentMatrix, which the reference counts in.
+        let pm = d.matrix(PARENT_MATRIX) * d.matrix(OFFSET_PARENT);
         let pinv = pm.inverse();
         let pr = rot3(&pm);
         let offset = d.vec3(OFFSET);
@@ -532,6 +535,7 @@ pub(crate) fn register_types() {
                 array_vec("target.targetRotateTranslate", "trt", "That target's rotatePivotTranslate."),
                 matrix_in("target.targetOffsetParentMatrix", "topm", true, "That target's offsetParentMatrix."),
                 array_vec("target.targetScale", "ts", "A scale constraint target's scale."),
+                matrix_in("constraintOffsetParentMatrix", "copm", false, "The driven object's offsetParentMatrix."),
             ],
             create: Some(Arc::new(move || Box::new(ConstraintNode { kind: k, ran: false }))),
             ..Default::default()
@@ -632,10 +636,46 @@ fn sync_from(g: &mut Graph, c: NodeId, kind: usize, driven: NodeId) -> bool {
     set_if_changed(g, c, ROTATE_AXIS, ra, &mut changed);
     set_if_changed(g, c, PIVOT, pivot, &mut changed);
     if kind == AIM || kind == NORMAL || kind == TANGENT {
-        set_if_changed(g, c, POSITION, t, &mut changed);
+        // Where the object's translate comes from another node (a point constraint, say), the constraint reads it
+        // from there in the same pass; copying it after each evaluation would cost another pass every frame.
+        if !follow_translate_source(g, c, driven, &mut changed) {
+            set_if_changed(g, c, POSITION, t, &mut changed);
+        }
     }
     follow_parent(g, c, driven, &mut changed);
     changed
+}
+
+/// Connects each part of constraintPosition to what drives that part of `driven`'s translate. False, with any such
+/// connections removed, when a part isn't driven or reading it would loop back.
+fn follow_translate_source(g: &mut Graph, c: NodeId, driven: NodeId, changed: &mut bool) -> bool {
+    let whole = g.source(&plug(driven, Transform::TRANSLATE));
+    let mut sources = Vec::with_capacity(3);
+    for k in 0..3 {
+        let part = g.source(&PlugRef::component(driven, Transform::TRANSLATE as i32, k)).or_else(|| whole.map(|w| if w.component < 0 { PlugRef { component: k, ..w } } else { w }));
+        match part {
+            Some(src) if src.node != driven && src.node != c => sources.push(src),
+            _ => break,
+        }
+    }
+    let mut all = sources.len() == 3;
+    // Already reading them: nothing to check again.
+    if all && (0..3).all(|k| g.source(&PlugRef::component(c, POSITION as i32, k)) == Some(sources[k as usize])) {
+        return true;
+    }
+    all = all && (0..3).all(|k| !g.reads_depend_on(&sources[k as usize], &PlugRef::component(c, POSITION as i32, k)));
+    for k in 0..3 {
+        let dst = PlugRef::component(c, POSITION as i32, k);
+        let want = if all { Some(sources[k as usize]) } else { None };
+        if g.source(&dst) != want {
+            match want {
+                Some(src) => g.connect_derived(&src, &dst),
+                None => g.disconnect_derived(&dst),
+            }
+            *changed = true;
+        }
+    }
+    all
 }
 
 /// The constraint's parent matrix comes from the parent of `node`, whichever that is now.
@@ -651,6 +691,12 @@ fn follow_parent(g: &mut Graph, c: NodeId, node: NodeId, changed: &mut bool) {
                 g.set_derived(&input, &PlugValue::Matrix(DMat4::IDENTITY));
             }
         }
+        *changed = true;
+    }
+    let opm = plug(node, Transform::OFFSET_PARENT_MATRIX);
+    let input = plug(c, OFFSET_PARENT);
+    if g.source(&input) != Some(opm) {
+        g.connect_derived(&opm, &input);
         *changed = true;
     }
 }
