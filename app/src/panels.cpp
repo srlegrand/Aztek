@@ -116,6 +116,8 @@ void Panel::showEvent(QShowEvent*) {
 // Channel names picked in the channel box (the reference's highlighted channels): their attribute names, kept across refreshes.
 static QStringList g_channel_sel;
 static QList<QLabel*> g_channel_labels;
+// Where a Shift+click or a drag over the names starts its range.
+static QString g_channel_anchor;
 // attr to whole plug for the picked channels under INPUTS.
 static QHash<QString, QString> g_input_plugs;
 
@@ -133,6 +135,7 @@ QStringList selected_input_plugs() {
 void clear_channel_selection() {
     g_channel_sel.clear();
     g_input_plugs.clear();
+    g_channel_anchor.clear();
 }
 
 namespace {
@@ -145,23 +148,71 @@ void restyle_channel_labels() {
     }
 }
 
-// A channel name: click picks it, Ctrl+click toggles, Shift+click adds.
+// The channel names from the anchor's row to this one, in the order the box shows them.
+QStringList channel_range(const QString& to) {
+    int a = -1, b = -1;
+    for (int i = 0; i < g_channel_labels.size(); ++i) {
+        QString n = g_channel_labels[i]->property("attr").toString();
+        if (a < 0 && n == g_channel_anchor) a = i;
+        if (b < 0 && n == to) b = i;
+    }
+    if (a < 0 || b < 0) return {to};
+    QStringList out;
+    for (int i = qMin(a, b); i <= qMax(a, b); ++i) {
+        QString n = g_channel_labels[i]->property("attr").toString();
+        if (!out.contains(n)) out << n;
+    }
+    return out;
+}
+
+// The reference's picking, on a name or a value: click picks one, Ctrl+click toggles, Shift+click picks the run from the
+// last click. A click on a value that is already picked keeps the others, so the value typed there goes to all of them.
+void pick_channel(const QString& a, Qt::KeyboardModifiers mods, bool on_value) {
+    if (mods & Qt::ControlModifier) {
+        if (g_channel_sel.contains(a)) g_channel_sel.removeAll(a);
+        else g_channel_sel << a;
+        g_channel_anchor = a;
+    } else if ((mods & Qt::ShiftModifier) && !g_channel_anchor.isEmpty()) {
+        g_channel_sel = channel_range(a);
+    } else if (!(on_value && g_channel_sel.contains(a))) {
+        g_channel_sel = {a};
+        g_input_plugs.clear();
+        g_channel_anchor = a;
+    }
+}
+
+// A value field: a click picks its channel the same way, before the field takes the focus.
+class ChannelValueClicks : public QObject {
+public:
+    using QObject::QObject;
+protected:
+    bool eventFilter(QObject* o, QEvent* e) override {
+        if (e->type() == QEvent::MouseButtonPress && static_cast<QMouseEvent*>(e)->button() == Qt::LeftButton) {
+            pick_channel(o->property("attr").toString(), static_cast<QMouseEvent*>(e)->modifiers(), true);
+            restyle_channel_labels();
+        }
+        return false;
+    }
+};
+
+// A channel name: click picks it, Ctrl+click toggles, Shift+click or a drag down the names picks a run.
 class ChannelLabel : public QLabel {
 public:
     ChannelLabel(const QString& text, QWidget* parent) : QLabel(text, parent) {}
 protected:
+    void mouseMoveEvent(QMouseEvent* e) override {
+        if (!(e->buttons() & Qt::LeftButton) || g_channel_anchor.isEmpty()) return QLabel::mouseMoveEvent(e);
+        auto* over = qobject_cast<QLabel*>(QApplication::widgetAt(e->globalPosition().toPoint()));
+        if (!over || !g_channel_labels.contains(over)) return;
+        QStringList run = channel_range(over->property("attr").toString());
+        if (run == g_channel_sel) return;
+        g_channel_sel = run;
+        restyle_channel_labels();
+    }
     void mousePressEvent(QMouseEvent* e) override {
         if (e->button() != Qt::LeftButton) return QLabel::mousePressEvent(e);
         QString a = property("attr").toString();
-        if (e->modifiers() & Qt::ControlModifier) {
-            if (g_channel_sel.contains(a)) g_channel_sel.removeAll(a);
-            else g_channel_sel << a;
-        } else if (e->modifiers() & Qt::ShiftModifier) {
-            if (!g_channel_sel.contains(a)) g_channel_sel << a;
-        } else {
-            g_channel_sel = {a};
-            g_input_plugs.clear();
-        }
+        pick_channel(a, e->modifiers(), false);
         if (property("inputPlug").isValid()) {
             g_input_plugs[a] = property("inputPlug").toString();
             // The channel's handle lights up, and a middle drag takes it.
@@ -173,6 +224,52 @@ protected:
         restyle_channel_labels();
     }
 };
+
+// A value typed into a field. When its channel is picked, it goes to every picked channel of that node, and for the
+// objects' own channels to every selected object, as one undo step. +=, -=, *= and /= work on each plug's own value.
+void commit_channels(QLabel* edited, const QString& plug, const QString& text) {
+    QString attr = edited->property("attr").toString();
+    QString node = edited->property("node").toString();
+    QList<QJsonObject> chans;
+    if (g_channel_sel.contains(attr)) {
+        for (QLabel* l : g_channel_labels)
+            if (l->property("node").toString() == node && g_channel_sel.contains(l->property("attr").toString()))
+                chans << QJsonObject::fromVariantMap(l->property("channel").toMap());
+    } else {
+        chans << QJsonObject::fromVariantMap(edited->property("channel").toMap());
+    }
+    QStringList nodes{node};
+    if (edited->property("main").toBool()) {
+        nodes.clear();
+        for (const QJsonValue& v : state()["selection"].toArray()) {
+            QString n = v.toString().section('.', 0, 0);
+            if (!nodes.contains(n)) nodes << n;
+        }
+        if (nodes.isEmpty()) nodes << node;
+    }
+    QString t = text.trimmed();
+    QString op;
+    for (QString o : {"+=", "-=", "*=", "/="})
+        if (t.startsWith(o)) op = o;
+    bool many = chans.size() * nodes.size() > 1;
+    if (many) exec_quiet("undoInfo", QJsonObject{{"openChunk", true}});
+    for (const QJsonObject& c : chans) {
+        QString type = c["type"].toString();
+        if (c["state"].toString() == "locked" && c["plug"].toString() != plug) continue;
+        for (const QString& n : nodes) {
+            QString p = n + "." + c["attr"].toString();
+            QString value = t;
+            if (!op.isEmpty() && (type == "float" || type == "int")) {
+                double current = p == c["plug"].toString() ? c["value"].toDouble() : ask("getAttr", args(QJsonArray{p})).toDouble();
+                double x = t.mid(2).toDouble();
+                double r = op == "+=" ? current + x : op == "-=" ? current - x : op == "*=" ? current * x : (x != 0 ? current / x : current);
+                value = QString::number(r, 'g', 12);
+            }
+            set_attr(p, typed(type, value, c), type);
+        }
+    }
+    if (many) exec_quiet("undoInfo", QJsonObject{{"closeChunk", true}});
+}
 
 // A channel row: right-aligned name, value field. Enter commits a setAttr.
 QWidget* channel_row(const QJsonObject& ch, QWidget* parent, int label_width) {
@@ -188,8 +285,17 @@ QWidget* channel_row(const QJsonObject& ch, QWidget* parent, int label_width) {
     label->setProperty("attr", ch["attr"].toString());
     if (parent->property("inInputs").toBool()) label->setProperty("inputPlug", ch["plug"].toString());
     label->setProperty("picked", g_channel_sel.contains(ch["attr"].toString()));
+    // The node the row belongs to, and whether it is the selected objects' own channel (the value goes to every
+    // selected object) or a shape's or an input's (the value goes to that node).
+    QString node = ch["plug"].toString().section('.', 0, -2);
+    label->setProperty("node", node);
+    label->setProperty("main", parent->property("mainNode").toString() == node);
+    label->setProperty("channel", ch.toVariantMap());
     g_channel_labels << label;
     auto* edit = new QLineEdit(value_text(ch), row);
+    edit->setProperty("attr", ch["attr"].toString());
+    static auto* clicks = new ChannelValueClicks(qApp);
+    edit->installEventFilter(clicks);
     // The reference's channel colours: keyed, key on this frame, changed since keyed, driven, locked.
     QString st = ch["state"].toString();
     edit->setObjectName(st == "keyed" ? "channelKeyed" : st == "keyOnFrame" ? "channelKeyOnFrame" : st == "changed" ? "channelChanged"
@@ -197,25 +303,12 @@ QWidget* channel_row(const QJsonObject& ch, QWidget* parent, int label_width) {
     edit->setFixedHeight(18);
     // Right-click is the channel box's menu, not the text field's.
     edit->setContextMenuPolicy(Qt::NoContextMenu);
-    QString plug = ch["plug"].toString(), type = ch["type"].toString();
-    QJsonObject c = ch;
+    QString plug = ch["plug"].toString();
     QObject::connect(edit, &QLineEdit::textEdited, edit, [edit] { edit->setProperty("editing", true); });
-    QObject::connect(edit, &QLineEdit::editingFinished, edit, [edit, plug, type, c] {
+    QObject::connect(edit, &QLineEdit::editingFinished, edit, [edit, label, plug] {
         if (!edit->property("editing").toBool()) return;
         edit->setProperty("editing", false);
-        QString text = edit->text();
-        // The reference's channel box takes relative edits: +=1, -=2, *=2, /=2.
-        double current = c["value"].toDouble();
-        if (type == "float" || type == "int") {
-            QString t = text.trimmed();
-            for (QString op : {"+=", "-=", "*=", "/="})
-                if (t.startsWith(op)) {
-                    double x = t.mid(2).toDouble();
-                    double r = op == "+=" ? current + x : op == "-=" ? current - x : op == "*=" ? current * x : (x != 0 ? current / x : current);
-                    text = QString::number(r, 'g', 12);
-                }
-        }
-        set_attr(plug, typed(type, text, c), type);
+        commit_channels(label, plug, edit->text());
     });
     h->addWidget(label);
     h->addWidget(edit, 1);
@@ -379,6 +472,7 @@ void ChannelBox::refresh() {
         exec("rename", args(QJsonArray{path, name->text().trimmed()}));
     });
     lay->addWidget(name);
+    body_->setProperty("mainNode", path);
     add_channels(lay, cb["channels"].toArray());
     QJsonArray shapes = cb["shapes"].toArray();
     if (!shapes.isEmpty()) {
