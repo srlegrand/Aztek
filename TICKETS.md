@@ -15,6 +15,7 @@ Requests waiting or in progress, newest detail kept. Move to Done with the date 
   `nurbsSquare -sl2` and `vortex -ax/-ay/-az` are missing; `connectDynamic -f` with a field's transform fails;
   `displaySmoothness -po` neither sets nor answers smooth preview; `scriptJob -listJobs` lists ids, not the Python
   function; opening a dynamics example in the app says the aztekDynamics plug-in wasn't found (the file `requires` it).
+- Missing commands found running the capture kit in Aztek (09/11/2026): `allNodeTypes`, `assignCommand`, `hotkeySet`, `imagePlane`, `runTimeCommand -dca` and `-uca`.
 - PLAN.md (08/11/2026): parity review's work queue. Phase 0 and 1 before anything else that isn't a ticket.
 - Cloth feels wrong at scale: a cloth bigger than the grid acts stiff, small or heavy even as silk. Units, gravity, bending and presets must scale (agent, top priority). Real-world units by default from `currentUnit`: 1 cm of geometry is 1 cm of cloth, so nobody works in 10 cm = 1 m.
 - Shift+click on an expand arrow fully expands (and collapses) everything below it, in every hierarchy: Outliner, Hypershade, Reference Editor, Node Editor lists, Graph Editor and Dope Sheet outlines, layer editors, Attribute Editor sections.
@@ -53,6 +54,12 @@ Requests waiting or in progress, newest detail kept. Move to Done with the date 
 - 0.4 `--batch`. Done: no window, no Vulkan, scene, scripts and commands in order, exit status from uncaught errors and `sys.exit`, `about -batch` true, CI on all three platforms.
   Not done: `basics.rs` can't run through the binary as it stands, since it asserts in Rust; `tests/batch/basics.py` carries the same calls and grows with each item.
   Why: the suite drives one `Core` in process. CI runs both suites by name and `basics.py` through the binary.
+- 0.1 Capture kit. Done: `tools/reference_capture/` with `capture.py`, `calls.json`, `scenes.json`, `node_types.txt`, `WANTED.md`; dry run through `aztek --batch` with no script errors.
+  Not done: never run in the reference itself, and no fixtures exist yet.
+  Why: needs Simon to run it: `mayapy tools/reference_capture/capture.py`, then commit `tests/data/reference/`. Nothing else waits on it.
+- 0.2 Fixture harness. Done: `reference_fixtures.rs` compares 99 calls with hand-written readings, reports by area, and fails on a new mismatch or a stale entry on the open list (44 entries at the start).
+  Not done: no comparison yet for attribute, hotkey or posed fixtures; 6 calls are skipped with no reading.
+  Why: nothing captured to compare against, and writing those comparisons blind would guess at the fixture shapes' use.
 
 ## Done
 - 08/11/2026 One light model: the viewport's lights render the same in Harold (decay rates, intensity, colour, spot cone and dropoff, ambient, area, volume, default lighting, ambient colour, black background); parity test against the shared formula.

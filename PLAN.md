@@ -21,7 +21,7 @@ it differs; this file is what to do next.
 Almost nothing in PARITY.md has been compared with a running copy of the reference. That has to change first, or every
 fix below is another guess.
 
-- [ ] 0.1 Reference capture kit in `tools/reference_capture/`. Plain Python that runs inside the reference
+- [x] 0.1 (09/11/2026: kit written and dry run in Aztek through `--batch`; never run in the reference, so the fixtures are still to come from Simon) Reference capture kit in `tools/reference_capture/`. Plain Python that runs inside the reference
   (`mayapy` or the Script Editor) and writes JSON fixtures to `tests/data/reference/<area>/`. Simon runs it, commits the
   output. It captures:
   - command return values and default names for a fixed list of calls (create, duplicate, group, rename with `#`,
@@ -33,7 +33,7 @@ fix below is another guess.
     a skinned arm, a constraint of each kind, a blendShape, a lattice, a display layer, a reference, an image plane);
   - posed results: world matrices and a sample of deformed points of those scenes at three frames.
   Keep the scripts free of anything copied from the reference's own scripts. `WANTED.md` lists what tests still need.
-- [ ] 0.2 `crates/aztek_scene/tests/reference_fixtures.rs`: one harness that loads a fixture, runs the same calls in
+- [x] 0.2 (09/11/2026: in `crates/aztek_host/tests/reference_fixtures.rs`, as it needs MEL and Python; `tests/data/reference_open.txt` lists the open mismatches by item and can only shrink. Compares calls only; attributes, hotkeys and posed fixtures get comparisons when they land) `crates/aztek_scene/tests/reference_fixtures.rs`: one harness that loads a fixture, runs the same calls in
   Aztek and reports every mismatch, grouped by command. Until fixtures land, it runs on the hand-written expectations
   below and skips missing files with a message, not a pass.
 - [x] 0.3 (08/11/2026: `crates/aztek_host/tests/basics.rs` and `basics_python.rs`; 15 pass, 18 phase 1 checks ignored and
@@ -60,7 +60,7 @@ Each was reproduced on 08/11/2026 through `maya.cmds` in the built app.
 - [ ] 1.4 `rename` with `#` replaces the hashes with the next free number (`thing#` gives `thing1`), padded by the count
   of hashes (`thing###` gives `thing001`).
 - [ ] 1.5 Duplicate naming: a trailing number increments and keeps its padding as the reference does (`arm_01` gave
-  `arm_1`). Confirm the rule with a capture, including `_L_01` style names and names ending in a digit after a letter.
+  `arm_1`). `listRelatives` without `-path` or `-fullPath` gives short leaf names, where Aztek gives paths. Confirm the rule with a capture, including `_L_01` style names and names ending in a digit after a letter.
 - [ ] 1.6 `move` and `xform` on `.rotatePivot` and `.scalePivot` take `-a`, `-r`, `-ws`, `-os`, `-rpr`, `-spr` like any
   move. `move -a 0 0 0 pCube1.scalePivot pCube1.rotatePivot` currently fails with "unknown flag 'absolute'".
 - [ ] 1.7 `InvertSelection` inverts (objects in object mode, components in component mode, respecting the masks).

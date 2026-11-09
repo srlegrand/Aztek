@@ -35,6 +35,7 @@ their files load into it (see the dated section and docs/DYNAMICS.md). The produ
   and the reference's return values.
 - Embedded CPython. The official module is `aztek.cmds`; a `the_reference` package shim maps `maya.cmds`, `maya.mel` and
   `maya.api.OpenMaya` onto Aztek's, so simple scripts run unchanged.
+- Ground truth: `tools/reference_capture/` writes fixtures from a running copy of the reference (calls, attributes per node type, runtime commands, hotkeys, `.ma` scenes, posed results). None has been captured yet, so expectations remain hand-written readings. `reference_fixtures.rs` compares against a capture where there is one, and `tests/data/reference_open.txt` lists what still differs.
 - Batch: `aztek --batch` (also `-batch`, `-file`, `-script`, `-command`) opens a scene and runs scripts with no window and no Vulkan, and `about -batch` answers true. Exit 0, 1 on an uncaught error or a failed deferred call, or `sys.exit`'s value. A failed step stops the steps after it. Output comes out as it happens. Unverified: whether the reference's exit status counts a deferred error the same way.
 - MEL: an interpreter for the subset scripts use (procedures, variables, arrays, control flow, command syntax,
   backticks, `eval`).
