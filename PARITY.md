@@ -23,6 +23,10 @@ Done 09/11/2026 (PLAN 1.12, 1.13). Smooth preview is `displaySmoothMesh` (0, 1, 
 
 PLAN 1.14, partly (09/11/2026). An instanced shape behaves as one shape to a script: `listRelatives -ap` gives every parent, `setAttr` on one reaches the others, a rename follows, geometry is shared and `.ma` holds the reference's `parent -s -add` form. Inside, each parent still holds a node of its own, so a direct graph write doesn't carry across, `MFnDagNode.instanceCount` doesn't see it, and only meshes instance. TICKETS.md has the rest.
 
+## Checks
+
+`tools/check_examples.sh` opens every example under `--batch` and fails on any warning. `tools/ui_checks/channel_box.py` drives the Channel Box's multi-edit by mouse and keyboard on Xvfb with a window manager; without one, Qt never takes the window as active and keys go to the hotkeys. Both run in CI on Linux.
+
 ## Units
 
 Done 09/11/2026 (PLAN 1.1). What's stored is centimetres and radians. A command called from a script or the interface is in the current units, and `execute` converts its flags, arguments and results by tags in `crates/aztek_scene/src/unit_tables.rs`; commands called by other commands, viewport tools and the Python API are in stored units. `currentUnit` lives in `aztek_ops::units`, per scene: a new scene goes back to cm and degrees, opening a file takes on the file's.

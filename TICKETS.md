@@ -14,10 +14,11 @@ Requests waiting or in progress, newest detail kept. Move to Done with the date 
 - Found making the examples (09/11/2026): `cluster`, `skinCluster` and `blendShape` don't take NURBS curve CVs;
   `nurbsSquare -sl2` and `vortex -ax/-ay/-az` are missing; `connectDynamic -f` with a field's transform fails;
   `displaySmoothness -po` neither sets nor answers smooth preview; `scriptJob -listJobs` lists ids, not the Python
-  function; opening a dynamics example in the app says the aztekDynamics plug-in wasn't found (the file `requires` it).
+  function.
 - `#` in `-n` flags when creating nodes (`polyCube -n thing#`): `rename` has it (PLAN 1.4).
 - Real plug cycles: `a.tx -> b.tx -> a.tx` is refused. The reference connects it and warns at evaluation; the evaluator needs a guard first.
 - One shape node under several parents, in fact: each instance's parent holds its own node, kept the same by `setAttr` and `rename` (PLAN 1.14). A script sees one shape; the Python API's `instanceCount`, a direct graph write and non-mesh instances don't yet. A real multi-parent graph means every DAG walk and per-instance world matrices, picking and selection paths: a project of its own, Simon's call.
+- A script's `scriptJob -idleEvent` moves the core's version on each idle, so the panels rebuild and a Channel Box field being typed in loses the keyboard. Found writing the multi-edit check; callbacks that changed nothing shouldn't move it.
 - Missing commands found running the capture kit in Aztek (09/11/2026): `allNodeTypes`, `assignCommand`, `hotkeySet`, `imagePlane`, `runTimeCommand -dca` and `-uca`.
 - PLAN.md (08/11/2026): parity review's work queue. Phase 0 and 1 before anything else that isn't a ticket.
 - Cloth feels wrong at scale: a cloth bigger than the grid acts stiff, small or heavy even as silk. Units, gravity, bending and presets must scale (agent, top priority). Real-world units by default from `currentUnit`: 1 cm of geometry is 1 cm of cloth, so nobody works in 10 cm = 1 m.
@@ -104,6 +105,12 @@ Requests waiting or in progress, newest detail kept. Move to Done with the date 
 - 1.14. Done: `listRelatives -ap` gives every parent, attributes set on one instance's shape reach the others, a rename follows, `.ma` keeps the reference's form
   Not done: one node under two parents inside the graph; `instanceCount`; non-mesh instances
   Why: a true multi-parent graph means rewriting every DAG walk; ticketed for Simon's call
+- After 1.14, every test and example under `--batch`. Done: the full suite green with no basics test ignored and `reference_open.txt` empty; all 51 example scenes open with no warnings; world matrices and mesh points at frames 1, 12 and 24 match the build from before the unit change on all 51; `aztekDynamics` warning gone; `tools/check_examples.sh` in CI.
+  Not done: `examples/tools/make_examples.mel` only runs from the repo's root, as written.
+  Why: it's the tool that writes the examples, not an example.
+- Channel Box multi-edit under Xvfb. Done: `tools/ui_checks/channel_box.py`, by mouse and keyboard: Shift+click run, 2.5 on both cubes and all three channels, +=1, one undo, drag down the names, Ctrl+click; in CI on Linux with openbox.
+  Not done: nothing.
+  Why: found on the way, a script's idle job takes the keyboard from a field: ticketed.
 
 ## Done
 - 08/11/2026 One light model: the viewport's lights render the same in Harold (decay rates, intensity, colour, spot cone and dropoff, ambient, area, volume, default lighting, ambient colour, black background); parity test against the shared formula.

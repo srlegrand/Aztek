@@ -56,7 +56,7 @@ jobs:
       - name: Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential dpkg-dev cmake ninja-build qt6-base-dev libvulkan-dev python3-dev
+          sudo apt-get install -y build-essential dpkg-dev cmake ninja-build qt6-base-dev libvulkan-dev python3-dev xvfb xdotool imagemagick openbox mesa-vulkan-drivers
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -75,6 +75,12 @@ jobs:
       # The real binary with no display: exit statuses, then the basics end to end.
       - name: Batch
         run: AZTEK_BIN="$PWD/build/aztek" cargo test -p aztek_host --test batch --test basics --test basics_python
+
+      - name: Examples
+        run: tools/check_examples.sh build/aztek
+
+      - name: Channel Box under Xvfb
+        run: python3 tools/ui_checks/channel_box.py build/aztek
 
       - name: Package
         run: |
