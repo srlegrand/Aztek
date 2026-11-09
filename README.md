@@ -174,7 +174,28 @@ Left to right: a Venom rig, whose download names no author; Toph, a fan art rig 
 
 ## Examples
 
-File > Examples opens scenes from the `examples` folder: modelling history, materials and textures, a small coloured and keyed arm rig, and nested references with their edits, and all the default lights; cloth draped on a ball, particles with fields, and boxes dropped on a hammock. `examples/tools/make_examples.mel` writes them.
+File > Examples opens fifty scenes from the `examples` folder, a submenu per area, and the example scripts in the
+Script Editor. Every one opens without a warning; a test plays each.
+
+- **Modelling:** every polygon primitive; a castle tower from one cylinder (extrude, inset, bevel, all as history);
+  booleans; edge loops, a bridge and welds; a spaceship half mirrored live; smooth mesh preview with creases;
+  duplicates and instances; NURBS curves and surfaces (revolve, loft, extrude along a path, planar trim); construction history.
+- **UVs:** planar, cylindrical, spherical and automatic projections; unfold and layout, with a checker.
+- **Rigging:** every constraint; an IK leg with a reverse foot; a spline IK tail; nonlinear deformers; lattice, wire,
+  wrap, cluster and softMod; linear against dual quaternion skinning; blend shapes with an in-between; set driven keys;
+  delta mush and jiggle; a small keyed arm rig.
+- **Characters:** Grox, a horned brute with a production-style rig (IK/FK arms and legs, reverse feet, stretch, space
+  switches, a tail, horns, blinks, proxy geometry), rough on purpose, and a keyed walking robot.
+- **Animation:** a bouncing ball, a motion path, animation layers, expressions, pendulums on cycles.
+- **Dynamics:** a flag in the wind, cloth on a moving collider, cloth draped on a ball, boxes on a hammock, bouncing
+  particles, a particle vortex, particles with fields, a tower knocked down.
+- **Rendering:** the standard surface's lobes, depth of field, motion blur, displacement and subdivision, every light
+  type, the Cornell box, materials and lights.
+- **Pipeline:** display layers and drawing overrides, namespaces and sets, a USD round trip, nested references.
+- **Scripts:** a spiral staircase, scattered rocks, a rename window in MEL, a selection scriptJob, a mesh report with
+  the API, a Python plug-in command, a turntable playblast.
+
+`examples/tools/make_showcase.py` and `make_examples.mel` write the scenes; `examples/tools/grox` builds Grox.
 
 ## Screens
 

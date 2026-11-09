@@ -232,16 +232,41 @@ QMenu* MainWindow::file_menu() {
         examples->clear();
         // Beside the program, in the source tree when running from a build, and where the Linux packages put them.
         const QString base = QCoreApplication::applicationDirPath();
-        for (const QString& where : {base + "/examples", base + "/../examples", base + "/../share/aztek/examples"}) {
-            const QStringList names = QDir(where).entryList({"*.ma"}, QDir::Files, QDir::Name);
-            if (names.isEmpty()) continue;
-            for (const QString& name : names) {
+        auto label_of = [](const QString& name) {
+            QString label = QFileInfo(name).completeBaseName().replace('_', ' ');
+            label[0] = label[0].toUpper();
+            return label;
+        };
+        auto add_scenes = [this, label_of](QMenu* menu, const QDir& dir) {
+            for (const QString& name : dir.entryList({"*.ma"}, QDir::Files, QDir::Name)) {
                 // Those that start ref_ are what the references example points at.
                 if (name.startsWith("ref_")) continue;
-                QString label = QFileInfo(name).completeBaseName().replace('_', ' ');
-                label[0] = label[0].toUpper();
-                const QString path = QDir(where).absoluteFilePath(name);
-                examples->addAction(label, [this, path] { if (confirm_unsaved()) open_file(path); });
+                const QString path = dir.absoluteFilePath(name);
+                menu->addAction(label_of(name), [this, path] { if (confirm_unsaved()) open_file(path); });
+            }
+        };
+        for (const QString& where : {base + "/examples", base + "/../examples", base + "/../share/aztek/examples"}) {
+            const QDir root(where);
+            if (!root.exists() || root.entryList({"*.ma"}, QDir::Files).isEmpty()) continue;
+            // A submenu per area (examples/modelling, examples/rigging...), then the scenes at the top, then the scripts.
+            for (const QString& sub : root.entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name)) {
+                const QDir dir(root.absoluteFilePath(sub));
+                if (sub == "scripts" || dir.entryList({"*.ma"}, QDir::Files).isEmpty()) continue;
+                add_scenes(examples->addMenu(label_of(sub)), dir);
+            }
+            examples->addSeparator();
+            add_scenes(examples, root);
+            const QDir scripts(root.absoluteFilePath("scripts"));
+            const QStringList files = scripts.entryList({"*.py", "*.mel"}, QDir::Files, QDir::Name);
+            if (!files.isEmpty()) {
+                QMenu* sm = examples->addMenu("Scripts");
+                for (const QString& name : files) {
+                    const QString path = scripts.absoluteFilePath(name);
+                    sm->addAction(name, [this, path] {
+                        show_script_editor();
+                        if (script_editor_) script_editor_->load_file(path);
+                    });
+                }
             }
             break;
         }

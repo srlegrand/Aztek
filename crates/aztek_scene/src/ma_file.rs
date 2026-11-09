@@ -3097,6 +3097,17 @@ fn build(s: &mut Session, doc: &Doc, import: bool) -> Vec<String> {
         // An intermediate mesh with an id is an Orig already filled from the mesh it feeds, tweaks and all.
         if doc.nodes[i].ty == "mesh" && b.ids[i].is_some() && !doc.nodes[i].truth(&["io", "intermediateObject"]).unwrap_or(false) {
             b.build_mesh(i);
+            // Smooth mesh preview: displaySmoothMesh 1 or 2 shows smoothLevel levels (2 when not written).
+            let dsm = doc.nodes[i].num(&["dsm", "displaySmoothMesh"]).unwrap_or(0.0);
+            if dsm > 0.0 {
+                let level = doc.nodes[i].num(&["smoothLevel", "lev"]).unwrap_or(2.0).clamp(1.0, 3.0) as i64;
+                if let Some(id) = b.ids[i] {
+                    let path = b.s.graph.path(id);
+                    if let Ok(p) = b.s.graph.plug(&format!("{path}.smoothPreview")) {
+                        let _ = b.s.graph.set_value(p, PlugValue::Int(level));
+                    }
+                }
+            }
         }
         if doc.nodes[i].ty == "nurbsSurface" && b.ids[i].is_some() {
             b.build_surface(i);
@@ -3655,6 +3666,12 @@ impl Writer<'_> {
                 let _ = writeln!(self.out, "\tlockNode -l 1 ;");
             }
             if ty == "mesh" {
+                // Smooth mesh preview as the reference writes it.
+                let level = self.s.graph.plug(&format!("{}.smoothPreview", self.s.graph.path(id))).ok().and_then(|p| self.s.graph.value(&p).ok()).map(|v| v.as_int()).unwrap_or(0);
+                if level > 0 {
+                    let _ = writeln!(self.out, "\tsetAttr \".displaySmoothMesh\" 2;");
+                    let _ = writeln!(self.out, "\tsetAttr \".smoothLevel\" {level};");
+                }
                 self.write_mesh(id, &name, parent);
             }
             if ty == "deformHandle" {

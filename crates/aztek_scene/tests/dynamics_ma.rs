@@ -251,3 +251,28 @@ fn classic_particles_fields_emitter_rigid_body_and_held_hair() {
     assert!(text.contains("connectAttr \":time1.o\" \"hairSystemShape1.cti\""), "{text}");
 }
 
+
+#[test]
+fn nails_hold_after_the_file_is_read_back() {
+    let mut s = Session::new();
+    run(&mut s, "playbackOptions", json!({"minTime": 1, "maxTime": 40}));
+    run(&mut s, "polyPlane", json!({"name": "flag", "width": 600, "height": 400, "sx": 12, "sy": 8, "ax": [0, 0, 1]}));
+    run(&mut s, "move", json!({"args": [300, 780, 0, "flag"]}));
+    run(&mut s, "createCloth", json!({"args": ["flag"]}));
+    let edge: Vec<String> = (0..9).map(|r| format!("flag.vtx[{}]", r * 13)).collect();
+    run(&mut s, "dynamicConstraint", json!({"args": edge, "type": "nail"}));
+    let held = |s: &mut Session| {
+        for f in 1..=20 {
+            frame(s, f as f64);
+        }
+        points(s, "flag")[0]
+    };
+    let here = held(&mut s);
+    assert!((here - DVec3::new(0.0, 580.0, 0.0)).length() < 1.0, "in the session: {here}");
+    let (text, _) = write_text(&mut s, "flag.ma", None);
+    let mut back = Session::new();
+    let w = read_text(&mut back, &text, false);
+    assert!(w.is_empty(), "{w:?}");
+    let there = held(&mut back);
+    assert!((there - DVec3::new(0.0, 580.0, 0.0)).length() < 1.0, "read back: {there}");
+}

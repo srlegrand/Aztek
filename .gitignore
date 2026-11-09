@@ -5,3 +5,4 @@ build/
 .idea/
 .claude/
 _site/
+examples/tools/make_showcase.log

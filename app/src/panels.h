@@ -132,6 +132,8 @@ public:
     ~ScriptEditor() override;
     void append(const QJsonArray& lines);
     void run(bool clear_after);
+    // Opens a .mel or .py file in a tab of its own.
+    void load_file(const QString& path);
 protected:
     bool eventFilter(QObject* o, QEvent* e) override;
 private:

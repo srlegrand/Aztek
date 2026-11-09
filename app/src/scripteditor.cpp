@@ -174,10 +174,7 @@ ScriptEditor::ScriptEditor(QWidget* parent) : QWidget(parent) {
     QMenu* file = mb->addMenu("File");
     file->addAction("Load Script...", [this] {
         QString f = QFileDialog::getOpenFileName(this, "Load Script", QSettings().value("project/current").toString(), "Scripts (*.mel *.py);;All files (*)");
-        if (f.isEmpty()) return;
-        QFile in(f);
-        if (!in.open(QIODevice::ReadOnly)) return;
-        add_tab(f.endsWith(".py", Qt::CaseInsensitive) ? "python" : "mel", QFileInfo(f).fileName(), QString::fromUtf8(in.readAll()), f);
+        if (!f.isEmpty()) load_file(f);
     });
     file->addAction("Source Script...", [] {
         QString f = QFileDialog::getOpenFileName(nullptr, "Source Script", QSettings().value("project/current").toString(), "Scripts (*.mel *.py)");
@@ -285,6 +282,12 @@ ScriptEditor::ScriptEditor(QWidget* parent) : QWidget(parent) {
 
 ScriptEditor::~ScriptEditor() {
     store_tabs();
+}
+
+void ScriptEditor::load_file(const QString& f) {
+    QFile in(f);
+    if (!in.open(QIODevice::ReadOnly)) return;
+    add_tab(f.endsWith(".py", Qt::CaseInsensitive) ? "python" : "mel", QFileInfo(f).fileName(), QString::fromUtf8(in.readAll()), f);
 }
 
 void ScriptEditor::store_tabs() {

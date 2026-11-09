@@ -726,6 +726,11 @@ fn run(g: &mut Graph, s: NodeId) {
             _ => Out::Cloth(None),
         })).collect()))
     } else if frame_no <= start + 1e-6 || st.last.is_none() {
+        // Built afresh at the start: the rest shapes, and the nails and other links taken from them, are where the
+        // meshes are now. One built while a file was still being read had them before the meshes were placed.
+        if st.last.is_some() || st.results == 0 {
+            build(g, s, &mut st);
+        }
         feed(g, &mut st, mpu);
         let solver = st.solver.as_mut().unwrap();
         solver.reset();

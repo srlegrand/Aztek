@@ -1,0 +1,22 @@
+// A window that renames the selection: a prefix, a base name and numbers, as a script-built UI.
+global proc exRenameRun() {
+    string $prefix = `textFieldGrp -q -text exRenamePrefix`;
+    string $base = `textFieldGrp -q -text exRenameBase`;
+    int $start = `intSliderGrp -q -value exRenameStart`;
+    string $sel[] = `ls -sl -type transform`;
+    for ($i = 0; $i < size($sel); $i++) {
+        string $num = $start + $i;
+        while (size($num) < 2) $num = "0" + $num;
+        rename $sel[$i] ($prefix + $base + "_" + $num);
+    }
+    print ("Renamed " + size($sel) + " objects.\n");
+}
+
+if (`window -exists exRenameWindow`) deleteUI exRenameWindow;
+window -title "Rename Selection" -widthHeight 360 140 exRenameWindow;
+columnLayout -adjustableColumn true -rowSpacing 4;
+textFieldGrp -label "Prefix" -text "L_" exRenamePrefix;
+textFieldGrp -label "Name" -text "finger" exRenameBase;
+intSliderGrp -label "Start at" -field true -minValue 0 -maxValue 99 -value 1 exRenameStart;
+button -label "Rename" -command "exRenameRun";
+showWindow exRenameWindow;

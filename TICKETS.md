@@ -11,6 +11,10 @@ Requests waiting or in progress, newest detail kept. Move to Done with the date 
 - C++ plug-in kit (agent).
 
 ## Waiting
+- Found making the examples (09/11/2026): `cluster`, `skinCluster` and `blendShape` don't take NURBS curve CVs;
+  `nurbsSquare -sl2` and `vortex -ax/-ay/-az` are missing; `connectDynamic -f` with a field's transform fails;
+  `displaySmoothness -po` neither sets nor answers smooth preview; `scriptJob -listJobs` lists ids, not the Python
+  function; opening a dynamics example in the app says the aztekDynamics plug-in wasn't found (the file `requires` it).
 - PLAN.md (08/11/2026): parity review's work queue. Phase 0 and 1 before anything else that isn't a ticket.
 - Cloth feels wrong at scale: a cloth bigger than the grid acts stiff, small or heavy even as silk. Units, gravity, bending and presets must scale (agent, top priority). Real-world units by default from `currentUnit`: 1 cm of geometry is 1 cm of cloth, so nobody works in 10 cm = 1 m.
 - Shift+click on an expand arrow fully expands (and collapses) everything below it, in every hierarchy: Outliner, Hypershade, Reference Editor, Node Editor lists, Graph Editor and Dope Sheet outlines, layer editors, Attribute Editor sections.
