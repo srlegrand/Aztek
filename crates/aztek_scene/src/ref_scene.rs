@@ -485,6 +485,136 @@ fn group_cmd(s: &mut Session, a: &Args, prev: &aztek_ops::RunFn<Session>) -> Cmd
     Ok(made)
 }
 
+/// One question to polyEvaluate. Several in one call give a dictionary by long name in Python and an array in MEL.
+fn poly_evaluate(s: &mut Session, a: &Args, prev: &aztek_ops::RunFn<Session>) -> CmdResult {
+    const SINGLE: &[&str] = &["vertex", "edge", "face", "uvcoord", "triangle", "shell", "boundingBox", "boundingBox2d", "area", "worldArea", "vertexComponent", "edgeComponent", "faceComponent", "uvComponent", "triangleComponent", "boundingBoxComponent", "boundingBoxComponent2d", "uvShell"];
+    let asked: Vec<&str> = SINGLE.iter().copied().filter(|f| a.bool(f)).collect();
+    if asked.len() > 1 {
+        let mut out = serde_json::Map::new();
+        for f in asked {
+            let mut one = a.clone();
+            for g in SINGLE {
+                one.flags.remove(*g);
+            }
+            one.flags.insert(f.to_string(), json!(true));
+            out.insert(f.to_string(), poly_evaluate_one(s, &one, prev)?);
+        }
+        return Ok(Value::Object(out));
+    }
+    poly_evaluate_one(s, a, prev)
+}
+
+/// polyEvaluate's UV questions, over each mesh named or selected.
+fn uv_answer(s: &mut Session, a: &Args, flag: &str) -> CmdResult {
+    let shell = a.get("uvsInShell").and_then(Value::as_i64).unwrap_or(-1);
+    let targets = crate::uv_ops::targets(s, a, "polyEvaluate")?;
+    let mut sum = 0i64;
+    let mut list = Vec::new();
+    let mut bounds: Option<[f64; 4]> = None;
+    for (node, t) in targets {
+        let Some(m) = crate::components::mesh_of(&mut s.graph, node) else { continue };
+        let name = s.graph.path(crate::dag::transform_of(&s.graph, node));
+        match crate::uv_ops::evaluate(&m, &t, flag, shell, &name) {
+            Value::Number(n) => sum += n.as_i64().unwrap_or(0),
+            Value::Array(v) if flag.starts_with("boundingBox") => {
+                let n = |i: usize, k: usize| v[i][k].as_f64().unwrap_or(0.0);
+                let b = bounds.get_or_insert([f64::MAX, f64::MIN, f64::MAX, f64::MIN]);
+                *b = [b[0].min(n(0, 0)), b[1].max(n(0, 1)), b[2].min(n(1, 0)), b[3].max(n(1, 1))];
+            }
+            Value::Array(v) => list.extend(v),
+            _ => {}
+        }
+    }
+    Ok(if flag.starts_with("boundingBox") {
+        let b = bounds.unwrap_or([0.0; 4]);
+        json!([[b[0], b[1]], [b[2], b[3]]])
+    } else if matches!(flag, "uvShell" | "uvComponent") {
+        json!(sum)
+    } else {
+        Value::Array(list)
+    })
+}
+
+fn poly_evaluate_one(s: &mut Session, a: &Args, prev: &aztek_ops::RunFn<Session>) -> CmdResult {
+    for flag in ["uvShell", "uvComponent", "uvShellIds", "activeUVShells"] {
+        if a.bool(flag) {
+            return uv_answer(s, a, flag);
+        }
+    }
+    if a.has("uvsInShell") {
+        return uv_answer(s, a, "uvsInShell");
+    }
+    if a.bool("activeShells") {
+        let comps = crate::components::component_strings(&s.graph, true);
+        let g = &mut s.graph;
+        let mut ids = Vec::new();
+        for (mesh, points) in crate::skin::points_named(g, &comps) {
+            let Some(m) = crate::components::mesh_of(g, mesh) else { continue };
+            let (of, _) = aztek_geo::multibox::shells_of(&m);
+            ids.extend(points.iter().filter_map(|&p| of.get(p as usize).copied()));
+        }
+        ids.sort_unstable();
+        ids.dedup();
+        return Ok(json!(ids));
+    }
+    // Lengths and areas read in the current unit.
+    let unit = if a.bool("boundingBox") || a.bool("boundingBoxComponent") {
+        aztek_ops::units::Unit::Linear
+    } else if a.bool("area") || a.bool("worldArea") {
+        aztek_ops::units::Unit::Area
+    } else {
+        aztek_ops::units::Unit::None
+    };
+    let mut v = poly_evaluate_counts(s, a, prev)?;
+    if aztek_ops::units::user_call() {
+        aztek_ops::units::json_to_user(unit, &mut v);
+    }
+    Ok(v)
+}
+
+fn poly_evaluate_counts(s: &mut Session, a: &Args, prev: &aztek_ops::RunFn<Session>) -> CmdResult {
+            let names = objects(s, a);
+            if a.bool("area") || a.bool("worldArea") {
+                return Ok(json!(mesh_area(&mut s.graph, &names, a.bool("worldArea"))));
+            }
+            if a.bool("boundingBoxComponent") {
+                let comps = crate::components::component_strings(&s.graph, true);
+                let g = &mut s.graph;
+                g.evaluate();
+                let (mut lo, mut hi) = (DVec3::splat(f64::MAX), DVec3::splat(f64::MIN));
+                for (mesh, ids) in crate::skin::points_named(g, &comps) {
+                    let Some(m) = crate::components::mesh_of(g, mesh) else { continue };
+                    let w = crate::rig::world(g, crate::dag::transform_of(g, mesh));
+                    for p in ids {
+                        let q = w.transform_point3(m.position(p));
+                        lo = lo.min(q);
+                        hi = hi.max(q);
+                    }
+                }
+                return Ok(json!([[lo.x, hi.x], [lo.y, hi.y], [lo.z, hi.z]]));
+            }
+            if a.bool("vertexComponent") || a.bool("edgeComponent") || a.bool("faceComponent") {
+                let kind = if a.bool("vertexComponent") { ".vtx[" } else if a.bool("edgeComponent") { ".e[" } else { ".f[" };
+                let comps = crate::components::component_strings(&s.graph, true);
+                return Ok(json!(comps.iter().filter(|c| c.contains(kind)).count()));
+            }
+            if a.bool("format") {
+                let r = prev(s, &Args { positional: a.positional.clone(), ..Default::default() })?;
+                let o = r.as_object().cloned().unwrap_or_default();
+                return Ok(json!(o.iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<_>>().join(" ")));
+            }
+            if a.bool("triangleComponent") {
+                let mut call = a.clone();
+                call.flags.remove("triangleComponent");
+                call.flags.insert("triangle".into(), json!(true));
+                return prev(s, &call);
+            }
+            if a.bool("boundingBox2d") || a.bool("boundingBoxComponent2d") {
+                return uv_answer(s, a, if a.bool("boundingBox2d") { "boundingBox2d" } else { "boundingBoxComponent2d" });
+            }
+            prev(s, a)
+}
+
 fn sets_cmd(s: &mut Session, a: &Args) -> CmdResult {
     use crate::object_sets as os;
     let g = &mut s.graph;
@@ -1674,49 +1804,16 @@ pub fn register(c: &mut Commands<Session>) {
             f("vertexComponent", "vc", B, "Selected vertex count."),
             f("edgeComponent", "ec", B, "Selected edge count."),
             f("faceComponent", "fc", B, "Selected face count."),
+            f("uvComponent", "uvc", B, "Selected UV count."),
+            f("uvShell", "us", B, "UV shell count."),
+            f("uvShellIds", "uid", B, "The UV shell of each selected UV."),
+            f("uvsInShell", "uis", ArgType::Int, "The UVs in this UV shell."),
+            f("activeUVShells", "aus", B, "The UV shells the selection touches."),
+            f("activeShells", "as", B, "The mesh shells the selection touches."),
+            f("uvSetName", "uvs", S, "The UV set: the current one here."),
+            f("displayStats", "ds", B, "Accepted for existing scripts."),
         ],
-        |s, a, prev| {
-            let names = objects(s, a);
-            if a.bool("area") || a.bool("worldArea") {
-                return Ok(json!(mesh_area(&mut s.graph, &names, a.bool("worldArea"))));
-            }
-            if a.bool("boundingBoxComponent") {
-                let comps = crate::components::component_strings(&s.graph, true);
-                let g = &mut s.graph;
-                g.evaluate();
-                let (mut lo, mut hi) = (DVec3::splat(f64::MAX), DVec3::splat(f64::MIN));
-                for (mesh, ids) in crate::skin::points_named(g, &comps) {
-                    let Some(m) = crate::components::mesh_of(g, mesh) else { continue };
-                    let w = crate::rig::world(g, crate::dag::transform_of(g, mesh));
-                    for p in ids {
-                        let q = w.transform_point3(m.position(p));
-                        lo = lo.min(q);
-                        hi = hi.max(q);
-                    }
-                }
-                return Ok(json!([[lo.x, hi.x], [lo.y, hi.y], [lo.z, hi.z]]));
-            }
-            if a.bool("vertexComponent") || a.bool("edgeComponent") || a.bool("faceComponent") {
-                let kind = if a.bool("vertexComponent") { ".vtx[" } else if a.bool("edgeComponent") { ".e[" } else { ".f[" };
-                let comps = crate::components::component_strings(&s.graph, true);
-                return Ok(json!(comps.iter().filter(|c| c.contains(kind)).count()));
-            }
-            if a.bool("format") {
-                let r = prev(s, &Args { positional: a.positional.clone(), ..Default::default() })?;
-                let o = r.as_object().cloned().unwrap_or_default();
-                return Ok(json!(o.iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<_>>().join(" ")));
-            }
-            if a.bool("triangleComponent") {
-                let mut call = a.clone();
-                call.flags.remove("triangleComponent");
-                call.flags.insert("triangle".into(), json!(true));
-                return prev(s, &call);
-            }
-            if a.bool("boundingBox2d") || a.bool("boundingBoxComponent2d") {
-                fail!("polyEvaluate: UV bounds are not available yet");
-            }
-            prev(s, a)
-        },
+        poly_evaluate,
     );
     c.register(Cmd::new("searchReplaceNames", "searchReplaceNames(search, replace, 'all'|'hierarchy'|'selected'): renames what holds search. Returns how many.", search_replace).positional("search replace scope"));
     c.register(

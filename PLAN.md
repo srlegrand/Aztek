@@ -65,12 +65,12 @@ Each was reproduced on 08/11/2026 through `maya.cmds` in the built app.
   move. `move -a 0 0 0 pCube1.scalePivot pCube1.rotatePivot` currently fails with "unknown flag 'absolute'".
 - [x] 1.7 (09/11/2026: `InvertSelection` runs `invertSelection`; objects leave out shapes and default cameras) `InvertSelection` inverts (objects in object mode, components in component mode, respecting the masks).
 - [x] 1.8 (09/11/2026: `hotkey -q` reads -k and its modifiers) `hotkey -q` reads the key from `-k` and never from the selection.
-- [ ] 1.9 Short flags that collide with the edit flag: `polyEvaluate -e` (edges) returns None. Audit every command for
+- [x] 1.9 (09/11/2026: the command's flag table decides, no list to keep) Short flags that collide with the edit flag: `polyEvaluate -e` (edges) returns None. Audit every command for
   short flags `e`, `q`, `c` that mean something else in that command, and take the command's own meaning.
-- [ ] 1.10 Tests that pin a divergence: `polyBevel31` (the reference makes `polyBevel1`), `group` under the world,
+- [x] 1.10 (09/11/2026: cycles through a conversion node connect; polyBevel1; the one remaining refusal is a real plug cycle, ticketed) Tests that pin a divergence: `polyBevel31` (the reference makes `polyBevel1`), `group` under the world,
   `src.t -> dst.r` with `dst.r -> src.s` refused as a cycle. Go through PARITY.md for every "because a test relies on
   it" and fix both.
-- [ ] 1.11 `polyEvaluate` with several flags returns a dict in Python and an array in MEL, as the reference does; add
+- [x] 1.11 (09/11/2026: dict in Python, array in MEL; -s counts mesh shells, -uvShell UV shells) `polyEvaluate` with several flags returns a dict in Python and an array in MEL, as the reference does; add
   `-uvShell`, `-uvsInShell`, `-activeUVShells` and the rest of its flag table.
 - [ ] 1.12 Smooth preview is `displaySmoothMesh` (0, 1, 2) on the shape with `smoothLevel`, `useSmoothPreviewForRender`
   and the rest of the reference's attribute names, so `.ma` files open smoothed and `displaySmoothness -q -po` answers.

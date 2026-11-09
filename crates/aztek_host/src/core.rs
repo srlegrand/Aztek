@@ -334,7 +334,18 @@ impl Core {
             return self.query_edit(&name, args, flags, query);
         }
         let (name, call) = self.components_first(name, call);
-        self.exec_plain(&name, call)
+        let asked = call.clone();
+        let out = self.exec_plain(&name, call)?;
+        // polyEvaluate with several flags: an array in MEL, in the order the flags were given.
+        if let (true, Value::Object(o)) = (name == "polyEvaluate", &out) {
+            if let Some(flags) = asked.as_object() {
+                let several: Vec<Value> = flags.keys().filter_map(|k| o.get(k).cloned()).collect();
+                if !several.is_empty() {
+                    return Ok(Value::Array(several));
+                }
+            }
+        }
+        Ok(out)
     }
 
     fn exec_plain(&mut self, name: &str, call: Value) -> Result<Value, String> {
@@ -447,8 +458,10 @@ impl Core {
             None => return Err(format!("Cannot find procedure \"{typed}\".")),
         };
         let on = |v: &Value| v.as_bool().unwrap_or(v.as_i64().is_some_and(|i| i != 0));
-        let query = kwargs.get("q").or(kwargs.get("query")).is_some_and(on);
-        let e_own = mel::e_is_own_flag(&name);
+        let own = |short: &str, long: &str| def_flags.iter().any(|(n, sh, _)| sh == short && n != long);
+        let q_own = own("q", "query");
+        let query = kwargs.get("query").is_some_and(on) || (!q_own && kwargs.get("q").is_some_and(on));
+        let e_own = own("e", "edit");
         let edit = !e_own && kwargs.get("e").or(kwargs.get("edit")).is_some_and(on);
         // Commands with their own query mode take q=True and the flags asked about.
         let own_query = def_flags.iter().any(|(n, _, _)| n == "query");
@@ -489,7 +502,7 @@ impl Core {
         let mut flags = Map::new();
         let mut relative = false;
         for (k, v) in &kwargs {
-            if matches!(k.as_str(), "q" | "query" | "e" | "edit") && !(e_own && k == "e") {
+            if matches!(k.as_str(), "q" | "query" | "e" | "edit") && !(e_own && k == "e") && !(q_own && k == "q") {
                 continue;
             }
             let mut key = k.as_str();

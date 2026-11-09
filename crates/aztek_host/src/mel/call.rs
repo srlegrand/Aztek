@@ -142,9 +142,10 @@ fn query_takes_value(cmd: &str, flag: &str) -> bool {
     )
 }
 
-/// Commands whose -e means something other than edit: scriptJob's event, timer's end.
-pub fn e_is_own_flag(cmd: &str) -> bool {
-    matches!(cmd, "scriptJob" | "timer" | "createDisplayLayer")
+/// Whether a command's -e is its own flag and not edit: polyEvaluate's edges, scriptJob's event, timer's end. The
+/// command's flag table says, so a new command can't collide.
+pub fn short_is_own<C>(def: &aztek_ops::CommandDef<C>, short: &str, generic: &str) -> bool {
+    def.flags.iter().any(|f| f.short_name == short && f.name != generic)
 }
 
 /// A reference command spelled as one of ours: the command it runs, and its flags (long or short) as ours.
@@ -288,9 +289,10 @@ pub fn build(cmds: &Commands<Session>, typed: &str, toks: &[Tok]) -> Result<(Str
     let mut flags = Map::new();
     let mut args = Vec::new();
     let own_query = def.flags.iter().any(|d| d.name == "query");
-    let q_pos = toks.iter().position(|t| matches!(flag_of(t), Some("q" | "query")));
+    let q_own = short_is_own(def, "q", "query");
+    let q_pos = toks.iter().position(|t| matches!(flag_of(t), Some("query")) || (!q_own && matches!(flag_of(t), Some("q"))));
     let query = q_pos.is_some();
-    let e_own = e_is_own_flag(&name);
+    let e_own = short_is_own(def, "e", "edit");
     let edit = !e_own && toks.iter().any(|t| matches!(flag_of(t), Some("e" | "edit")));
     let mut asked = Vec::new();
     let mut i = 0;

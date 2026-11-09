@@ -1,8 +1,4 @@
 # Calls that don't yet match the reference, with the PLAN.md item that fixes each. This list can only shrink.
-polyEvaluate.e  # 1.9
-cycle.connects  # 1.10
-polyEvaluate.several.python  # 1.11
-polyEvaluate.uvShell  # 1.11
 smooth.attr  # 1.12
 smooth.level  # 1.12
 smooth.query  # 1.12

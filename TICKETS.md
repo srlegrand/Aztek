@@ -16,6 +16,7 @@ Requests waiting or in progress, newest detail kept. Move to Done with the date 
   `displaySmoothness -po` neither sets nor answers smooth preview; `scriptJob -listJobs` lists ids, not the Python
   function; opening a dynamics example in the app says the aztekDynamics plug-in wasn't found (the file `requires` it).
 - `#` in `-n` flags when creating nodes (`polyCube -n thing#`): `rename` has it (PLAN 1.4).
+- Real plug cycles: `a.tx -> b.tx -> a.tx` is refused. The reference connects it and warns at evaluation; the evaluator needs a guard first.
 - Missing commands found running the capture kit in Aztek (09/11/2026): `allNodeTypes`, `assignCommand`, `hotkeySet`, `imagePlane`, `runTimeCommand -dca` and `-uca`.
 - PLAN.md (08/11/2026): parity review's work queue. Phase 0 and 1 before anything else that isn't a ticket.
 - Cloth feels wrong at scale: a cloth bigger than the grid acts stiff, small or heavy even as silk. Units, gravity, bending and presets must scale (agent, top priority). Real-world units by default from `currentUnit`: 1 cm of geometry is 1 cm of cloth, so nobody works in 10 cm = 1 m.
@@ -84,6 +85,15 @@ Requests waiting or in progress, newest detail kept. Move to Done with the date 
 - 1.8. Done: `hotkey -q -k F12 -n`, `-rn`, from MEL and Python
   Not done: hotkey sets (`hotkeySet`) not there
   Why: ticket from the capture kit
+- 1.9. Done: `polyEvaluate -e` and the 10 other commands with an own -e (`polyCheck`, `polyCompare`, `delete`, `findType`, `attributeInfo`, `createSet`, `createDisplayLayer`, `namingConvention`, `timer`, `scriptJob`), and `usdPy -q`, in MEL and Python
+  Not done: nothing; -c never meant create in the parser, so it needed no change
+  Why: audit in the session's flag dump; PARITY.md lists them
+- 1.10. Done: `src.t -> dst.r -> src.s` connects; `polyBevel3` pin gone from PARITY.md; `shell` test now asks for UV shells
+  Not done: `a.tx -> b.tx -> a.tx` still refused
+  Why: the evaluator needs a cycle guard first
+- 1.11. Done: `-uvShell`, `-uvShellIds`, `-uvsInShell`, `-activeUVShells`, `-activeShells`, `-uvComponent`, `-b2`, `-bc2`, units on `-b`, `-bc`, `-a`, `-wa`
+  Not done: the shape of the UV list answers is from the docs, unverified
+  Why: needs a capture
 
 ## Done
 - 08/11/2026 One light model: the viewport's lights render the same in Harold (decay rates, intensity, colour, spot cone and dropoff, ambient, area, volume, default lighting, ambient colour, black background); parity test against the shared formula.

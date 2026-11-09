@@ -38,7 +38,6 @@ fn creation_returns_lists_and_queries_return_values() {
 }
 
 #[test]
-#[ignore = "PLAN 1.11: polyEvaluate with several flags gives a dict"]
 fn poly_evaluate_dict() {
     let _one = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
     let out = run("cmds.polyCube()\nr = cmds.polyEvaluate('pCube1', v=True, f=True)\nprint(sorted(r.items()))\nprint(cmds.polyEvaluate('pCube1', e=True))");

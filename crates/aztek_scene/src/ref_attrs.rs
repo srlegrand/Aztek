@@ -1042,7 +1042,11 @@ pub fn register(c: &mut Commands<Session>) {
             let (Some(x), Some(y)) = (a.pos_str(0), a.pos_str(1)) else { fail!("isConnected: expected (src, dst)") };
             let g = &s.graph;
             if let Some(pairs) = pairs_for_compound(g, x, y) {
-                return Ok(json!(pairs.iter().all(|(p, q)| g.source(q) == Some(*p))));
+                let source_through = |q: &PlugRef| match conversion_into(g, q) {
+                    Some(c) => g.node(c).and_then(|n| n.ty().attr_index("input")).and_then(|i| g.source(&PlugRef::new(c, i as i32))),
+                    None => g.source(q),
+                };
+                return Ok(json!(pairs.iter().all(|(p, q)| source_through(q).as_ref() == Some(p) || g.source(q) == Some(*p))));
             }
             let (sp, dp) = (g.plug(x)?, g.plug(y)?);
             // A conversion node between them doesn't part them.
@@ -1051,6 +1055,19 @@ pub fn register(c: &mut Commands<Session>) {
                 g.source(&PlugRef::new(c.node, input as i32))
             });
             let exact = g.source(&dp) == Some(sp) || through == Some(sp);
+            // A whole vector joined through conversion nodes is joined axis by axis.
+            let axes = dp.component < 0
+                && sp.component < 0
+                && g.attr(&dp).ty == PlugType::Vec3
+                && (0..3).all(|k| {
+                    let part = PlugRef::component(dp.node, dp.attr, k);
+                    conversion_into(g, &part)
+                        .and_then(|c| g.source(&PlugRef::new(c, g.node(c)?.ty().attr_index("input")? as i32)))
+                        == Some(PlugRef::component(sp.node, sp.attr, k))
+                });
+            if axes {
+                return Ok(json!(true));
+            }
             // A whole Vec3 drives its children, child by child.
             let parts = dp.component >= 0 && sp.component == dp.component && g.source(&PlugRef { component: -1, ..dp }) == Some(PlugRef { component: -1, ..sp });
             Ok(json!(exact || parts))
