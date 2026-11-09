@@ -169,7 +169,16 @@ fn copy_node(
     let n = g.node(s).unwrap();
     let ty = n.type_arc().clone();
     let named = top && !name.is_empty();
-    let copy_name = if named { name.to_string() } else { n.name().to_string() };
+    // A shape's copy takes the next free shape name in the scene (pCubeShape2), not its source's under a new parent.
+    let is_shape = crate::dag::is_shape(g, s);
+    let copy_name = if named {
+        name.to_string()
+    } else if is_shape && mode != Mode::Instance {
+        let source = n.name().to_string();
+        g.next_scene_name(&source)
+    } else {
+        n.name().to_string()
+    };
     let c = g.create_node(&ty, &copy_name, p, named)?;
     record.insert(s, c);
     copy_values(g, s, c)?;

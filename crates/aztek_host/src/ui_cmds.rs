@@ -404,6 +404,17 @@ pub fn register(s: &mut Session) {
             if key.is_empty() {
                 fail!("hotkey: give -k");
             }
+            if a.bool("query") {
+                let release = a.get("queried").and_then(Value::as_array).is_some_and(|q| q.iter().any(|x| matches!(x.as_str(), Some("releaseName" | "rn"))));
+                let found = with_ui(|u| {
+                    u.hotkeys
+                        .iter()
+                        .find(|x| x["key"] == json!(key) && x["ctrl"] == json!(a.bool("ctrlModifier")) && x["alt"] == json!(a.bool("altModifier")) && x["shift"] == json!(a.bool("shiftModifier")))
+                        .cloned()
+                });
+                let field = if release { "releaseName" } else { "name" };
+                return Ok(found.map_or(json!(""), |h| h[field].clone()));
+            }
             let hk = json!({
                 "key": key,
                 "ctrl": a.bool("ctrlModifier"),
@@ -420,6 +431,8 @@ pub fn register(s: &mut Session) {
             Ok(Value::Null)
         })
         .undoable(false)
+        .flag(f("query", "q", ArgType::Bool, "Ask what the key is bound to: -n for press, -rn for release."))
+        .flag(f("queried", "", ArgType::Any, "What a query asks for."))
         .flag(f("keyShortcut", "k", ArgType::String, "The key."))
         .flag(f("altModifier", "alt", ArgType::Bool, "With Alt."))
         .flag(f("ctrlModifier", "ctl", ArgType::Bool, "With Ctrl."))

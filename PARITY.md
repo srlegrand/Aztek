@@ -5,6 +5,10 @@ manipulators, the script editor and preferences, and renders with Harold, its ow
 the reference carries. Dynamics depart on purpose: one solver stands for the reference's several dynamics systems, and
 their files load into it (see the dated section and docs/DYNAMICS.md). The product carries none of the reference's names, icons or branding.
 
+## Names and pivots
+
+Done 09/11/2026 (PLAN 1.2 to 1.8). `group` is `group1`, `group2`, under its members' shared parent with pivots at the world's origin. `rename` takes `#`. A trailing number keeps its padding in every generated name. A copied shape takes the next free shape name. `listRelatives` gives leaf names unless `-path` or `-fullPath`, so a script handing a result to another command wants one of those, as in the reference. `move` on `obj.rotatePivot` and `obj.scalePivot` takes `-a`, `-r`, `-ws`, `-os`, one pivot at a time. `InvertSelection` and `hotkey -q` work. Unverified against a capture: all the naming rules (`tools/reference_capture/WANTED.md`).
+
 ## Units
 
 Done 09/11/2026 (PLAN 1.1). What's stored is centimetres and radians. A command called from a script or the interface is in the current units, and `execute` converts its flags, arguments and results by tags in `crates/aztek_scene/src/unit_tables.rs`; commands called by other commands, viewport tools and the Python API are in stored units. `currentUnit` lives in `aztek_ops::units`, per scene: a new scene goes back to cm and degrees, opening a file takes on the file's.

@@ -533,6 +533,18 @@ impl Core {
     /// The reference's -q and -e on a node's settings: each flag is an attribute of the node named first (or selected), or of
     /// its shape's history (polyCube1 for pCube1).
     fn query_edit(&mut self, name: &str, args: Vec<Value>, flags: Map<String, Value>, query: bool) -> Result<Value, String> {
+        // hotkey asks about a key, not an object.
+        if name == "hotkey" && query {
+            let mut call = flags;
+            let asked: Vec<Value> = call.iter().filter(|(_, v)| v.is_null()).map(|(k, _)| json!(k)).collect();
+            call.retain(|_, v| !v.is_null());
+            call.insert("query".into(), json!(true));
+            call.insert("queried".into(), Value::Array(asked));
+            if let Some(key) = args.first() {
+                call.entry("keyShortcut").or_insert(key.clone());
+            }
+            return self.exec_silent(name, Value::Object(call));
+        }
         let g = &self.s.graph;
         let target = match args.first().and_then(Value::as_str) {
             Some(t) => t.to_string(),
@@ -752,13 +764,36 @@ fn pivot_move(name: &str, call: Value) -> (String, Value) {
         return (name.to_string(), call);
     }
     let mut objs: Vec<Value> = Vec::new();
+    let (mut rotate, mut scale) = (false, false);
     for a in args.iter().filter_map(Value::as_str) {
-        let o = json!(a.split('.').next().unwrap_or(a));
+        let (o, plug) = a.split_once('.').unwrap_or((a, ""));
+        rotate |= matches!(plug, "rotatePivot" | "rp");
+        scale |= matches!(plug, "scalePivot" | "sp");
+        let o = json!(o);
         if !objs.contains(&o) {
             objs.push(o);
         }
     }
+    let values: Vec<f64> = args.iter().filter_map(Value::as_f64).collect();
     let mut c = call.as_object().cloned().unwrap_or_default();
+    let flag = |c: &Map<String, Value>, names: &[&str]| names.iter().any(|n| c.get(*n).and_then(Value::as_bool) == Some(true));
+    let relative = flag(&c, &["relative", "r"]);
+    let object_space = flag(&c, &["objectSpace", "os"]);
+    for f in ["absolute", "a", "relative", "r", "worldSpace", "ws", "worldSpaceDistance", "wd", "objectSpace", "os", "rotatePivotRelative", "rpr", "scalePivotRelative", "spr", "xyz"] {
+        c.remove(f);
+    }
+    if values.len() >= 3 {
+        c.insert(if relative { "by" } else { "to" }.into(), json!(values[..3]));
+    }
     c.insert("args".into(), Value::Array(objs));
+    if rotate {
+        c.insert("rotatePivot".into(), json!(true));
+    }
+    if scale {
+        c.insert("scalePivot".into(), json!(true));
+    }
+    if object_space {
+        c.insert("objectSpace".into(), json!(true));
+    }
     ("movePivot".into(), Value::Object(c))
 }

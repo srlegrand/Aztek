@@ -134,6 +134,22 @@ pub fn register(c: &mut Commands<Session>) {
                     if !is_transform(&s.graph, id) {
                         continue;
                     }
+                    // Named pivots move on their own, in world or object space, as `move` on obj.rotatePivot does.
+                    if a.bool("rotatePivot") || a.bool("scalePivot") {
+                        let space = if a.bool("objectSpace") { "objectSpace" } else { "worldSpace" };
+                        for pivot in ["rotatePivot", "scalePivot"].into_iter().filter(|p| a.bool(p)) {
+                            let at = if let Some(t) = a.vec3("to") {
+                                t
+                            } else {
+                                let now = s.run("xform", json!({"args": [name], "query": true, space: true, "queried": [pivot]}))?;
+                                let v: Vec<f64> = now.as_array().map(|l| l.iter().filter_map(Value::as_f64).collect()).unwrap_or_default();
+                                let by = a.vec3("by").unwrap_or([0.0; 3]);
+                                [v.first().unwrap_or(&0.0) + by[0], v.get(1).unwrap_or(&0.0) + by[1], v.get(2).unwrap_or(&0.0) + by[2]]
+                            };
+                            s.run("xform", json!({"args": [name], space: true, pivot: at}))?;
+                        }
+                        continue;
+                    }
                     let now = crate::transform_ops::world_pivot(&mut s.graph, id);
                     let at = if let Some(t) = a.vec3("to") {
                         DVec3::from_array(t)
@@ -146,6 +162,9 @@ pub fn register(c: &mut Commands<Session>) {
             },
         )
         .positional("objects")
+        .flag(FlagDef::new("rotatePivot", "rp", T::Bool, Value::Null, "Only the rotate pivot."))
+        .flag(FlagDef::new("scalePivot", "sp", T::Bool, Value::Null, "Only the scale pivot."))
+        .flag(FlagDef::new("objectSpace", "os", T::Bool, Value::Null, "The values are in the object's space, not the world's."))
         .flag(FlagDef::new("by", "r", T::Vec3, Value::Null, "World offset."))
         .flag(FlagDef::new("to", "", T::Vec3, Value::Null, "World position.")),
     );

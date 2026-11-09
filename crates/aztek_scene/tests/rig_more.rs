@@ -243,7 +243,7 @@ fn inverse_scale_follows_the_parent() {
     run(&mut s, "select", json!({"clear": true}));
     chain_of(&mut s, &[[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]]);
     let copy = run(&mut s, "duplicate", json!({"args": ["joint3"]}))[0].as_str().unwrap().to_string();
-    let child = run(&mut s, "listRelatives", json!({"args": [copy.clone()], "children": true}));
+    let child = run(&mut s, "listRelatives", json!({"args": [copy.clone()], "children": true, "path": true}));
     let child = child[0].as_str().unwrap().to_string();
     let wired = run(&mut s, "listConnections", json!({"args": [format!("{child}.inverseScale")], "source": true, "plugs": true}));
     assert_eq!(wired, json!([format!("{copy}.scale")]), "{child}");

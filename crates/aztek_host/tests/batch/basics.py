@@ -24,3 +24,26 @@ cmds.polyCube(); cmds.polyCube()
 assert cmds.group("pCube1", "pCube2") == "group1"
 assert cmds.group(em=True) == "group2"
 assert cmds.xform("group1", q=True, ws=True, rp=True) == [0.0, 0.0, 0.0]
+
+# Names.
+cmds.file(new=True, force=True)
+cmds.polyCube(); cmds.polyCube(); cmds.polyCube()
+assert cmds.rename("pCube1", "thing#") == "thing1"
+assert cmds.rename("pCube2", "thing#") == "thing2"
+assert cmds.rename("pCube3", "part###") == "part001"
+cmds.polyCube(n="arm_01")
+assert cmds.duplicate("arm_01") == ["arm_02"]
+
+# Pivots, selection, hotkeys.
+cmds.file(new=True, force=True)
+cmds.polyCube()
+cmds.move(3, 0, 0)
+cmds.move(0, 0, 0, "pCube1.scalePivot", "pCube1.rotatePivot", absolute=True)
+assert cmds.xform("pCube1", q=True, ws=True, rp=True) == [0.0, 0.0, 0.0]
+cmds.polyCube(); cmds.polyCube()
+cmds.select("pCube1")
+cmds.InvertSelection()
+assert cmds.ls(sl=True) == ["pCube2", "pCube3"]
+cmds.nameCommand("makeCubeNameCommand", ann="Make a cube", c="polyCube")
+cmds.hotkey(k="F12", n="makeCubeNameCommand")
+assert cmds.hotkey(k="F12", q=True, n=True) == "makeCubeNameCommand"

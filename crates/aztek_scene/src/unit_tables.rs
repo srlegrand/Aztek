@@ -138,6 +138,7 @@ pub const FLAGS: &[Row] = &[
     ("rotateComponents", &[("by", Angle), ("pivot", Linear)]),
     ("scaleComponents", &[("pivot", Linear)]),
     ("moveComponents", &[("by", Linear), ("to", Linear)]),
+    ("movePivot", &[("by", Linear), ("to", Linear)]),
     ("distanceDimension", &[("startPoint", Linear), ("endPoint", Linear)]),
     ("closestPointOnMesh", &[("inPosition", Linear)]),
     ("nearestPointOnMesh", &[("inPosition", Linear)]),

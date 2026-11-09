@@ -678,6 +678,7 @@ fn register_scene(c: &mut Commands<Session>) {
             if g.node(id).unwrap().is_locked() {
                 fail!("rename: cannot rename locked node '{target}'");
             }
+            let new_name = g.resolve_hashes(&new_name);
             rename_node(g, id, &new_name)?;
             Ok(json!(g.path(id)))
         })

@@ -1,15 +1,4 @@
 # Calls that don't yet match the reference, with the PLAN.md item that fixes each. This list can only shrink.
-rename.hash  # 1.4
-rename.hash.middle  # 1.4
-rename.hash.second  # 1.4
-rename.hashes.padded  # 1.4
-duplicate.children.names  # 1.5
-duplicate.padded  # 1.5
-duplicate.padded.carry  # 1.5
-duplicate.shape  # 1.5
-pivot.move.absolute  # 1.6
-select.invert  # 1.7
-hotkey.query  # 1.8
 polyEvaluate.e  # 1.9
 cycle.connects  # 1.10
 polyEvaluate.several.python  # 1.11
