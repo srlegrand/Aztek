@@ -1,7 +1,7 @@
 <p align="center"><img src="docs/splash.png" alt="Aztek"></p>
 
 <p align="center">
-  <a href="https://github.com/srlegrand/Aztek/releases/latest"><img src="https://img.shields.io/badge/Download-Windows%20%7C%20Linux-white?style=for-the-badge" alt="Download"></a>
+  <a href="https://github.com/srlegrand/Aztek/releases/latest"><img src="https://img.shields.io/badge/Download-Windows%20%7C%20Linux%20%7C%20macOS-white?style=for-the-badge" alt="Download"></a>
   <a href="https://github.com/srlegrand/Aztek/fork"><img src="https://img.shields.io/badge/Fork%20it%20on%20GitHub-white?style=for-the-badge&logo=github&logoColor=black" alt="Fork it on GitHub"></a>
   <a href="#copy-it-anywhere"><img src="https://img.shields.io/badge/Copy%20it%20anywhere-white?style=for-the-badge" alt="Copy it anywhere"></a>
   <a href="https://srlegrand.github.io/Aztek/"><img src="https://img.shields.io/badge/Website-white?style=for-the-badge" alt="Website"></a>
@@ -18,15 +18,15 @@ The tools we build our work on shouldn't belong to whoever bought them last. Too
 A 3D application for modelling, UVs, rigging, animation, dynamics and rendering, with the industry-standard commands, hotkeys, menus and file format. Rust core (scene graph, commands,
 geometry, Vulkan viewport), Qt Widgets shell in C++, a MEL interpreter, and embedded Python with `aztek.cmds`,
 compatibility modules so existing scripts import unchanged, and an API 2.0 subset. Reads and writes `.ma` files. [PARITY.md](PARITY.md) has the behaviour
-target and status, including known differences; [docs/COMMANDS.md](docs/COMMANDS.md) lists all 1103 commands.
+target and status, including known differences; [docs/COMMANDS.md](docs/COMMANDS.md) lists all 1108 commands.
 
 Website: [srlegrand.github.io/Aztek](https://srlegrand.github.io/Aztek/). Licence: [MIT-0](LICENSE).
 
 **Download** from the [latest release](https://github.com/srlegrand/Aztek/releases/latest): Windows installer or zip, Rocky Linux 9 and 8 `.rpm`, Ubuntu 24.04 and 22.04 `.deb`, Linux `.tar.gz`, and an early macOS build for Apple silicon. Install steps are under [Install](#install).
 
-| Modelling history | Cloth, rendered with Harold | Rigid bodies on cloth |
+| Modelling history | A flag in the wind | Grox, keyed |
 | --- | --- | --- |
-| ![Extrude, width and bevel keyed on their history nodes](docs/clip-modelling.gif) | ![A sheet dropped on a ball](docs/clip-cloth.gif) | ![Boxes dropped into a cloth hammock](docs/clip-rigid.gif) |
+| ![Extrude, width and bevel keyed on their history nodes](docs/clip-modelling.gif) | ![A cloth flag nailed to its pole, in the wind](docs/clip-flag.gif) | ![Grox's IK arms, hands, head, jaw, blink and tail keyed and played back](docs/clip-grox.gif) |
 
 ![A production rig opened from its .ma file](docs/production-rig.png)
 
@@ -89,6 +89,8 @@ filled in with. GitHub takes files up to 25 MB and images up to 10 MB.
   retargeting between skeletons of different sizes. Controls keep their colours: drawing overrides, templates, reference display,
   display layer colours and wireframe colours.
 
+  ![Grox, the example character, posed with both IK arms raised](docs/grox-ui.png)
+
   ![A quadruped skeleton posed with the rotate tool](docs/quadruped-rig.png)
 - **Deformers:** blendShape in full (Shape Editor, in-between and live targets), lattice, wrap, wire, delta mush, softMod,
   nonlinears, clusters, sculpt, jiggle, shrinkWrap, proximityWrap, curveWarp, wrinkle, morph and more; deformer weights painted
@@ -109,7 +111,9 @@ filled in with. GitHub takes files up to 25 MB and images up to 10 MB.
   and a vertex it cannot place leaves the simulation for a while and comes back, marked in the view. Older dynamics
   nodes in `.ma` files load into it. See [docs/DYNAMICS.md](docs/DYNAMICS.md).
 
-  ![Particles from an emitter with turbulence and a floor collider](docs/clip-particles.gif)
+  | Cloth, rendered with Harold | A tower knocked down | Rigid bodies on cloth | Particles |
+  | --- | --- | --- | --- |
+  | ![A sheet dropped on a ball](docs/clip-cloth.gif) | ![A tower of blocks knocked down by a heavy ball](docs/clip-tower.gif) | ![Boxes dropped into a cloth hammock](docs/clip-rigid.gif) | ![Particles from an emitter with turbulence and a floor collider](docs/clip-particles.gif) |
 
 **Rendering and look development**
 
@@ -120,6 +124,8 @@ filled in with. GitHub takes files up to 25 MB and images up to 10 MB.
   in a scene renders through it. See [docs/HAROLD.md](docs/HAROLD.md).
 
   ![Two rigs and a row of materials rendered with Harold](docs/harold.png)
+
+  ![Grox rendered with Harold under a sky dome and two directional lights](docs/grox-render.jpg)
 - **Materials and textures:** a physically based standard surface, and lambert, blinn, phong, phongE and surfaceShader with file textures and place2dTexture, assigned to objects or faces; Textured mode (6) in the viewport; Hypershade lists; the image behind the UV Editor.
 
   ![Materials and a file texture in Textured mode](docs/materials.png)
@@ -174,8 +180,12 @@ Left to right: a Venom rig, whose download names no author; Toph, a fan art rig 
 
 ## Examples
 
-File > Examples opens fifty scenes from the `examples` folder, a submenu per area, and the example scripts in the
+File > Examples opens over fifty scenes from the `examples` folder, a submenu per area, and the example scripts in the
 Script Editor. Every one opens without a warning; a test plays each.
+
+![Twelve of the example scenes in the viewport](docs/examples.jpg)
+
+![File > Examples > Rigging](docs/examples-menu.png)
 
 - **Modelling:** every polygon primitive; a castle tower from one cylinder (extrude, inset, bevel, all as history);
   booleans; edge loops, a bridge and welds; a spaceship half mirrored live; smooth mesh preview with creases;

@@ -15,6 +15,7 @@
 #include "viewport.h"
 #include "widgets.h"
 
+#include <QHash>
 #include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
@@ -233,8 +234,11 @@ QMenu* MainWindow::file_menu() {
         // Beside the program, in the source tree when running from a build, and where the Linux packages put them.
         const QString base = QCoreApplication::applicationDirPath();
         auto label_of = [](const QString& name) {
-            QString label = QFileInfo(name).completeBaseName().replace('_', ' ');
-            label[0] = label[0].toUpper();
+            static const QHash<QString, QString> kept = {{"ik", "IK"}, {"fk", "FK"}, {"uv", "UV"}, {"uvs", "UVs"}, {"usd", "USD"}, {"nurbs", "NURBS"}};
+            QStringList words = QFileInfo(name).completeBaseName().split('_', Qt::SkipEmptyParts);
+            for (QString& w : words) w = kept.value(w.toLower(), w);
+            QString label = words.join(' ');
+            if (!label.isEmpty()) label[0] = label[0].toUpper();
             return label;
         };
         auto add_scenes = [this, label_of](QMenu* menu, const QDir& dir) {

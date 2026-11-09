@@ -24,6 +24,7 @@
   --c-usd: #179c8e;
   --c-code: #c99a12;
   --c-ui: #6b7685;
+  --c-ex: #c8377f;
 }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
@@ -176,7 +177,7 @@ h1 { font: 700 clamp(34px, 5vw, 58px)/1.02 "Barlow Condensed", sans-serif; margi
 .g span code { background: rgba(255, 255, 255, 0.2); }
 .c-model { --c: var(--c-model); } .c-uv { --c: var(--c-uv); } .c-rig { --c: var(--c-rig); } .c-anim { --c: var(--c-anim); }
 .c-dyn { --c: var(--c-dyn); } .c-ren { --c: var(--c-ren); } .c-usd { --c: var(--c-usd); } .c-code { --c: var(--c-code); }
-.c-ui { --c: var(--c-ui); }
+.c-ui { --c: var(--c-ui); } .c-ex { --c: var(--c-ex); }
 
 /* Reel: moving pictures on a dark strip */
 .reel {

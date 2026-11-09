@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Aztek</title>
-<meta name="description" content="Aztek: a free 3D application for modelling, UVs, rigging, animation, dynamics and rendering, with the industry-standard commands, hotkeys, menus and file format. MIT-0, for Linux and Windows.">
+<meta name="description" content="Aztek: a free 3D application for modelling, UVs, rigging, animation, dynamics and rendering, with the industry-standard commands, hotkeys, menus and file format. MIT-0, for Linux, Windows and macOS.">
 <meta property="og:title" content="Aztek">
-<meta property="og:description" content="Modelling, UVs, rigging, animation, dynamics and rendering, with the industry-standard commands, hotkeys and menus. MIT-0, Linux and Windows.">
+<meta property="og:description" content="Modelling, UVs, rigging, animation, dynamics and rendering, with the industry-standard commands, hotkeys and menus. MIT-0, Linux, Windows and macOS.">
 <meta property="og:image" content="https://srlegrand.github.io/Aztek/img/social-preview.png">
 <link rel="icon" type="image/png" href="img/aztek-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -23,6 +23,7 @@
     <a href="#glance">Features</a>
     <a href="#dynamics">Dynamics</a>
     <a href="#rendering">Rendering</a>
+    <a href="#examples">Examples</a>
     <a href="#copy">Copy it</a>
     <a href="#licence">Licence</a>
     <a href="https://github.com/srlegrand/Aztek">GitHub</a>
@@ -37,7 +38,7 @@
       <h1>Model, rig, animate, simulate and render. One application, the way you already work.</h1>
       <p class="standfirst">Modelling, UVs, rigging, animation, cloth, particles, rigid bodies, a path tracer and USD, with the
         industry-standard commands, flags, hotkeys, menus and marking menus. MEL and Python scripts run, <code>.ma</code>
-        files open and save, production rigs pose. MIT-0, for Linux and Windows.</p>
+        files open and save, production rigs pose. Over fifty example scenes to start from. MIT-0, for Linux, Windows and macOS.</p>
     </div>
   </div>
 </section>
@@ -117,12 +118,12 @@ git push --mirror &lt;your repository's URL&gt;</code></pre>
 
 <section class="reel">
   <figure>
-    <video src="img/clip-cloth.mp4" poster="img/clip-cloth.jpg" autoplay muted loop playsinline preload="metadata"></video>
-    <figcaption><b>Cloth</b> A sheet dropped on a ball, simulated and rendered with Harold, frame by frame.</figcaption>
+    <video src="img/clip-flag.mp4" poster="img/clip-flag.jpg" autoplay muted loop playsinline preload="metadata"></video>
+    <figcaption><b>Cloth</b> A flag nailed to its pole, in the wind. One of the example scenes.</figcaption>
   </figure>
   <figure>
-    <video src="img/clip-modelling.mp4" poster="img/clip-modelling.jpg" autoplay muted loop playsinline preload="metadata"></video>
-    <figcaption><b>History</b> Extrude, width and bevel keyed on their history nodes and played back in the viewport.</figcaption>
+    <video src="img/clip-grox.mp4" poster="img/clip-grox.jpg" autoplay muted loop playsinline preload="metadata"></video>
+    <figcaption><b>Grox</b> The example character's IK arms, hands, head, jaw, blink and tail, keyed and played back.</figcaption>
   </figure>
   <figure>
     <video src="img/clip-turntable.mp4" poster="img/clip-turntable.jpg" autoplay muted loop playsinline preload="metadata"></video>
@@ -156,6 +157,7 @@ git push --mirror &lt;your repository's URL&gt;</code></pre>
         <figcaption><b>History</b> <code>polyExtrudeFace1</code> in the channel box's inputs, the move manipulator on the faces.</figcaption></figure>
       <figure><img src="img/quad-draw-view.png" alt="Quad Draw on a live surface" loading="lazy"><figcaption><b>Quad Draw</b> Retopology on a live surface.</figcaption></figure>
       <figure><img src="img/soft-select-view.png" alt="Soft selection falloff on a plane" loading="lazy"><figcaption><b>Soft selection</b> The falloff shown on the vertices.</figcaption></figure>
+      <figure class="wide"><video src="img/clip-modelling.mp4" poster="img/clip-modelling.jpg" autoplay muted loop playsinline preload="none"></video><figcaption><b>Keyed history</b> Extrude, width and bevel keyed on their history nodes and played back.</figcaption></figure>
       <figure class="wide"><img src="img/nurbs-view.png" alt="NURBS surfaces and curves" loading="lazy"><figcaption><b>NURBS</b> Surfaces and curves, with a drawing override on the control.</figcaption></figure>
     </div>
   </article>
@@ -183,6 +185,7 @@ git push --mirror &lt;your repository's URL&gt;</code></pre>
         curveWarp. HumanIK characters with definitions, control rig and retargeting. Controls keep their colours.</p>
     </div>
     <div class="spread-media">
+      <figure class="wide"><img src="img/grox-ui.png" alt="Grox, the example character, posed with both IK arms raised" loading="lazy"><figcaption><b>Grox</b> The example character: IK/FK arms and legs, reverse feet, stretch, space switches, a tail and blinks. Its IK arm's channels in the channel box.</figcaption></figure>
       <figure class="wide"><img src="img/quadruped-rig.png" alt="A quadruped skeleton posed with the rotate tool" loading="lazy"><figcaption><b>Skeleton</b> A quadruped posed with the rotate tool.</figcaption></figure>
       <figure><img src="img/rigging.png" alt="Joints, smooth skin and an RP IK handle" loading="lazy"><figcaption><b>Skin and IK</b> Joints, smooth skin and an RP IK handle.</figcaption></figure>
       <figure><img src="img/paint-weights.png" alt="Paint Skin Weights" loading="lazy"><figcaption><b>Paint Skin Weights</b> Influences and brush in Tool Settings.</figcaption></figure>
@@ -215,7 +218,9 @@ git push --mirror &lt;your repository's URL&gt;</code></pre>
     </div>
     <div class="spread-media">
       <figure class="wide"><img src="img/ui-dynamics.png" alt="A cloth draped over a ball, with the cloth's attributes in the Attribute Editor" loading="lazy"><figcaption><b>Dynamics menu set</b> The sheet at frame 30, its cloth attributes in the Attribute Editor.</figcaption></figure>
-      <figure><video src="img/clip-rigid.mp4" poster="img/clip-rigid.jpg" autoplay muted loop playsinline preload="none"></video><figcaption><b>Rigid bodies</b> Boxes falling into a cloth hammock.</figcaption></figure>
+      <figure><video src="img/clip-cloth.mp4" poster="img/clip-cloth.jpg" autoplay muted loop playsinline preload="none"></video><figcaption><b>Cloth</b> A sheet dropped on a ball, rendered with Harold frame by frame.</figcaption></figure>
+      <figure><video src="img/clip-tower.mp4" poster="img/clip-tower.jpg" autoplay muted loop playsinline preload="none"></video><figcaption><b>Rigid bodies</b> A tower of blocks knocked down by a ball.</figcaption></figure>
+      <figure><video src="img/clip-rigid.mp4" poster="img/clip-rigid.jpg" autoplay muted loop playsinline preload="none"></video><figcaption><b>Rigid on cloth</b> Boxes falling into a cloth hammock.</figcaption></figure>
       <figure><video src="img/clip-particles.mp4" poster="img/clip-particles.jpg" autoplay muted loop playsinline preload="none"></video><figcaption><b>Particles</b> An emitter, turbulence and a floor collider.</figcaption></figure>
     </div>
   </article>
@@ -233,6 +238,7 @@ git push --mirror &lt;your repository's URL&gt;</code></pre>
     <div class="spread-media">
       <figure class="wide"><img src="img/ui-render.png" alt="The Harold Render View over the main window" loading="lazy"><figcaption><b>Render View</b> Five materials under a sky dome, rendering progressively.</figcaption></figure>
       <figure class="wide"><img src="img/harold.png" alt="Two rigs and a row of materials rendered with Harold" loading="lazy"><figcaption><b>Harold</b> Two rigs and a row of materials, with a sky and a key light.</figcaption></figure>
+      <figure class="wide"><img src="img/grox-render.jpg" alt="Grox rendered with Harold" loading="lazy"><figcaption><b>Grox in Harold</b> Painted textures, a sky dome and two directional lights.</figcaption></figure>
       <figure><img src="img/harold-cornell.png" alt="The Cornell box rendered with Harold" loading="lazy"><figcaption><b>Cornell box</b> One of the example scenes.</figcaption></figure>
       <figure><img src="img/lights-view.png" alt="Lights in the viewport" loading="lazy"><figcaption><b>Viewport lights</b> Use All Lights, with blinn and phong highlights.</figcaption></figure>
     </div>
@@ -288,6 +294,24 @@ cmds.setKeyframe(cube, at='ty', t=24, v=5)</code></pre>
       <figure class="wide"><img src="img/four-view.png" alt="Four views" loading="lazy"><figcaption><b>Four views</b> Space to toggle.</figcaption></figure>
     </div>
   </article>
+
+  <article class="spread c-ex" id="examples">
+    <div class="tab"><b>10</b>Examples</div>
+    <div class="spread-copy">
+      <h3>Over fifty scenes to open and pull apart</h3>
+      <p class="lead">File &gt; Examples, a submenu per area, plus scripts that open in the Script Editor.</p>
+      <p>Modelling (every primitive, a castle tower all in history, booleans, mirroring, NURBS), UVs, rigging (every
+        constraint, a reverse foot, spline IK, every deformer, linear against dual quaternion skins, set driven keys),
+        characters, animation, dynamics (a flag in the wind, a tower knocked down, particles in a vortex), rendering (the
+        standard surface's lobes, depth of field, motion blur, every light type) and pipeline (layers, namespaces, USD,
+        nested references).</p>
+      <p>Grox, a horned brute with a full rig and painted textures, is in there too. He's rough on purpose: take him apart.</p>
+    </div>
+    <div class="spread-media">
+      <figure class="wide"><img src="img/examples.jpg" alt="Twelve of the example scenes" loading="lazy"><figcaption><b>A few of them</b> Straight from the files, in the viewport.</figcaption></figure>
+      <figure class="wide"><img src="img/examples-menu.png" alt="File, Examples, Rigging submenu" loading="lazy"><figcaption><b>File &gt; Examples</b> Every scene opens without a warning; a test plays each one.</figcaption></figure>
+    </div>
+  </article>
 </section>
 
 <section class="feedback" id="feedback">
@@ -320,9 +344,11 @@ cmds.setKeyframe(cube, at='ty', t=24, v=5)</code></pre>
   <h2>Build from source</h2>
 <pre><code>git clone https://github.com/srlegrand/Aztek.git
 cd Aztek
-./build.sh --deps --run      # Linux
-build.bat -Run               # Windows</code></pre>
+./build.sh --deps --run        # Linux
+./build-macos.sh --deps --run  # macOS, with Homebrew
+build.bat -Run                 # Windows</code></pre>
   <p class="small">Needs Rust, CMake, Ninja, Qt 6.4+, Python 3 and, on Windows, Visual Studio 2022 with the C++ workload.
+    On macOS, <code>--deps</code> installs everything through Homebrew and <code>--package</code> makes a self-contained Aztek.app.
     Details in the <a href="https://github.com/srlegrand/Aztek#build">README</a>.</p>
 </section>
 
