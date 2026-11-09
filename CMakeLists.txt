@@ -96,7 +96,29 @@ if(APPLE)
 endif()
 file(STRINGS ${CMAKE_SOURCE_DIR}/Cargo.toml AZTEK_VERSION_LINE REGEX "^version *= *\"")
 string(REGEX REPLACE "^version *= *\"([^\"]*)\".*" "\\1" AZTEK_VERSION "${AZTEK_VERSION_LINE}")
-# What a user reads: 1.N and the commit it was built from, so any build traces back to its change.
+# What a user reads: 2.N and the commit it was built from, so any build traces back to its change. CI writes 2.N into
+# Cargo.toml before building; a local build from a git checkout works out the same number itself, so a build of a
+# commit says the same as the release of that commit. Without git (a source tarball) it stays at Cargo.toml's version.
+if(AZTEK_VERSION STREQUAL "1.0.0")
+  execute_process(COMMAND git rev-list --count HEAD WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+                  OUTPUT_VARIABLE AZTEK_COUNT OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET RESULT_VARIABLE AZTEK_COUNT_FAILED)
+  if(NOT AZTEK_COUNT_FAILED AND AZTEK_COUNT MATCHES "^[0-9]+$")
+    set(AZTEK_VERSION "2.${AZTEK_COUNT}.0")
+  endif()
+endif()
+# A new commit or a checkout runs the configure step again, so the number and the commit stay current.
+if(EXISTS "${CMAKE_SOURCE_DIR}/.git/HEAD")
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/.git/HEAD")
+  file(READ "${CMAKE_SOURCE_DIR}/.git/HEAD" AZTEK_GIT_HEAD)
+  if(AZTEK_GIT_HEAD MATCHES "^ref: ([^\n]+)")
+    string(STRIP "${CMAKE_MATCH_1}" AZTEK_GIT_REF)
+    foreach(f "${AZTEK_GIT_REF}" "packed-refs")
+      if(EXISTS "${CMAKE_SOURCE_DIR}/.git/${f}")
+        set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/.git/${f}")
+      endif()
+    endforeach()
+  endif()
+endif()
 set(AZTEK_COMMIT "$ENV{GITHUB_SHA}")
 if(NOT AZTEK_COMMIT)
   execute_process(COMMAND git rev-parse HEAD WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}

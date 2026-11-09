@@ -263,7 +263,7 @@ Node Editor:
 
 ## Install
 
-Packages are on the [releases page](https://github.com/srlegrand/Aztek/releases): each build of the main branch is a release of its own, numbered 1.N where N counts the changes so far.
+Packages are on the [releases page](https://github.com/srlegrand/Aztek/releases): each build of the main branch is a release of its own, numbered 2.N where N counts the changes so far. A build from source of the same commit shows the same number in Help > About.
 
 | System | Package | Install |
 | --- | --- | --- |

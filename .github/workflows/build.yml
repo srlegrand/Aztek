@@ -30,7 +30,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      # The version a user sees: 1.<commits on main>, so every build is newer than the last and says so.
+      # The version a user sees: 2.<commits on main>, so every build is newer than the last and says so.
       - id: check
         run: |
           version="2.$(git rev-list --count HEAD).0"
