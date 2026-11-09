@@ -26,7 +26,7 @@
     {"id": "duplicate.no.number", "area": "duplicate", "setup": "polyCube -n box;", "call": "duplicate box;", "expect": ["box1"]},
     {"id": "duplicate.taken", "area": "duplicate", "setup": "polyCube -n a1; polyCube -n a2;", "call": "duplicate a1;", "expect": ["a3"]},
     {"id": "duplicate.rr", "area": "duplicate", "setup": "polyCube;", "call": "duplicate -rr pCube1;", "expect": ["pCube2"]},
-    {"id": "duplicate.children", "area": "duplicate", "setup": "polyCube; polySphere; parent pSphere1 pCube1;", "call": "duplicate pCube1;", "expect": ["pCube2"]},
+    {"id": "duplicate.children", "area": "duplicate", "setup": "polyCube; polySphere; parent pSphere1 pCube1;", "call": "duplicate pCube1;", "expect": ["pCube2", "pCube2|pSphere1"]},
     {"id": "duplicate.children.names", "area": "duplicate", "setup": "polyCube; polySphere; parent pSphere1 pCube1; duplicate pCube1;", "call": "listRelatives -c pCube2;", "expect": ["pCubeShape2", "pSphere1"]},
 
     {"id": "instance.plain", "area": "instance", "setup": "polyCube;", "call": "instance pCube1;", "expect": ["pCube2"]},

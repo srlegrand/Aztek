@@ -57,6 +57,9 @@ Requests waiting or in progress, newest detail kept. Move to Done with the date 
 - 0.1 Capture kit. Done: `tools/reference_capture/` with `capture.py`, `calls.json`, `scenes.json`, `node_types.txt`, `WANTED.md`; dry run through `aztek --batch` with no script errors.
   Not done: never run in the reference itself, and no fixtures exist yet.
   Why: needs Simon to run it: `mayapy tools/reference_capture/capture.py`, then commit `tests/data/reference/`. Nothing else waits on it.
+- 0.2 Fixture harness. Done: `reference_fixtures.rs` compares 99 calls with hand-written readings, reports by area, and fails on a new mismatch or a stale entry on the open list (44 entries at the start).
+  Not done: no comparison yet for attribute, hotkey or posed fixtures; 6 calls are skipped with no reading.
+  Why: nothing captured to compare against, and writing those comparisons blind would guess at the fixture shapes' use.
 
 ## Done
 - 08/11/2026 One light model: the viewport's lights render the same in Harold (decay rates, intensity, colour, spot cone and dropoff, ambient, area, volume, default lighting, ambient colour, black background); parity test against the shared formula.
