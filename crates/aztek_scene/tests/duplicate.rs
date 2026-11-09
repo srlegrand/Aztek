@@ -124,7 +124,7 @@ fn duplicate_modes_and_group() {
     assert_eq!(inst.len(), 2);
     assert_eq!(kind(&mut s, &inst[0]), "instance");
     assert_eq!(kind(&mut s, &inst[1]), "instance");
-    assert_eq!(inst[0], "|Group|Bolt1");
+    assert_eq!(inst[0], "|group1|Bolt1");
     near(world_pos(&mut s, &json!(inst[1])), DVec3::new(20.0, 0.0, 0.0));
 
     let made = run(&mut s, "duplicate", json!({"args": [c], "mode": "reference"}));

@@ -53,9 +53,9 @@ Each was reproduced on 08/11/2026 through `maya.cmds` in the built app.
   box, attribute editor, manipulator readout, numeric input and Python API boundary by the current unit, with
   `unitConversion` nodes on connections between differing types. Time units too (`pal`, `ntsc`, `film`, custom fps).
   Biggest item in the plan: audit every command that takes or returns a distance or angle; list them in PARITY.md.
-- [ ] 1.2 `group` names: `group1`, `group2`, never `Group`. Also check `group -em`, `group -n`, MEL `group` and the
+- [x] 1.2 (09/11/2026: landed with 1.3 as one change to one command) `group` names: `group1`, `group2`, never `Group`. Also check `group -em`, `group -n`, MEL `group` and the
   Ctrl+G path.
-- [ ] 1.3 `group` puts the new group under the members' shared parent and its pivot at the world origin, as the
+- [x] 1.3 (09/11/2026: PARITY.md's difference removed) `group` puts the new group under the members' shared parent and its pivot at the world origin, as the
   reference does (PARITY.md says it goes under the world because tests rely on it: fix the tests).
 - [ ] 1.4 `rename` with `#` replaces the hashes with the next free number (`thing#` gives `thing1`), padded by the count
   of hashes (`thing###` gives `thing001`).

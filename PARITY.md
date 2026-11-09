@@ -377,8 +377,7 @@ connections. Transforms: `offsetParentMatrix`, `shear`, limits and `transformLim
 matrices, `rotateQuaternion`, bounding box attributes, `hiddenInOutliner`. UUIDs and namespaces. Full flag sets for the
 core commands (`ref_attrs.rs`, `ref_xforms.rs`, `ref_scene.rs`).
 
-Differences from the reference in these: `group` goes under the world, not the members' shared parent, because existing tests and
-tools rely on it. `src.t -> dst.r` followed by `dst.r -> src.s` is refused as a cycle, which the reference allows, for the same
+Differences from the reference in these: `src.t -> dst.r` followed by `dst.r -> src.s` is refused as a cycle, which the reference allows, for the same
 reason. `parentMatrix` read through a connection includes `offsetParentMatrix` (getAttr gives the reference's value). Expression
 numbers are all doubles, so `1/2` is 0.5. `parent -add` makes an instance through `instance`. `closestPointOnMesh` leaves
 `parameterU` and `parameterV` at 0. Limits apply when the node computes, so a plug reading a limited channel directly can

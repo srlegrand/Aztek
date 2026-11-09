@@ -472,7 +472,13 @@ fn group_cmd(s: &mut Session, a: &Args, prev: &aztek_ops::RunFn<Session>) -> Cmd
     call.flags.remove("world");
     call.flags.remove("absolute");
     call.flags.remove("relative");
-    prev(s, &call)
+    let made = prev(s, &call)?;
+    // Its pivots sit at the world's origin, wherever the group ends up, unless it was made empty.
+    if !a.bool("empty") {
+        let name = made.as_str().unwrap_or_default().to_string();
+        s.run("xform", json!({"args": [name], "worldSpace": true, "rotatePivot": [0.0, 0.0, 0.0], "scalePivot": [0.0, 0.0, 0.0]}))?;
+    }
+    Ok(made)
 }
 
 fn sets_cmd(s: &mut Session, a: &Args) -> CmdResult {
@@ -1204,7 +1210,7 @@ pub fn register(c: &mut Commands<Session>) {
     extend(
         c,
         "group",
-        vec![f("world", "w", B, "Under the world (the default here)."), f("absolute", "a", B, "Keep world placement (the default)."), f("relative", "r", B, "Keep local placement."), f("useAsGroup", "uag", S, "Accepted for existing scripts.")],
+        vec![f("world", "w", B, "Under the world, not the members' shared parent."), f("absolute", "a", B, "Keep world placement (the default)."), f("relative", "r", B, "Keep local placement."), f("useAsGroup", "uag", S, "Accepted for existing scripts.")],
         group_cmd,
     );
     extend(
