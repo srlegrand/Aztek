@@ -277,7 +277,7 @@ fn run(it: &mut Interp, name: &str, a: &mut Vec<Value>) -> R<Value> {
                 "ov" | "operatingSystemVersion" => Value::Str(std::env::consts::OS.into()),
                 "a" | "application" => Value::Str("aztek".into()),
                 "p" | "product" => Value::Str("Aztek".into()),
-                "b" | "batch" => on(false),
+                "b" | "batch" => on(aztek_core::batch_mode()),
                 "li" | "linux" => on(cfg!(target_os = "linux")),
                 "nt" | "windows" | "win" => on(cfg!(windows)),
                 "mac" | "macOS" => on(cfg!(target_os = "macos")),

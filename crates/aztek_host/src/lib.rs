@@ -3,6 +3,7 @@
 
 pub mod dyn_draw;
 pub mod axis_orient;
+mod batch;
 pub mod camera;
 mod core;
 pub mod ctx_cmds;
@@ -147,6 +148,8 @@ pub extern "C" fn aztek_image_free(data: *mut u8, width: i32, height: i32) {
 pub extern "C" fn aztek_init() {
     with(|_| ());
 }
+
+pub use batch::{aztek_batch, run as batch_run};
 
 /// Runs MEL-style source; returns the last result as JSON.
 #[no_mangle]

@@ -40,7 +40,7 @@ fix below is another guess.
   failing until their items land; found 1.14) Basics suite: `tests/basics.rs` turning the review's probe into tests. Transforms, pivots, freeze and
   reset, duplicate and instance, group and parent, names, undo, units, keys, files, selection, attributes. It
   should fail today on everything listed in phase 1.
-- [ ] 0.4 A `--batch` mode (no window, no Vulkan) that runs `--script` and exits with the script's status, so the
+- [x] 0.4 (09/11/2026: `aztek --batch`, `crates/aztek_host/src/batch.rs`; `tests/batch.rs` runs in process and, with `AZTEK_BIN`, through the real binary with no display, as CI does on Linux and macOS; Windows checks statuses through the binary. `tests/batch/basics.py` carries the basics end to end and grows with each item) A `--batch` mode (no window, no Vulkan) that runs `--script` and exits with the script's status, so the
   basics suite and CI can run Python and MEL end to end without Xvfb. Add it to `build.yml`.
 
 ## Phase 1: basics that are wrong today

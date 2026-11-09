@@ -25,6 +25,7 @@ Requests waiting or in progress, newest detail kept. Move to Done with the date 
 - Menus still missing: UV Pin, Proximity Pin, Interactive Bind Skin, Split UVs, 3D Cut and Sew, Unsmooth, Slice, Hole Punch, Cut Out, Deform Edit submenus, Prune Membership, Relationship Editors, IK/FK Keys, Audio, Cache, Visualize.
 - World symmetry: an object moved after symmetry was set keeps its old pairs.
 - `.mb` files read (low priority).
+- macOS tests: `python_forms` fails on the runner, `xform -q -ro` gives 44.99999999999999 for 45 (to go with PLAN 1.1). `cargo test` stopped at that failure, so CI now runs `--no-fail-fast` to show the rest. The step is `continue-on-error`, so a green macOS job doesn't mean its tests passed: read the log.
 - macOS: the early Apple-silicon build has to be tried on a Mac (viewport through MoltenVK, Cmd and Option in mouse and key handling), then made a condition of a release.
 - Lou: `poseInterpolator`, blendShape on a lattice.
 - Reference gaps: `exportEdits`, `-shd`, painted weights and tweaks on referenced meshes as edits; second reference of a large rig loads slower than the first.
@@ -46,6 +47,12 @@ Requests waiting or in progress, newest detail kept. Move to Done with the date 
   - A missing class or method is a compile error naming it; a small tool turns those into a report for the backlog.
   - First: `MPxCommand`, `MArgDatabase`, `MSyntax`, `MPxNode`, `MPxDeformerNode`, mesh, transform, skin and animation function sets, iterators, math classes. Later: locators and custom drawing, `MPxContext`, `MQtUtil`. Then the dynamics and rendering classes, once the unified solver and Harold have landed.
 
+
+## Session log
+
+- 0.4 `--batch`. Done: no window, no Vulkan, scene, scripts and commands in order, exit status from uncaught errors and `sys.exit`, `about -batch` true, CI on all three platforms.
+  Not done: `basics.rs` can't run through the binary as it stands, since it asserts in Rust; `tests/batch/basics.py` carries the same calls and grows with each item.
+  Why: the suite drives one `Core` in process. CI runs both suites by name and `basics.py` through the binary.
 
 ## Done
 - 08/11/2026 One light model: the viewport's lights render the same in Harold (decay rates, intensity, colour, spot cone and dropoff, ambient, area, volume, default lighting, ambient colour, black background); parity test against the shared formula.

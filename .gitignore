@@ -7,3 +7,4 @@ build/
 _site/
 examples/tools/make_showcase.log
 dist/
+deps/

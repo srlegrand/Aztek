@@ -88,6 +88,10 @@ Checking a real `.ma` with no UI: `cargo run --release -p aztek_scene --example 
 rig is from what the file stored; `--example rig_diff -- a.ma b.ma node.attr=value` compares two files under a pose. Rig files and their
 textures from elsewhere stay out of the repo: tests use small `.ma` text written by hand (`tests/rig_files.rs`).
 
+Checking anything else without a display: `./build/aztek --batch --script file.py` (or `.mel`, `--command mel`, a scene file) has
+no window and no Vulkan, and exits with the script's status. `AZTEK_BIN=$PWD/build/aztek cargo test -p aztek_host --test batch` runs
+its tests through the binary.
+
 Checking the UI without a display: run under Xvfb and look at the pictures.
 
     xvfb-run -a -s "-screen 0 1700x1050x24" ./build/aztek --script scene.mel --screenshot out.png

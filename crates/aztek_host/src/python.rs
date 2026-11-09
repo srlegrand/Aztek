@@ -539,6 +539,43 @@ pub(crate) fn with_lent_session<R>(h: &mut Core, f: impl FnOnce(&mut Core) -> R)
 
 /// Runs Python source in __main__. A lone expression's value is printed as the reference does: # Result: ... #
 /// Must not be called from inside a host borrow: the commands it runs borrow the host themselves.
+/// As `run`, for `aztek --batch`: the script's exit status. An exception nothing caught is 1 and `sys.exit(n)` is n.
+pub fn run_status(src: &str) -> i32 {
+    if let Err(e) = ensure() {
+        let _ = with_core(|core| core.push(format!("# Error: {e} #"), LineKind::Error));
+        return 1;
+    }
+    let r = Python::attach(|py| -> PyResult<i32> {
+        let main = py.import("__main__")?;
+        match main.getattr("_aztek_run")?.call1((src,)) {
+            Ok(_) => Ok(main.getattr("_aztek_run_failed")?.is_truthy()? as i32),
+            Err(e) if e.is_instance_of::<pyo3::exceptions::PySystemExit>(py) => {
+                let code = e.value(py).getattr("code")?;
+                if code.is_none() {
+                    return Ok(0);
+                }
+                match code.extract::<i32>() {
+                    Ok(n) => Ok(n),
+                    Err(_) => {
+                        eprintln!("{code}");
+                        Ok(1)
+                    }
+                }
+            }
+            Err(e) => Err(e),
+        }
+    });
+    let status = match r {
+        Ok(n) => n,
+        Err(e) => {
+            let _ = with_core(|core| core.push(format!("# Error: {e} #"), LineKind::Error));
+            1
+        }
+    };
+    let _ = with_core(|core| core.version += 1);
+    status
+}
+
 pub fn run(src: &str) {
     if let Err(e) = ensure() {
         with_core(|core| core.push(format!("# Error: {e} #"), LineKind::Error));

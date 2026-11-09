@@ -857,7 +857,7 @@ fn about(_s: &mut Session, a: &Args) -> CmdResult {
     } else if a.bool("macOS") {
         json!(mac)
     } else if a.bool("batch") {
-        json!(false)
+        json!(aztek_core::batch_mode())
     } else if a.bool("is64") {
         json!(true)
     } else if a.bool("uiLanguage") || a.bool("codeset") {
