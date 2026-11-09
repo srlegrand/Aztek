@@ -505,7 +505,7 @@ impl NodeBehavior for RigidNode {
         let (x, y, z) = rot.to_euler(glam::EulerRot::ZYX);
         // Rotate order xyz applies x first: R = Rz Ry Rx.
         d.set_output(t, PlugValue::Vec3(tr));
-        d.set_output(r, PlugValue::Vec3(DVec3::new(z.to_degrees(), y.to_degrees(), x.to_degrees())));
+        d.set_output(r, PlugValue::Vec3(DVec3::new(z, y, x)));
     }
     fn as_any(&self) -> &dyn Any {
         self

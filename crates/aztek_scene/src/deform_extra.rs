@@ -877,7 +877,7 @@ impl NodeBehavior for CurveWarp {
         let warp = Warp::new(line, DVec3::AXES[axis]);
         let extent = size[axis].max(1e-9);
         let run = if d.bool(CW_KEEP) { extent } else { warp.length() };
-        let (ls, off, twist, roll) = (d.float(CW_LENGTH), d.float(CW_OFFSET), d.float(CW_TWIST).to_radians(), d.float(CW_ROLL).to_radians());
+        let (ls, off, twist, roll) = (d.float(CW_LENGTH), d.float(CW_OFFSET), d.float(CW_TWIST), d.float(CW_ROLL));
         let mid = (lo + hi) * 0.5;
         let along = DVec3::AXES[axis];
         deform_world(d, &input, |_, at| {

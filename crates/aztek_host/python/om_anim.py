@@ -20,7 +20,8 @@ from aztek.api.OpenMaya import (
     _node_object,
 )
 
-_cmds = _sys.modules["aztek.cmds"]
+# The API's commands: in stored units, as its values are.
+from aztek.api.OpenMaya import _cmds
 
 
 class MFnSkinCluster(MFnDependencyNode):
@@ -299,12 +300,12 @@ class MFnAnimCurve(MFnDependencyNode):
     def _in(self, v):
         import math
 
-        return math.degrees(v) if self._is_angle() else float(v)
+        return float(v)
 
     def _out(self, v):
         import math
 
-        return math.radians(v) if self._is_angle() else float(v)
+        return float(v)
 
     @property
     def animCurveType(self):
@@ -425,4 +426,4 @@ class MFnAnimCurve(MFnDependencyNode):
 def _math_plug_value(plug, value):
     import math
 
-    return math.degrees(value) if plug._is_angle() else float(value)
+    return float(value)

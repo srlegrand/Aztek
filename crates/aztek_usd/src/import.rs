@@ -291,7 +291,9 @@ fn read_xform(c: &mut Ctx, prim: &Prim, node: NodeId) {
             }
             let a = prim.attribute(op.as_str());
             let times = c.sample_times(a.time_sample_times().unwrap_or_default());
-            let mut read = |t: Option<f64>| d3(&a, t).unwrap_or(DVec3::ZERO);
+            // A stage's rotations are degrees.
+            let angular = order_of(op).is_some() || op == "xformOp:rotateXYZ:rotateAxis";
+            let mut read = |t: Option<f64>| d3(&a, t).unwrap_or(DVec3::ZERO) * if angular { std::f64::consts::PI / 180.0 } else { 1.0 };
             let attr = if let Some(ord) = order_of(op) {
                 set_attr(c.g(), node, "rotateOrder", PlugValue::Int(ord_index(ord)));
                 "rotate"

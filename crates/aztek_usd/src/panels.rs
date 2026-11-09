@@ -25,9 +25,9 @@ pub fn trs_of(prim: &Prim, time: f64) -> (DVec3, DVec3, DVec3) {
     let e = match authored {
         Some((a, i)) => {
             let near = a.get_at::<openusd::gf::Vec3f>(TimeCode::new(time)).ok().flatten().map_or(DVec3::ZERO, |v| DVec3::new(v.x as f64, v.y as f64, v.z as f64));
-            euler_near(&r, RotateOrder::from_index(i as i64), near)
+            euler_near(&r, RotateOrder::from_index(i as i64), near * (std::f64::consts::PI / 180.0)) * (180.0 / std::f64::consts::PI)
         }
-        None => aztek_scene::transform::matrix_to_euler(&r, RotateOrder::Xyz),
+        None => aztek_scene::transform::matrix_to_euler(&r, RotateOrder::Xyz) * (180.0 / std::f64::consts::PI),
     };
     (t, e, s)
 }
@@ -219,7 +219,7 @@ pub fn virtual_set(s: &mut Session, t: &Target, attr: &str, v: &J, time: f64) ->
         }
         // Rebuilt the way set_local reads it apart: an op stack's order stands.
         let order = crate::prims::rotation_order(&prim);
-        let m = glam::DMat4::from_translation(tr) * glam::DMat4::from_mat3(glam::DMat3::from_mat4(aztek_scene::transform::euler_to_matrix(ro, order))) * glam::DMat4::from_scale(sc);
+        let m = glam::DMat4::from_translation(tr) * glam::DMat4::from_mat3(glam::DMat3::from_mat4(aztek_scene::transform::euler_to_matrix(ro * (std::f64::consts::PI / 180.0), order))) * glam::DMat4::from_scale(sc);
         entry.edit(s, "setAttr", |st| {
             let p = st.prim(path.clone()).map_err(|e| e.to_string())?;
             set_local(&p, &m, time)?;

@@ -339,7 +339,7 @@ fn bevel_with(a: &Args, m: &mut Mesh, picked: &Ids, sym: Option<&SymmetryMap>, f
         segments: a.int("segments", 1).max(1) as i32,
         profile: a.float("profile", 0.5),
         clamp: a.bool("clamp"),
-        smoothing_angle: a.float("smoothingAngle", 30.0),
+        smoothing_angle: a.float("smoothingAngle", 30_f64.to_radians()).to_degrees(),
         symmetry: sym,
         applied_offset: Some(&applied),
     };
@@ -818,7 +818,7 @@ fn bridge_options(a: &Args) -> BridgeOptions {
                     offset: a.int("bridgeOffset", 0) as i32,
                     reverse_source: a.bool("directionSource"),
                     reverse_target: a.bool("directionTarget"),
-                    twist: a.float("twist", 0.0),
+                    twist: a.float("twist", 0.0).to_degrees(),
                     taper: a.float("taper", 1.0),
                     bias: a.float("bias", 0.5),
                     profile_factor: a.float("profileFactor", 0.0),
@@ -830,7 +830,7 @@ fn bridge_options(a: &Args) -> BridgeOptions {
                     weld_ends: a.bool("weldEnds"),
                     weld_tolerance: a.float("weldTolerance", 0.35),
                     relax: a.int("relax", 0).max(0) as i32,
-                    smoothing_angle: a.float("smoothingAngle", 30.0),
+                    smoothing_angle: a.float("smoothingAngle", 30_f64.to_radians()).to_degrees(),
                     merge: a.bool("merge"),
                     merge_factor: a.float("mergeFactor", 0.5),
                     connect: match a.string("connect", "pairs").as_str() {

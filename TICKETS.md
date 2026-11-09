@@ -26,11 +26,10 @@ Requests waiting or in progress, newest detail kept. Move to Done with the date 
 - Menus still missing: UV Pin, Proximity Pin, Interactive Bind Skin, Split UVs, 3D Cut and Sew, Unsmooth, Slice, Hole Punch, Cut Out, Deform Edit submenus, Prune Membership, Relationship Editors, IK/FK Keys, Audio, Cache, Visualize.
 - World symmetry: an object moved after symmetry was set keeps its old pairs.
 - `.mb` files read (low priority).
-- macOS tests: `python_forms` fails on the runner, `xform -q -ro` gives 44.99999999999999 for 45 (to go with PLAN 1.1). `cargo test` stopped at that failure, so CI now runs `--no-fail-fast` to show the rest. The step is `continue-on-error`, so a green macOS job doesn't mean its tests passed: read the log.
+- macOS tests: `python_forms` failed on the runner with `xform -q -ro` at 44.99999999999999 for 45; values shown in degrees are now tidied, so see if it passes (09/11/2026). `cargo test` stopped at that failure, so CI now runs `--no-fail-fast` to show the rest. The step is `continue-on-error`, so a green macOS job doesn't mean its tests passed: read the log.
 - macOS: the early Apple-silicon build has to be tried on a Mac (viewport through MoltenVK, Cmd and Option in mouse and key handling), then made a condition of a release.
 - Lou: `poseInterpolator`, blendShape on a lattice.
 - Reference gaps: `exportEdits`, `-shd`, painted weights and tweaks on referenced meshes as edits; second reference of a large rig loads slower than the first.
-- `conversionFactor` written normalised (0.0436 saves as 2.5), which the reference would read differently.
 
 - USD gaps: MaterialX draws grey, subdivision meshes draw their hull, no component selection in a stage, time samples not on the time slider or in the Graph Editor, Outliner collections.
 - polyMergeUV, polyForceUV with no UV selection do nothing where the reference may still add a node: check.
@@ -60,6 +59,9 @@ Requests waiting or in progress, newest detail kept. Move to Done with the date 
 - 0.2 Fixture harness. Done: `reference_fixtures.rs` compares 99 calls with hand-written readings, reports by area, and fails on a new mismatch or a stale entry on the open list (44 entries at the start).
   Not done: no comparison yet for attribute, hotkey or posed fixtures; 6 calls are skipped with no reading.
   Why: nothing captured to compare against, and writing those comparisons blind would guess at the fixture shapes' use.
+- 1.1 Real units. Done: centimetres and radians stored, conversion at commands, `.ma`, panels, expressions, Python API and USD, `unitConversion` nodes, time units, audit in PARITY.md.
+  Not done: three readings wait on a capture (matrix queries, primitive default sizes, `polyEvaluate -b`). The Channel Box check under Xvfb comes after 1.14 with its own item.
+  Why: the reference has to answer those; the Channel Box works on what it shows, which is now in the current unit.
 
 ## Done
 - 08/11/2026 One light model: the viewport's lights render the same in Harold (decay rates, intensity, colour, spot cone and dropoff, ambient, area, volume, default lighting, ambient colour, black background); parity test against the shared formula.

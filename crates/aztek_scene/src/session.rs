@@ -181,6 +181,7 @@ impl Session {
         crate::dyn_particles::register(&mut s.commands);
         // Last: history node types take their attributes from the commands registered above.
         crate::history::register(&mut s.commands);
+        crate::unit_tables::tag_commands(&mut s.commands);
         crate::instancing::install(&mut s.graph);
         crate::duplicate::install(&mut s.graph);
         crate::anim::install(&mut s.graph);

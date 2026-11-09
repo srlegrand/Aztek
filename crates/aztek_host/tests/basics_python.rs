@@ -46,7 +46,6 @@ fn poly_evaluate_dict() {
 }
 
 #[test]
-#[ignore = "PLAN 1.1: units convert through maya.cmds"]
 fn units_through_python() {
     let _one = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
     let out = run("cmds.polyCube()\ncmds.move(100, 0, 0)\ncmds.rotate(0, 90, 0)\ncmds.currentUnit(l='m', a='rad')\nprint(round(cmds.getAttr('pCube1.tx'), 4))\nprint(round(cmds.getAttr('pCube1.ry'), 4))\ncmds.currentUnit(l='cm', a='deg')");

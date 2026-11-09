@@ -224,7 +224,9 @@ pub fn anim_curves(core: &Core, arg: &str) -> Value {
                     let f = anim::fps() / 3.0;
                     let (ix, iy) = k.tangent_xy(i, false);
                     let (ox, oy) = k.tangent_xy(i, true);
-                    json!([key.t, key.v, si, so, key.itt.name(), key.ott.name(), key.breakdown, ix * f, iy / 3.0, ox * f, oy / 3.0, key.tan_lock, key.weight_lock])
+                    let unit = aztek_ops::units::factor(aztek_scene::anim::curve_unit(g, c));
+                    let (key_v, si, so, iy, oy) = (key.v / unit, si / unit, so / unit, iy / unit, oy / unit);
+                    json!([key.t, key_v, si, so, key.itt.name(), key.ott.name(), key.breakdown, ix * f, iy / 3.0, ox * f, oy / 3.0, key.tan_lock, key.weight_lock])
                 })
                 .collect();
             let mut samples = Vec::new();
@@ -260,6 +262,13 @@ pub fn anim_curves(core: &Core, arg: &str) -> Value {
 }
 
 /// Channels of a node as the channel box lists them: keyable scalar attributes, vectors split per axis.
+/// A value as the panels show it: in the current unit of what it measures.
+fn shown_json(a: &aztek_scene::plug::AttrDef, v: &PlugValue) -> Value {
+    let mut j = value_json(v);
+    aztek_ops::units::json_to_user(a.unit, &mut j);
+    j
+}
+
 fn channels(g: &Graph, id: NodeId, all_inputs: bool) -> Vec<Value> {
     let Some(n) = g.node(id) else { return Vec::new() };
     let path = g.path(id);
@@ -278,7 +287,7 @@ fn channels(g: &Graph, id: NodeId, all_inputs: bool) -> Vec<Value> {
                     "plug": format!("{path}.{alias}"),
                     "nice": alias,
                     "type": "float",
-                    "value": n.data().element(i, e.element).map_or(0.0, |v| v.as_float()),
+                    "value": n.data().element(i, e.element).map_or(0.0, |v| v.as_float()) / aztek_ops::units::factor(a.unit),
                     "enum": [],
                     "connected": g.source(&e).is_some(),
                     "state": channel_state(g, &e),
@@ -307,7 +316,7 @@ fn channels(g: &Graph, id: NodeId, all_inputs: bool) -> Vec<Value> {
                         "plug": format!("{path}.{child}"),
                         "nice": format!("{} {}", attr_nice(a), if a.has(flags::COLOR) { ["R", "G", "B"][k] } else { ["X", "Y", "Z"][k] }),
                         "type": "float",
-                        "value": v[k],
+                        "value": v[k] / aztek_ops::units::factor(a.unit),
                         "connected": g.source(&aztek_scene::plug::PlugRef::new(id, i as i32)).is_some(),
                         "state": channel_state(g, &PlugRef::component(id, i as i32, k as i32)),
                     }));
@@ -319,7 +328,7 @@ fn channels(g: &Graph, id: NodeId, all_inputs: bool) -> Vec<Value> {
                     "plug": format!("{path}.{}", a.name),
                     "nice": attr_nice(a),
                     "type": type_name(t),
-                    "value": value_json(v),
+                    "value": shown_json(a, v),
                     "enum": a.enum_names,
                     "connected": g.source(&aztek_scene::plug::PlugRef::new(id, i as i32)).is_some(),
                     "state": channel_state(g, &PlugRef::new(id, i as i32)),
@@ -382,7 +391,7 @@ fn node_attrs(g: &Graph, id: NodeId) -> Value {
             "plug": format!("{path}.{}", a.name),
             "nice": attr_nice(a),
             "type": type_name(a.ty),
-            "value": value_json(&aztek_scene::draw_style::through_layer(g, &aztek_scene::plug::PlugRef::new(id, i as i32)).unwrap_or_else(|| n.value(i).clone())),
+            "value": shown_json(a, &aztek_scene::draw_style::through_layer(g, &aztek_scene::plug::PlugRef::new(id, i as i32)).unwrap_or_else(|| n.value(i).clone())),
             "enum": a.enum_names,
             "children": a.child_names,
             "output": a.flags & flags::OUTPUT != 0,

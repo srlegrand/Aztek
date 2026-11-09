@@ -77,7 +77,8 @@ fn copy_attr() {
     run(&mut s, "polyCube", json!({"name": "c"}));
     run(&mut s, "connectAttr", json!({"args": ["c.rx", "a.sx"]}));
     run(&mut s, "copyAttr", json!({"args": ["a", "b"], "ic": true, "at": ["scale"]}));
-    assert_eq!(run(&mut s, "connectionInfo", json!({"args": ["b.sx"], "sfd": true})), "c.rotateX");
+    // An angle driving a plain number goes through a conversion node, as in the reference.
+    assert_eq!(run(&mut s, "connectionInfo", json!({"args": ["b.sx"], "sfd": true})), "unitConversion1.output");
     assert_eq!(run(&mut s, "connectionInfo", json!({"args": ["a.sx"], "sfd": true})), "");
 }
 

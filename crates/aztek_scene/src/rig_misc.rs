@@ -438,7 +438,7 @@ fn inherit_transform(s: &mut Session, a: &Args) -> CmdResult {
                 let (sc, q, t) = local.to_scale_rotation_translation();
                 let euler = q.to_euler(glam::EulerRot::ZYX);
                 g.set_value(plug(id, Transform::TRANSLATE), PlugValue::Vec3(t))?;
-                g.set_value(plug(id, Transform::ROTATE), PlugValue::Vec3(DVec3::new(euler.2, euler.1, euler.0) * (180.0 / std::f64::consts::PI)))?;
+                g.set_value(plug(id, Transform::ROTATE), PlugValue::Vec3(DVec3::new(euler.2, euler.1, euler.0)))?;
                 g.set_value(plug(id, Transform::SCALE), PlugValue::Vec3(sc))?;
             }
         }

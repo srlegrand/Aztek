@@ -250,7 +250,6 @@ fn undo_and_redo() {
 // Units
 
 #[test]
-#[ignore = "PLAN 1.1: linear units convert"]
 fn linear_units_convert() {
     let mut c = core();
     mel(&mut c, "polyCube; move 100 0 0;");
@@ -269,7 +268,6 @@ fn linear_units_convert() {
 }
 
 #[test]
-#[ignore = "PLAN 1.1: angular units convert"]
 fn angular_units_convert() {
     let mut c = core();
     mel(&mut c, "polyCube; rotate 0 90 0;");

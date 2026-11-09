@@ -85,6 +85,7 @@ impl Core {
         #[cfg(feature = "python")]
         crate::python::register_commands(&mut c.s);
         crate::native_plugin::register_commands(&mut c.s);
+        aztek_scene::unit_tables::tag_commands(&mut c.s.commands);
         c
     }
 
@@ -245,6 +246,11 @@ impl Core {
     pub fn exec(&mut self, name: &str, call: Value) -> Result<Value, String> {
         // Echoed as the reference does: short flag names.
         let mut shown = call.clone();
+        if aztek_ops::units::in_stored() {
+            if let Some(def) = self.s.commands.find(name) {
+                aztek_ops::in_user_units(def, &mut shown);
+            }
+        }
         if let (Some(def), Some(o)) = (self.s.commands.find(name), shown.as_object_mut()) {
             let keys: Vec<String> = o.keys().cloned().collect();
             for k in keys {
@@ -304,12 +310,12 @@ impl Core {
     /// Runs MEL source: echoes each statement and prints its result. An error goes to the history, ends the run and
     /// gives null. Otherwise returns the value of the last statement.
     pub fn mel(&mut self, src: &str) -> Value {
-        mel::run(self, src).unwrap_or(Value::Null)
+        aztek_ops::units::as_script(|| mel::run(self, src)).unwrap_or(Value::Null)
     }
 
     /// As `mel`, with the error back to the caller as well.
     pub fn mel_checked(&mut self, src: &str) -> Result<Value, String> {
-        mel::run(self, src)
+        aztek_ops::units::as_script(|| mel::run(self, src))
     }
 
     /// One command from MEL: no history lines; the interpreter reports the result or error as fits the statement.

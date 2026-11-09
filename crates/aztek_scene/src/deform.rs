@@ -201,7 +201,7 @@ fn nonlinear(kind: usize, a: f64, b: f64, c: f64, d: f64, e: f64, lo: f64, hi: f
         1 => {
             // twist: start angle a at the low bound to end angle b at the high one, degrees, about Y.
             let t = ((p.y - lo) / span).clamp(0.0, 1.0);
-            let ang = (a + (b - a) * t).to_radians();
+            let ang = a + (b - a) * t;
             let (s, co) = ang.sin_cos();
             DVec3::new(p.x * co + p.z * s, p.y, -p.x * s + p.z * co)
         }

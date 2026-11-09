@@ -335,9 +335,10 @@ pub(crate) fn xform_sample(g: &mut Graph, x: NodeId, world: bool, prim: &str, ti
     t.put(prim, "xformOp:translate:rotatePivotTranslate", "double3", time, d3(a));
     let a = v(g, "rotatePivot");
     t.put(prim, "xformOp:translate:rotatePivot", "double3", time, d3(a));
-    let a = v(g, "rotate");
+    // A stage's rotations are degrees.
+    let a = v(g, "rotate") * (180.0 / std::f64::consts::PI);
     t.put(prim, &rot_name, "float3", time, f3(a));
-    let a = v(g, "rotateAxis");
+    let a = v(g, "rotateAxis") * (180.0 / std::f64::consts::PI);
     t.put(prim, "xformOp:rotateXYZ:rotateAxis", "float3", time, f3(a));
     let a = v(g, "scalePivotTranslate");
     t.put(prim, "xformOp:translate:scalePivotTranslate", "double3", time, d3(a));

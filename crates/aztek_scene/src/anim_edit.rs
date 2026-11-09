@@ -739,6 +739,7 @@ pub fn register(c: &mut Commands<Session>) {
                 let r = (|| -> CmdResult<()> {
                     for p in plugs {
                         let v = match a.get("value").and_then(Value::as_f64) {
+                            Some(v) if aztek_ops::units::user_call() => aztek_ops::units::to_stored(g.attr(&p).unit, v),
                             Some(v) => v,
                             None => scalar(g, &p),
                         };

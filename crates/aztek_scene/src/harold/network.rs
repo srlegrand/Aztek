@@ -144,13 +144,13 @@ impl NetBuilder<'_> {
         Place2d {
             coverage: two(g, "coverage", 1.0),
             translate_frame: two(g, "translateFrame", 0.0),
-            rotate_frame: get_f(g, id, "rotateFrame", 0.0) as f32,
+            rotate_frame: get_f(g, id, "rotateFrame", 0.0).to_degrees() as f32,
             mirror: [get_b(g, id, "mirrorU", false), get_b(g, id, "mirrorV", false)],
             wrap: [get_b(g, id, "wrapU", true), get_b(g, id, "wrapV", true)],
             stagger: get_b(g, id, "stagger", false),
             repeat: two(g, "repeatUV", 1.0),
             offset: two(g, "offset", 0.0),
-            rotate_uv: get_f(g, id, "rotateUV", 0.0) as f32,
+            rotate_uv: get_f(g, id, "rotateUV", 0.0).to_degrees() as f32,
             noise: two(g, "noiseUV", 0.0),
         }
     }

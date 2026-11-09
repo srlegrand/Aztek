@@ -1432,3 +1432,12 @@ fn register_edit_keys(c: &mut Commands<Session>) {
         .flag(f("delete", "del", ArgType::Bool, "Remove them.")),
     );
 }
+
+/// What a curve's values measure, by its type: animCurveTA and animCurveUA hold radians, TL and UL centimetres.
+pub fn curve_unit(g: &Graph, c: NodeId) -> aztek_ops::units::Unit {
+    match g.node(c).map(|n| n.ty().name.chars().last()) {
+        Some(Some('A')) => aztek_ops::units::Unit::Angle,
+        Some(Some('L')) => aztek_ops::units::Unit::Linear,
+        _ => aztek_ops::units::Unit::None,
+    }
+}

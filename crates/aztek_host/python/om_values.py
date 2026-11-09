@@ -1,5 +1,6 @@
 # aztek.api.OpenMaya, value classes: vectors, points, matrices, rotations, units, arrays. No scene access here.
 # The reference's conventions: row vectors (p * m), matrices flat row by row with the translation in elements 12, 13, 14.
+from json import loads as _json_loads
 import math as _math
 import struct as _struct
 
@@ -1320,11 +1321,17 @@ class MAngle:
 
     @staticmethod
     def uiUnit():
-        return MAngle._ui
+        import _aztek
+
+        name = _json_loads(_aztek.call("currentUnit", "[]", '{"query": true, "queried": ["angle"]}'))
+        return {"deg": MAngle.kDegrees, "rad": MAngle.kRadians, "min": MAngle.kAngMinutes, "sec": MAngle.kAngSeconds}.get(name, MAngle.kDegrees)
 
     @staticmethod
     def setUIUnit(unit):
-        MAngle._ui = unit
+        import _aztek
+
+        name = {MAngle.kDegrees: "deg", MAngle.kRadians: "rad", MAngle.kAngMinutes: "min", MAngle.kAngSeconds: "sec"}[unit]
+        _aztek.call("currentUnit", "[]", '{"angle": "%s"}' % name)
 
     @staticmethod
     def internalUnit():
@@ -1332,11 +1339,11 @@ class MAngle:
 
     @staticmethod
     def internalToUI(v):
-        return v / MAngle._to_rad[MAngle._ui]
+        return v / MAngle._to_rad[MAngle.uiUnit()]
 
     @staticmethod
     def uiToInternal(v):
-        return v * MAngle._to_rad[MAngle._ui]
+        return v * MAngle._to_rad[MAngle.uiUnit()]
 
     def __repr__(self):
         return "aztek.api.OpenMaya.MAngle(%s, %d)" % (_num(self.value), self.unit)
@@ -1350,6 +1357,7 @@ class MDistance:
     kMiles = 4
     kMillimeters = 5
     kCentimeters = 6
+    _UNIT_NAMES = {"in": 1, "ft": 2, "yd": 3, "mi": 4, "mm": 5, "cm": 6, "km": 7, "m": 8}
     kKilometers = 7
     kMeters = 8
     kLast = 9
@@ -1391,11 +1399,17 @@ class MDistance:
 
     @staticmethod
     def uiUnit():
-        return MDistance._ui
+        import _aztek
+
+        name = _json_loads(_aztek.call("currentUnit", "[]", '{"query": true, "queried": ["linear"]}'))
+        return MDistance._UNIT_NAMES.get(name, MDistance.kCentimeters)
 
     @staticmethod
     def setUIUnit(unit):
-        MDistance._ui = unit
+        import _aztek
+
+        name = next(n for n, u in MDistance._UNIT_NAMES.items() if u == unit)
+        _aztek.call("currentUnit", "[]", '{"linear": "%s"}' % name)
 
     @staticmethod
     def internalUnit():
@@ -1403,11 +1417,11 @@ class MDistance:
 
     @staticmethod
     def internalToUI(v):
-        return v / MDistance._to_cm[MDistance._ui]
+        return v / MDistance._to_cm[MDistance.uiUnit()]
 
     @staticmethod
     def uiToInternal(v):
-        return v * MDistance._to_cm[MDistance._ui]
+        return v * MDistance._to_cm[MDistance.uiUnit()]
 
     def __repr__(self):
         return "aztek.api.OpenMaya.MDistance(%s, %d)" % (_num(self.value), self.unit)

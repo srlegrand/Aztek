@@ -558,6 +558,8 @@ pub extern "C" fn aztek_view_render(id: i32) {
 /// 1 shift, 2 ctrl, 4 alt; buttons the held set (bit 1 left, 2 middle, 4 right). Returns 1 to redraw.
 #[no_mangle]
 pub extern "C" fn aztek_view_mouse(id: i32, kind: i32, button: i32, x: f64, y: f64, mods: i32, buttons: i32) -> i32 {
+    // The viewport works in what's stored; what it echoes goes back to the current units.
+    aztek_ops::units::stored(|| {
     with(|h| {
         let Host { core, views, .. } = h;
         match views.get_mut(&id) {
@@ -565,14 +567,18 @@ pub extern "C" fn aztek_view_mouse(id: i32, kind: i32, button: i32, x: f64, y: f
             None => 0,
         }
     })
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn aztek_view_wheel(id: i32, delta: f64) {
+    // The viewport works in what's stored; what it echoes goes back to the current units.
+    aztek_ops::units::stored(|| {
     with(|h| {
         if let Some(v) = h.views.get_mut(&id) {
             v.wheel(&mut h.core, delta);
         }
+    })
     })
 }
 
@@ -580,6 +586,8 @@ pub extern "C" fn aztek_view_wheel(id: i32, delta: f64) {
 /// "frame" ("selection" or "all"), "home", "dpr". value is JSON.
 #[no_mangle]
 pub extern "C" fn aztek_view_set(id: i32, key: *const c_char, value: *const c_char) {
+    // The viewport works in what's stored; what it echoes goes back to the current units.
+    aztek_ops::units::stored(|| {
     let key = cstr(key);
     let v: Value = serde_json::from_str(&cstr(value)).unwrap_or(Value::Null);
     with(|h| {
@@ -591,6 +599,7 @@ pub extern "C" fn aztek_view_set(id: i32, key: *const c_char, value: *const c_ch
         } else if let Some(view) = views.get_mut(&id) {
             view.set(core, &key, &v);
         }
+    })
     })
 }
 

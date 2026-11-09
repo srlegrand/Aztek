@@ -555,7 +555,7 @@ pub(crate) fn extrude_surface(profile: &NurbsCurve, path: Option<&NurbsCurve>, o
     };
     Some(NurbsSurface::from_curves(profile, &way, |i, j| {
         let s = ((params[j] - lo) / (hi - lo).max(1e-12)).clamp(0.0, 1.0);
-        let local = DQuat::from_axis_angle(axis, o.rotation.to_radians() * s) * (lift * (profile.cvs[i] - center) * (1.0 + (o.scale - 1.0) * s));
+        let local = DQuat::from_axis_angle(axis, o.rotation * s) * (lift * (profile.cvs[i] - center) * (1.0 + (o.scale - 1.0) * s));
         let base = if o.fixed_path && path.is_some() { way.cvs[j] } else { center + way.cvs[j] - q0 };
         base + turns[j] * local
     }))
@@ -709,7 +709,7 @@ impl NodeBehavior for MakeNode {
         match self.kind {
             Make::Sphere => {
                 let (r, ssw, esw, deg, sections, spans) = round(d);
-                let s = nurbs::sphere_surface(ssw, esw, sections, spans, deg);
+                let s = nurbs::sphere_surface(ssw.to_degrees(), esw.to_degrees(), sections, spans, deg);
                 let m = place * DMat4::from_scale(DVec3::splat(r));
                 d.set_output(M_OUT, to_value(s.transformed(&m)));
             }
@@ -718,17 +718,17 @@ impl NodeBehavior for MakeNode {
                 let half = r * d.float(M_P + 8) * 0.5;
                 let top = if self.kind == Make::Cone { 0.0 } else { r };
                 let profile = NurbsCurve::line(DVec3::new(r, -half, 0.0), DVec3::new(top, half, 0.0), spans, deg);
-                let s = nurbs::revolved(&profile, DVec3::Y, DVec3::ZERO, ssw, esw, sections, deg);
+                let s = nurbs::revolved(&profile, DVec3::Y, DVec3::ZERO, ssw.to_degrees(), esw.to_degrees(), sections, deg);
                 d.set_output(M_OUT, to_value(s.transformed(&place)));
             }
             Make::Torus => {
                 let (r, ssw, esw, deg, sections, spans) = round(d);
                 let (minor, msw) = (r * d.float(M_P + 8), d.float(M_P + 9));
-                let mut profile = nurbs::unit_arc(0.0, msw, spans.max(3), deg);
+                let mut profile = nurbs::unit_arc(0.0, msw.to_degrees(), spans.max(3), deg);
                 for p in profile.cvs.iter_mut() {
                     *p = DVec3::new(r + minor * p.x, minor * p.y, 0.0);
                 }
-                let s = nurbs::revolved(&profile, DVec3::Y, DVec3::ZERO, ssw, esw, sections, deg);
+                let s = nurbs::revolved(&profile, DVec3::Y, DVec3::ZERO, ssw.to_degrees(), esw.to_degrees(), sections, deg);
                 d.set_output(M_OUT, to_value(s.transformed(&place)));
             }
             Make::Plane => {
@@ -1539,7 +1539,7 @@ fn round_settings(a: &Args, spans: i64) -> Vec<(usize, PlugValue)> {
     set.extend([
         (M_P, PlugValue::Float(a.float("radius", 1.0))),
         (M_P + 1, PlugValue::Float(a.float("startSweep", 0.0))),
-        (M_P + 2, PlugValue::Float(a.float("endSweep", 360.0))),
+        (M_P + 2, PlugValue::Float(a.float("endSweep", std::f64::consts::TAU))),
         (M_P + 3, PlugValue::Int(a.int("degree", 3))),
         (M_P + 4, PlugValue::Int(a.int("sections", 8))),
         (M_P + 5, PlugValue::Int(a.int("spans", spans))),
@@ -1666,7 +1666,7 @@ pub fn register(c: &mut Commands<Session>) {
         round_flags(Cmd::new("torus", "Create a NURBS torus with a makeNurbTorus node. Returns [nurbsTorus1, makeNurbTorus1].", |s, a| {
             let mut set = round_settings(a, 4);
             set.push((M_P + 8, PlugValue::Float(a.float("heightRatio", 0.5))));
-            set.push((M_P + 9, PlugValue::Float(a.float("minorSweep", 360.0))));
+            set.push((M_P + 9, PlugValue::Float(a.float("minorSweep", std::f64::consts::TAU))));
             make_primitive(s, a, "makeNurbTorus", "nurbsTorus1", "makeNurbTorus1", &set)
         }))
         .flag(f("minorSweep", "msw", ArgType::Float, "Degrees of the tube's section (360).")),

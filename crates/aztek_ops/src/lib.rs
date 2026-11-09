@@ -9,6 +9,8 @@ use std::sync::Arc;
 
 use serde_json::{json, Map, Value};
 
+pub mod units;
+
 /// A command failing with a message for the user.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum CommandError {
@@ -64,6 +66,8 @@ pub struct FlagDef {
     /// MEL: tokens each use of the flag takes, for multi-use flags (`-tv joint1 0.5 -tv joint2 0.5`); values gather
     /// into one flat list. 0 reads the flag by its type.
     pub arity: u8,
+    /// What the flag's numbers measure: a script gives them in the current unit.
+    pub unit: units::Unit,
 }
 
 impl FlagDef {
@@ -79,6 +83,7 @@ impl FlagDef {
             min: None,
             max: None,
             arity: 0,
+            unit: units::Unit::None,
         }
     }
     /// A multi-use flag taking n values per use.
@@ -196,6 +201,10 @@ pub struct CommandDef<C> {
     pub scripted: bool,
     /// Takes everything as positional arguments in order, flags included: a plug-in command with no syntax.
     pub raw_args: bool,
+    /// What numbers among the positional arguments measure (`move 1 0 0`): a script gives them in the current unit.
+    pub positional_unit: units::Unit,
+    /// What the numbers in the result measure.
+    pub result_unit: units::Unit,
 }
 
 impl<C> Clone for CommandDef<C> {
@@ -204,6 +213,8 @@ impl<C> Clone for CommandDef<C> {
             name: self.name.clone(),
             doc: self.doc.clone(),
             positional_doc: self.positional_doc.clone(),
+            positional_unit: self.positional_unit,
+            result_unit: self.result_unit,
             flags: self.flags.clone(),
             undoable: self.undoable,
             run: self.run.clone(),
@@ -226,6 +237,8 @@ impl<C> CommandDef<C> {
             name: name.into(),
             doc: doc.into(),
             positional_doc: String::new(),
+            positional_unit: units::Unit::None,
+            result_unit: units::Unit::None,
             flags: Vec::new(),
             undoable: true,
             run: Arc::new(run),
@@ -320,6 +333,9 @@ impl<C> Commands<C> {
     }
     pub fn find(&self, name: &str) -> Option<&CommandDef<C>> {
         self.registry.get(name)
+    }
+    pub fn find_mut(&mut self, name: &str) -> Option<&mut CommandDef<C>> {
+        self.registry.get_mut(name)
     }
     pub fn all(&self) -> impl Iterator<Item = &CommandDef<C>> {
         self.registry.values()
@@ -524,6 +540,13 @@ pub fn execute<C: CommandHost>(
         ctx.top_level_started(name, call, source);
     }
 
+    // A script's numbers are in the current units; what the command stores is in centimetres and radians.
+    let (user, unit_depth, unit_was) = units::enter();
+    let mut args = args;
+    let mut result_unit = def.result_unit;
+    if user {
+        result_unit = user_units_in(&def, call, &mut args);
+    }
     let c = ctx.commands_mut();
     c.depth += 1;
     c.running.push(args.clone());
@@ -536,6 +559,13 @@ pub fn execute<C: CommandHost>(
     } else {
         (def.run)(ctx, &args)
     };
+    units::leave(unit_depth, unit_was);
+    let result = result.map(|mut v| {
+        if user {
+            units::json_to_user(result_unit, &mut v);
+        }
+        v
+    });
     let c = ctx.commands_mut();
     c.running.pop();
     c.depth -= 1;
@@ -555,6 +585,64 @@ pub fn execute<C: CommandHost>(
 }
 
 /// `execute` from a script.
+/// Converts what the call gave (not defaults: they are already stored values) and says what its result measures: the
+/// command's own unit or, for a query, the unit of the flag asked about.
+fn user_units_in<C>(def: &CommandDef<C>, call: &Value, args: &mut Args) -> units::Unit {
+    let querying = args.flags.get("query").is_some_and(|q| q.as_bool() == Some(true));
+    let mut result = def.result_unit;
+    // A query names what it asks in `queried`, or as a flag.
+    if querying {
+        if let Some(list) = args.flags.get("queried").and_then(Value::as_array) {
+            for q in list.iter().filter_map(Value::as_str) {
+                if let Some(f) = def.flags.iter().find(|f| f.name == q || f.short_name == q) {
+                    if f.unit != units::Unit::None {
+                        result = f.unit;
+                    }
+                }
+            }
+        }
+    }
+    let given = call.as_object();
+    for f in &def.flags {
+        if f.unit == units::Unit::None {
+            continue;
+        }
+        let named = given.is_some_and(|o| o.contains_key(&f.name) || (!f.short_name.is_empty() && o.contains_key(&f.short_name)));
+        if !named {
+            continue;
+        }
+        if querying {
+            result = f.unit;
+        } else if let Some(v) = args.flags.get_mut(&f.name) {
+            units::json_to_stored(f.unit, v);
+        }
+    }
+    if def.positional_unit != units::Unit::None {
+        for v in &mut args.positional {
+            units::json_to_stored(def.positional_unit, v);
+        }
+    }
+    result
+}
+
+/// A call in stored units as a person would have typed it, for the history.
+pub fn in_user_units<C>(def: &CommandDef<C>, call: &mut Value) {
+    if let Some(o) = call.as_object_mut() {
+        for f in &def.flags {
+            if f.unit != units::Unit::None {
+                if let Some(v) = o.get_mut(&f.name) {
+                    units::json_to_user(f.unit, v);
+                }
+            }
+        }
+        if def.positional_unit != units::Unit::None {
+            if let Some(v) = o.get_mut("args") {
+                units::json_to_user(def.positional_unit, v);
+            }
+        }
+    }
+}
+
 pub fn run<C: CommandHost>(ctx: &mut C, name: &str, call: Value) -> CmdResult {
     execute(ctx, name, &call, CallSource::Script)
 }

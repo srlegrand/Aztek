@@ -313,7 +313,7 @@ impl NodeBehavior for CurveNode {
             Kind::Circle => {
                 let (normal, center, first) = (d.vec3(P0), d.vec3(P0 + 1), d.vec3(P0 + 2));
                 let (r, sw) = (d.float(P0 + 3), d.float(P0 + 6));
-                Some(nurbs::circle(center, normal, first, r, d.int(P0 + 4).max(1) as usize, d.int(P0 + 5).max(3) as usize, sw))
+                Some(nurbs::circle(center, normal, first, r, d.int(P0 + 4).max(1) as usize, d.int(P0 + 5).max(3) as usize, sw.to_degrees()))
             }
             Kind::Square => {
                 let (normal, center) = (d.vec3(P0), d.vec3(P0 + 1));
@@ -533,7 +533,7 @@ impl NodeBehavior for SurfNode {
                 }),
                 SurfKind::Revolve => curves.first().filter(|c| c.is_valid()).map(|c| {
                     let (start, end) = (d.float(S_P + 4), d.float(S_P + 5));
-                    nurbs::revolved(c, d.vec3(S_P), d.vec3(S_P + 1), start, end, d.int(S_P + 2).max(3) as usize, d.int(S_P + 6).clamp(1, 3) as usize)
+                    nurbs::revolved(c, d.vec3(S_P), d.vec3(S_P + 1), start.to_degrees(), end.to_degrees(), d.int(S_P + 2).max(3) as usize, d.int(S_P + 6).clamp(1, 3) as usize)
                 }),
                 SurfKind::Loft => crate::surfaces::loft_surface(
                     &curves,
@@ -576,7 +576,7 @@ impl NodeBehavior for SurfNode {
                         (0..n)
                             .map(|i| {
                                 let s = i as f64 / (n - 1).max(1) as f64;
-                                let (sc, ang) = (1.0 + (scale - 1.0) * s, rotation.to_radians() * s);
+                                let (sc, ang) = (1.0 + (scale - 1.0) * s, rotation * s);
                                 let turn = DMat3::from_rotation_z(ang);
                                 local.iter().map(|l| path_pts[i] + fr[i] * (turn * (*l * DVec3::new(sc, sc, 1.0)))).collect()
                             })
@@ -604,11 +604,11 @@ impl NodeBehavior for SurfNode {
                 let pivot = d.vec3(S_P + 1);
                 let sections = d.int(S_P + 2).max(3) as usize;
                 let (start, end) = (d.float(S_P + 4), d.float(S_P + 5));
-                let full = ((end - start).abs() - 360.0).abs() < 1e-6;
+                let full = ((end - start).abs() - std::f64::consts::TAU).abs() < 1e-6;
                 let rows_n = if full { sections } else { sections + 1 };
                 let rows: Vec<Vec<DVec3>> = (0..rows_n)
                     .map(|i| {
-                        let a = (start + (end - start) * i as f64 / sections as f64).to_radians();
+                        let a = start + (end - start) * i as f64 / sections as f64;
                         let q = DQuat::from_axis_angle(axis, a);
                         pts.iter().map(|p| pivot + q * (*p - pivot)).collect()
                     })
@@ -1197,7 +1197,7 @@ pub fn register(c: &mut Commands<Session>) {
                     g.set_value(plug(n, P0 + 3), PlugValue::Float(a.float("radius", 1.0)))?;
                     g.set_value(plug(n, P0 + 4), PlugValue::Int(a.int("degree", 3)))?;
                     g.set_value(plug(n, P0 + 5), PlugValue::Int(a.int("sections", 8)))?;
-                    g.set_value(plug(n, P0 + 6), PlugValue::Float(a.float("sweep", 360.0)))?;
+                    g.set_value(plug(n, P0 + 6), PlugValue::Float(a.float("sweep", std::f64::consts::TAU)))?;
                     g.connect(&plug(n, OUT), &plug(sh, CurveShape::CREATE), false)?;
                     Ok((tr, sh, n))
                 })();
@@ -1591,7 +1591,7 @@ pub fn register(c: &mut Commands<Session>) {
                     (S_P + 2, PlugValue::Int(a.int("sections", 8))),
                     (S_P + 3, PlugValue::Int(a.int("divisions", 4))),
                     (S_P + 4, PlugValue::Float(a.float("startSweep", 0.0))),
-                    (S_P + 5, PlugValue::Float(a.float("endSweep", 360.0))),
+                    (S_P + 5, PlugValue::Float(a.float("endSweep", std::f64::consts::TAU))),
                     (S_P + 6, PlugValue::Int(a.int("degree", 3))),
                 ];
                 let (tr, node) = surf_output(g, "revolve", &a.string("name", "revolvedSurface1"), "revolve1", &[shape], &set, a.int("polygon", 0) == 1)?;

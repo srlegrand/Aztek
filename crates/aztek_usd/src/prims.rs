@@ -247,7 +247,8 @@ pub fn set_local(prim: &Prim, m: &DMat4, time: f64) -> Result<(), String> {
         let a = prim.attribute(op.as_str());
         a.get_at::<gf::Vec3f>(TimeCode::new(time)).ok().flatten().map_or(DVec3::ZERO, |v| DVec3::new(v.x as f64, v.y as f64, v.z as f64))
     };
-    let e = euler_near(&r, order, old);
+    // A stage's rotations are degrees.
+    let e = euler_near(&r, order, old * (std::f64::consts::PI / 180.0)) * (180.0 / std::f64::consts::PI);
     // m = T Rpt Rp R Rp^-1 Spt Sp S Sp^-1, so the translation channel is what's left of m's translation.
     let tr = DMat4::from_translation(rpt + rp) * DMat4::from_mat3(r) * DMat4::from_translation(-rp + spt + sp) * DMat4::from_scale(s) * DMat4::from_translation(-sp);
     let translate = t - tr.w_axis.truncate();

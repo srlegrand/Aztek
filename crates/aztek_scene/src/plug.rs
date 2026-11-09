@@ -289,6 +289,8 @@ pub struct AttrDef {
     pub step: Option<f64>,
     /// Groups attrs under a heading in editors; empty is the type's own section.
     pub category: String,
+    /// What the attr measures: stored in centimetres or radians, shown in the current unit.
+    pub unit: aztek_ops::units::Unit,
 }
 
 impl Default for AttrDef {
@@ -314,11 +316,31 @@ impl Default for AttrDef {
             soft_max: None,
             step: None,
             category: String::new(),
+            unit: aztek_ops::units::Unit::None,
         }
     }
 }
 
 impl AttrDef {
+    /// The default, limits and step of an attr declared in degrees, in radians.
+    pub(crate) fn degrees_to_radians(&mut self) {
+        let f = std::f64::consts::PI / 180.0;
+        let scale = |v: &mut PlugValue| match v {
+            PlugValue::Float(d) => *d *= f,
+            PlugValue::Vec3(x) => *x *= f,
+            _ => {}
+        };
+        scale(&mut self.default_value);
+        if let Some(v) = &mut self.file_default {
+            scale(v);
+        }
+        for b in [&mut self.min_value, &mut self.max_value, &mut self.soft_min, &mut self.soft_max, &mut self.step] {
+            if let Some(x) = b {
+                *x *= f;
+            }
+        }
+    }
+
     /// The value scene files omit and assume when the attr is absent.
     pub fn stored_default(&self) -> &PlugValue {
         self.file_default.as_ref().unwrap_or(&self.default_value)

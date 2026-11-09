@@ -546,7 +546,7 @@ fn projection_state(d: &NodeData) -> String {
 }
 
 fn projection_axes(rotate: glam::DVec3) -> glam::DMat3 {
-    let r = rotate * (std::f64::consts::PI / 180.0);
+    let r = rotate;
     glam::DMat3::from_quat(glam::DQuat::from_euler(glam::EulerRot::ZYX, r.z, r.y, r.x))
 }
 
@@ -557,7 +557,7 @@ fn reproject(d: &NodeData, ty: Projection, m: &mut Mesh) {
     let c = d.vec3(PJ_CENTER);
     let (w, h) = (d.float(PJ_WIDTH).abs().max(1e-9), d.float(PJ_HEIGHT).abs().max(1e-9));
     let (ic, is) = (d.vec3(PJ_IMAGE_CENTER), d.vec3(PJ_IMAGE_SCALE));
-    let sweep = d.float(PJ_SWEEP).abs().max(1e-3).to_radians();
+    let sweep = d.float(PJ_SWEEP).abs().max(1e-3f64.to_radians());
     let faces = crate::history::parse_components(d.string(PJ_FACES));
     let mut edit = UvEdit::default();
     for f in faces {

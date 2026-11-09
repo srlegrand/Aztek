@@ -214,6 +214,8 @@ fn default_light(s: &mut Session, a: &Args, ty: &str) -> CmdResult {
     if ty == "spotLight" {
         for (i, attr) in [(5, "coneAngle"), (6, "penumbraAngle"), (7, "dropoff")] {
             if let Some(x) = at(i) {
+                // A create-menu procedure's numbers are a script's.
+                let x = if attr == "dropoff" { x } else { x * aztek_ops::units::rad_per_unit() };
                 set_num(g, sh, attr, x)?;
             }
         }

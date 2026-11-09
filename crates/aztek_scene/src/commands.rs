@@ -271,6 +271,26 @@ fn set_vec_unlocked(g: &mut Graph, id: NodeId, attr: usize, v: DVec3) -> CmdResu
     Ok(g.set_value(p, v)?)
 }
 
+/// Joins plugs that measure different things through a unitConversion node, one per axis of a whole vector.
+fn connect_converted(s: &mut Session, src: PlugRef, dst: PlugRef, factor: f64, force: bool) -> CmdResult {
+    let whole = s.graph.attr(&dst).ty == PlugType::Vec3 && dst.component < 0 && src.component < 0 && s.graph.attr(&src).ty == PlugType::Vec3;
+    let pairs: Vec<(PlugRef, PlugRef)> = if whole {
+        (0..3).map(|k| (PlugRef::component(src.node, src.attr, k), PlugRef::component(dst.node, dst.attr, k))).collect()
+    } else {
+        vec![(src, dst.clone())]
+    };
+    for (from, to) in pairs {
+        let node = s.run("createNode", json!({"args": ["unitConversion"]}))?;
+        let node = node.as_str().unwrap_or_default().to_string();
+        s.run("setAttr", json!({"args": [format!("{node}.conversionFactor"), factor]}))?;
+        let g = &mut s.graph;
+        let (input, output) = (g.plug(&format!("{node}.input"))?, g.plug(&format!("{node}.output"))?);
+        g.connect(&from, &input, false)?;
+        g.connect(&output, &to, force)?;
+    }
+    Ok(json!(s.graph.plug_name(&dst)))
+}
+
 pub fn register(c: &mut Commands<Session>) {
     register_undo(c);
     register_scene(c);
@@ -733,6 +753,7 @@ fn register_scene(c: &mut Commands<Session>) {
 
     c.register(
         Cmd::new("newScene", "Clear the scene. Not undoable.", |s, _| {
+            aztek_ops::units::reset();
             s.graph.clear();
             s.extras = Default::default();
             crate::anim::set_frame(&mut s.graph, crate::anim::range().min);
@@ -839,8 +860,16 @@ fn register_attrs(c: &mut Commands<Session>) {
                 if a.positional.len() != 2 {
                     fail!("connectAttr: expected (src, dst)");
                 }
+                let (src, dst) = {
+                    let g = &mut s.graph;
+                    (plug_arg(g, &a.positional[0])?, plug_arg(g, &a.positional[1])?)
+                };
+                // Numbers mean what people read them as: a translate of 1 driving a rotate turns it 1 degree.
+                let factor = aztek_ops::units::factor(s.graph.attr(&dst).unit) / aztek_ops::units::factor(s.graph.attr(&src).unit);
+                if aztek_ops::units::user_call() && (factor - 1.0).abs() > 1e-12 && !s.graph.attr(&dst).is_array() {
+                    return connect_converted(s, src, dst, factor, a.bool("force"));
+                }
                 let g = &mut s.graph;
-                let (src, dst) = (plug_arg(g, &a.positional[0])?, plug_arg(g, &a.positional[1])?);
                 let d = g.connect(&src, &dst, a.bool("force"))?;
                 Ok(json!(g.plug_name(&d)))
             },
@@ -856,12 +885,25 @@ fn register_attrs(c: &mut Commands<Session>) {
              drives.",
             |s, a| {
                 let Some(last) = a.positional.last() else { fail!("disconnectAttr: expected a plug") };
-                let g = &mut s.graph;
-                let d = plug_arg(g, last)?;
-                if !g.attr(&d).is_array() || d.element >= 0 {
-                    g.disconnect(&d);
+                let d = plug_arg(&mut s.graph, last)?;
+                if !s.graph.attr(&d).is_array() || d.element >= 0 {
+                    let parts: Vec<PlugRef> = if s.graph.attr(&d).ty == PlugType::Vec3 && d.component < 0 && s.graph.source(&d).is_none() {
+                        (0..3).map(|k| PlugRef::component(d.node, d.attr, k)).collect()
+                    } else {
+                        vec![d.clone()]
+                    };
+                    for p in parts {
+                        let conversion = s.graph.source(&p).filter(|sp| s.graph.node(sp.node).is_some_and(|n| n.ty().name == "unitConversion"));
+                        s.graph.disconnect(&p);
+                        // A conversion node goes when what it joined is apart.
+                        if let Some(c) = conversion {
+                            let name = s.graph.path(c.node);
+                            s.run("delete", json!({"args": [name]}))?;
+                        }
+                    }
                     return Ok(Value::Null);
                 }
+                let g = &mut s.graph;
                 let from = if a.positional.len() > 1 { Some(plug_arg(g, &a.positional[0])?) } else { None };
                 for e in g.elements(&d) {
                     if from.is_none() || g.source(&e) == from {
@@ -1127,6 +1169,11 @@ fn add_attr(s: &mut Session, a: &Args) -> CmdResult {
         fail!("addAttr: unknown type '{kind}'")
     };
     let mut def = AttrDef {
+        unit: match kind.as_str() {
+            "doubleAngle" => aztek_ops::units::Unit::Angle,
+            "doubleLinear" => aztek_ops::units::Unit::Linear,
+            _ => aztek_ops::units::Unit::None,
+        },
         name: name.clone(),
         short_name: a.string("shortName", ""),
         nice_name: a.string("niceName", ""),
@@ -1157,6 +1204,20 @@ fn add_attr(s: &mut Session, a: &Args) -> CmdResult {
     def.max_value = a.get("maxValue").and_then(Value::as_f64);
     def.soft_min = a.get("softMinValue").and_then(Value::as_f64);
     def.soft_max = a.get("softMaxValue").and_then(Value::as_f64);
+    // A script's numbers are in the current unit of what the attr measures.
+    let k = aztek_ops::units::factor(def.unit);
+    if k != 1.0 {
+        match &mut def.default_value {
+            PlugValue::Float(x) => *x *= k,
+            PlugValue::Vec3(x) => *x *= k,
+            _ => {}
+        }
+        for b in [&mut def.min_value, &mut def.max_value, &mut def.soft_min, &mut def.soft_max] {
+            if let Some(x) = b {
+                *x *= k;
+            }
+        }
+    }
     for (f, bit) in [
         ("keyable", flags::KEYABLE),
         ("hidden", flags::HIDDEN),

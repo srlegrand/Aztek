@@ -367,7 +367,7 @@ def _is_number(s):
 
 def _plain_result(v):
     if isinstance(v, (MAngle,)):
-        return v.asDegrees()
+        return v.asRadians()
     if isinstance(v, MDistance):
         return v.asCentimeters()
     if isinstance(v, MTime):
@@ -494,13 +494,13 @@ class MDataHandle:
 
     def asDouble(self):
         v = float(self._num())
-        return _math.radians(v) if self._unit() == "angle" else v
+        return v
 
     def asFloat(self):
         return _f32(self.asDouble())
 
     def asAngle(self):
-        return MAngle(float(self._num()), MAngle.kDegrees)
+        return MAngle(float(self._num()), MAngle.kRadians)
 
     def asDistance(self):
         return MDistance(float(self._num()), MDistance.kCentimeters)
@@ -559,12 +559,12 @@ class MDataHandle:
     setInt64 = setChar
 
     def setDouble(self, v):
-        return self._write(_math.degrees(v) if self._unit() == "angle" else float(v))
+        return self._write(float(v))
 
     setFloat = setDouble
 
     def setMAngle(self, a):
-        return self._write(a.asDegrees())
+        return self._write(a.asRadians())
 
     def setMDistance(self, d):
         return self._write(d.asCentimeters())

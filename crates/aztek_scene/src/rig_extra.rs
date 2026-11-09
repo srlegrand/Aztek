@@ -343,7 +343,7 @@ fn make_lattice_flexor(s: &mut Session, plan: &FlexorPlan, meshes: &[NodeId], di
     let names: Vec<String> = meshes.iter().map(|&m| g.path(m)).collect();
     let made = s.run(
         "lattice",
-        json!({"args": names, "divisions": dims, "position": centre.to_array(), "scale": [across, len, across], "rotation": [rx.to_degrees(), ry.to_degrees(), rz.to_degrees()]}),
+        json!({"args": names, "divisions": dims, "position": centre.to_array(), "scale": [across, len, across], "rotation": [rx, ry, rz]}),
     )?;
     let list = made.as_array().cloned().unwrap_or_default();
     let (Some(ffd), Some(lat), Some(base)) = (list.first().and_then(Value::as_str), list.get(1).and_then(Value::as_str), list.get(2).and_then(Value::as_str)) else {

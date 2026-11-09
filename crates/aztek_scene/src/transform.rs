@@ -53,15 +53,14 @@ fn axis_rotation(axis: usize, radians: f64) -> DMat4 {
     }
 }
 
-/// Rotation matrix from Euler degrees; XYZ means X is applied first.
-pub fn euler_to_matrix(degrees: DVec3, order: RotateOrder) -> DMat4 {
+/// Rotation matrix from Euler radians; XYZ means X is applied first.
+pub fn euler_to_matrix(r: DVec3, order: RotateOrder) -> DMat4 {
     let a = order.axes();
-    let r = degrees * (std::f64::consts::PI / 180.0);
     // First-applied rotation sits rightmost.
     axis_rotation(a[2], r[a[2]]) * axis_rotation(a[1], r[a[1]]) * axis_rotation(a[0], r[a[0]])
 }
 
-/// Euler degrees of a rotation, the middle angle in [-90, 90].
+/// Euler radians of a rotation, the middle angle within a quarter turn.
 ///
 /// Solves all six orders with one parity-signed formula.
 pub fn matrix_to_euler(rot: &DMat3, order: RotateOrder) -> DVec3 {
@@ -85,7 +84,7 @@ pub fn matrix_to_euler(rot: &DMat3, order: RotateOrder) -> DVec3 {
     out[i] = a;
     out[j] = b;
     out[k] = c;
-    out * (180.0 / std::f64::consts::PI)
+    out
 }
 
 /// Euler angles of `rot` in `order`, wrapped and flipped to lie closest to `reference`, so sampled rotations stay
@@ -93,7 +92,7 @@ pub fn matrix_to_euler(rot: &DMat3, order: RotateOrder) -> DVec3 {
 pub fn euler_near(rot: &DMat3, order: RotateOrder, reference: DVec3) -> DVec3 {
     let unwrap = |mut e: DVec3| {
         for i in 0..3 {
-            e[i] += 360.0 * ((reference[i] - e[i]) / 360.0).round();
+            e[i] += std::f64::consts::TAU * ((reference[i] - e[i]) / std::f64::consts::TAU).round();
         }
         e
     };
@@ -101,9 +100,9 @@ pub fn euler_near(rot: &DMat3, order: RotateOrder, reference: DVec3) -> DVec3 {
     let s = order.axes();
     // The other Euler solution for the same rotation.
     let mut b = a;
-    b[s[0]] += 180.0;
-    b[s[1]] = 180.0 - b[s[1]];
-    b[s[2]] += 180.0;
+    b[s[0]] += std::f64::consts::PI;
+    b[s[1]] = std::f64::consts::PI - b[s[1]];
+    b[s[2]] += std::f64::consts::PI;
     a = unwrap(a);
     b = unwrap(b);
     let dist = |e: DVec3| (e - reference).dot(e - reference);

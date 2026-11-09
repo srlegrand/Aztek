@@ -1,6 +1,7 @@
 //! What works on whole curves: quaternion rotation interpolation (rotationInterpolation), filters (filterCurve,
 //! simplify), the Graph Editor's buffer (bufferCurve) and stats (keyframeStats); and muting channels (mute).
 
+use std::f64::consts::{PI, TAU};
 use std::any::Any;
 use std::sync::Arc;
 
@@ -202,16 +203,16 @@ pub fn euler_filter_values(values: &mut [DVec3], order: RotateOrder) {
         let prev = values[i - 1];
         let unwrap = |mut e: DVec3| {
             for c in 0..3 {
-                e[c] += 360.0 * ((prev[c] - e[c]) / 360.0).round();
+                e[c] += TAU * ((prev[c] - e[c]) / TAU).round();
             }
             e
         };
         let a = unwrap(values[i]);
         // The same rotation reached the other way round the middle axis: first + 180, middle mirrored, last + 180.
         let mut other = values[i];
-        other[axes[0]] += 180.0;
-        other[axes[1]] = 180.0 - other[axes[1]];
-        other[axes[2]] += 180.0;
+        other[axes[0]] += PI;
+        other[axes[1]] = PI - other[axes[1]];
+        other[axes[2]] += PI;
         let b = unwrap(other);
         let dist = |e: DVec3| (e - prev).length_squared();
         values[i] = if dist(b) + 1e-9 < dist(a) { b } else { a };
@@ -239,7 +240,7 @@ fn euler_filter(g: &mut Graph, node: NodeId, axes: [Option<NodeId>; 3], window: 
         for i in 1..values.len() {
             let prev = values[i - 1];
             for c in 0..3 {
-                values[i][c] += 360.0 * ((prev[c] - values[i][c]) / 360.0).round();
+                values[i][c] += TAU * ((prev[c] - values[i][c]) / TAU).round();
             }
         }
     }

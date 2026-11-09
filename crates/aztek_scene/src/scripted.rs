@@ -144,6 +144,11 @@ pub fn attr_from_json(j: &Value) -> AttrDef {
             }
         }
     };
+    a.unit = match text("unit").as_str() {
+        "angle" => aztek_ops::units::Unit::Angle,
+        "distance" => aztek_ops::units::Unit::Linear,
+        _ => aztek_ops::units::Unit::None,
+    };
     a.min_value = num("min");
     a.max_value = num("max");
     a.soft_min = num("softMin");

@@ -1120,18 +1120,23 @@ impl NodeBehavior for Expression {
         let Some((_, program)) = &self.compiled else { return };
         let program = program.clone();
         let slots = program.slots();
-        // Refs whose slot is angular, spelled i3 or o2: with -uc none those values are radians.
+        // Refs whose slot is angular, spelled i3 or o2: the script sees them in the current unit, except under -uc none.
         let radians: Vec<String> = d.string(RADIANS).split_whitespace().map(str::to_string).collect();
-        let is_rad = |out: bool, k: i32| radians.iter().any(|r| *r == format!("{}{k}", if out { "o" } else { "i" }));
+        let shown_unit = |out: bool, k: i32| {
+            let slot = format!("{}{k}", if out { "o" } else { "i" });
+            if radians.iter().any(|r| *r == slot) {
+                aztek_ops::units::Unit::Angle
+            } else if radians.iter().any(|r| r.strip_prefix('L') == Some(slot.as_str())) {
+                aztek_ops::units::Unit::Linear
+            } else {
+                aztek_ops::units::Unit::None
+            }
+        };
         let attrs: Vec<f64> = slots
             .iter()
             .map(|&(out, k)| {
                 let v = d.element_or(if out { OUTPUT } else { INPUT }, k).scalar().unwrap_or(0.0);
-                if is_rad(out, k) {
-                    v.to_radians()
-                } else {
-                    v
-                }
+                aztek_ops::units::to_user(shown_unit(out, k), v)
             })
             .collect();
         if self.rng == 0 {
@@ -1162,7 +1167,7 @@ impl NodeBehavior for Expression {
         let mut out: Vec<(i32, PlugValue)> = Vec::new();
         for (&(is_out, k), v) in slots.iter().zip(values) {
             if is_out {
-                let v = if is_rad(true, k) { v.to_degrees() } else { v };
+                let v = aztek_ops::units::to_stored(shown_unit(true, k), v);
                 out.push((k, PlugValue::Float(v)));
             }
         }
@@ -1258,9 +1263,7 @@ fn bind(g: &Graph, program: &Program, object: &str) -> Result<Vec<Bound>, String
 }
 
 fn is_angular(g: &Graph, p: &PlugRef) -> bool {
-    let Some(n) = g.node(p.node) else { return false };
-    let a = &n.ty().attrs[p.attr as usize];
-    matches!(a.name.as_str(), "rotate" | "rotateAxis" | "jointOrient" | "doubleAngle") || a.name.starts_with("rotate") && a.ty == PlugType::Vec3
+    g.node(p.node).is_some_and(|n| n.ty().attrs[p.attr as usize].unit == aztek_ops::units::Unit::Angle)
 }
 
 /// Replaces what the node drives and reads with what `src` needs. Errors leave the caller to undo.
@@ -1270,8 +1273,11 @@ fn apply(g: &mut Graph, id: NodeId, src: &str, object: &str, unit: i64) -> CmdRe
     let bound = bind(g, &program, object).map_err(aztek_ops::CommandError::new)?;
     let mut radians = Vec::new();
     for b in &bound {
-        if unit == 1 && is_angular(g, &b.plug) {
-            radians.push(format!("{}{}", if b.out { "o" } else { "i" }, b.slot));
+        let side = if b.out { "o" } else { "i" };
+        if unit != 1 && is_angular(g, &b.plug) {
+            radians.push(format!("{side}{}", b.slot));
+        } else if unit == 0 && g.node(b.plug.node).is_some_and(|n| n.ty().attrs[b.plug.attr as usize].unit == aztek_ops::units::Unit::Linear) {
+            radians.push(format!("L{side}{}", b.slot));
         }
     }
     g.set_value(PlugRef::new(id, RADIANS as i32), PlugValue::String(radians.join(" ")))?;

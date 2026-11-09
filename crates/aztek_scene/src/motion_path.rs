@@ -96,10 +96,9 @@ fn path_frame(c: &NurbsCurve, d: &NodeData) -> PathFrame {
         // Leans into the turn in proportion to how tight it is.
         let limit = d.float(BANK_LIMIT).abs();
         let side = front.cross(up);
-        let lean = turn.length().to_degrees() * d.float(BANK_SCALE);
+        let lean = turn.length() * d.float(BANK_SCALE);
         let angle = lean.clamp(-limit, limit) * if side.dot(turn) >= 0.0 { 1.0 } else { -1.0 };
-        let a = angle.to_radians();
-        up = up * a.cos() + side * a.sin();
+        up = up * angle.cos() + side * angle.sin();
     }
     let (fa, ua) = (d.int(FRONT_AXIS).clamp(0, 2) as usize, d.int(UP_AXIS).clamp(0, 2) as usize);
     let f_col = if d.bool(INVERSE_FRONT) { -front } else { front };
@@ -122,7 +121,7 @@ fn path_frame(c: &NurbsCurve, d: &NodeData) -> PathFrame {
     for (attr, axis) in [(FRONT_TWIST, fa), (UP_TWIST, ua), (SIDE_TWIST, third)] {
         let angle = d.float(attr);
         if angle != 0.0 {
-            rotation = rotation * DMat3::from_axis_angle(axis_vec(axis), angle.to_radians());
+            rotation = rotation * DMat3::from_axis_angle(axis_vec(axis), angle);
         }
     }
     PathFrame { position, rotation }
