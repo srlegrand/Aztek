@@ -267,7 +267,22 @@ fn read_args(g: &mut Graph, a: &Args) -> CmdResult {
     read(g, &p)
 }
 
+/// setAttr, on a shape's instances as well: they're one shape.
 fn set_attr(s: &mut Session, a: &Args, prev: &aztek_ops::RunFn<Session>) -> CmdResult {
+    let r = set_attr_one(s, a, prev)?;
+    let Some(name) = a.pos_str(0).map(str::to_string) else { return Ok(r) };
+    let Some((node, attr)) = name.split_once('.') else { return Ok(r) };
+    let Some(id) = s.graph.find(node).ok().flatten() else { return Ok(r) };
+    let others = crate::instancing::one_shape(&s.graph, id);
+    for other in others.into_iter().filter(|&o| o != id) {
+        let mut call = a.clone();
+        call.positional[0] = json!(format!("{}.{attr}", s.graph.path(other)));
+        set_attr_one(s, &call, prev)?;
+    }
+    Ok(r)
+}
+
+fn set_attr_one(s: &mut Session, a: &Args, prev: &aztek_ops::RunFn<Session>) -> CmdResult {
     let Some(name) = a.pos_str(0).map(str::to_string) else { fail!("setAttr: expected (plug, value)") };
     if let (Some(id), Some(level)) = (old_smooth_plug(s, &name), a.positional.get(1).and_then(Value::as_i64)) {
         crate::mesh_nodes::MeshNode::set_preview(&mut s.graph, id, level)?;

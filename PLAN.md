@@ -76,7 +76,7 @@ Each was reproduced on 08/11/2026 through `maya.cmds` in the built app.
   and the rest of the reference's attribute names, so `.ma` files open smoothed and `displaySmoothness -q -po` answers.
   Keep `smoothPreview` as an alias for old Aztek files.
 - [x] 1.13 (09/11/2026: query shapes unverified) `shadingNode -isColorManaged`, `hyperShade -listUpstreamShaderNodes` and the other `hyperShade` flags.
-- [ ] 1.14 Found by the basics suite (08/11/2026): an instance is its own shape node joined to the source by a
+- [~] 1.14 (09/11/2026: one shape to a script, not one node inside: `listRelatives -ap`, `setAttr` and `rename` act across instances; ticket for the rest) Found by the basics suite (08/11/2026): an instance is its own shape node joined to the source by a
   connection, so `listRelatives -ap` on the shape lists one parent and attributes set on one instance's shape don't
   reach the other. The reference has one shape under several parents. Also `duplicate` keeps the source's shape name
   under the new transform (`pCube2|pCubeShape1`) where the reference names it `pCubeShape2`: in 1.5.

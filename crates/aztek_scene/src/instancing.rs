@@ -183,6 +183,25 @@ pub fn direct_instances(g: &Graph, mesh: NodeId) -> Vec<NodeId> {
 }
 
 /// Every mesh sharing data with `mesh` through instance links or a shared base, itself included, by id.
+/// The shape nodes that are one shape to a script: this mesh and its instances, not what merely references them. In
+/// the reference these are one node under several parents; here each parent holds a node of its own, kept the same.
+pub fn one_shape(g: &Graph, mesh: NodeId) -> Vec<NodeId> {
+    if !is_mesh(g, mesh) {
+        return Vec::new();
+    }
+    let mut seen = BTreeSet::from([mesh]);
+    let mut todo = vec![mesh];
+    while let Some(m) = todo.pop() {
+        let up = instance_parent(g, m);
+        for id in std::iter::once(up).chain(direct_instances(g, m)) {
+            if id != NO_NODE && seen.insert(id) {
+                todo.push(id);
+            }
+        }
+    }
+    seen.into_iter().collect()
+}
+
 pub fn members(g: &Graph, mesh: NodeId) -> Vec<NodeId> {
     if !is_mesh(g, mesh) {
         return Vec::new();

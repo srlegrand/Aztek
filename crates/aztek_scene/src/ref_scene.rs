@@ -47,7 +47,12 @@ fn list_relatives(s: &mut Session, a: &Args) -> CmdResult {
     let mut out: Vec<NodeId> = Vec::new();
     for name in objects(s, a) {
         let id = node_of(g, &name, "listRelatives")?;
-        let found: Vec<NodeId> = if a.bool("parent") || a.bool("allParents") {
+        let found: Vec<NodeId> = if a.bool("allParents") {
+            // An instanced shape has a parent per instance.
+            let shared = crate::instancing::one_shape(g, id);
+            let all = if shared.len() > 1 { shared } else { vec![id] };
+            all.into_iter().map(|m| g.parent(m)).filter(|&p| p != NO_NODE).collect()
+        } else if a.bool("parent") {
             let p = g.parent(id);
             if p == NO_NODE { Vec::new() } else { vec![p] }
         } else if a.bool("allDescendents") {
