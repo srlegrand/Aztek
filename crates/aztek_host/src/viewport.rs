@@ -68,7 +68,7 @@ pub fn gather(g: &mut Graph) -> Vec<DrawItem> {
         }
         let Some(mesh) = n.data().mesh(MeshNode::OUT_MESH).cloned() else { continue };
         let world = n.data().matrix(DagNode::WORLD_MATRIX);
-        let smooth = n.int(MeshNode::SMOOTH_PREVIEW).clamp(0, 3) as i32;
+        let smooth = MeshNode::preview_level(n) as i32;
         out.push(DrawItem { shape: id, xf: aztek_scene::dag::transform_of(g, id), world, mesh, smooth });
     }
     out

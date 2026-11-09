@@ -27,7 +27,68 @@ use crate::transform::{matrix_to_euler, RotateOrder, Shape, Transform};
 #[derive(Clone, Default)]
 pub struct MeshNode;
 
+/// The reference's smooth mesh attributes, by its names.
+fn smooth_mesh_attrs() -> Vec<AttrDef> {
+    let stored = flags::INPUT | flags::STORABLE;
+    let int = |name: &str, short: &str, def: i64, lo: f64, hi: f64, doc: &str| AttrDef {
+        name: name.into(),
+        short_name: short.into(),
+        ty: PlugType::Int,
+        default_value: PlugValue::Int(def),
+        flags: stored,
+        doc: doc.into(),
+        min_value: Some(lo),
+        max_value: Some(hi),
+        ..Default::default()
+    };
+    vec![
+        int("displaySmoothMesh", "dsm", 0, 0.0, 2.0, "Smooth mesh preview: 0 off, 1 the cage and the smoothed mesh, 2 the smoothed mesh."),
+        int("smoothLevel", "lev", 2, 0.0, 4.0, "Subdivision levels the preview shows."),
+        AttrDef {
+            name: "useSmoothPreviewForRender".into(),
+            short_name: "uspr".into(),
+            ty: PlugType::Bool,
+            default_value: PlugValue::Bool(true),
+            flags: stored,
+            doc: "Render at the preview's level, not renderSmoothLevel.".into(),
+            ..Default::default()
+        },
+        int("renderSmoothLevel", "rsl", 2, 0.0, 4.0, "Subdivision levels to render when not using the preview's."),
+    ]
+}
+
 impl MeshNode {
+    /// Subdivision levels the viewport shows: none unless displaySmoothMesh is on.
+    pub fn preview_level(n: &crate::node::Node) -> i64 {
+        let t = n.ty();
+        match (t.attr_index("displaySmoothMesh"), t.attr_index("smoothLevel")) {
+            (Some(d), Some(l)) if n.int(d) > 0 => n.int(l).clamp(0, 4),
+            _ => 0,
+        }
+    }
+
+    /// Levels to render, by useSmoothPreviewForRender.
+    pub fn render_level(n: &crate::node::Node) -> i64 {
+        let t = n.ty();
+        let preview = Self::preview_level(n);
+        match (t.attr_index("useSmoothPreviewForRender"), t.attr_index("renderSmoothLevel")) {
+            (Some(u), Some(r)) if preview > 0 && !n.bool(u) => n.int(r).clamp(0, 4),
+            _ => preview,
+        }
+    }
+
+    /// Shows `level` levels, or the cage alone at 0.
+    pub fn set_preview(g: &mut Graph, id: NodeId, level: i64) -> crate::error::Result<()> {
+        let Some(t) = g.node(id).map(|n| n.type_arc().clone()) else { return Ok(()) };
+        if let (Some(d), Some(l)) = (t.attr_index("displaySmoothMesh"), t.attr_index("smoothLevel")) {
+            g.set_value(PlugRef::new(id, d as i32), PlugValue::Int(if level > 0 { 2 } else { 0 }))?;
+            if level > 0 {
+                g.set_value(PlugRef::new(id, l as i32), PlugValue::Int(level))?;
+            }
+        }
+        Ok(())
+    }
+
     pub const IN_MESH: usize = Shape::COUNT;
     pub const OUT_MESH: usize = Shape::COUNT + 1;
     pub const SYMMETRY: usize = Shape::COUNT + 2;
@@ -92,6 +153,7 @@ impl MeshNode {
                     "Mirror plane (object space) every component edit is applied across, or radial: every edit repeated round \
                      radialAxis.",
                 ),
+                // Files from before displaySmoothMesh hold this; reading them moves it across.
                 AttrDef {
                     name: "smoothPreview".into(),
                     ty: PlugType::Int,
@@ -178,6 +240,7 @@ impl MeshNode {
             ]
             .into_iter()
             .chain(crate::harold_nodes::shape_render_attrs())
+            .chain(smooth_mesh_attrs())
             .collect(),
             create: Some(Arc::new(|| Box::new(MeshNode))),
             ..Default::default()
@@ -1345,7 +1408,7 @@ pub fn register(c: &mut Commands<Session>) {
                 let mut result = Ok(Value::Null);
                 for id in ids {
                     if g.node(id).is_some_and(|n| n.ty().is_a("mesh")) {
-                        if let Err(e) = g.set_value(PlugRef::new(id, MeshNode::SMOOTH_PREVIEW as i32), PlugValue::Int(level)) {
+                        if let Err(e) = MeshNode::set_preview(g, id, level) {
                             result = Err(e.into());
                             break;
                         }

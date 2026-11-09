@@ -72,10 +72,10 @@ Each was reproduced on 08/11/2026 through `maya.cmds` in the built app.
   it" and fix both.
 - [x] 1.11 (09/11/2026: dict in Python, array in MEL; -s counts mesh shells, -uvShell UV shells) `polyEvaluate` with several flags returns a dict in Python and an array in MEL, as the reference does; add
   `-uvShell`, `-uvsInShell`, `-activeUVShells` and the rest of its flag table.
-- [ ] 1.12 Smooth preview is `displaySmoothMesh` (0, 1, 2) on the shape with `smoothLevel`, `useSmoothPreviewForRender`
+- [x] 1.12 (09/11/2026: real attributes on the shape; smoothPreview answers and sets as an alias, older files move across on reading) Smooth preview is `displaySmoothMesh` (0, 1, 2) on the shape with `smoothLevel`, `useSmoothPreviewForRender`
   and the rest of the reference's attribute names, so `.ma` files open smoothed and `displaySmoothness -q -po` answers.
   Keep `smoothPreview` as an alias for old Aztek files.
-- [ ] 1.13 `shadingNode -isColorManaged`, `hyperShade -listUpstreamShaderNodes` and the other `hyperShade` flags.
+- [x] 1.13 (09/11/2026: query shapes unverified) `shadingNode -isColorManaged`, `hyperShade -listUpstreamShaderNodes` and the other `hyperShade` flags.
 - [ ] 1.14 Found by the basics suite (08/11/2026): an instance is its own shape node joined to the source by a
   connection, so `listRelatives -ap` on the shape lists one parent and attributes set on one instance's shape don't
   reach the other. The reference has one shape under several parents. Also `duplicate` keeps the source's shape name

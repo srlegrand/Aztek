@@ -422,7 +422,6 @@ fn cycles_connect() {
 // Smooth preview
 
 #[test]
-#[ignore = "PLAN 1.12: smooth preview is displaySmoothMesh"]
 fn smooth_preview_attributes() {
     let mut c = core();
     mel(&mut c, "polyCube;");
@@ -438,7 +437,6 @@ fn smooth_preview_attributes() {
 // Shading
 
 #[test]
-#[ignore = "PLAN 1.13: shadingNode -isColorManaged"]
 fn shading_node_colour_managed() {
     let mut c = core();
     assert_eq!(mel(&mut c, "shadingNode -asTexture -isColorManaged file;"), json!("file1"));

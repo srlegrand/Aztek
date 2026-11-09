@@ -543,7 +543,7 @@ pub fn mesh_stats(g: &mut Graph, n: NodeId) -> Value {
         .collect();
     let axes = ["off", "x", "y", "z", "radial"];
     let sym = node.int(MeshNode::SYMMETRY).clamp(0, SYMMETRY_RADIAL) as usize;
-    let smooth = node.int(MeshNode::SMOOTH_PREVIEW);
+    let smooth = MeshNode::preview_level(node);
     let mut out = json!({
         "points": m.num_points(),
         "edges": m.num_edges(),

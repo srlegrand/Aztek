@@ -2132,6 +2132,33 @@ pub fn register(c: &mut Commands<Session>) {
                 let names = objects(s, a);
                 let g = &mut s.graph;
                 g.evaluate();
+                // Meshes: -po is the reference's 1 the cage, 2 the cage and the smoothed mesh, 3 the smoothed mesh.
+                let meshes: Vec<NodeId> = if a.bool("all") {
+                    g.nodes().into_iter().filter(|&n| g.node(n).is_some_and(|x| x.ty().is_a("mesh"))).collect()
+                } else {
+                    names.iter().filter_map(|n| g.find(n).ok().flatten()).filter_map(|id| crate::components::as_mesh(g, id)).collect()
+                };
+                let mesh_attr = |g: &Graph, m: NodeId, attr: &str| g.node(m).and_then(|n| n.ty().attr_index(attr)).map(|i| crate::PlugRef::new(m, i as i32));
+                let asks_po = a.get("queried").and_then(Value::as_array).is_some_and(|q| q.iter().any(|x| matches!(x.as_str(), Some("polygonObject" | "po"))));
+                if a.bool("query") {
+                    if asks_po {
+                        let mut out = Vec::new();
+                        for m in &meshes {
+                            let Some(p) = mesh_attr(g, *m, "displaySmoothMesh") else { continue };
+                            out.push(json!(g.value(&p)?.as_int() + 1));
+                        }
+                        return Ok(Value::Array(out));
+                    }
+                    return Ok(Value::Null);
+                }
+                if a.has("polygonObject") {
+                    let level = a.int("polygonObject", 1).clamp(1, 3) - 1;
+                    for m in &meshes {
+                        if let Some(p) = mesh_attr(g, *m, "displaySmoothMesh") {
+                            g.set_value(p, PlugValue::Int(level))?;
+                        }
+                    }
+                }
                 let mut shapes = Vec::new();
                 if a.bool("all") {
                     shapes = g.nodes().into_iter().filter(|&n| is_surface(g, n)).collect();
@@ -2158,7 +2185,9 @@ pub fn register(c: &mut Commands<Session>) {
         .flag(f("divisionsV", "dv", ArgType::Int, "Isoparms within a span along V."))
         .flag(f("pointsWire", "pw", ArgType::Int, "Points to a drawn span."))
         .flag(f("pointsShaded", "ps", ArgType::Int, "Shaded fineness."))
-        .flag(f("polygonObject", "po", ArgType::Int, "Accepted for existing scripts."))
+        .flag(f("polygonObject", "po", ArgType::Int, "Meshes: 1 the cage, 2 the cage and the smoothed mesh, 3 the smoothed mesh."))
+        .flag(f("query", "q", ArgType::Bool, "Ask: -po answers per object."))
+        .flag(f("queried", "", ArgType::Any, "What a query asks for."))
         .flag(f("all", "all", ArgType::Bool, "Every surface.")),
     );
 }

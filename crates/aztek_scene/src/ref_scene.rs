@@ -1277,7 +1277,7 @@ pub fn register(c: &mut Commands<Session>) {
         Cmd::new("shadingNode", "Create a rendering or utility node: shadingNode -asUtility multiplyDivide -n name.", |s, a| {
             let Some(ty) = a.pos_str(0) else { fail!("shadingNode: name a node type") };
             let Some(t) = types::find(ty) else { fail!("shadingNode: unknown type {ty}") };
-            if !(a.bool("asUtility") || a.bool("asShader") || a.bool("asTexture") || a.bool("asLight") || a.bool("asPostProcess") || a.bool("asRendering")) {
+            if !(a.bool("asRendering") || a.bool("asUtility") || a.bool("asShader") || a.bool("asTexture") || a.bool("asLight") || a.bool("asPostProcess") || a.bool("asRendering")) {
                 fail!("shadingNode: give -asUtility, -asShader, -asTexture or -asLight");
             }
             if t.dag && !t.is_a("transform") {
@@ -1293,6 +1293,8 @@ pub fn register(c: &mut Commands<Session>) {
             Ok(json!(s.graph.path(id)))
         })
         .positional("type")
+        .flag(f("isColorManaged", "icm", B, "The node's colours are colour managed. Accepted: textures read their colour space here."))
+        .flag(f("asRendering", "ar", B, "A rendering node."))
         .flag(f("asUtility", "au", B, "A utility."))
         .flag(f("asShader", "as", B, "A shader."))
         .flag(f("asTexture", "at", B, "A texture."))

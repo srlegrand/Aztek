@@ -94,6 +94,12 @@ Requests waiting or in progress, newest detail kept. Move to Done with the date 
 - 1.11. Done: `-uvShell`, `-uvShellIds`, `-uvsInShell`, `-activeUVShells`, `-activeShells`, `-uvComponent`, `-b2`, `-bc2`, units on `-b`, `-bc`, `-a`, `-wa`
   Not done: the shape of the UV list answers is from the docs, unverified
   Why: needs a capture
+- 1.12. Done: `displaySmoothMesh`, `smoothLevel`, `useSmoothPreviewForRender`, `renderSmoothLevel`, `displaySmoothness -po` set and `-q -po` per object; the viewport and Harold read them
+  Not done: the rest of the reference's smooth attributes (`continuity`, `smoothTessLevel` and so on) aren't there
+  Why: they change nothing here until the preview honours them
+- 1.13. Done: `shadingNode -isColorManaged`, `-asRendering`; `hyperShade -lus -lds -snw -d`
+  Not done: `-rgp`, `-rs`, `-inc`, `-cwa`, `-n` accepted and do nothing
+  Why: they drive the reference's Hypershade window, which Aztek doesn't have in that form
 
 ## Done
 - 08/11/2026 One light model: the viewport's lights render the same in Harold (decay rates, intensity, colour, spot cone and dropoff, ambient, area, volume, default lighting, ambient colour, black background); parity test against the shared formula.

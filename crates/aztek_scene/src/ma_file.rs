@@ -3106,13 +3106,30 @@ fn build(s: &mut Session, doc: &Doc, import: bool) -> Vec<String> {
             b.build_mesh(i);
             // Smooth mesh preview: displaySmoothMesh 1 or 2 shows smoothLevel levels (2 when not written).
             let dsm = doc.nodes[i].num(&["dsm", "displaySmoothMesh"]).unwrap_or(0.0);
-            if dsm > 0.0 {
-                let level = doc.nodes[i].num(&["smoothLevel", "lev"]).unwrap_or(2.0).clamp(1.0, 3.0) as i64;
-                if let Some(id) = b.ids[i] {
-                    let path = b.s.graph.path(id);
-                    if let Ok(p) = b.s.graph.plug(&format!("{path}.smoothPreview")) {
-                        let _ = b.s.graph.set_value(p, PlugValue::Int(level));
+            // An older Aztek file: smoothPreview held the level.
+            let old = doc.nodes[i].num(&["smoothPreview"]).unwrap_or(0.0);
+            if let Some(id) = b.ids[i] {
+                let path = b.s.graph.path(id);
+                let g = &mut b.s.graph;
+                let mut set = |attr: &str, v: PlugValue| {
+                    if let Ok(p) = g.plug(&format!("{path}.{attr}")) {
+                        let _ = g.set_value(p, v);
                     }
+                };
+                if dsm > 0.0 {
+                    set("displaySmoothMesh", PlugValue::Int(dsm as i64));
+                } else if old > 0.0 {
+                    set("displaySmoothMesh", PlugValue::Int(2));
+                    set("smoothLevel", PlugValue::Int(old as i64));
+                }
+                if let Some(level) = doc.nodes[i].num(&["smoothLevel", "lev"]) {
+                    set("smoothLevel", PlugValue::Int(level as i64));
+                }
+                if let Some(level) = doc.nodes[i].num(&["renderSmoothLevel", "rsl"]) {
+                    set("renderSmoothLevel", PlugValue::Int(level as i64));
+                }
+                if doc.nodes[i].num(&["useSmoothPreviewForRender", "uspr"]).is_some() {
+                    set("useSmoothPreviewForRender", PlugValue::Bool(doc.nodes[i].truth(&["useSmoothPreviewForRender", "uspr"]).unwrap_or(true)));
                 }
             }
         }
@@ -3680,10 +3697,21 @@ impl Writer<'_> {
             }
             if ty == "mesh" {
                 // Smooth mesh preview as the reference writes it.
-                let level = self.s.graph.plug(&format!("{}.smoothPreview", self.s.graph.path(id))).ok().and_then(|p| self.s.graph.value(&p).ok()).map(|v| v.as_int()).unwrap_or(0);
-                if level > 0 {
-                    let _ = writeln!(self.out, "\tsetAttr \".displaySmoothMesh\" 2;");
-                    let _ = writeln!(self.out, "\tsetAttr \".smoothLevel\" {level};");
+                let path = self.s.graph.path(id);
+                let read = |g: &mut Graph, attr: &str| g.plug(&format!("{path}.{attr}")).ok().and_then(|p| g.value(&p).ok());
+                let g = &mut self.s.graph;
+                let (dsm, level, render, use_preview) = (read(g, "displaySmoothMesh"), read(g, "smoothLevel"), read(g, "renderSmoothLevel"), read(g, "useSmoothPreviewForRender"));
+                if let Some(PlugValue::Int(d)) = dsm.filter(|d| d.as_int() != 0) {
+                    let _ = writeln!(self.out, "\tsetAttr \".displaySmoothMesh\" {d};");
+                }
+                if let Some(PlugValue::Int(l)) = level.filter(|l| l.as_int() != 2) {
+                    let _ = writeln!(self.out, "\tsetAttr \".smoothLevel\" {l};");
+                }
+                if let Some(PlugValue::Int(l)) = render.filter(|l| l.as_int() != 2) {
+                    let _ = writeln!(self.out, "\tsetAttr \".renderSmoothLevel\" {l};");
+                }
+                if matches!(use_preview, Some(PlugValue::Bool(false))) {
+                    let _ = writeln!(self.out, "\tsetAttr \".useSmoothPreviewForRender\" no;");
                 }
                 self.write_mesh(id, &name, parent);
             }

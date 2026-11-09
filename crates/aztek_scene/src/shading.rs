@@ -707,6 +707,10 @@ fn upstream(g: &Graph, from: NodeId) -> Vec<NodeId> {
 
 fn hyper_shade(s: &mut Session, a: &Args) -> CmdResult {
     make_defaults(&mut s.graph);
+    if a.bool("duplicate") {
+        let names: Vec<String> = s.graph.selection().iter().map(|&m| s.graph.path(m)).collect();
+        return s.run("duplicate", json!({"args": names, "upstreamNodes": true}));
+    }
     let g = &mut s.graph;
     if let Some(name) = a.get("assign").and_then(Value::as_str) {
         let mat = node_named(g, name, "hyperShade")?;
@@ -756,12 +760,27 @@ fn hyper_shade(s: &mut Session, a: &Args) -> CmdResult {
         g.select(&mats, SelectMode::Replace);
         return Ok(Value::Null);
     }
-    if let Some(name) = a.get("listUpstreamNodes").and_then(Value::as_str) {
+    if let Some(name) = a.get("listUpstreamNodes").or(a.get("listUpstreamShaderNodes")).and_then(Value::as_str) {
         let id = node_named(g, name, "hyperShade")?;
-        let list: Vec<String> = upstream(g, id).into_iter().skip(1).map(|n| g.path(n)).collect();
+        let shaders_only = a.has("listUpstreamShaderNodes");
+        let list: Vec<String> = upstream(g, id).into_iter().skip(1).filter(|&n| !shaders_only || is_shading_node(g, n)).map(|n| g.path(n)).collect();
         return Ok(json!(list));
     }
-    if let Some(name) = a.get("listDownstreamNodes").and_then(Value::as_str) {
+    // The network under the selected materials.
+    if a.bool("shaderNetwork") {
+        let mut net = Vec::new();
+        for m in g.selection().to_vec() {
+            for n in upstream(g, m) {
+                if !net.contains(&n) && is_shading_node(g, n) {
+                    net.push(n);
+                }
+            }
+        }
+        g.select(&net, SelectMode::Replace);
+        return Ok(Value::Null);
+    }
+    if let Some(name) = a.get("listDownstreamNodes").or(a.get("listDownstreamShaderNodes")).and_then(Value::as_str) {
+        let shaders_only = a.has("listDownstreamShaderNodes");
         let id = node_named(g, name, "hyperShade")?;
         let conns = g.connections();
         let mut out = vec![id];
@@ -775,9 +794,14 @@ fn hyper_shade(s: &mut Session, a: &Args) -> CmdResult {
                 }
             }
         }
-        return Ok(json!(out.into_iter().skip(1).map(|n| g.path(n)).collect::<Vec<_>>()));
+        return Ok(json!(out.into_iter().skip(1).filter(|&n| !shaders_only || is_shading_node(g, n)).map(|n| g.path(n)).collect::<Vec<_>>()));
     }
     Ok(Value::Null)
+}
+
+/// A node of a shading network: not the scene's time, a transform or a shape it happens to read from.
+fn is_shading_node(g: &Graph, id: NodeId) -> bool {
+    g.node(id).is_some_and(|n| !n.ty().dag && n.ty().name != "time" && !n.ty().name.starts_with("animCurve"))
 }
 
 /// The plug defaultNavigation connects from when only the node is named.
@@ -1322,7 +1346,16 @@ pub fn register(c: &mut Commands<Session>) {
         .flag(f("objects", "o", ArgType::String, "The material whose objects to select; empty for the selected one."))
         .flag(f("shaderNetworksSelectMaterialNodes", "smn", ArgType::Bool, "Select the materials of the selected objects."))
         .flag(f("listUpstreamNodes", "lun", ArgType::String, "The nodes upstream of this one."))
-        .flag(f("listDownstreamNodes", "ldn", ArgType::String, "The nodes downstream of this one.")),
+        .flag(f("listDownstreamNodes", "ldn", ArgType::String, "The nodes downstream of this one."))
+        .flag(f("listUpstreamShaderNodes", "lus", ArgType::String, "The shading nodes upstream of this one."))
+        .flag(f("listDownstreamShaderNodes", "lds", ArgType::String, "The shading nodes downstream of this one."))
+        .flag(f("shaderNetwork", "snw", ArgType::Bool, "Select the networks of the selected materials."))
+        .flag(f("duplicate", "d", ArgType::Bool, "Copy the selected materials with what feeds them."))
+        .flag(f("resetGraphPosition", "rgp", ArgType::Bool, "Accepted: the Node Editor lays out for itself."))
+        .flag(f("resetSwatch", "rs", ArgType::Bool, "Accepted: swatches redraw on change."))
+        .flag(f("incremental", "inc", ArgType::Bool, "Accepted for existing scripts."))
+        .flag(f("clearWorkArea", "cwa", ArgType::Bool, "Accepted: the Node Editor has its own work area."))
+        .flag(f("networks", "n", ArgType::Bool, "Accepted for existing scripts.")),
     );
     c.register(
         Cmd::new("defaultNavigation", "Connects as dropping one node on another does: -connectToExisting -source file1 -destination lambert2.color. Plugs left out take the node's usual one.", default_navigation)
