@@ -47,7 +47,7 @@ fix below is another guess.
 
 Each was reproduced on 08/11/2026 through `maya.cmds` in the built app.
 
-- [ ] 1.1 Units are labels only. `currentUnit -l m` then `getAttr pCube1.tx` on a 100 cm translate gives 100, not 1;
+- [x] 1.1 (09/11/2026: PARITY.md, Units, lists what's converted and audited; three questions wait on the capture kit) Units are labels only. `currentUnit -l m` then `getAttr pCube1.tx` on a 100 cm translate gives 100, not 1;
   `currentUnit -a rad` then `getAttr .ry` on 90 degrees gives 90, not 1.5708, and `setAttr .ry 1.0` in radians stores
   1 degree. Store centimetres and radians internally as the reference does, convert at every command, `.ma`, channel
   box, attribute editor, manipulator readout, numeric input and Python API boundary by the current unit, with

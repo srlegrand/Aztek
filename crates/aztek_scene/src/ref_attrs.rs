@@ -256,6 +256,12 @@ fn read_args(g: &mut Graph, a: &Args) -> CmdResult {
 
 fn set_attr(s: &mut Session, a: &Args, prev: &aztek_ops::RunFn<Session>) -> CmdResult {
     let Some(name) = a.pos_str(0).map(str::to_string) else { fail!("setAttr: expected (plug, value)") };
+    // A child that's driven makes the whole plug driven.
+    if let Ok(p) = s.graph.plug(&name) {
+        if aztek_ops::units::user_call() && p.component < 0 && s.graph.attr(&p).ty == PlugType::Vec3 && (0..3).any(|k| s.graph.source(&PlugRef::component(p.node, p.attr, k)).is_some()) {
+            fail!("setAttr: {name} is connected: its children are driven");
+        }
+    }
     // A script's number is in the current unit.
     let converted;
     let a = match plug_unit(s, &name).filter(|_| aztek_ops::units::user_call()) {
@@ -382,11 +388,15 @@ fn add_attr_query(s: &mut Session, a: &Args) -> CmdResult {
         "longName" => json!(def.name.rsplit('.').next().unwrap_or("")),
         "shortName" => json!(def.short_name.rsplit('.').next().unwrap_or("")),
         "niceName" => json!(if def.nice_name.is_empty() { def.name.clone() } else { def.nice_name.clone() }),
-        "defaultValue" => to_json(&def.default_value),
-        "minValue" => json!(def.min_value),
-        "maxValue" => json!(def.max_value),
-        "softMinValue" => json!(def.soft_min),
-        "softMaxValue" => json!(def.soft_max),
+        "defaultValue" => {
+            let mut v = to_json(&def.default_value);
+            aztek_ops::units::json_to_user(def.unit, &mut v);
+            v
+        }
+        "minValue" => json!(def.min_value.map(|x| aztek_ops::units::to_user(def.unit, x))),
+        "maxValue" => json!(def.max_value.map(|x| aztek_ops::units::to_user(def.unit, x))),
+        "softMinValue" => json!(def.soft_min.map(|x| aztek_ops::units::to_user(def.unit, x))),
+        "softMaxValue" => json!(def.soft_max.map(|x| aztek_ops::units::to_user(def.unit, x))),
         "hasMinValue" => json!(def.min_value.is_some()),
         "hasMaxValue" => json!(def.max_value.is_some()),
         "enumName" => json!(def.enum_names.join(":")),
@@ -489,6 +499,25 @@ fn add_vec3_child(s: &mut Session, a: &Args) -> CmdResult<Option<Value>> {
         out.push(json!(format!("{}.{name}", s.graph.path(id))));
     }
     Ok(Some(Value::Array(out)))
+}
+
+/// The unitConversion node feeding a plug.
+fn conversion_into(g: &Graph, p: &PlugRef) -> Option<NodeId> {
+    g.source(p).map(|c| c.node).filter(|&n| g.node(n).is_some_and(|x| x.ty().name == "unitConversion"))
+}
+
+/// As attribute_query, with defaults and limits in the current unit.
+fn attribute_query_shown(s: &mut Session, a: &Args) -> CmdResult {
+    let mut v = attribute_query(s, a)?;
+    let numeric = ["listDefault", "minimum", "maximum", "softMin", "softMax", "range", "softRange", "softRangeAll"].iter().any(|f| a.bool(f));
+    if numeric && aztek_ops::units::user_call() {
+        let node = a.string("node", "");
+        let attr = a.pos_str(0).unwrap_or_default().to_string();
+        if let Ok(p) = s.graph.plug(&format!("{node}.{attr}")) {
+            aztek_ops::units::json_to_user(s.graph.attr(&p).unit, &mut v);
+        }
+    }
+    Ok(v)
 }
 
 fn attribute_query(s: &mut Session, a: &Args) -> CmdResult {
@@ -848,13 +877,22 @@ pub fn register(c: &mut Commands<Session>) {
                 let g = &mut s.graph;
                 if let Some(pairs) = pairs_for_compound(g, &src, &dst) {
                     for (_, y) in pairs {
-                        g.disconnect(&y);
+                        let conversion = conversion_into(&s.graph, &y);
+                        s.graph.disconnect(&y);
+                        if let Some(c) = conversion {
+                            let name = s.graph.path(c);
+                            s.run("delete", json!({"args": [name]}))?;
+                        }
                     }
                     return Ok(Value::Null);
                 }
                 let (sp, d) = (g.plug(&src)?, g.plug(&dst)?);
                 if !g.attr(&d).is_array() || d.element >= 0 {
-                    if g.source(&d) != Some(sp) {
+                    let through = conversion_into(g, &d).and_then(|c| {
+                        let input = g.node(c)?.ty().attr_index("input")?;
+                        g.source(&PlugRef::new(c, input as i32))
+                    });
+                    if g.source(&d) != Some(sp) && through != Some(sp) {
                         fail!("disconnectAttr: there is no connection from '{src}' to '{dst}'");
                     }
                 } else if a.bool("nextAvailable") {
@@ -970,7 +1008,7 @@ pub fn register(c: &mut Commands<Session>) {
         .flag(f("query", "q", ArgType::Bool, "List the aliases."))
         .flag(f("remove", "rm", ArgType::Bool, "Remove the alias.")),
     );
-    let mut q = Cmd::new("attributeQuery", "Facts about an attribute: attributeQuery -n node -k attr, or -type nodeType.", attribute_query).positional("attribute").undoable(false);
+    let mut q = Cmd::new("attributeQuery", "Facts about an attribute: attributeQuery -n node -k attr, or -type nodeType.", attribute_query_shown).positional("attribute").undoable(false);
     for (name, short, doc) in [
         ("exists", "ex", "Whether it exists."), ("keyable", "k", "Keyable."), ("channelBox", "ch", "Shown in the channel box."), ("hidden", "h", "Hidden."),
         ("writable", "w", "Takes values."), ("readable", "r", "Can be read."), ("connectable", "c", "Can connect."), ("storable", "s", "Saved."), ("multi", "m", "A multi attribute."),

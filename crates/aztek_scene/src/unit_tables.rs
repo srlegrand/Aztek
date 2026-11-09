@@ -1,5 +1,5 @@
 //! Which attributes and command flags measure a distance or an angle. Stored values are centimetres and radians; these
-//! tags are what scripts, the interface and scene files convert by. `docs/UNITS.md` lists the audit this came from, and
+//! tags are what scripts, the interface and scene files convert by. PARITY.md lists the audit this came from, and
 //! the capture kit's attribute fixtures (`doubleLinear`, `doubleAngle`) check it when they land.
 
 use aztek_ops::units::Unit::{self, Angle, Linear};
@@ -11,7 +11,7 @@ const ANGLE_ATTRS: &[&str] = &[
     "minorSweep", "smoothingAngle", "smoothingangle", "miteringAngle", "angleTolerance",
     "outRotate", "outputRotate", "inputRotate", "inRotate1", "inRotate2", "rotateFrame", "rotateUV", "pivotOrient",
     "cutPlaneRotate", "bankLimit", "wedgeAngle", "frontTwist", "upTwist", "sideTwist", "twistRotation", "rollRotation",
-    "projectionHorizontalSweep", "rotation", "dTwistStart", "dTwistEnd", "euler",
+    "projectionHorizontalSweep", "rotation", "dTwistStart", "dTwistEnd", "dTwistRampMult", "euler",
 ];
 
 const LINEAR_ATTRS: &[&str] = &[
@@ -137,6 +137,7 @@ pub const FLAGS: &[Row] = &[
     ("polySpherize", &[("radius", Linear), ("center", Linear)]),
     ("rotateComponents", &[("by", Angle), ("pivot", Linear)]),
     ("scaleComponents", &[("pivot", Linear)]),
+    ("moveComponents", &[("by", Linear), ("to", Linear)]),
     ("distanceDimension", &[("startPoint", Linear), ("endPoint", Linear)]),
     ("closestPointOnMesh", &[("inPosition", Linear)]),
     ("nearestPointOnMesh", &[("inPosition", Linear)]),

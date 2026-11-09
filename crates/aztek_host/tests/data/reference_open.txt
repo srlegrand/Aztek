@@ -1,21 +1,4 @@
 # Calls that don't yet match the reference, with the PLAN.md item that fixes each. This list can only shrink.
-units.convertUnit  # 1.1
-units.fps.custom  # 1.1
-units.in.getAttr  # 1.1
-units.m.getAttr  # 1.1
-units.m.keyframe  # 1.1
-units.m.move  # 1.1
-units.m.pointPosition  # 1.1
-units.m.polyCube  # 1.1
-units.m.setAttr  # 1.1
-units.m.xform  # 1.1
-units.mm.getAttr  # 1.1
-units.rad.getAttr  # 1.1
-units.rad.keyframe  # 1.1
-units.rad.rotate  # 1.1
-units.rad.setAttr  # 1.1
-units.unitConversion  # 1.1
-units.unitConversion.factor  # 1.1
 group.empty  # 1.2
 group.plain  # 1.2
 group.second  # 1.2

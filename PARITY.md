@@ -5,6 +5,104 @@ manipulators, the script editor and preferences, and renders with Harold, its ow
 the reference carries. Dynamics depart on purpose: one solver stands for the reference's several dynamics systems, and
 their files load into it (see the dated section and docs/DYNAMICS.md). The product carries none of the reference's names, icons or branding.
 
+## Units
+
+Done 09/11/2026 (PLAN 1.1). What's stored is centimetres and radians. A command called from a script or the interface is in the current units, and `execute` converts its flags, arguments and results by tags in `crates/aztek_scene/src/unit_tables.rs`; commands called by other commands, viewport tools and the Python API are in stored units. `currentUnit` lives in `aztek_ops::units`, per scene: a new scene goes back to cm and degrees, opening a file takes on the file's.
+
+- Scene files: written in the scene's current units, which the header names; read by the units the file names. `.ma` angle curves hold stored radians once read. Tangents in files stay as the file has them (value per second).
+- `connectAttr` between plugs that measure different things makes a `unitConversion` node with the reference's factor (translate to rotate is 0.0174533), one per axis for a whole vector. `disconnectAttr` removes it, `isConnected` sees through it, `listConnections` shows it unless `-scn`. A file's own connection is taken as written.
+- Python API (`maya.api.OpenMaya`, plug-ins): centimetres and radians whatever the scene, as the reference's are. `MAngle.uiUnit` and `MDistance.uiUnit` follow `currentUnit`.
+- Panels: Channel Box and its multi-edit (`+=`, `-=`, `*=`, `/=` work on what's shown), Attribute Editor, Graph Editor and Dope Sheet key values read in the current units through `query.rs`. Manipulator drags work in stored units and echo in the current ones.
+- Expressions: angular plugs read in the current unit unless `-uc none`, distances under `-uc all`.
+- Time: film, pal, ntsc, show and the rest of the reference's names, and custom rates such as `37fps`. Keys keep their seconds across a change unless `-ua 0`. Frames are what's stored, rescaled on a change, where the reference stores ticks: same results.
+- USD stages hold degrees: converted where they meet the scene.
+- Left as they are: HumanIK's per-joint state attributes keep what their solver works in. Attributes Aztek adds itself with no counterpart (`hardAngle`, `minAngle`) and UV angles the reference documents in degrees (`polyEditUV -angle`, `polyMoveUV -ra`) stay in degrees.
+- Unverified, all on the capture list: whether `xform -q -m` answers in the current unit (here centimetres), whether a primitive's default size follows the unit (here it doesn't: `polyCube` with no `-w` in a metre scene is 1 cm wide), and whether `polyEvaluate -b` scales (1.11).
+
+Audited, commands whose flags carry a unit:
+
+- `ambientLight`: -position (distance), -rotation (angle)
+- `directionalLight`: -position (distance), -rotation (angle)
+- `pointLight`: -position (distance), -rotation (angle)
+- `unfrozenTransforms`: -rotateStep (angle)
+- `xform`: -translation (distance), -rotatePivot (distance), -scalePivot (distance), -pivots (distance), -rotateTranslation (distance), -scaleTranslation (distance), -rotation (angle), -rotateAxis (angle), -boundingBox (distance)
+- `rotate`: -pivot (distance), -by (angle), -to (angle), -x (angle), -y (angle), -z (angle)
+- `move`: -x (distance), -y (distance), -z (distance), -by (distance), -to (distance)
+- `scale`: -pivot (distance)
+- `duplicate`: -translate (distance), -rotate (angle), -pivotPoint (distance)
+- `joint`: -position (distance), -orientation (angle), -scaleOrientation (angle), -angleX (angle), -angleY (angle), -angleZ (angle), -limitX (angle), -limitY (angle), -limitZ (angle)
+- `ikHandle`: -twist (angle), -roll (angle), -offset (distance)
+- `spaceLocator`: -position (distance)
+- `camera`: -position (distance), -rotation (angle), -nearClipPlane (distance), -farClipPlane (distance), -orthographicWidth (distance), -centerOfInterest (distance), -worldCenterOfInterest (distance)
+- `viewPlace`: -orthoWidth (distance)
+- `viewClipPlane`: -nearClipPlane (distance), -farClipPlane (distance)
+- `lookThru`: -nearClip (distance), -farClip (distance)
+- `dolly`: -distance (distance)
+- `tumble`: -azimuthAngle (angle), -elevationAngle (angle), -rotationAngles (angle)
+- `orbit`: -horizontalAngle (angle), -verticalAngle (angle), -rotationAngles (angle)
+- `roll`: -degree (angle)
+- `spotLight`: -position (distance), -rotation (angle), -coneAngle (angle), -penumbra (angle), -leftBarnDoorAngle (angle), -rightBarnDoorAngle (angle), -topBarnDoorAngle (angle), -bottomBarnDoorAngle (angle)
+- `curve`: -point (distance), -editPoint (distance)
+- `circle`: -center (distance), -radius (distance), -sweep (angle), -firstPoint (distance)
+- `nurbsSquare`: -center (distance), -sideLength1 (distance)
+- `sphere`: -pivot (distance), -radius (distance), -startSweep (angle), -endSweep (angle)
+- `cone`: -pivot (distance), -radius (distance), -startSweep (angle), -endSweep (angle)
+- `cylinder`: -pivot (distance), -radius (distance), -startSweep (angle), -endSweep (angle)
+- `torus`: -pivot (distance), -radius (distance), -startSweep (angle), -endSweep (angle), -minorSweep (angle)
+- `nurbsPlane`: -pivot (distance), -width (distance)
+- `nurbsCube`: -pivot (distance), -width (distance)
+- `revolve`: -pivot (distance), -startSweep (angle), -endSweep (angle)
+- `extrude`: -length (distance), -rotation (angle)
+- `offsetCurve`: -distance (distance)
+- `offsetSurface`: -distance (distance)
+- `extendCurve`: -distance (distance)
+- `extendSurface`: -distance (distance)
+- `threePointArc`: -point1 (distance), -point2 (distance), -point3 (distance), -radius (distance)
+- `twoPointArc`: -point1 (distance), -point2 (distance), -radius (distance)
+- `nonLinear`: -startAngle (angle), -endAngle (angle), -wavelength (distance)
+- `softMod`: -falloffRadius (distance), -falloffCenter (distance)
+- `softSelect`: -softSelectDistance (distance)
+- `wire`: -dropoffDistance (distance), -rotation (angle)
+- `wrap`: -maxDistance (distance)
+- `lattice`: -position (distance), -rotation (angle)
+- `pathAnimation`: -bankLimit (angle), -bankThreshold (angle)
+- `polyMergeVertex`: -distance (distance)
+- `polyMerge`: -distance (distance)
+- `polyBevel`: -offset (distance), -smoothingAngle (angle)
+- `polyBevel3`: -offset (distance), -angleTolerance (angle), -miteringAngle (angle), -smoothingAngle (angle)
+- `polySoftEdge`: -angle (angle)
+- `polyCut`: -cutPlaneCenter (distance), -cutPlaneRotate (angle), -cutPlaneWidth (distance), -cutPlaneHeight (distance), -extractOffset (distance)
+- `polyMirrorFace`: -mirrorPosition (distance), -pivot (distance), -pivotX (distance), -pivotY (distance), -pivotZ (distance), -smoothingAngle (angle)
+- `polyMirror`: -mirrorPosition (distance), -pivot (distance), -pivotX (distance), -pivotY (distance), -pivotZ (distance), -tolerance (distance)
+- `polyPoke`: -translate (distance), -translateX (distance), -translateY (distance), -translateZ (distance), -localTranslate (distance), -localTranslateX (distance), -localTranslateY (distance), -localTranslateZ (distance)
+- `polyInset`: -thickness (distance), -depth (distance)
+- `polyCreateFacet`: -point (distance)
+- `polyAppend`: -point (distance)
+- `polyChamferVtx`: -width (distance)
+- `polyWedgeFace`: -wedgeAngle (angle), -center (distance)
+- `polyQuad`: -angle (angle)
+- `polyQuadrangulate`: -maxAngle (angle)
+- `polyBridgeEdge`: -twist (angle), -smoothingAngle (angle)
+- `polyBridge`: -twist (angle), -smoothingAngle (angle)
+- `polySpherize`: -radius (distance), -center (distance)
+- `rotateComponents`: -by (angle), -pivot (distance)
+- `scaleComponents`: -pivot (distance)
+- `moveComponents`: -by (distance), -to (distance)
+- `distanceDimension`: -startPoint (distance), -endPoint (distance)
+- `closestPointOnMesh`: -inPosition (distance)
+- `nearestPointOnMesh`: -inPosition (distance)
+- `setPivot`: -position (distance)
+- `transformLimits`: -translation (distance), -translationX (distance), -translationY (distance), -translationZ (distance), -rotation (angle), -rotationX (angle), -rotationY (angle), -rotationZ (angle)
+- Primitives (`polyCube`, `polySphere`, `polyCylinder`, `polyCone`, `polyPlane`, `polyTorus`, `polyPrism`, `polyPyramid`, `polyPipe`, `polyHelix`, `polyDisc`, `polyCapsule`, `polyPlatonicSolid`, `polyPrimitive`, `polySoccerBall`, `polyIcoSphere`, `polyQuadSphere`, `polySuperShape`): -position, -width, -height, -depth, -radius, -sideLength, -length, -tipRadius, -sectionRadius, -thickness (distance); -rotation, -twist (angle)
+- Component edits (`polyExtrudeFacet`, `polyExtrudeEdge`, `polyExtrude`, `polyMoveVertex`, `polyMoveEdge`, `polyMoveFacet`, `polyChipOff`, `polyDuplicateEdge`): -translate, -localTranslate, -pivot and their X Y Z, -offset, -thickness (distance); -rotate, -localRotate and their X Y Z, -smoothingAngle, -twist (angle)
+- Constraints (`pointConstraint`, `orientConstraint`, `aimConstraint`, `geometryConstraint`, `normalConstraint`, `tangentConstraint`, `poleVectorConstraint`, `pointOnPolyConstraint`): -offset (angle on orient and aim, distance on the rest)
+- Any command's -smoothingAngle, -miteringAngle, -angleTolerance (angle)
+- Arguments: `move` (distance), `rotate` (angle)
+- Results: `pointPosition`, `objectCenter`, `exactWorldBoundingBox`, `arclen`, `pointOnCurve`, `pointOnSurface` (distance); `angleBetween` (angle)
+- In their bodies: `getAttr`, `setAttr`, `addAttr`, `attributeQuery`, `setKeyframe -v`, `keyframe -vc`, `keyTangent` angles, `setDrivenKeyframe -v`, `unfrozenTransforms`, `getParticleAttr`
+
+Attributes tagged as angles: `rotate`, `rotateAxis`, `jointOrient`, `preferredAngle`, `minRotLimit`, `maxRotLimit`, `restRotate`, `constraintRotate`, `constraintJointOrient`, `constraintRotateAxis`, `targetOffsetRotate`, `targetRotate`, `targetJointOrient`, `localRotate`, `twist`, `roll`, `startAngle`, `endAngle`, `coneAngle`, `penumbraAngle`, `shutterAngle`, `startSweep`, `endSweep`, `sweep`, `minorSweep`, `smoothingAngle`, `smoothingangle`, `miteringAngle`, `angleTolerance`, `outRotate`, `outputRotate`, `inputRotate`, `inRotate1`, `inRotate2`, `rotateFrame`, `rotateUV`, `pivotOrient`, `cutPlaneRotate`, `bankLimit`, `wedgeAngle`, `frontTwist`, `upTwist`, `sideTwist`, `twistRotation`, `rollRotation`, `projectionHorizontalSweep`, `rotation`, `dTwistStart`, `dTwistEnd`, `dTwistRampMult`, `euler`. As distances: `translate`, `rotatePivot`, `scalePivot`, `rotatePivotTranslate`, `scalePivotTranslate`, `transMinusRotatePivot`, `center`, `boundingBoxMin`, `boundingBoxMax`, `boundingBoxSize`, `constraintTranslate`, `constraintRotatePivot`, `constraintRotateTranslate`, `targetTranslate`, `targetRotatePivot`, `targetRotateTranslate`, `targetScalePivot`, `targetOffsetTranslate`, `restTranslate`, `localTranslate`, `localPosition`, `cutPlaneCenter`, `centerOfIllumination`, `centerOfInterest`, `focusDistance`, `nearClipPlane`, `farClipPlane`, `orthographicWidth`, `distance`, `point1`, `point2`, `falloffRadius`, `falloffCenter`, `maxDistance`, `minDistance`, and sizes on primitives. The attribute fixtures check these (`doubleAngle`, `doubleLinear`) once captured.
+
 ## Reference and checks
 
 - The reference's published command reference (flags, short names, create/query/edit modes, return values) and node reference

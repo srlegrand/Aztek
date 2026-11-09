@@ -1723,7 +1723,7 @@ class MFnUnitAttribute(MFnNumericAttribute):
     def create(self, longName, shortName, unitType, defaultValue=0.0):
         d = defaultValue
         if isinstance(d, MAngle):
-            d = d.asDegrees()
+            d = d.asRadians()
         elif isinstance(d, MDistance):
             d = d.asCentimeters()
         elif isinstance(d, MTime):

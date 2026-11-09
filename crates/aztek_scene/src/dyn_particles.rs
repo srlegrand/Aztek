@@ -121,10 +121,14 @@ fn get_particle_attr(s: &mut Session, a: &Args) -> CmdResult {
     let ids: Vec<usize> = particle_ids(&name).unwrap_or_else(|| (0..st.position.len()).collect()).into_iter().filter(|&i| i < st.position.len()).collect();
     let values: Vec<Vec<f64>> = ids
         .iter()
-        .map(|&i| match particle_value(&st, &at, i) {
-            Value::Array(v) => v.iter().filter_map(Value::as_f64).collect(),
-            Value::Number(n) => vec![n.as_f64().unwrap_or(0.0)],
-            _ => Vec::new(),
+        .map(|&i| {
+            // Lengths and speeds read in the current unit.
+            let k = if aztek_ops::units::user_call() && matches!(at.as_str(), "position" | "velocity" | "radiusPP") { 1.0 / aztek_ops::units::cm_per_unit() } else { 1.0 };
+            match particle_value(&st, &at, i) {
+                Value::Array(v) => v.iter().filter_map(Value::as_f64).map(|x| x * k).collect(),
+                Value::Number(n) => vec![n.as_f64().unwrap_or(0.0) * k],
+                _ => Vec::new(),
+            }
         })
         .filter(|v| !v.is_empty())
         .collect();

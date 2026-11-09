@@ -25,6 +25,20 @@ class _StoredCmds:
 
         return call
 
+    # Plug-in commands come and go on the module itself.
+    def __setattr__(self, name, value):
+        setattr(_script_cmds, name, value)
+
+    def __delattr__(self, name):
+        delattr(_script_cmds, name)
+
+    @property
+    def __dict__(self):
+        return _script_cmds.__dict__
+
+    def __dir__(self):
+        return dir(_script_cmds)
+
 
 _cmds = _StoredCmds()
 
@@ -963,7 +977,7 @@ class MPlug:
         return self._set(str(v))
 
     def setMAngle(self, a):
-        return self._set(a.asDegrees())
+        return self._set(a.asRadians())
 
     def setMDistance(self, d):
         return self._set(d.asCentimeters())
@@ -1575,7 +1589,7 @@ class MDGModifier:
         return self._plug_value(plug, str(v))
 
     def newPlugValueMAngle(self, plug, a):
-        return self._plug_value(plug, a.asDegrees())
+        return self._plug_value(plug, a.asRadians())
 
     def newPlugValueMDistance(self, plug, d):
         return self._plug_value(plug, d.asCentimeters())

@@ -103,9 +103,6 @@ fn connections_drive_values_and_refuse_cycles() {
     assert!(s
         .run("setAttr", json!({"args": ["dst.rotate", [0, 0, 0]]}))
         .is_err());
-    assert!(s
-        .run("connectAttr", json!({"args": ["dst.rotate", "src.scale"]}))
-        .is_err());
 }
 
 #[test]

@@ -1204,6 +1204,20 @@ fn add_attr(s: &mut Session, a: &Args) -> CmdResult {
     def.max_value = a.get("maxValue").and_then(Value::as_f64);
     def.soft_min = a.get("softMinValue").and_then(Value::as_f64);
     def.soft_max = a.get("softMaxValue").and_then(Value::as_f64);
+    // A script's numbers are in the current unit of what the attr measures.
+    let k = aztek_ops::units::factor(def.unit);
+    if k != 1.0 {
+        match &mut def.default_value {
+            PlugValue::Float(x) => *x *= k,
+            PlugValue::Vec3(x) => *x *= k,
+            _ => {}
+        }
+        for b in [&mut def.min_value, &mut def.max_value, &mut def.soft_min, &mut def.soft_max] {
+            if let Some(x) = b {
+                *x *= k;
+            }
+        }
+    }
     for (f, bit) in [
         ("keyable", flags::KEYABLE),
         ("hidden", flags::HIDDEN),

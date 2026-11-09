@@ -20,7 +20,8 @@ from aztek.api.OpenMaya import (
     _node_object,
 )
 
-_cmds = _sys.modules["aztek.cmds"]
+# The API's commands: in stored units, as its values are.
+from aztek.api.OpenMaya import _cmds
 
 
 class MFnSkinCluster(MFnDependencyNode):
