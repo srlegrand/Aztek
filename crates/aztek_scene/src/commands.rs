@@ -680,6 +680,11 @@ fn register_scene(c: &mut Commands<Session>) {
             }
             let new_name = g.resolve_hashes(&new_name);
             rename_node(g, id, &new_name)?;
+            // An instanced shape keeps one name under all its parents.
+            let name_now = g.node(id).unwrap().name().to_string();
+            for other in crate::instancing::one_shape(g, id).into_iter().filter(|&o| o != id) {
+                rename_node(g, other, &name_now)?;
+            }
             Ok(json!(g.path(id)))
         })
         .positional("[object] newName"),

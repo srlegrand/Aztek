@@ -19,6 +19,10 @@ Done 09/11/2026 (PLAN 1.9 to 1.11). Whether `-e` or `-q` means edit and query no
 
 Done 09/11/2026 (PLAN 1.12, 1.13). Smooth preview is `displaySmoothMesh` (0, 1, 2) and `smoothLevel` on the shape, with `useSmoothPreviewForRender` and `renderSmoothLevel` for Harold. `displaySmoothness -po` maps 1, 2, 3 onto it and `-q -po` answers per object. `smoothPreview` stays as a command and as an alias for old files and scripts. `shadingNode` takes `-isColorManaged` and `-asRendering`; `hyperShade` has `-listUpstreamShaderNodes`, `-listDownstreamShaderNodes`, `-shaderNetwork` and `-duplicate`. Its window flags are accepted and do nothing.
 
+## Instances
+
+PLAN 1.14, partly (09/11/2026). An instanced shape behaves as one shape to a script: `listRelatives -ap` gives every parent, `setAttr` on one reaches the others, a rename follows, geometry is shared and `.ma` holds the reference's `parent -s -add` form. Inside, each parent still holds a node of its own, so a direct graph write doesn't carry across, `MFnDagNode.instanceCount` doesn't see it, and only meshes instance. TICKETS.md has the rest.
+
 ## Units
 
 Done 09/11/2026 (PLAN 1.1). What's stored is centimetres and radians. A command called from a script or the interface is in the current units, and `execute` converts its flags, arguments and results by tags in `crates/aztek_scene/src/unit_tables.rs`; commands called by other commands, viewport tools and the Python API are in stored units. `currentUnit` lives in `aztek_ops::units`, per scene: a new scene goes back to cm and degrees, opening a file takes on the file's.

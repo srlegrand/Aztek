@@ -47,3 +47,11 @@ assert cmds.ls(sl=True) == ["pCube2", "pCube3"]
 cmds.nameCommand("makeCubeNameCommand", ann="Make a cube", c="polyCube")
 cmds.hotkey(k="F12", n="makeCubeNameCommand")
 assert cmds.hotkey(k="F12", q=True, n=True) == "makeCubeNameCommand"
+
+# Instances.
+cmds.file(new=True, force=True)
+cmds.polyCube()
+cmds.instance("pCube1")
+assert cmds.listRelatives("pCube1|pCubeShape1", ap=True) == ["pCube1", "pCube2"]
+cmds.setAttr("pCube1|pCubeShape1.castsShadows", 0)
+assert cmds.getAttr("pCube2|pCubeShape1.castsShadows") == 0

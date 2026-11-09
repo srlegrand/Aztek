@@ -17,6 +17,7 @@ Requests waiting or in progress, newest detail kept. Move to Done with the date 
   function; opening a dynamics example in the app says the aztekDynamics plug-in wasn't found (the file `requires` it).
 - `#` in `-n` flags when creating nodes (`polyCube -n thing#`): `rename` has it (PLAN 1.4).
 - Real plug cycles: `a.tx -> b.tx -> a.tx` is refused. The reference connects it and warns at evaluation; the evaluator needs a guard first.
+- One shape node under several parents, in fact: each instance's parent holds its own node, kept the same by `setAttr` and `rename` (PLAN 1.14). A script sees one shape; the Python API's `instanceCount`, a direct graph write and non-mesh instances don't yet. A real multi-parent graph means every DAG walk and per-instance world matrices, picking and selection paths: a project of its own, Simon's call.
 - Missing commands found running the capture kit in Aztek (09/11/2026): `allNodeTypes`, `assignCommand`, `hotkeySet`, `imagePlane`, `runTimeCommand -dca` and `-uca`.
 - PLAN.md (08/11/2026): parity review's work queue. Phase 0 and 1 before anything else that isn't a ticket.
 - Cloth feels wrong at scale: a cloth bigger than the grid acts stiff, small or heavy even as silk. Units, gravity, bending and presets must scale (agent, top priority). Real-world units by default from `currentUnit`: 1 cm of geometry is 1 cm of cloth, so nobody works in 10 cm = 1 m.
@@ -100,6 +101,9 @@ Requests waiting or in progress, newest detail kept. Move to Done with the date 
 - 1.13. Done: `shadingNode -isColorManaged`, `-asRendering`; `hyperShade -lus -lds -snw -d`
   Not done: `-rgp`, `-rs`, `-inc`, `-cwa`, `-n` accepted and do nothing
   Why: they drive the reference's Hypershade window, which Aztek doesn't have in that form
+- 1.14. Done: `listRelatives -ap` gives every parent, attributes set on one instance's shape reach the others, a rename follows, `.ma` keeps the reference's form
+  Not done: one node under two parents inside the graph; `instanceCount`; non-mesh instances
+  Why: a true multi-parent graph means rewriting every DAG walk; ticketed for Simon's call
 
 ## Done
 - 08/11/2026 One light model: the viewport's lights render the same in Harold (decay rates, intensity, colour, spot cone and dropoff, ambient, area, volume, default lighting, ambient colour, black background); parity test against the shared formula.

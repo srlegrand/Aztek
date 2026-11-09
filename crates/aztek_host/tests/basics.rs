@@ -141,7 +141,6 @@ fn duplicate_and_instance() {
 }
 
 #[test]
-#[ignore = "PLAN 1.14: an instance is one shape under two parents"]
 fn instances_share_one_shape() {
     let mut c = core();
     mel(&mut c, "polyCube; instance pCube1;");
