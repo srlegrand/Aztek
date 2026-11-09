@@ -384,7 +384,6 @@ fn hotkey_query() {
 // polyEvaluate
 
 #[test]
-#[ignore = "PLAN 1.9: polyEvaluate -e is edges, not edit"]
 fn poly_evaluate_counts() {
     let mut c = core();
     mel(&mut c, "polyCube;");
@@ -396,7 +395,6 @@ fn poly_evaluate_counts() {
 }
 
 #[test]
-#[ignore = "PLAN 1.11: polyEvaluate -uvShell"]
 fn poly_evaluate_uv_shells() {
     let mut c = core();
     mel(&mut c, "polyCube;");
@@ -413,7 +411,6 @@ fn bevel_node_name() {
 }
 
 #[test]
-#[ignore = "PLAN 1.10: a cycle through two nodes connects"]
 fn cycles_connect() {
     let mut c = core();
     mel(&mut c, "polyCube -n src; polyCube -n dst;");

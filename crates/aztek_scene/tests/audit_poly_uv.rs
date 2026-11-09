@@ -320,7 +320,7 @@ fn auto_seam_and_optimize() {
     run(&mut s, "polyCube", json!({"name": "c"}));
     run(&mut s, "u3dAutoSeam", json!({"args": ["c"], "s": 1.0}));
     // Every cube edge is 90 degrees: all cut, six shells.
-    assert_eq!(run(&mut s, "polyEvaluate", json!({"args": ["c"], "shell": true})), 6);
+    assert_eq!(run(&mut s, "polyEvaluate", json!({"args": ["c"], "uvShell": true})), 6);
 }
 
 #[test]

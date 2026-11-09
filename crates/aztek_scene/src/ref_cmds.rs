@@ -61,7 +61,7 @@ pub fn register(c: &mut Commands<Session>) {
                     tot[3] += faces.iter().map(|&f| cage.face_size(f) as i64 - 2).sum::<i64>();
                     let t = crate::uv_ops::topo(&cage);
                     tot[4] += t.maps.len() as i64;
-                    tot[5] += t.shells.len() as i64;
+                    tot[5] += aztek_geo::multibox::shells_of(&cage).1 as i64;
                     let w = crate::rig::world(g, crate::dag::transform_of(g, mesh));
                     for p in 0..cage.point_capacity() {
                         if cage.point_valid(p) {

@@ -9,6 +9,12 @@ their files load into it (see the dated section and docs/DYNAMICS.md). The produ
 
 Done 09/11/2026 (PLAN 1.2 to 1.8). `group` is `group1`, `group2`, under its members' shared parent with pivots at the world's origin. `rename` takes `#`. A trailing number keeps its padding in every generated name. A copied shape takes the next free shape name. `listRelatives` gives leaf names unless `-path` or `-fullPath`, so a script handing a result to another command wants one of those, as in the reference. `move` on `obj.rotatePivot` and `obj.scalePivot` takes `-a`, `-r`, `-ws`, `-os`, one pivot at a time. `InvertSelection` and `hotkey -q` work. Unverified against a capture: all the naming rules (`tools/reference_capture/WANTED.md`).
 
+## Short flags and polyEvaluate
+
+Done 09/11/2026 (PLAN 1.9 to 1.11). Whether `-e` or `-q` means edit and query now comes from each command's flag table. Commands where it doesn't: `-e` on `polyEvaluate` and `polyCheck` (edge), `polyCompare` (edges), `delete` (expressions), `findType` (exact), `attributeInfo` (enumerated), `createSet` and `createDisplayLayer` (empty), `namingConvention` (enable), `timer` (endTimer), `scriptJob` (event); `-q` on `usdPy` (quiet). `-c` was never read as anything generic.
+
+`polyEvaluate`: `-v -e -f -t -uv -s -b -b2 -a -wa -vc -ec -fc -uvc -tc -bc -bc2 -us -uid -uis -aus -as`, with `-uvs` accepted for the current set and `-ds` accepted. Several flags give a dictionary by long name in Python and an array in MEL in the order given. `-s` counts mesh shells, where it counted UV shells; `-us` counts those. Lengths and areas are in the current unit: unverified (`units.m.polyEvaluate.b`).
+
 ## Units
 
 Done 09/11/2026 (PLAN 1.1). What's stored is centimetres and radians. A command called from a script or the interface is in the current units, and `execute` converts its flags, arguments and results by tags in `crates/aztek_scene/src/unit_tables.rs`; commands called by other commands, viewport tools and the Python API are in stored units. `currentUnit` lives in `aztek_ops::units`, per scene: a new scene goes back to cm and degrees, opening a file takes on the file's.
@@ -381,8 +387,7 @@ connections. Transforms: `offsetParentMatrix`, `shear`, limits and `transformLim
 matrices, `rotateQuaternion`, bounding box attributes, `hiddenInOutliner`. UUIDs and namespaces. Full flag sets for the
 core commands (`ref_attrs.rs`, `ref_xforms.rs`, `ref_scene.rs`).
 
-Differences from the reference in these: `src.t -> dst.r` followed by `dst.r -> src.s` is refused as a cycle, which the reference allows, for the same
-reason. `parentMatrix` read through a connection includes `offsetParentMatrix` (getAttr gives the reference's value). Expression
+Differences from the reference in these: a connection that truly feeds a plug back into itself (`a.tx -> b.tx -> a.tx`) is refused, where the reference connects it and warns when it evaluates (ticket). `parentMatrix` read through a connection includes `offsetParentMatrix` (getAttr gives the reference's value). Expression
 numbers are all doubles, so `1/2` is 0.5. `parent -add` makes an instance through `instance`. `closestPointOnMesh` leaves
 `parameterU` and `parameterV` at 0. Limits apply when the node computes, so a plug reading a limited channel directly can
 see the value before the limit. The defaults of `multiplyDivide.input1`, `condition.colorIfTrue` and `floatMath.floatB`
@@ -882,7 +887,7 @@ Not done, the ones a user would notice first:
 - The extrude handles do not follow `offset`, `localRotate` or several separate regions: one set sits at the middle of them.
 - Option boxes with no layout of their own still list flags, and some are empty: NURBS primitives, Curves such as Detach, several Surfaces, Unfold and Layout. Tools have no option boxes. Boxes for Mesh Reduce and Combine are raw flags.
 - Missing menu items, by use: Joint Labelling, Rivet, UV Pin, Proximity Pin, Copy and Paste Vertex Weights, Mirror Skin Weights as an option box, Interactive Bind Skin, UV Set Editor, Split UVs, 3D Cut and Sew UV Tool, Smooth Proxy, Unsmooth, Slice, Hole Punch, Cut Out, the Deform > Edit submenus other than Lattice, Prune Membership, Display Intermediate Objects, Relationship Editors, Hold Current Keys, IK/FK Keys, the Audio and Cache menus, a top level Visualize.
-- `polyBevel3`'s node is `polyBevel31`, as an existing test pins it; from memory the reference calls it `polyBevel1`. Not confirmed.
+- `polyBevel3`'s node is `polyBevel1`, with no test pinning anything else. From memory, not confirmed: `bevel.name` in the capture kit.
 
 ## Animation layers and HumanIK, 07/11/2026
 

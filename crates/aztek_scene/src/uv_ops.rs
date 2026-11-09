@@ -1311,3 +1311,44 @@ pub fn editor_data(g: &mut Graph, mesh: NodeId) -> Option<Value> {
 pub fn is_uv_node(type_name: &str) -> bool {
     NODE_TYPES.iter().any(|(n, _)| *n == type_name)
 }
+
+/// polyEvaluate's UV questions about one mesh: `flag` is the long name asked, `what` the mesh's name for component lists.
+pub(crate) fn evaluate(m: &Mesh, t: &Target, flag: &str, shell: i64, what: &str) -> serde_json::Value {
+    use serde_json::json;
+    let tp = topo(m);
+    let uv = m.corner_attrs().get::<[f32; 2]>(UV);
+    let shell_of_map = |map: &Vec<Index>| map.first().and_then(|&c| tp.face_shell.get(m.corner_face(c) as usize).copied());
+    match flag {
+        "uvShell" => json!(tp.shells.len()),
+        "uvComponent" => json!(t.maps.len()),
+        "uvShellIds" => json!(t.maps.iter().filter_map(|&i| tp.maps.get(i as usize)).filter_map(shell_of_map).collect::<Vec<_>>()),
+        "uvsInShell" => json!(tp
+            .maps
+            .iter()
+            .enumerate()
+            .filter(|(_, map)| shell_of_map(map).is_some_and(|s| s as i64 == shell))
+            .map(|(i, _)| format!("{what}.map[{i}]"))
+            .collect::<Vec<_>>()),
+        "activeUVShells" => {
+            let mut ids: Vec<Index> = target_faces(m, t, &tp).iter().filter_map(|&f| tp.face_shell.get(f as usize).copied()).filter(|&s| s != INVALID).collect();
+            ids.extend(t.maps.iter().filter_map(|&i| tp.maps.get(i as usize)).filter_map(shell_of_map));
+            ids.sort_unstable();
+            ids.dedup();
+            json!(ids)
+        }
+        "boundingBox2d" | "boundingBoxComponent2d" => {
+            let faces = target_faces(m, t, &tp);
+            let corners: Vec<Index> = if flag == "boundingBox2d" { (0..m.corner_capacity()).filter(|&c| m.corner_valid(c)).collect() } else { corners_of(m, &tp, &faces, &t.maps) };
+            let (mut lo, mut hi) = ([f64::MAX; 2], [f64::MIN; 2]);
+            for c in corners {
+                let q = uv_of(uv, c);
+                for k in 0..2 {
+                    lo[k] = lo[k].min(q[k] as f64);
+                    hi[k] = hi[k].max(q[k] as f64);
+                }
+            }
+            json!([[lo[0], hi[0]], [lo[1], hi[1]]])
+        }
+        _ => json!(null),
+    }
+}

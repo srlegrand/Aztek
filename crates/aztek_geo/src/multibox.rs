@@ -153,7 +153,7 @@ struct Voxelized {
 }
 
 /// Connected pieces of the mesh, numbered by their lowest point; points on no face get their own.
-fn shells_of(mesh: &Mesh) -> (Vec<i32>, i32) {
+pub fn shells_of(mesh: &Mesh) -> (Vec<i32>, i32) {
     let mut parent: Vec<Index> = (0..mesh.point_capacity()).collect();
     fn find(parent: &mut [Index], mut i: Index) -> Index {
         while parent[i as usize] != i {
