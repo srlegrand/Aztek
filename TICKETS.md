@@ -62,6 +62,12 @@ Requests waiting or in progress, newest detail kept. Move to Done with the date 
 - 1.1 Real units. Done: centimetres and radians stored, conversion at commands, `.ma`, panels, expressions, Python API and USD, `unitConversion` nodes, time units, audit in PARITY.md.
   Not done: three readings wait on a capture (matrix queries, primitive default sizes, `polyEvaluate -b`). The Channel Box check under Xvfb comes after 1.14 with its own item.
   Why: the reference has to answer those; the Channel Box works on what it shows, which is now in the current unit.
+- 1.2. Done: `group1`, `group2` from `group`, `group -em`, `group -n` and the Ctrl+G menu item, which runs the same command
+  Not done: nothing
+  Why: one command
+- 1.3. Done: `group` under the members' shared parent, pivots at the world origin, members keep their world place
+  Not done: `-em` pivots stay local
+  Why: the reference's empty group has no members to place it
 
 ## Done
 - 08/11/2026 One light model: the viewport's lights render the same in Harold (decay rates, intensity, colour, spot cone and dropoff, ambient, area, volume, default lighting, ambient colour, black background); parity test against the shared formula.

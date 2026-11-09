@@ -17,3 +17,10 @@ cmds.currentUnit(linear="m", angle="rad")
 assert abs(cmds.getAttr("pCube1.tx") - 1.0) < 1e-9
 assert abs(cmds.getAttr("pCube1.ry") - 1.5707963267948966) < 1e-9
 cmds.currentUnit(linear="cm", angle="deg")
+
+# Groups.
+cmds.file(new=True, force=True)
+cmds.polyCube(); cmds.polyCube()
+assert cmds.group("pCube1", "pCube2") == "group1"
+assert cmds.group(em=True) == "group2"
+assert cmds.xform("group1", q=True, ws=True, rp=True) == [0.0, 0.0, 0.0]

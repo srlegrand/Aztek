@@ -526,7 +526,7 @@ fn register_scene(c: &mut Commands<Session>) {
                 };
                 let mut c = a.clone();
                 if !c.has("name") {
-                    c.flags.insert("name".into(), json!("Group"));
+                    c.flags.insert("name".into(), json!("group1"));
                 }
                 c.flags.insert("skipSelect".into(), json!(true));
                 let name = create(s, "transform", &c)?;

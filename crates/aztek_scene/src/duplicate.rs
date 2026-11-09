@@ -331,7 +331,7 @@ fn duplicate_roots(g: &mut Graph, roots: &[NodeId], r: &Request) -> CmdResult<Ve
             }
         }
         let ty = types::find("transform").expect("transform");
-        let grp = g.create_node(&ty, "Group", parent, true)?;
+        let grp = g.create_node(&ty, "group1", parent, true)?;
         for &c in &made {
             g.set_parent(c, grp, true, usize::MAX)?;
         }

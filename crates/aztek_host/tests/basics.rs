@@ -164,7 +164,6 @@ fn duplicate_names_the_shape() {
 // Group and parent
 
 #[test]
-#[ignore = "PLAN 1.2: group names are group1, group2"]
 fn group_names() {
     let mut c = core();
     mel(&mut c, "polyCube; polyCube;");
@@ -175,12 +174,11 @@ fn group_names() {
 }
 
 #[test]
-#[ignore = "PLAN 1.3: group goes under the shared parent, pivot at the origin"]
 fn group_under_the_shared_parent() {
     let mut c = core();
-    mel(&mut c, "polyCube; polyCube; group -em -n top; parent pCube1 pCube2 top; move 5 0 0 top;");
+    mel(&mut c, "polyCube; polyCube; group -em -n holder; parent pCube1 pCube2 holder; move 5 0 0 holder;");
     let g = mel(&mut c, "group pCube1 pCube2;");
-    assert_eq!(mel(&mut c, &format!("listRelatives -p {};", g.as_str().unwrap())), json!(["top"]));
+    assert_eq!(mel(&mut c, &format!("listRelatives -p {};", g.as_str().unwrap())), json!(["holder"]));
     near(mel(&mut c, &format!("xform -q -ws -rp {};", g.as_str().unwrap())), &[0.0, 0.0, 0.0]);
     near(mel(&mut c, "xform -q -ws -t pCube1;"), &[5.0, 0.0, 0.0]);
 }
