@@ -21,6 +21,7 @@ public:
     void set_corner(QWidget* w);
 protected:
     void resizeEvent(QResizeEvent* e) override;
+    bool eventFilter(QObject* o, QEvent* e) override;
 
 public:
     // Reads the reference's shelf_Name.mel into a new shelf: its shelfButton blocks.
@@ -35,6 +36,7 @@ private:
     void edit_item(int shelf, int item);
     std::function<void(const QString&, const QString&)> run_;
     QWidget* corner_ = nullptr;
+    QWidget* corner_gap_ = nullptr;
     void place_corner();
     QTabWidget* tabs_;
     QJsonArray shelves_;

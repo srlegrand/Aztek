@@ -19,6 +19,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
+#include <QMenuBar>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QScrollArea>
@@ -229,69 +230,120 @@ QWidget* section(const QString& text, QWidget* parent) {
 
 } // namespace
 
+namespace {
+
+// The reference's Channels menu, also the channel box's right-click menu: keys, mutes, connections and locks on the
+// picked channels of the selected objects.
+void fill_channels_menu(QMenu* m) {
+    QJsonArray picked;
+    for (const QString& a : g_channel_sel) picked.append(a);
+    bool any = !picked.isEmpty();
+    auto plugs = [] {
+        QJsonArray out;
+        QJsonArray sel = state()["selection"].toArray();
+        for (const QJsonValue& o : sel)
+            for (const QString& a : g_channel_sel) out.append(o.toString().section('.', 0, 0) + "." + a);
+        return out;
+    };
+    m->addAction("Key Selected", [picked] { exec("setKeyframe", QJsonObject{{"attribute", picked}}); })->setEnabled(any);
+    m->addAction("Key All", [] { exec("setKeyframe"); });
+    m->addAction("Breakdown Selected", [picked] { exec("setKeyframe", QJsonObject{{"attribute", picked}, {"breakdown", true}}); })->setEnabled(any);
+    m->addAction("Breakdown All", [] { exec("setKeyframe", QJsonObject{{"breakdown", true}}); });
+    m->addSeparator();
+    m->addAction("Mute Selected", [plugs] {
+        for (const QJsonValue& pl : plugs()) exec("mute", QJsonObject{{"args", QJsonArray{pl}}});
+    })->setEnabled(any);
+    m->addAction("Mute All", [] { exec("mute"); });
+    m->addAction("Unmute Selected", [plugs] {
+        for (const QJsonValue& pl : plugs()) exec("mute", QJsonObject{{"args", QJsonArray{pl}}, {"disable", true}, {"force", true}});
+    })->setEnabled(any);
+    m->addAction("Unmute All", [] { exec("mute", QJsonObject{{"disable", true}, {"force", true}}); });
+    m->addSeparator();
+    m->addAction("Delete Selected Keys", [picked] { exec("cutKey", QJsonObject{{"attribute", picked}}); })->setEnabled(any);
+    m->addAction("Break Connections", [plugs] {
+        for (const QJsonValue& pl : plugs()) exec("disconnectAttr", QJsonObject{{"args", QJsonArray{pl}}});
+    })->setEnabled(any);
+    m->addSeparator();
+    m->addAction("Lock Selected", [plugs] {
+        for (const QJsonValue& pl : plugs()) exec("setAttr", QJsonObject{{"args", QJsonArray{pl}}, {"lock", true}});
+    })->setEnabled(any);
+    m->addAction("Unlock Selected", [plugs] {
+        for (const QJsonValue& pl : plugs()) exec("setAttr", QJsonObject{{"args", QJsonArray{pl}}, {"lock", false}});
+    })->setEnabled(any);
+    m->addAction("Hide Selected", [plugs] {
+        for (const QJsonValue& pl : plugs()) exec("setAttr", QJsonObject{{"args", QJsonArray{pl}}, {"keyable", false}});
+    })->setEnabled(any);
+    m->addAction("Lock and Hide Selected", [plugs] {
+        for (const QJsonValue& pl : plugs()) exec("setAttr", QJsonObject{{"args", QJsonArray{pl}}, {"lock", true}, {"keyable", false}});
+    })->setEnabled(any);
+    m->addSeparator();
+    m->addAction("Select All Channels", [] {
+        g_channel_sel.clear();
+        for (QLabel* l : g_channel_labels) g_channel_sel << l->property("attr").toString();
+        restyle_channel_labels();
+    });
+    m->addAction("Deselect Channels", [] {
+        g_channel_sel.clear();
+        restyle_channel_labels();
+    });
+}
+
+} // namespace
+
 ChannelBox::ChannelBox(QWidget* parent) : Panel(parent) {
     auto* lay = new QVBoxLayout(this);
     lay->setContentsMargins(0, 0, 0, 0);
+    lay->setSpacing(0);
+    // The reference's menu bar over the channels: Channels, Edit, Object.
+    auto* bar = new QMenuBar(this);
+    bar->setNativeMenuBar(false);
+    bar->setObjectName("panelMenus");
+    QMenu* channels = bar->addMenu("Channels");
+    connect(channels, &QMenu::aboutToShow, channels, [channels] {
+        channels->clear();
+        fill_channels_menu(channels);
+    });
+    QMenu* edit = bar->addMenu("Edit");
+    edit->addAction("Expressions...", [] { mel_action("ExpressionEditor"); });
+    edit->addAction("Set Driven Key...", [] { mel_action("SetDrivenKeyOptions"); });
+    edit->addAction("Connection Editor...", [] { mel_action("ConnectionEditor"); });
+    edit->addAction("Graph Editor...", [] { mel_action("GraphEditor"); });
+    edit->addSeparator();
+    edit->addAction("Channel Control...", [] { mel_action("ChannelControlEditor"); });
+    // Object: the selected objects; picking one shows it here.
+    QMenu* object = bar->addMenu("Object");
+    connect(object, &QMenu::aboutToShow, object, [object] {
+        object->clear();
+        QJsonArray sel = state()["selection"].toArray();
+        QStringList nodes;
+        for (const QJsonValue& v : sel) {
+            QString n = v.toString().section('.', 0, 0);
+            if (!nodes.contains(n)) nodes << n;
+        }
+        if (nodes.isEmpty()) object->addAction("Nothing selected")->setEnabled(false);
+        for (const QString& n : nodes) {
+            QAction* a = object->addAction(n.section('|', -1), [nodes, n] {
+                // The lead object is the last selected: move this one to the end.
+                QJsonArray order;
+                for (const QString& o : nodes)
+                    if (o != n) order.append(o);
+                order.append(n);
+                exec("select", QJsonObject{{"args", order}, {"replace", true}});
+            });
+            a->setCheckable(true);
+            a->setChecked(n == nodes.last());
+        }
+    });
+    lay->addWidget(bar);
     scroll_ = new QScrollArea(this);
     scroll_->setWidgetResizable(true);
     scroll_->setFrameShape(QFrame::NoFrame);
     lay->addWidget(scroll_);
     setObjectName("channelBox");
-    // The reference's channel box menu: keys, locks and connections on the picked channels.
     setContextMenuPolicy(Qt::CustomContextMenu);
     connect(this, &QWidget::customContextMenuRequested, this, [this](const QPoint& p) {
         QMenu m;
-        QJsonArray picked;
-        for (const QString& a : g_channel_sel) picked.append(a);
-        bool any = !picked.isEmpty();
-        auto plugs = [] {
-            QJsonArray out;
-            QJsonArray sel = state()["selection"].toArray();
-            for (const QJsonValue& o : sel)
-                for (const QString& a : g_channel_sel) out.append(o.toString().section('.', 0, 0) + "." + a);
-            return out;
-        };
-        m.addAction("Key Selected", [picked] { exec("setKeyframe", QJsonObject{{"attribute", picked}}); })->setEnabled(any);
-        m.addAction("Key All", [] { exec("setKeyframe"); });
-        m.addAction("Breakdown Selected", [picked] { exec("setKeyframe", QJsonObject{{"attribute", picked}, {"breakdown", true}}); })->setEnabled(any);
-        m.addAction("Breakdown All", [] { exec("setKeyframe", QJsonObject{{"breakdown", true}}); });
-        m.addSeparator();
-        m.addAction("Mute Selected", [plugs] {
-            for (const QJsonValue& pl : plugs()) exec("mute", QJsonObject{{"args", QJsonArray{pl}}});
-        })->setEnabled(any);
-        m.addAction("Mute All", [] { exec("mute"); });
-        m.addAction("Unmute Selected", [plugs] {
-            for (const QJsonValue& pl : plugs()) exec("mute", QJsonObject{{"args", QJsonArray{pl}}, {"disable", true}, {"force", true}});
-        })->setEnabled(any);
-        m.addAction("Unmute All", [] { exec("mute", QJsonObject{{"disable", true}, {"force", true}}); });
-        m.addSeparator();
-        m.addAction("Delete Selected Keys", [picked] { exec("cutKey", QJsonObject{{"attribute", picked}}); })->setEnabled(any);
-        m.addAction("Break Connections", [plugs] {
-            for (const QJsonValue& pl : plugs()) exec("disconnectAttr", QJsonObject{{"args", QJsonArray{pl}}});
-        })->setEnabled(any);
-        m.addSeparator();
-        m.addAction("Lock Selected", [plugs] {
-            for (const QJsonValue& pl : plugs()) exec("setAttr", QJsonObject{{"args", QJsonArray{pl}}, {"lock", true}});
-        })->setEnabled(any);
-        m.addAction("Unlock Selected", [plugs] {
-            for (const QJsonValue& pl : plugs()) exec("setAttr", QJsonObject{{"args", QJsonArray{pl}}, {"lock", false}});
-        })->setEnabled(any);
-        m.addAction("Hide Selected", [plugs] {
-            for (const QJsonValue& pl : plugs()) exec("setAttr", QJsonObject{{"args", QJsonArray{pl}}, {"keyable", false}});
-        })->setEnabled(any);
-        m.addAction("Lock and Hide Selected", [plugs] {
-            for (const QJsonValue& pl : plugs()) exec("setAttr", QJsonObject{{"args", QJsonArray{pl}}, {"lock", true}, {"keyable", false}});
-        })->setEnabled(any);
-        m.addSeparator();
-        m.addAction("Select All Channels", [] {
-            g_channel_sel.clear();
-            for (QLabel* l : g_channel_labels) g_channel_sel << l->property("attr").toString();
-            restyle_channel_labels();
-        });
-        m.addAction("Deselect Channels", [] {
-            g_channel_sel.clear();
-            restyle_channel_labels();
-        });
+        fill_channels_menu(&m);
         m.exec(mapToGlobal(p));
     });
 }

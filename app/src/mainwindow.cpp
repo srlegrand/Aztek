@@ -36,6 +36,8 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QKeyEvent>
+#include <QIcon>
+#include <QPolygonF>
 #include <QLabel>
 #include <QMouseEvent>
 #include <QLineEdit>
@@ -819,7 +821,8 @@ void MainWindow::build_toolbox() {
     addToolBar(Qt::LeftToolBarArea, tb);
     auto* tools = new QActionGroup(this);
     struct T { const char* id; const char* ic; const char* tip; };
-    for (T t : {T{"select", "select", "Select Tool (Q)"}, T{"move", "move", "Move Tool (W)"}, T{"rotate", "rotate", "Rotate Tool (E)"}, T{"scale", "scale", "Scale Tool (R)"}}) {
+    for (T t : {T{"select", "select", "Select Tool (Q)"}, T{"lasso", "lasso", "Lasso Tool"}, T{"paintSelect", "paintSelect", "Paint Selection Tool"},
+                T{"move", "move", "Move Tool (W)"}, T{"rotate", "rotate", "Rotate Tool (E)"}, T{"scale", "scale", "Scale Tool (R)"}}) {
         QString id = t.id;
         QAction* a = tb->addAction(icon(t.ic), t.tip, [this, id] { set_tool(id); });
         a->setCheckable(true);
@@ -842,6 +845,33 @@ void MainWindow::build_toolbox() {
     });
     QAction* last = tb->addAction(icon("lastTool"), "Last Tool (Y)", [this] { set_tool(last_tool_); });
     Q_UNUSED(last);
+    tb->addAction(icon("outlinerIcon"), "Outliner", [this] {
+        outliner_dock_->setVisible(!outliner_dock_->isVisible());
+        if (outliner_dock_->isVisible()) outliner_dock_->raise();
+    });
+    // The application's mark at the foot of the toolbox, where the reference has its own.
+    auto* fill = new QWidget(tb);
+    fill->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+    tb->addWidget(fill);
+    auto* mark = new QLabel(tb);
+    mark->setObjectName("toolboxMark");
+    mark->setAlignment(Qt::AlignCenter);
+    {
+        // The A of the app icon, drawn without its black tile.
+        const qreal dpr = devicePixelRatioF();
+        QPixmap pm(QSize(30, 30) * dpr);
+        pm.setDevicePixelRatio(dpr);
+        pm.fill(Qt::transparent);
+        QPainter p(&pm);
+        p.setRenderHint(QPainter::Antialiasing);
+        p.scale(30.0 / 512.0, 30.0 / 512.0);
+        p.setPen(QPen(QColor(41, 184, 216), 34, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        p.drawPolyline(QPolygonF({QPointF(90, 450), QPointF(210, 62), QPointF(330, 450)}));
+        p.drawPolyline(QPolygonF({QPointF(135, 310), QPointF(422, 310), QPointF(422, 400), QPointF(332, 400), QPointF(332, 355), QPointF(377, 355)}));
+        mark->setPixmap(pm);
+    }
+    mark->setToolTip("Aztek");
+    tb->addWidget(mark);
 }
 
 void MainWindow::build_docks() {
@@ -897,6 +927,11 @@ void MainWindow::build_docks() {
     addDockWidget(Qt::LeftDockWidgetArea, tool_dock_);
     tabifyDockWidget(outliner_dock_, tool_dock_);
     tool_dock_->hide();
+    // As the reference's default workspace: tabbed editors on the window's outer edges, and no Outliner until asked
+    // for (the toolbox button, Persp/Outliner, or Windows > Outliner). A saved window state overrides both.
+    setTabPosition(Qt::RightDockWidgetArea, QTabWidget::East);
+    setTabPosition(Qt::LeftDockWidgetArea, QTabWidget::West);
+    outliner_dock_->hide();
 }
 
 void MainWindow::build_bottom() {

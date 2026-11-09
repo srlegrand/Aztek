@@ -305,11 +305,13 @@ void ModelPanel::build_menus() {
     bar_->addSeparator();
     bar_->addAction(icon("wireframe"), "Wireframe (4)", set("wireframe", "true"));
     bar_->addAction(icon("shaded"), "Smooth Shade All (5)", set("wireframe", "false"));
+    bar_flag("defaultMaterial", "Use Default Material", "defaultMaterial");
     bar_flag("textured", "Textured (6)", "textured");
     QAction* all_lights = bar_->addAction(icon("lightsAll"), "Use All Lights (7)");
     all_lights->setCheckable(true);
     connect(all_lights, &QAction::triggered, this, [v](bool on) { v->set("disp", QString("{\"displayLights\":\"%1\"}").arg(on ? "all" : "default")); });
     connect(lighting, &QMenu::aboutToShow, all_lights, [v, all_lights] { all_lights->setChecked(parse(v->get("disp")).toObject()["displayLights"].toString() == "all"); });
+    bar_flag("shadows", "Shadows", "shadows");
     QAction* wos2 = bar_->addAction(icon("wireOnShaded"), "Wireframe on Shaded");
     wos2->setCheckable(true);
     connect(wos2, &QAction::toggled, wos, &QAction::setChecked);

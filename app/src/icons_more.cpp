@@ -2,6 +2,8 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QPolygonF>
+#include <QRadialGradient>
+#include <utility>
 #include <QString>
 
 namespace az {
@@ -43,6 +45,65 @@ void brush(QPainter& p, const QColor& c) {
 } // namespace
 
 bool draw_more(const QString& name, QPainter& p) {
+    if (name == "paintSelect") {
+        // A brush stroke of picked points.
+        line_pen(p, kInk, 2.4);
+        p.drawLine(QPointF(27, 4), QPointF(17, 15));
+        p.setPen(Qt::NoPen);
+        p.setBrush(kOrange);
+        p.drawEllipse(QPointF(14, 18), 4.5, 4.5);
+        p.setBrush(kBlue);
+        for (QPointF c : {QPointF(5, 27), QPointF(10, 26), QPointF(15, 27), QPointF(20, 26)}) p.drawEllipse(c, 2, 2);
+        return true;
+    }
+    if (name == "hypershade") {
+        // Three shader balls.
+        for (auto [c, col] : {std::pair{QPointF(10, 11), kRed}, std::pair{QPointF(22, 11), kGreen}, std::pair{QPointF(16, 22), kBlue}}) {
+            QRadialGradient g(c - QPointF(2, 2), 7);
+            g.setColorAt(0, col.lighter(160));
+            g.setColorAt(1, col.darker(150));
+            p.setPen(Qt::NoPen);
+            p.setBrush(g);
+            p.drawEllipse(c, 6, 6);
+        }
+        return true;
+    }
+    if (name == "humanIK") {
+        // A figure, as the reference's Character Controls button.
+        p.setPen(Qt::NoPen);
+        p.setBrush(kInk);
+        p.drawEllipse(QPointF(16, 6), 3.5, 3.5);
+        line_pen(p, kInk, 3.2);
+        p.drawLine(QPointF(16, 11), QPointF(16, 20));
+        p.drawLine(QPointF(7, 13), QPointF(25, 13));
+        p.drawLine(QPointF(16, 20), QPointF(10, 29));
+        p.drawLine(QPointF(16, 20), QPointF(22, 29));
+        line_pen(p, kBlue, 1.6);
+        p.drawEllipse(QPointF(16, 16), 13, 14);
+        return true;
+    }
+    if (name == "defaultMaterial") {
+        QRadialGradient g(QPointF(13, 13), 12);
+        g.setColorAt(0, QColor(225, 225, 225));
+        g.setColorAt(1, QColor(110, 110, 110));
+        p.setPen(Qt::NoPen);
+        p.setBrush(g);
+        p.drawEllipse(QPointF(16, 16), 11, 11);
+        return true;
+    }
+    if (name == "shadows") {
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(40, 40, 40, 200));
+        p.drawEllipse(QPointF(19, 26), 10, 3.5);
+        QRadialGradient g(QPointF(12, 10), 10);
+        g.setColorAt(0, QColor(230, 230, 230));
+        g.setColorAt(1, QColor(120, 120, 120));
+        p.setBrush(g);
+        p.drawEllipse(QPointF(15, 15), 8, 8);
+        line_pen(p, kYellow, 1.8);
+        p.drawLine(QPointF(3, 3), QPointF(7, 7));
+        return true;
+    }
     if (name.startsWith("brush")) {
         // Each brush its own tint, from its name.
         uint h = qHash(name);

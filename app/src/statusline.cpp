@@ -6,6 +6,7 @@
 #include "host.h"
 #include "icons.h"
 #include "panels.h"
+#include "renderui.h"
 #include "viewport.h"
 
 #include <QAction>
@@ -157,6 +158,14 @@ void MainWindow::build_status_line() {
     soft_button_ = tb->addAction(icon("softSelect"), "Soft select (tap B; hold B and drag sizes the falloff)");
     soft_button_->setCheckable(true);
     connect(soft_button_, &QAction::triggered, this, [](bool on) { exec("softSelect", QJsonObject{{"softSelectEnabled", on ? 1 : 0}}); });
+    tb->addSeparator();
+
+    // Rendering, as the reference's: Render View, render the current frame, IPR, Render Settings, Hypershade.
+    tb->addAction(icon("renderView"), "Open Render View", [this] { show_render_view(this); });
+    tb->addAction(icon("renderFrame"), "Render the current frame (Harold)", [this] { render_current_frame(this); });
+    tb->addAction(icon("renderIpr"), "IPR render the current frame (Harold)", [this] { render_ipr(this); });
+    tb->addAction(icon("renderSettings"), "Display Render Settings window", [this] { show_render_settings(this); });
+    tb->addAction(icon("hypershade"), "Display Hypershade window", [this] { show_hypershade(); });
 
     auto* spacer = new QWidget(tb);
     spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
@@ -169,7 +178,7 @@ void MainWindow::build_status_line() {
     input_mode_->setToolTip("What the field does");
     tb->addWidget(input_mode_);
     input_field_ = new QLineEdit(tb);
-    input_field_->setFixedWidth(170);
+    input_field_->setFixedWidth(120);
     input_field_->setPlaceholderText("name or x y z");
     connect(input_field_, &QLineEdit::returnPressed, this, [this] {
         input_entered(input_field_->text());
@@ -177,9 +186,10 @@ void MainWindow::build_status_line() {
     });
     tb->addWidget(input_field_);
     tb->addSeparator();
-    // The editors' show and hide buttons, at the far right.
-    tb->addAction(icon("toolSettings"), "Show or hide the Tool Settings", [this] { tool_dock_->setVisible(!tool_dock_->isVisible()); });
+    // The editors' show and hide buttons, at the far right, in the reference's order.
+    tb->addAction(icon("humanIK"), "Show or hide the HumanIK Character Controls", [this] { show_named_window("humanIK"); });
     tb->addAction(icon("attrEditor"), "Show or hide the Attribute Editor", [this] { attr_dock_->setVisible(!attr_dock_->isVisible()); if (attr_dock_->isVisible()) attr_dock_->raise(); });
+    tb->addAction(icon("toolSettings"), "Show or hide the Tool Settings", [this] { tool_dock_->setVisible(!tool_dock_->isVisible()); });
     tb->addAction(icon("channelBoxIcon"), "Show or hide the Channel Box", [this] { channel_dock_->setVisible(!channel_dock_->isVisible()); if (channel_dock_->isVisible()) channel_dock_->raise(); });
     tb->addAction(icon("outlinerIcon"), "Show or hide the Outliner", [this] { outliner_dock_->setVisible(!outliner_dock_->isVisible()); if (outliner_dock_->isVisible()) outliner_dock_->raise(); });
 }

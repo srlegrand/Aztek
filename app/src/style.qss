@@ -23,6 +23,8 @@ QTabWidget#shelfTabs QTabBar::tab { padding: 1px 8px; font-size: 8pt; }
 QPushButton#feelButton { background: #ff8a00; color: #101010; font-weight: bold; font-size: 16px; border: 1px solid #ffc27a; border-radius: 3px; padding: 10px 18px; border-radius: 4px; }
 QPushButton#feelButton:hover { background: #ffa533; }
 QPushButton#feelButton:pressed { background: #e07400; }
+QToolButton#feelFold { border: none; background: transparent; color: #c8c8c8; font-size: 14px; padding: 0; }
+QToolButton#feelFold:hover { background: #4a4a4a; border-radius: 3px; }
 QLabel#feedbackWarning { background: #b00020; color: #ffffff; font-weight: bold; padding: 6px; border-radius: 3px; }
 QPushButton#feedbackSubmit { font-weight: bold; padding: 3px 12px; }
 QLineEdit { background: #2b2b2b; border: 1px solid #222; padding: 1px 3px; selection-background-color: #5285a6; }
@@ -61,3 +63,8 @@ QScrollBar::handle:vertical { background: #5e5e5e; min-height: 20px; }
 QScrollBar:horizontal { background: #3a3a3a; height: 12px; }
 QScrollBar::handle:horizontal { background: #5e5e5e; min-width: 20px; }
 QLabel#menuSection { color: #9a9a9a; font-style: italic; padding: 1px 0; }
+QToolButton#shelfSide { color: #bdbdbd; font-size: 13px; padding: 0 2px; min-width: 14px; border: none; }
+QToolButton#shelfSide:hover { background: #5a5a5a; border-radius: 2px; }
+QLabel#toolboxMark { padding: 6px 0 4px 0; }
+QMainWindow > QTabBar::tab { background: #3c3c3c; color: #bdbdbd; padding: 6px 3px; border: 1px solid #2b2b2b; }
+QMainWindow > QTabBar::tab:selected { background: #525252; color: #e6e6e6; }

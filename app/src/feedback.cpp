@@ -34,6 +34,7 @@
 #include <QProcess>
 #include <QPushButton>
 #include <QScreen>
+#include <QSettings>
 #include <QSpinBox>
 #include <QStandardPaths>
 #include <QSysInfo>
@@ -778,15 +779,41 @@ QPointer<FeedbackDialog>& open_dialog() {
 
 } // namespace
 
+// The button, with a small arrow on its left that folds it away and brings it back. Remembered between sessions.
 QWidget* make_feedback_button(QWidget* parent) {
-    auto* b = new QPushButton("This doesn't feel right!", parent);
+    auto* box = new QWidget(parent);
+    auto* row = new QHBoxLayout(box);
+    row->setContentsMargins(0, 0, 0, 0);
+    row->setSpacing(2);
+    auto* fold = new QToolButton(box);
+    fold->setObjectName("feelFold");
+    fold->setAutoRaise(true);
+    fold->setFocusPolicy(Qt::NoFocus);
+    fold->setCursor(Qt::PointingHandCursor);
+    fold->setFixedWidth(14);
+    fold->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
+    auto* b = new QPushButton("This doesn't feel right!", box);
     b->setObjectName("feelButton");
     b->setFocusPolicy(Qt::NoFocus);
     b->setCursor(Qt::PointingHandCursor);
     b->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     b->setToolTip("Something behaves differently from what you expect? Tell us.\nWrite a report and open it as a GitHub issue. Nothing is public until you press Submit on GitHub.");
     QObject::connect(b, &QPushButton::clicked, b, [b] { open_feedback(b->window()); });
-    return b;
+    row->addWidget(fold);
+    row->addWidget(b);
+    auto show = [fold, b](bool folded) {
+        b->setVisible(!folded);
+        fold->setText(folded ? QString::fromUtf8("\u25C2") : QString::fromUtf8("\u25B8"));
+        fold->setToolTip(folded ? "Show the \"This doesn't feel right!\" button. It's also in the Help menu."
+                                : "Fold the button away. It stays in the Help menu.");
+    };
+    show(QSettings().value("feedback/folded", false).toBool());
+    QObject::connect(fold, &QToolButton::clicked, fold, [b, show] {
+        const bool folded = b->isVisible();
+        QSettings().setValue("feedback/folded", folded);
+        show(folded);
+    });
+    return box;
 }
 
 void open_feedback(QWidget* main_window) {

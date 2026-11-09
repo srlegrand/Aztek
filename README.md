@@ -53,7 +53,8 @@ GitHub issue, so every rough edge anyone notices ends up in one public list.
 
 ![The This doesn't feel right! window over the main window](docs/feedback.png)
 
-It is also under Help > This doesn't feel right!, and the `AztekFeedback` runtime command. Optionally add:
+It is also under Help > This doesn't feel right!, and the `AztekFeedback` runtime command. The small arrow on the
+button's left folds it away, and brings it back; Aztek remembers which. Optionally add:
 
 - a screenshot of the app, which you can draw on with a pen, arrows, rectangles and text;
 - a zipped `.ma` copy of the current scene. Your scene stays as it is, and the copy has a generic name. It holds the names of everything in

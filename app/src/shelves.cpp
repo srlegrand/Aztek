@@ -193,8 +193,37 @@ protected:
 } // namespace
 
 ShelfBar::ShelfBar(std::function<void(const QString&, const QString&)> run, QWidget* parent) : QWidget(parent), run_(std::move(run)) {
-    auto* lay = new QVBoxLayout(this);
+    auto* lay = new QHBoxLayout(this);
     lay->setContentsMargins(0, 0, 0, 0);
+    lay->setSpacing(2);
+    // The reference's two buttons left of the shelves: a list of the shelves to jump to, and the shelf menu.
+    auto* side = new QVBoxLayout();
+    side->setContentsMargins(2, 2, 0, 2);
+    side->setSpacing(2);
+    auto* list = new QToolButton(this);
+    list->setObjectName("shelfSide");
+    list->setText(QString::fromUtf8("\u2261"));
+    list->setToolTip("Shelves");
+    list->setAutoRaise(true);
+    connect(list, &QToolButton::clicked, this, [this, list] {
+        QMenu m;
+        for (int i = 0; i < tabs_->count(); ++i) {
+            QAction* a = m.addAction(tabs_->tabText(i), [this, i] { tabs_->setCurrentIndex(i); });
+            a->setCheckable(true);
+            a->setChecked(i == tabs_->currentIndex());
+        }
+        m.exec(list->mapToGlobal(QPoint(list->width(), 0)));
+    });
+    auto* gear = new QToolButton(this);
+    gear->setObjectName("shelfSide");
+    gear->setText(QString::fromUtf8("\u2699"));
+    gear->setToolTip("Shelf menu");
+    gear->setAutoRaise(true);
+    connect(gear, &QToolButton::clicked, this, [this, gear] { tab_menu(gear->mapToGlobal(QPoint(gear->width(), 0)), tabs_->currentIndex()); });
+    side->addWidget(list);
+    side->addWidget(gear);
+    side->addStretch(1);
+    lay->addLayout(side);
     tabs_ = new QTabWidget(this);
     tabs_->setObjectName("shelfTabs");
     tabs_->setDocumentMode(true);
@@ -229,17 +258,26 @@ void ShelfBar::set_corner(QWidget* w) {
     // It's as tall as the tab row and the shelf together: it sits over their right end, with a gap kept for it in the tabs.
     corner_ = w;
     w->setParent(this);
-    auto* gap = new QWidget(tabs_);
-    gap->setFixedSize(w->sizeHint().width() + 8, 1);
-    tabs_->setCornerWidget(gap, Qt::TopRightCorner);
+    corner_gap_ = new QWidget(tabs_);
+    tabs_->setCornerWidget(corner_gap_, Qt::TopRightCorner);
+    w->installEventFilter(this);  // it can change size (the feedback button folds away)
     w->raise();
     place_corner();
+}
+
+bool ShelfBar::eventFilter(QObject* o, QEvent* e) {
+    if (o == corner_ && e->type() == QEvent::LayoutRequest) place_corner();
+    return QWidget::eventFilter(o, e);
 }
 
 void ShelfBar::place_corner() {
     if (!corner_) return;
     QSize size = corner_->sizeHint();
     corner_->setGeometry(width() - size.width() - 4, 4, size.width(), size.height());
+    if (corner_gap_ && corner_gap_->width() != size.width() + 8) {
+        corner_gap_->setFixedSize(size.width() + 8, 1);
+        tabs_->setCornerWidget(corner_gap_, Qt::TopRightCorner);  // the tab row takes the new width
+    }
 }
 
 void ShelfBar::resizeEvent(QResizeEvent* e) {
