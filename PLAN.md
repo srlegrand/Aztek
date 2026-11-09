@@ -21,7 +21,7 @@ it differs; this file is what to do next.
 Almost nothing in PARITY.md has been compared with a running copy of the reference. That has to change first, or every
 fix below is another guess.
 
-- [ ] 0.1 Reference capture kit in `tools/reference_capture/`. Plain Python that runs inside the reference
+- [x] 0.1 (09/11/2026: kit written and dry run in Aztek through `--batch`; never run in the reference, so the fixtures are still to come from Simon) Reference capture kit in `tools/reference_capture/`. Plain Python that runs inside the reference
   (`mayapy` or the Script Editor) and writes JSON fixtures to `tests/data/reference/<area>/`. Simon runs it, commits the
   output. It captures:
   - command return values and default names for a fixed list of calls (create, duplicate, group, rename with `#`,
