@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Builds Aztek on Linux and macOS: ./build.sh [--deps] [--debug] [--run]
+# On macOS, ./build-macos.sh also makes a self-contained Aztek.app (--package) and installs it (--install).
 #   --deps   install the build dependencies first (apt, dnf, pacman, or Homebrew on macOS)
 #   --debug  debug build in build-debug/
 #   --run    start Aztek when the build is done

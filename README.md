@@ -279,10 +279,12 @@ environment is fine: the script builds against the system Python and ignores con
 
 macOS, with [Homebrew](https://brew.sh):
 
-    ./build.sh --deps --run
+    ./build-macos.sh --deps --run
 
-`--deps` installs CMake, Ninja, Qt, Python 3.12 and MoltenVK with Homebrew. The build is `build/aztek.app`. macOS is
-new: the viewport, menus and shortcuts haven't been checked there yet.
+`--deps` installs Xcode's command line tools, CMake, Ninja, Qt, Python 3.12, MoltenVK and Rust. The build is
+`build/aztek.app`. `--package` makes a self-contained `Aztek.app` and `dist/aztek-macos-<arch>.zip`, as the release
+build does; `--install` puts it in `~/Applications`. macOS is new: the viewport, menus and shortcuts haven't been checked
+there yet.
 
 Windows, from PowerShell or a command prompt:
 

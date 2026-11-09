@@ -314,41 +314,18 @@ jobs:
         continue-on-error: true
         run: PYO3_PYTHON="$(brew --prefix python@3.12)/bin/python3.12" cargo test --workspace
 
-      - name: Build
-        run: |
-          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
-            -DPython3_EXECUTABLE="$(brew --prefix python@3.12)/bin/python3.12" -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR"
-          cmake --build build
-
-      # Aztek.app with Qt and MoltenVK inside and an ad-hoc signature (Apple silicon won't start unsigned code).
-      # Python stays Homebrew's python@3.12.
-      - name: Package
-        run: |
-          APP=build/aztek.app
-          mkdir -p "$APP/Contents/Frameworks" "$APP/Contents/Resources"
-          cp "$(brew --prefix molten-vk)/lib/libMoltenVK.dylib" "$APP/Contents/Frameworks/"
-          mkdir aztek.iconset
-          for s in 16 32 128 256 512; do
-            sips -z $s $s app/icons/aztek-icon.png --out aztek.iconset/icon_${s}x${s}.png >/dev/null
-            sips -z $((s * 2)) $((s * 2)) app/icons/aztek-icon.png --out aztek.iconset/icon_${s}x${s}@2x.png >/dev/null
-          done
-          iconutil -c icns aztek.iconset -o "$APP/Contents/Resources/aztek.icns"
-          "$QT_ROOT_DIR/bin/macdeployqt" "$APP"
-          codesign --force --deep --sign - "$APP"
-          mkdir -p dist/Aztek
-          cp -R "$APP" dist/Aztek/Aztek.app
-          cp -R examples dist/Aztek/examples
-          ditto -c -k --keepParent dist/Aztek aztek-macos-arm64.zip
+      # The same script as on a Mac: Aztek.app with Qt and MoltenVK inside, signed ad hoc, zipped with the examples.
+      # Python stays Homebrew's python@3.12. Qt is the one installed above, through QT_ROOT_DIR.
+      - name: Build and package
+        run: ./build-macos.sh --package
 
       - name: Check
-        run: |
-          otool -L dist/Aztek/Aztek.app/Contents/MacOS/aztek
-          codesign --verify --deep --strict dist/Aztek/Aztek.app
+        run: otool -L dist/Aztek/Aztek.app/Contents/MacOS/aztek
 
       - uses: actions/upload-artifact@v4
         with:
           name: aztek-macos-arm64
-          path: aztek-macos-arm64.zip
+          path: dist/aztek-macos-arm64.zip
 
   # Every push to main replaces the "latest" pre-release; a v* tag makes a versioned release.
   release:

@@ -98,5 +98,5 @@ release yet: when it fails, the other packages still go out.
 - Python is Homebrew's `python@3.12`, linked from `/opt/homebrew`: `brew install python@3.12` before starting it.
 - `gpu.rs` loads MoltenVK from the bundle first, then a Vulkan loader on the library path, then Homebrew's folders.
   The viewport draws through `AZTEK_APPKIT`: the widget's `NSView`, with a Metal layer from `ash_window`.
-- `./build.sh --deps` installs the build dependencies with Homebrew; the build is `build/aztek.app`.
+- `./build-macos.sh` builds it (`--deps` installs the dependencies with Homebrew); `--package` makes the same `Aztek.app` and zip as the release build, which runs that script.
 - Not checked yet: the viewport on a real Mac, and whether Ctrl and Alt in mouse and key handling should be Cmd and Option.
