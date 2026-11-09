@@ -911,23 +911,25 @@ struct MaMesh {
 impl MaMesh {
     fn from_node(n: &MaNode) -> MaMesh {
         let mut m = MaMesh::default();
+        // Points are distances, in the file's linear unit as the reference writes them.
+        let lin = FILE_UNITS.with(Cell::get).0;
         for s in &n.sets {
             let Some(first) = s.path.first() else { continue };
             let start = first.range.map_or(0, |r| r.0.max(0) as usize);
             match (first.name.as_str(), s.path.get(1).map(|x| x.name.as_str())) {
                 ("vt" | "vrts", None) => {
                     for (k, c) in s.values.chunks_exact(3).enumerate() {
-                        put(&mut m.points, start + k, tok_vec3(c));
+                        put(&mut m.points, start + k, tok_vec3(c) * lin);
                     }
                 }
                 ("pt" | "pnts", None) => {
                     for (k, c) in s.values.chunks_exact(3).enumerate() {
-                        m.tweaks.insert(start + k, tok_vec3(c));
+                        m.tweaks.insert(start + k, tok_vec3(c) * lin);
                     }
                 }
                 ("pt" | "pnts", Some(child)) => {
                     if let (Some(v), Some(axis)) = (s.values.first().and_then(Tok::num), axis_of(child)) {
-                        m.tweaks.entry(start).or_default()[axis] = v;
+                        m.tweaks.entry(start).or_default()[axis] = v * lin;
                     }
                 }
                 ("ed" | "edge", None) => {
@@ -2540,7 +2542,10 @@ impl Build<'_> {
                 let _ = g.set_value(PlugRef::new(id, attr as i32), PlugValue::Bool(v));
             }
         }
-        if let Some(v) = n.vec3(&["ovrgb", "overrideColorRGB"]) {
+        // Binary files give the colour a channel at a time.
+        let channels = [["ovcr", "overrideColorR"], ["ovcg", "overrideColorG"], ["ovcb", "overrideColorB"]];
+        let parts = || -> Option<DVec3> { Some(DVec3::new(n.num(&channels[0])?, n.num(&channels[1])?, n.num(&channels[2])?)) };
+        if let Some(v) = n.vec3(&["ovrgb", "overrideColorRGB"]).or_else(parts) {
             let _ = g.set_value(PlugRef::new(id, dl::OVERRIDE_COLOR_RGB as i32), PlugValue::Vec3(v));
         }
         if let Some(v) = n.num(&["ovca", "overrideColorA"]) {
@@ -3461,7 +3466,7 @@ fn write_stored(out: &mut String, m: &Stored) {
         let a = c * VT_CHUNK;
         let _ = write!(out, "\tsetAttr \".vt[{}]\" ", range_text(a, a + chunk.len() - 1));
         for p in chunk {
-            let _ = write!(out, " {}", vec_text(*p));
+            let _ = write!(out, " {}", vec_text(file_vec(units::Unit::Linear, *p)));
         }
         let _ = writeln!(out, ";");
     }
@@ -4867,7 +4872,7 @@ pub enum Format {
 
 impl Format {
     pub fn of_path(path: &str) -> Format {
-        if extension(path) == "ma" {
+        if matches!(extension(path).as_str(), "ma" | "mb") {
             Format::Ma
         } else {
             Format::Aztek
@@ -4877,7 +4882,7 @@ impl Format {
         match ty {
             "mayaAscii" => Ok(Format::Ma),
             "aztek" => Ok(Format::Aztek),
-            "mayaBinary" => fail!("file: mayaBinary can't be read or written; use mayaAscii"),
+            "mayaBinary" => fail!("file: mayaBinary files are read, not written; use mayaAscii"),
             other => fail!("file: unknown file type {other}"),
         }
     }
@@ -4893,19 +4898,29 @@ fn extension(path: &str) -> String {
     std::path::Path::new(path).extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase()
 }
 
-/// Reads a file's text, refusing .mb files.
-fn read_scene_text(path: &str) -> Result<String, String> {
+/// A scene file's text; a binary `.mb` file comes as `.ma` text, with its own units and what it couldn't carry.
+struct SceneText {
+    text: String,
+    binary: Option<crate::mb_file::Converted>,
+}
+
+fn read_scene_text(path: &str) -> Result<SceneText, String> {
     let bytes = std::fs::read(path).map_err(|e| format!("{path}: {e}"))?;
-    if extension(path) == "mb" || bytes.starts_with(b"FOR4") || bytes.starts_with(b"FOR8") {
-        return Err(format!("{path}: binary .mb files can't be read; save it as .ma"));
+    if crate::mb_file::is_binary(&bytes) {
+        let mut c = crate::mb_file::convert(&bytes).map_err(|e| format!("{path}: {e}"))?;
+        let text = std::mem::take(&mut c.text);
+        return Ok(SceneText { text, binary: Some(c) });
     }
-    Ok(String::from_utf8_lossy(&bytes).into_owned())
+    if extension(path) == "mb" {
+        return Err(format!("{path}: not a binary scene file"));
+    }
+    Ok(SceneText { text: String::from_utf8_lossy(&bytes).into_owned(), binary: None })
 }
 
 /// Writes the scene to path in the format given. Returns warnings; does not change the scene's name.
 pub fn write_file(s: &mut Session, path: &str, format: Format, only: Option<&[NodeId]>) -> Result<Vec<String>, String> {
-    if extension(path) == "mb" && format == Format::Aztek {
-        return Err(format!("{path}: binary .mb files can't be written; use .ma"));
+    if extension(path) == "mb" {
+        return Err(format!("{path}: binary .mb files can't be written; save it as .ma"));
     }
     if s.commands.find("aztekUsdBeforeSave").is_some() {
         let _ = s.run("aztekUsdBeforeSave", json!({}));
@@ -4941,10 +4956,10 @@ pub fn save_scene(s: &mut Session, path: &str, format: Format) -> Result<Vec<Str
     Ok(w)
 }
 
-/// Replaces the scene with the file's: `.ma` or Aztek's own format, by extension. Undo restarts.
+/// Replaces the scene with the file's: `.ma`, `.mb` or Aztek's own format. Undo restarts.
 pub fn open_scene(s: &mut Session, path: &str) -> Result<Vec<String>, String> {
-    let text = read_scene_text(path)?;
-    let warnings = if Format::of_path(path) == Format::Ma {
+    let SceneText { text, binary } = read_scene_text(path)?;
+    let warnings = if Format::of_path(path) == Format::Ma || binary.is_some() {
         let _ = s.run("newScene", json!({}));
         // Here and not at the next command: a script can use a camera straight after opening a file.
         crate::cameras::make_defaults(&mut s.graph);
@@ -4952,9 +4967,14 @@ pub fn open_scene(s: &mut Session, path: &str) -> Result<Vec<String>, String> {
         let g = &mut s.graph;
         g.begin_batch();
         g.undo_stack_mut().set_enabled(false);
-        let w = read_text(s, &text, false);
-        // The scene takes on the file's units, as it does its frame rate.
-        let (lin, ang) = FILE_UNITS.with(Cell::get);
+        let mut w = binary_warnings(&binary);
+        w.extend(read_text(s, &text, false));
+        // The scene takes on the file's units, as it does its frame rate. A binary file's values are in internal
+        // units, so its text says centimetres and radians and its own units come from its header.
+        let (lin, ang) = match &binary {
+            Some(b) => (linear_unit(&b.linear).unwrap_or(1.0), if b.angle.starts_with("rad") { 1.0 } else { std::f64::consts::PI / 180.0 }),
+            None => FILE_UNITS.with(Cell::get),
+        };
         units::set_linear(lin);
         units::set_angle(ang);
         let g = &mut s.graph;
@@ -4992,12 +5012,21 @@ pub fn open_scene(s: &mut Session, path: &str) -> Result<Vec<String>, String> {
     Ok(warnings)
 }
 
-/// Adds a `.ma` or Aztek scene file's contents to the scene. One undo step.
+/// What a binary file couldn't carry over, logged as read_text logs its own.
+fn binary_warnings(binary: &Option<crate::mb_file::Converted>) -> Vec<String> {
+    let w = binary.as_ref().map(|b| b.warnings.clone()).unwrap_or_default();
+    w.iter().for_each(|x| log::warn!("{x}"));
+    w
+}
+
+/// Adds a `.ma`, `.mb` or Aztek scene file's contents to the scene. One undo step.
 pub fn import_scene(s: &mut Session, path: &str) -> Result<Vec<String>, String> {
-    let text = read_scene_text(path)?;
+    let SceneText { text, binary } = read_scene_text(path)?;
     crate::references::note_scene_folder(s, path);
-    if Format::of_path(path) == Format::Ma {
-        return Ok(read_text(s, &text, true));
+    if Format::of_path(path) == Format::Ma || binary.is_some() {
+        let mut w = binary_warnings(&binary);
+        w.extend(read_text(s, &text, true));
+        return Ok(w);
     }
     let doc: Value = serde_json::from_str(&text).map_err(|e| format!("{path}: {e}"))?;
     let mut warnings = Vec::new();
@@ -5029,7 +5058,11 @@ fn file_command(s: &mut Session, a: &Args) -> CmdResult {
         return crate::references::file_reference(s, a, &path);
     }
     if let Some(t) = &type_flag {
-        s.scene_type = Some(Format::of_type(t)?);
+        // A binary file is read by what's in it; the type only matters to a write, which is refused.
+        let reading = ["open", "import", "reference"].iter().any(|f| a.bool(f));
+        if t != "mayaBinary" || !reading {
+            s.scene_type = Some(Format::of_type(t)?);
+        }
     }
     let format_for = |s: &Session, path: &str| -> Format {
         match s.scene_type {

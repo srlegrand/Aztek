@@ -824,7 +824,7 @@ Shallower than it could be:
 
 ### References (07/11/2026)
 
-`references.rs` rewritten against scenes written by the reference (`tests/data/ref_files`), whose world matrices match the reference's recorded values. Load state from `-rdi`, nesting, the reference's `.ed` edits and placeholders, failed edits kept, `referenceEdit`, `file -ir -cr -gr -lck -rpr -mnc`, `ls -rn`, Reference Editor, File > Create Reference. Three production rigs referenced twice save and reopen with no joint difference (`examples/ref_rig.rs`). Shallower: `.mb` files can't be read; `-shd` and `exportEdits` not done; painted skin weights and mesh tweaks on a referenced mesh aren't kept as edits; a few IK solver values show as edits; a second reference of a large rig loads slower than the first.
+`references.rs` rewritten against scenes written by the reference (`tests/data/ref_files`), whose world matrices match the reference's recorded values. Load state from `-rdi`, nesting, the reference's `.ed` edits and placeholders, failed edits kept, `referenceEdit`, `file -ir -cr -gr -lck -rpr -mnc`, `ls -rn`, Reference Editor, File > Create Reference. Three production rigs referenced twice save and reopen with no joint difference (`examples/ref_rig.rs`). Shallower: `.mb` files are read but not written; `-shd` and `exportEdits` not done; painted skin weights and mesh tweaks on a referenced mesh aren't kept as edits; a few IK solver values show as edits; a second reference of a large rig loads slower than the first.
 
 ## USD (07/11/2026)
 
@@ -1067,3 +1067,21 @@ spot light was missing from renders before this (no decay in the file, intensity
 about 13 units from the floor: a hundredth of the light), ambient
 colour wasn't honoured, and an ambient light's all-round half was lost to a multiple importance weight no ray could
 balance; each has a test.
+
+### Binary scene files (09/11/2026)
+
+`.mb` files open, import and load as references (File > Open, Import, Create Reference, `file -o/-i/-r`, the command
+line). `mb_file.rs` reads the IFF tree and writes it out as `.ma` text for the `.ma` reader, so both formats go through
+the same code: nodes with their ids, values of every kind seen so far (numbers, compounds, strings and string arrays,
+Int32/double/point arrays, matrices and transformation matrices, component lists, attribute aliases, key times),
+meshes (points, edges, normals, faces with holes, uv and colour sets), added attributes, `select -ne` values on default
+nodes, connections, relationships, plug-in requires, references with their load state and reference edits. Values are
+kept in internal units with the file's own units given to the scene afterwards. Checked by opening twelve scenes the
+reference saved both ways and writing out what Aztek holds: eleven match line for line, and the metre scene differs only
+by the camera distances below. Node types come from a table of
+four-character ids plus the ids a file's plug-ins declare; a node of a type not in it is skipped with a warning (a
+transform stands in for an unknown transform kind). Not yet: writing `.mb`; added attributes beyond bool, double and the
+data types; NURBS geometry data. Found on the way and fixed for `.ma`: mesh points (`.vt`, `.pt`) were read and written
+without the file's linear unit, so a mesh in a metre scene came out a hundredth of its size; a display layer's colour
+set a channel at a time wasn't read. Still to do in `.ma`: camera distances (`.coi`, `.ow`, clip planes) don't take
+the file's linear unit.

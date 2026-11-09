@@ -160,13 +160,13 @@ QMenu* MainWindow::file_menu() {
     m->addAction("Optimize Scene Size", [] { exec("cleanUpScene"); });
     m->addSeparator();
     auto do_import = [] {
-        QString f = QFileDialog::getOpenFileName(nullptr, "Import", QString(), QString("Scenes and meshes (*.ma *.obj *.ply *.stl *.usd *.usda *.usdc *.usdz);;ASCII scenes (*.ma);;%1;;Meshes (*.obj *.ply *.stl)").arg(kUsdFilter));
+        QString f = QFileDialog::getOpenFileName(nullptr, "Import", QString(), QString("Scenes and meshes (*.ma *.mb *.obj *.ply *.stl *.usd *.usda *.usdc *.usdz);;ASCII scenes (*.ma);;Binary scenes (*.mb);;%1;;Meshes (*.obj *.ply *.stl)").arg(kUsdFilter));
         if (f.isEmpty()) return;
         if (is_usd_file(f)) {
             usd_import(f);
             return;
         }
-        if (f.endsWith(".ma", Qt::CaseInsensitive)) {
+        if (f.endsWith(".ma", Qt::CaseInsensitive) || f.endsWith(".mb", Qt::CaseInsensitive)) {
             exec("file", QJsonObject{{"args", QJsonArray{f}}, {"import", true}});
             return;
         }

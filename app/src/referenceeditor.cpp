@@ -33,7 +33,7 @@ namespace az {
 
 namespace {
 
-const char* kFilter = "Scenes (*.ma *.aztek);;ASCII scenes (*.ma);;Aztek scenes (*.aztek);;All files (*)";
+const char* kFilter = "Scenes (*.ma *.mb *.aztek);;ASCII scenes (*.ma);;Binary scenes (*.mb);;Aztek scenes (*.aztek);;All files (*)";
 
 QJsonObject with_file(const QString& path, QJsonObject call) {
     call["args"] = QJsonArray{path};

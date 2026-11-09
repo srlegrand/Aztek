@@ -1362,7 +1362,7 @@ void MainWindow::new_scene() {
 
 void MainWindow::open_scene() {
     if (!confirm_unsaved()) return;
-    QString f = QFileDialog::getOpenFileName(this, "Open Scene", QString(), "Scenes (*.aztek *.ma *.usd *.usda *.usdc *.usdz);;Aztek scenes (*.aztek);;ASCII scenes (*.ma);;USD (*.usd *.usda *.usdc *.usdz);;All files (*)");
+    QString f = QFileDialog::getOpenFileName(this, "Open Scene", QString(), "Scenes (*.aztek *.ma *.mb *.usd *.usda *.usdc *.usdz);;Aztek scenes (*.aztek);;ASCII scenes (*.ma);;Binary scenes (*.mb);;USD (*.usd *.usda *.usdc *.usdz);;All files (*)");
     if (!f.isEmpty()) open_file(f);
 }
 
@@ -1381,6 +1381,12 @@ void MainWindow::open_file(const QString& path) {
 
 bool MainWindow::save_scene(bool as) {
     QString f = state()["file"].toString();
+    // Binary files are read, not written: saving one asks for a .ma beside it.
+    if (f.endsWith(".mb", Qt::CaseInsensitive)) {
+        f.chop(3);
+        f += ".ma";
+        as = true;
+    }
     if (as || f.isEmpty()) {
         QString filter;
         f = QFileDialog::getSaveFileName(this, "Save Scene As", f.isEmpty() ? "untitled.aztek" : f, "Aztek scenes (*.aztek);;ASCII scenes (*.ma)", &filter);

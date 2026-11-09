@@ -38,7 +38,7 @@
       <h1>Model, rig, animate, simulate and render. One application, the way you already work.</h1>
       <p class="standfirst">Modelling, UVs, rigging, animation, cloth, particles, rigid bodies, a path tracer and USD, with the
         industry-standard commands, flags, hotkeys, menus and marking menus. MEL and Python scripts run, <code>.ma</code>
-        files open and save, production rigs pose. Over fifty example scenes to start from. MIT-0, for Linux, Windows and macOS.</p>
+        files open and save, <code>.mb</code> files open, production rigs pose. Over fifty example scenes to start from. MIT-0, for Linux, Windows and macOS.</p>
     </div>
   </div>
 </section>
@@ -111,7 +111,7 @@ git push --mirror &lt;your repository's URL&gt;</code></pre>
     <a class="g c-anim" href="#animation"><b>04</b><strong>Animation</strong><span>Graph Editor, Dope Sheet, layers, playblast</span></a>
     <a class="g c-dyn" href="#dynamics"><b>05</b><strong>Dynamics</strong><span>Cloth, particles and rigid bodies in one solver</span></a>
     <a class="g c-ren" href="#rendering"><b>06</b><strong>Rendering</strong><span>Harold, a CPU path tracer, and the lights you know</span></a>
-    <a class="g c-usd" href="#pipeline"><b>07</b><strong>Pipeline</strong><span><code>.ma</code> files, references, USD stages</span></a>
+    <a class="g c-usd" href="#pipeline"><b>07</b><strong>Pipeline</strong><span><code>.ma</code> and <code>.mb</code> files, references, USD stages</span></a>
     <a class="g c-code" href="#scripting"><b>08</b><strong>Scripting</strong><span>MEL, Python, the API, plug-ins, script-built UI</span></a>
   </div>
 </section>
@@ -246,8 +246,8 @@ git push --mirror &lt;your repository's URL&gt;</code></pre>
   <article class="spread c-usd" id="pipeline">
     <div class="tab"><b>07</b>Pipeline</div>
     <div class="spread-copy">
-      <h3><code>.ma</code> files, references and USD</h3>
-      <p class="lead">Files read and written in the standard layout.</p>
+      <h3><code>.ma</code> and <code>.mb</code> files, references and USD</h3>
+      <p class="lead">Files read and written in the standard layout. Binary <code>.mb</code> files are read too.</p>
       <p>Deformer chains, constraints, utility nodes, expressions, materials, NURBS, drawing overrides and references with
         their edits; namespaces, instances, locked nodes, Z up. USD (<code>.usd</code>, <code>.usda</code>,
         <code>.usdc</code>, <code>.usdz</code>) read and written with transforms, meshes, skeletons, blend shapes, materials

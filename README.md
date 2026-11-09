@@ -17,7 +17,7 @@ The tools we build our work on shouldn't belong to whoever bought them last. Too
 
 A 3D application for modelling, UVs, rigging, animation, dynamics and rendering, with the industry-standard commands, hotkeys, menus and file format. Rust core (scene graph, commands,
 geometry, Vulkan viewport), Qt Widgets shell in C++, a MEL interpreter, and embedded Python with `aztek.cmds`,
-compatibility modules so existing scripts import unchanged, and an API 2.0 subset. Reads and writes `.ma` files. [PARITY.md](PARITY.md) has the behaviour
+compatibility modules so existing scripts import unchanged, and an API 2.0 subset. Reads and writes `.ma` files and reads `.mb` files. [PARITY.md](PARITY.md) has the behaviour
 target and status, including known differences; [docs/COMMANDS.md](docs/COMMANDS.md) lists all 1108 commands.
 
 Website: [srlegrand.github.io/Aztek](https://srlegrand.github.io/Aztek/). Licence: [MIT-0](LICENSE).
@@ -134,7 +134,7 @@ filled in with. GitHub takes files up to 25 MB and images up to 10 MB.
 
 **Pipeline**
 
-- **Files:** `.ma` read and written in the standard layout, deformer chains, constraints, utility nodes, expressions, materials,
+- **Files:** `.ma` read and written in the standard layout, `.mb` read, deformer chains, constraints, utility nodes, expressions, materials,
   NURBS and references with their edits included; namespaces, instances, locked nodes, Z up.
 
   ![A character rig opened from a .ma file](docs/rig-file.png)
@@ -320,7 +320,7 @@ Python.
 
 Options:
 
-    aztek [scene.aztek|scene.ma] [--script file.mel|file.py] [--screenshot out.png]
+    aztek [scene.aztek|scene.ma|scene.mb] [--script file.mel|file.py] [--screenshot out.png]
 
 On KDE Plasma, Alt + drag moves windows by default: set System Settings > Window Management > Window Behavior >
 Window Actions > Modifier key to Meta.
@@ -386,10 +386,11 @@ with `loadPlugin`. C++ plug-ins rebuilt with the kit in `devkit/` load too.
 
 Existing scripts, habits and `.ma` files carry over: a production rig opens, poses and saves (see "A real rig" in
 [PARITY.md](PARITY.md)). Behaviour comes from published references, so expect differences in details; PARITY.md lists
-the known ones. `.mb` files are not supported yet, and the C++ plug-in kit covers part of the API so far. Materials and render settings from other renderers in a file are
+the known ones. `.mb` files open, import and load as references but can't be saved yet (save as `.ma`), and the C++ plug-in kit covers part of the API so far. Materials and render settings from other renderers in a file are
 read and rendered with Harold, with a warning naming what isn't honoured.
 
 ## Licence
 
 [MIT-0](LICENSE): use, copy, change, sell, re-host and redistribute it however you like, with no attribution required.
+One table of binary file type ids in it comes from an MIT project; its notice is in [THIRD_PARTY.md](THIRD_PARTY.md).
 Copies on any other host are welcome (see [Copy it anywhere](#copy-it-anywhere)). It comes with no warranty of any kind.
