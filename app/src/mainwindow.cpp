@@ -1,5 +1,6 @@
 #include <QWidgetAction>
 #include "mainwindow.h"
+#include "updates.h"
 #include "renderui.h"
 #include "aztek.h"
 #include "feedback.h"
@@ -798,6 +799,7 @@ void MainWindow::build_menu_set(const QString& set) {
     }
     auto* help = new QMenu("Help", this);
     help->addAction("This doesn't feel right!", [this] { open_feedback(this); });
+    help->addAction("Check for Updates...", [this] { check_for_updates(this, [this] { return close(); }); });
     help->addAction("About Aztek", [this] { show_about(this); });
     mb->addMenu(help);
     set_menus_.append(help);
@@ -1607,6 +1609,9 @@ void MainWindow::run_startup(const QString& script, const QString& screenshot) {
         restoreState(s.value("window/state").toByteArray());
     }
     exec_quiet("constructionHistory", QJsonObject{{"state", s.value("prefs/constructionHistory", true).toBool()}});
+    // New versions: asked about once, then checked in the background. Not when a script or a screenshot drives the run.
+    if (script.isEmpty() && screenshot.isEmpty())
+        QTimer::singleShot(2500, this, [this] { updates_at_startup(this, [this] { return close(); }); });
     if (!script.isEmpty()) {
         QTimer::singleShot(300, this, [this, script] {
             QFile f(script);

@@ -30,6 +30,10 @@ image = { version = "0.25", default-features = false, features = ["png", "jpeg",
 pyo3 = { version = "0.30", optional = true }
 zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 libloading = "0.8"
+# The update check and download: HTTPS through rustls with the system's root certificates (a studio proxy's too),
+# through the proxy the environment names unless NO_PROXY covers the host.
+ureq = { version = "2", default-features = false, features = ["tls", "native-certs"] }
+sha2 = "0.10"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

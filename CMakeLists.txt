@@ -78,6 +78,7 @@ add_executable(aztek WIN32
   app/src/attreditor.cpp
   app/src/colorchooser.cpp
   app/src/scripteditor.cpp
+  app/src/updates.cpp
   app/src/outlinerpanel.cpp
   app/src/icons_more.cpp
   app/src/icons_render.cpp
@@ -130,6 +131,10 @@ if(AZTEK_COMMIT)
   set(AZTEK_SHOWN "${AZTEK_SHOWN} (${AZTEK_COMMIT})")
 endif()
 target_compile_definitions(aztek PRIVATE AZTEK_VERSION="${AZTEK_SHOWN}")
+# Builds made by CI are the released ones: they offer to install a newer release over themselves. Others only say so.
+if(DEFINED ENV{GITHUB_ACTIONS})
+  target_compile_definitions(aztek PRIVATE AZTEK_RELEASE_BUILD=1)
+endif()
 target_include_directories(aztek PRIVATE app/src)
 target_link_libraries(aztek PRIVATE Qt6::Widgets ${AZTEK_HOST_LIB})
 if(AZTEK_PYTHON)

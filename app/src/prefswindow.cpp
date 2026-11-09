@@ -96,6 +96,7 @@ Preferences::Preferences(QWidget* parent) : QDialog(parent) {
     number(f, "Interface font size (pt)", "fontSize", 9, 7, 16, 1, 0);
     check(f, "Hide the In-View Editor", "inViewEditorOff", false);
     check(f, "Remember window positions", "rememberLayout", true);
+    check(f, "Check for updates at start-up", "updateCheck", false);
     f = page("UI Elements");
     check(f, "Status line", "uiStatusLine", true);
     check(f, "Shelf", "uiShelf", true);

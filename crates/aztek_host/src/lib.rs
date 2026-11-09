@@ -30,6 +30,7 @@ pub mod host_general;
 pub mod scriptui;
 pub mod tools;
 pub mod ui_cmds;
+pub mod update;
 pub mod view;
 pub mod usd_view;
 pub mod viewport;
@@ -182,6 +183,40 @@ pub extern "C" fn aztek_feedback_issue(call: *const c_char) -> *mut c_char {
         let gpu = h.shared.as_ref().map(|s| s.device_name.clone());
         out_json(feedback::issue_from_json(&call, gpu))
     })
+}
+
+/// The latest release on GitHub, as update::latest. Blocks: call it off the interface thread.
+#[no_mangle]
+pub extern "C" fn aztek_update_latest() -> *mut c_char {
+    out_json(update::latest())
+}
+
+/// Downloads url to path, checking the digest when there is one. Null when it worked, else the reason. Blocks.
+#[no_mangle]
+pub extern "C" fn aztek_update_download(url: *const c_char, path: *const c_char, digest: *const c_char) -> *mut c_char {
+    match update::download(&cstr(url), std::path::Path::new(&cstr(path)), &cstr(digest)) {
+        None => std::ptr::null_mut(),
+        Some(e) => out(e),
+    }
+}
+
+/// Bytes downloaded so far and the total (0 when not known yet).
+#[no_mangle]
+pub extern "C" fn aztek_update_progress(done: *mut u64, total: *mut u64) {
+    let (d, t) = update::progress();
+    unsafe {
+        if !done.is_null() {
+            *done = d;
+        }
+        if !total.is_null() {
+            *total = t;
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn aztek_update_cancel() {
+    update::cancel();
 }
 
 /// A zipped copy of the scene at this path, leaving the scene as it was. Returns {"ok": bytes} or {"error": message}.

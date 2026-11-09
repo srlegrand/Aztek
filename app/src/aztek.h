@@ -27,6 +27,13 @@ void aztek_redo(void);
 char* aztek_feedback_issue(const char* call_json);
 char* aztek_feedback_scene_zip(const char* path);
 
+// Updates. The latest release on GitHub: {tag, name, body, url, assets: [{name, url, size, digest}]} or {error}.
+// A download to a file, checked against the digest when given: null when it worked, else the reason. Both block.
+char* aztek_update_latest(void);
+char* aztek_update_download(const char* url, const char* path, const char* digest);
+void aztek_update_progress(uint64_t* done, uint64_t* total);
+void aztek_update_cancel(void);
+
 // Script UI: operations for the shell to mirror (null when none), what the user did, and the hook for what must answer
 // at once. Dialogs run the event loop inside the hook, on top of a suspended command.
 char* aztek_ui_take_ops(void);

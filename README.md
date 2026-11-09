@@ -63,7 +63,7 @@ button's left folds it away, and brings it back; Aztek remembers which. Optional
 Both are off by default and ask you to confirm. **Reports are public: never include work under NDA or anything confidential. If you do, it
 is at your own risk.**
 
-The app makes no network requests. "Open on GitHub" opens a filled-in issue page in your browser, puts the picture on the clipboard (Ctrl+V
+Sending a report makes no network request from the app. "Open on GitHub" opens a filled-in issue page in your browser, puts the picture on the clipboard (Ctrl+V
 in the description box) and shows the folder holding the attachments, under `feedback/` in the app's data location, so the zip can be dragged
 in. You need a GitHub account, and nothing is public until you press Submit on that page. The window shows exactly what the page will be
 filled in with. GitHub takes files up to 25 MB and images up to 10 MB.
@@ -264,6 +264,14 @@ Node Editor:
 ## Install
 
 Packages are on the [releases page](https://github.com/srlegrand/Aztek/releases): each build of the main branch is a release of its own, numbered 2.N where N counts the changes so far. A build from source of the same commit shows the same number in Help > About.
+
+**Updates.** On its first start Aztek asks whether to check for new versions when it starts; the answer can be changed in
+Preferences > Interface, and Help > Check for Updates works either way. The check asks GitHub for the latest release and
+sends nothing else: no identifiers, nothing about you or your scenes. That is the only request Aztek makes by itself. When
+a newer version is out it shows what changed and offers to install it the way this copy was installed: the Windows
+installer runs, a `.deb` or `.rpm` installs with your password, the macOS app and the Linux tarball are replaced in
+place, and a Windows zip opens its download. Downloads are checked against the release's checksum. A copy built from
+source is pointed at `git pull`. It goes through the proxy in `HTTPS_PROXY`, minding `NO_PROXY`.
 
 | System | Package | Install |
 | --- | --- | --- |
