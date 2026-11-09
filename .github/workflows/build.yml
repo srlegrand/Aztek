@@ -283,7 +283,10 @@ jobs:
   macos:
     needs: gate
     if: needs.gate.outputs.go == 'true'
-    runs-on: macos-14
+    runs-on: macos-15
+    # Without this the app would ask for the runner's own macOS.
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "14.0"
     steps:
       - uses: actions/checkout@v4
 
@@ -300,7 +303,6 @@ jobs:
           target: desktop
           arch: clang_64
           cache: true
-          setup-python: false
 
       - uses: dtolnay/rust-toolchain@stable
 

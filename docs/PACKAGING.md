@@ -90,7 +90,7 @@ the exe on Windows.
 
 ## macOS
 
-Early. The `macos` job builds `aztek-macos-arm64.zip` on a `macos-14` runner (Apple silicon). It isn't a condition of a
+Early. The `macos` job builds `aztek-macos-arm64.zip` on a `macos-15` runner (Apple silicon), for macOS 14 and later. It isn't a condition of a
 release yet: when it fails, the other packages still go out.
 
 - `Aztek.app` carries Qt (`macdeployqt`) and `libMoltenVK.dylib` in `Contents/Frameworks`, with an ad-hoc signature.
