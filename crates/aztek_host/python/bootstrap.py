@@ -275,6 +275,7 @@ def _run(src):
     import traceback
 
     g = __main__.__dict__
+    g["_aztek_run_failed"] = False
     try:
         try:
             code = compile(src, "<script>", "eval")
@@ -291,6 +292,7 @@ def _run(src):
         for l in "".join(lines[1:-1]).rstrip().splitlines():
             _aztek.write("# " + l, 2)
         _aztek.write("# Error: %s: %s #" % (type(e).__name__, e), 2)
+        g["_aztek_run_failed"] = True
     finally:
         if _before_call:
             try:

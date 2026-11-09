@@ -48,6 +48,7 @@ void aztek_image_free(unsigned char* data, int width, int height);
 char* aztek_render_status(void);
 unsigned char* aztek_render_image(const char* aov, int snapshot, double exposure, double gamma, int* width, int* height);
 int aztek_render_batch(int argc, const char* const* argv);
+int aztek_batch(int argc, const char* const* argv);
 
 enum { AZTEK_XCB = 1, AZTEK_XLIB = 2, AZTEK_WIN32 = 3, AZTEK_WAYLAND = 4, AZTEK_APPKIT = 5 };
 

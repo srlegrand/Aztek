@@ -12,6 +12,9 @@
 #include <QFile>
 #include <QPalette>
 #include <QStyleFactory>
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
 
 namespace {
 
@@ -41,12 +44,32 @@ void apply_style(QApplication& app) {
     if (qss.open(QIODevice::ReadOnly)) app.setStyleSheet(QString::fromUtf8(qss.readAll()));
 }
 
+#ifdef Q_OS_WIN
+// A window-subsystem program has no console of its own: batch output goes to the one it was started from.
+void attach_console() {
+    if (!AttachConsole(ATTACH_PARENT_PROCESS)) return;
+    const DWORD which[] = {STD_OUTPUT_HANDLE, STD_ERROR_HANDLE};
+    for (DWORD w : which) {
+        HANDLE h = GetStdHandle(w);
+        if (h == nullptr || h == INVALID_HANDLE_VALUE)
+            SetStdHandle(w, CreateFileW(L"CONOUT$", GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr));
+    }
+}
+#endif
+
 } // namespace
 
 int main(int argc, char** argv) {
-    // Batch rendering needs no display: handled before Qt starts.
+    // Batch rendering and batch scripts need no display: handled before Qt starts.
     for (int i = 1; i < argc; ++i)
         if (std::strcmp(argv[i], "-render") == 0) return aztek_render_batch(argc, argv);
+    for (int i = 1; i < argc; ++i)
+        if (std::strcmp(argv[i], "--batch") == 0 || std::strcmp(argv[i], "-batch") == 0) {
+#ifdef Q_OS_WIN
+            attach_console();
+#endif
+            return aztek_batch(argc, argv);
+        }
 #ifdef Q_OS_LINUX
     // The viewport draws into X11 windows; on a Wayland session Qt runs through XWayland.
     if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM")) qputenv("QT_QPA_PLATFORM", "xcb");
@@ -64,8 +87,10 @@ int main(int argc, char** argv) {
     args.addHelpOption();
     QCommandLineOption script({"s", "script"}, "Run a MEL file at start.", "file");
     QCommandLineOption shot("screenshot", "Save a screenshot of the window after start-up and quit.", "png");
+    QCommandLineOption batch("batch", "No window: run the scene and scripts given, then exit with their status.");
     args.addOption(script);
     args.addOption(shot);
+    args.addOption(batch);
     args.addPositionalArgument("scene", "Scene to open.");
     args.process(app);
 

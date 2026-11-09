@@ -188,6 +188,10 @@ pub fn set_last_error(e: &str) {
     with_jobs(|j| j.last_error = e.to_string());
 }
 
+pub fn deferred_pending() -> bool {
+    with_jobs(|j| !j.deferred.is_empty())
+}
+
 pub fn take_deferred() -> Vec<Value> {
     with_jobs(|j| std::mem::take(&mut j.deferred))
 }

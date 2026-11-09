@@ -106,6 +106,7 @@ impl Core {
             let bare = text.trim_start_matches("// Error: ").trim_start_matches("# Error: ").trim_end_matches(" //").trim_end_matches(" #");
             crate::script_jobs::set_last_error(bare);
         }
+        crate::batch::echo(&text, kind);
         self.log.push(LogLine { text, kind });
     }
 

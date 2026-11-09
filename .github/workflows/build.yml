@@ -72,6 +72,10 @@ jobs:
       - name: Build
         run: ./build.sh
 
+      # The real binary with no display: exit statuses, then the basics end to end.
+      - name: Batch
+        run: AZTEK_BIN="$PWD/build/aztek" cargo test -p aztek_host --test batch --test basics --test basics_python
+
       - name: Package
         run: |
           tar -czf aztek-linux-x86_64.tar.gz -C build aztek -C .. examples
@@ -259,6 +263,16 @@ jobs:
         shell: pwsh
         run: .\build.ps1 -Qt $env:QT_ROOT_DIR
 
+      # The real binary: a clean script exits 0, the basics pass, a failing script exits 1.
+      - name: Batch
+        shell: pwsh
+        run: |
+          $exe = "build\dist\aztek.exe"
+          $p = Start-Process $exe -ArgumentList "--batch", "--script", "crates\aztek_host\tests\batch\basics.py" -Wait -PassThru -NoNewWindow
+          if ($p.ExitCode -ne 0) { throw "basics: exit code $($p.ExitCode)" }
+          $p = Start-Process $exe -ArgumentList "--batch", "--command", "error `"no`";" -Wait -PassThru -NoNewWindow
+          if ($p.ExitCode -ne 1) { throw "a failing script gave exit code $($p.ExitCode), not 1" }
+
       - name: Package
         shell: pwsh
         run: |
@@ -314,12 +328,16 @@ jobs:
 
       - name: Test
         continue-on-error: true
-        run: PYO3_PYTHON="$(brew --prefix python@3.12)/bin/python3.12" cargo test --workspace
+        run: PYO3_PYTHON="$(brew --prefix python@3.12)/bin/python3.12" cargo test --workspace --no-fail-fast
 
       # The same script as on a Mac: Aztek.app with Qt and MoltenVK inside, signed ad hoc, zipped with the examples.
       # Python stays Homebrew's python@3.12. Qt is the one installed above, through QT_ROOT_DIR.
       - name: Build and package
         run: ./build-macos.sh --package
+
+      - name: Batch
+        continue-on-error: true
+        run: AZTEK_BIN="$PWD/build/aztek.app/Contents/MacOS/aztek" PYO3_PYTHON="$(brew --prefix python@3.12)/bin/python3.12" cargo test -p aztek_host --no-fail-fast --test batch --test basics --test basics_python
 
       - name: Check
         run: otool -L dist/Aztek/Aztek.app/Contents/MacOS/aztek
