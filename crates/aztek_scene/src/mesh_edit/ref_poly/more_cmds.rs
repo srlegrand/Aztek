@@ -26,7 +26,7 @@ use crate::mesh_edit::{faces, points, EditResult};
 fn cut_plane(a: &Args) -> (DVec3, DVec3) {
     let c = vec_flag(a, "cutPlaneCenter", DVec3::ZERO);
     let r = vec_flag(a, "cutPlaneRotate", DVec3::ZERO);
-    let turn = glam::DMat3::from_euler(glam::EulerRot::ZYX, r.z.to_radians(), r.y.to_radians(), r.x.to_radians());
+    let turn = glam::DMat3::from_euler(glam::EulerRot::ZYX, r.z, r.y, r.x);
     let n = turn * DVec3::Z;
     let w = object_to_world(a);
     let inv = w.inverse();

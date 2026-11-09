@@ -162,7 +162,7 @@ fn pivots_dont_move_the_object() {
     let mut g = new_scene();
     loc(&mut g, "p");
     set(&mut g, "p.rotatePivot", DVec3::new(5.0, 0.0, 0.0)).unwrap();
-    set(&mut g, "p.rotate", DVec3::new(0.0, 0.0, 90.0)).unwrap();
+    set(&mut g, "p.rotate", DVec3::new(0.0, 0.0, 90_f64.to_radians())).unwrap();
     // Rotating 90 about Z around (5,0,0) swings the origin to (5,-5,0).
     let w = world_t(&mut g, "p");
     assert!(approx(w.x, 5.0) && approx(w.y, -5.0));
@@ -170,7 +170,7 @@ fn pivots_dont_move_the_object() {
 
 #[test]
 fn euler_round_trip_for_every_rotate_order() {
-    let r = DVec3::new(30.0, -40.0, 70.0);
+    let r = DVec3::new(30_f64.to_radians(), (-40_f64).to_radians(), 70_f64.to_radians());
     for o in 0..6 {
         let order = RotateOrder::from_index(o);
         let m = euler_to_matrix(r, order);

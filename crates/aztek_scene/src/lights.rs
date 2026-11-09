@@ -417,8 +417,8 @@ pub fn scene_light(g: &mut Graph, shape: NodeId) -> Option<SceneLight> {
         diffuse: flag(g, "emitDiffuse"),
         specular: kind != Kind::Ambient && flag(g, "emitSpecular"),
         decay: read_f(g, shape, "decayRate", 0.0) as i32,
-        cone_deg: read_f(g, shape, "coneAngle", 40.0),
-        penumbra_deg: read_f(g, shape, "penumbraAngle", 0.0),
+        cone_deg: read_f(g, shape, "coneAngle", 40_f64.to_radians()).to_degrees(),
+        penumbra_deg: read_f(g, shape, "penumbraAngle", 0.0).to_degrees(),
         dropoff: read_f(g, shape, "dropoff", 0.0),
         ambient_shade: read_f(g, shape, "ambientShade", 0.45),
         by_area: kind == Kind::Area && !flag(g, "normalize"),
@@ -589,7 +589,7 @@ pub fn icon_lines(n: &Node, w: &DMat4) -> Vec<(DVec3, DVec3)> {
             s.push((c - x * (foot * 0.5), c + x * (foot * 0.5)));
         }
         Some(Kind::Spot) => {
-            let half = (idx("coneAngle", 40.0) * 0.5).to_radians();
+            let half = idx("coneAngle", 40_f64.to_radians()) * 0.5;
             let len = 1.0 * k;
             let r = half.tan() * len;
             let end = c - z * len;
@@ -599,7 +599,7 @@ pub fn icon_lines(n: &Node, w: &DMat4) -> Vec<(DVec3, DVec3)> {
             }
             let pen = idx("penumbraAngle", 0.0);
             if pen != 0.0 {
-                let r2 = (half + pen.to_radians()).clamp(0.0, 1.55).tan() * len;
+                let r2 = (half + pen).clamp(0.0, 1.55).tan() * len;
                 ring(end, x, y, r2, 24, &mut s);
             }
             arrow(c, c - z * (len * 1.6), x, &mut s);

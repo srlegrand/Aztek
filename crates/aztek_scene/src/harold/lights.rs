@@ -78,8 +78,8 @@ pub fn translate(mb: &mut MatBuilder, scene: &mut Scene, warnings: &mut Vec<Stri
         let shape_of = match ty.as_str() {
             "pointLight" => Shape::Point { pos, radius },
             "spotLight" => {
-                let cone = get_f(g, shape, "coneAngle", 40.0).to_radians() as f32 * 0.5;
-                let pen = get_f(g, shape, "penumbraAngle", 0.0).to_radians() as f32;
+                let cone = get_f(g, shape, "coneAngle", 40_f64.to_radians()) as f32 * 0.5;
+                let pen = get_f(g, shape, "penumbraAngle", 0.0) as f32;
                 let (outer, inner) = if pen >= 0.0 { (cone + pen, cone) } else { (cone, (cone + pen).max(0.0)) };
                 Shape::Spot { pos, radius, frame: Frame::from_n(fwd), cos_outer: outer.min(3.1).cos(), cos_inner: inner.cos(), dropoff: get_f(g, shape, "dropoff", 0.0) as f32 }
             }

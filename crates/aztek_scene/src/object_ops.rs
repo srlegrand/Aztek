@@ -503,7 +503,7 @@ pub fn register(c: &mut Commands<Session>) {
                         out.push(json!({
                             "name": g.path(id),
                             "translate": t.to_array(),
-                            "rotate": r.to_array(),
+                            "rotate": (if aztek_ops::units::user_call() { r / aztek_ops::units::rad_per_unit() } else { r }).to_array(),
                             "scale": sc.to_array(),
                             "unfrozen": unfrozen,
                         }));

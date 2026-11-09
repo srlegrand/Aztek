@@ -494,7 +494,7 @@ class MDataHandle:
 
     def asDouble(self):
         v = float(self._num())
-        return _math.radians(v) if self._unit() == "angle" else v
+        return v
 
     def asFloat(self):
         return _f32(self.asDouble())
@@ -559,7 +559,7 @@ class MDataHandle:
     setInt64 = setChar
 
     def setDouble(self, v):
-        return self._write(_math.degrees(v) if self._unit() == "angle" else float(v))
+        return self._write(float(v))
 
     setFloat = setDouble
 

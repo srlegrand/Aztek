@@ -205,6 +205,16 @@ pub mod types {
         if !ty.attrs.iter().any(|a| a.name == "message") {
             ty.attrs.push(message_attr());
         }
+        let type_name = ty.name.clone();
+        for a in &mut ty.attrs {
+            if a.unit == aztek_ops::units::Unit::None && matches!(a.ty, crate::plug::PlugType::Float | crate::plug::PlugType::Vec3) {
+                a.unit = crate::unit_tables::attr_unit(&type_name, &a.name);
+                // Types declare angles in degrees, as people read them; what's stored is radians.
+                if a.unit == aztek_ops::units::Unit::Angle {
+                    a.degrees_to_radians();
+                }
+            }
+        }
         let ty = Arc::new(ty);
         r.types.insert(ty.name.clone(), ty.clone());
         Ok(ty)

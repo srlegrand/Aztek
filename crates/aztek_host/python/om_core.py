@@ -7,7 +7,26 @@ import threading as _threading
 
 import _aztek as _az
 
-_cmds = _sys.modules["aztek.cmds"]
+_script_cmds = _sys.modules["aztek.cmds"]
+
+
+class _StoredCmds:
+    """aztek.cmds in stored units, centimetres and radians, as the API's values are in the reference."""
+
+    def __getattr__(self, name):
+        fn = getattr(_script_cmds, name)
+
+        def call(*args, **kwargs):
+            was = _az.stored_units(True)
+            try:
+                return fn(*args, **kwargs)
+            finally:
+                _az.stored_units(was)
+
+        return call
+
+
+_cmds = _StoredCmds()
 
 
 # Set per thread while a node computes: {"id", "name", "type", "attrs"}. The host can't be reached then, and a compute may
@@ -250,7 +269,7 @@ _COMP_TYPES = {
 _COMP_NAMES = {v: k for k, v in _COMP_TYPES.items()}
 _COMP_RE = _re.compile(r"^(.+)\.(vtxFace|vtx|map|cv|ep|e|f)\[([^\]]*)\](?:\[([^\]]*)\])?$")
 
-# Attributes held in degrees: the API's values for them are in radians, as the reference's are.
+# Rotation attributes, by every spelling.
 _ANGLE_ATTRS = {
     "rotate", "rotateX", "rotateY", "rotateZ", "r", "rx", "ry", "rz",
     "jointOrient", "jointOrientX", "jointOrientY", "jointOrientZ", "jo", "jox", "joy", "joz",
@@ -871,7 +890,7 @@ class MPlug:
 
     def asDouble(self, *a):
         v = float(self._number())
-        return _math.radians(v) if self._is_angle() else v
+        return v
 
     def asFloat(self, *a):
         return _f32(self.asDouble())
@@ -927,7 +946,7 @@ class MPlug:
         return self
 
     def setDouble(self, v):
-        return self._set(_math.degrees(v) if self._is_angle() else float(v))
+        return self._set(float(v))
 
     setFloat = setDouble
 
@@ -1548,7 +1567,7 @@ class MDGModifier:
     newPlugValueChar = newPlugValueInt
 
     def newPlugValueDouble(self, plug, v):
-        return self._plug_value(plug, _math.degrees(v) if plug._is_angle() else float(v))
+        return self._plug_value(plug, float(v))
 
     newPlugValueFloat = newPlugValueDouble
 

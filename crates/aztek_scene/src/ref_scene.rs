@@ -1620,9 +1620,11 @@ pub fn register(c: &mut Commands<Session>) {
             if a.bool("euler") {
                 let q = if axis == DVec3::ZERO { glam::DQuat::IDENTITY } else { glam::DQuat::from_axis_angle(axis, angle) };
                 let e = crate::transform::matrix_to_euler(&glam::DMat3::from_quat(q), crate::transform::RotateOrder::Xyz);
-                return Ok(json!([e.x, e.y, e.z]));
+                let k = if aztek_ops::units::user_call() { 1.0 / aztek_ops::units::rad_per_unit() } else { 1.0 };
+                return Ok(json!([e.x * k, e.y * k, e.z * k]));
             }
-            Ok(json!([axis.x, axis.y, axis.z, angle.to_degrees()]))
+            let angle = if aztek_ops::units::user_call() { aztek_ops::units::to_user(aztek_ops::units::Unit::Angle, angle) } else { angle };
+            Ok(json!([axis.x, axis.y, axis.z, angle]))
         })
         .flag(f("vector1", "v1", ArgType::Vec3, "From."))
         .flag(f("vector2", "v2", ArgType::Vec3, "To."))

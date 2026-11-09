@@ -43,7 +43,7 @@ fn drape(unit: &str, per: f64, size: f64, res: i64, ball: f64, preset: &str, fra
     for f in 1..=frames {
         frame(&mut s, f as f64);
     }
-    let p = points(&mut s, "sheet").into_iter().map(|p| p * per).collect();
+    let p = points(&mut s, "sheet").into_iter().map(|p| p * 0.01).collect();
     run(&mut s, "currentUnit", json!({"linear": "cm"}));
     p
 }

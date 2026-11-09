@@ -33,7 +33,7 @@ impl Step {
 
 /// The world matrix of one step about `pivot`, its axes along the columns of `frame` (identity for world axes).
 pub fn step_matrix(s: &Step, pivot: DVec3, frame: &DMat3) -> DMat4 {
-    about_frame(&pivot_frame(pivot, frame), &trs_matrix(s.translate, s.rotate, s.scale))
+    about_frame(&pivot_frame(pivot, frame), &trs_matrix(s.translate, s.rotate * (180.0 / std::f64::consts::PI), s.scale))
 }
 
 /// World matrices of copies 1..count of an object whose world matrix is `base`: copy i is step^i * base.

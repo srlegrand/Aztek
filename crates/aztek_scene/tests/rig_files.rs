@@ -336,7 +336,8 @@ fn a_point_constraint_reads_no_rotation_from_its_target() {
     let (mut s, w) = load(body);
     assert!(w.is_empty(), "{w:?}");
     assert_near(get(&mut s, "obj.t"), &[2.0, 0.0, 0.0], "on the target");
-    assert_near(get(&mut s, "tgt.r"), &[2.0, 0.0, 0.0], "and what it drives turns the target");
+    // A file's connection joins stored values: 2 from a translate is 2 radians with no conversion node between.
+    assert_near(get(&mut s, "tgt.r"), &[2_f64.to_degrees(), 0.0, 0.0], "and what it drives turns the target");
 }
 
 #[test]

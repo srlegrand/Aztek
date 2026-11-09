@@ -750,7 +750,7 @@ impl View {
         // Driven or locked cameras keep to what drives them.
         g.without_undo(|g| {
             let _ = g.set_value(PlugRef::new(tr, Transform::TRANSLATE as i32), PlugValue::Vec3(eye));
-            let _ = g.set_value(PlugRef::new(tr, Transform::ROTATE as i32), PlugValue::Vec3(cam::rotate_for(yaw, pitch)));
+            let _ = g.set_value(PlugRef::new(tr, Transform::ROTATE as i32), PlugValue::Vec3(cam::rotate_for(yaw.to_radians(), pitch.to_radians())));
             if light.is_some() {
                 if let Some(i) = g.node(sh).and_then(|n| n.ty().attr_index("centerOfIllumination")) {
                     let _ = g.set_value(PlugRef::new(sh, i as i32), PlugValue::Float(dist));

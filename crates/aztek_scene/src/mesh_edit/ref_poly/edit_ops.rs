@@ -22,11 +22,11 @@ use crate::mesh_edit::{edges, faces, points, with_mirror, EditResult};
 pub(crate) fn move_spec(a: &Args) -> MoveSpec {
     MoveSpec {
         translate: vec_flag(a, "translate", DVec3::ZERO),
-        rotate: vec_flag(a, "rotate", DVec3::ZERO),
+        rotate: vec_flag(a, "rotate", DVec3::ZERO) * (180.0 / std::f64::consts::PI),
         scale: vec_flag(a, "scale", DVec3::ONE),
         pivot: vec_flag(a, "pivot", DVec3::ZERO),
         local_translate: vec_flag(a, "localTranslate", DVec3::ZERO),
-        local_rotate: vec_flag(a, "localRotate", DVec3::ZERO),
+        local_rotate: vec_flag(a, "localRotate", DVec3::ZERO) * (180.0 / std::f64::consts::PI),
         local_scale: vec_flag(a, "localScale", DVec3::ONE),
         local_direction: vec_flag(a, "localDirection", DVec3::ZERO),
         gain: a.float("gain", 1.0),
@@ -213,7 +213,7 @@ fn bevel_op(a: &Args, m: &mut Mesh, sel: &Ids, sym: Option<&SymmetryMap>) -> Cmd
         segments: a.int("segments", 1).max(1) as i32,
         profile: if on(a, "chamfer", false) { 0.25 } else { a.float("profile", 0.5) },
         clamp: on(a, "clamp", true) && on(a, "autoFit", true),
-        smoothing_angle: a.float("smoothingAngle", 30.0),
+        smoothing_angle: a.float("smoothingAngle", 30_f64.to_radians()).to_degrees(),
         symmetry: sym,
         applied_offset: Some(&applied),
     };
@@ -387,7 +387,7 @@ fn flip_edge_op(_a: &Args, m: &mut Mesh, sel: &Ids, sym: Option<&SymmetryMap>) -
 
 fn quad_op(a: &Args, m: &mut Mesh, sel: &Ids, _sym: Option<&SymmetryMap>) -> CmdResult<EditResult> {
     let o = QuadrangulateOptions {
-        max_face_angle: a.float("angle", 30.0),
+        max_face_angle: a.float("angle", 30_f64.to_radians()).to_degrees(),
         keep_hard_edges: on(a, "keepHardEdges", true),
         keep_seams: on(a, "keepTextureBorders", true),
         keep_materials: on(a, "keepGroupBorder", true),
@@ -432,7 +432,7 @@ fn wedge_op(a: &Args, m: &mut Mesh, sel: &Ids, _sym: Option<&SymmetryMap>) -> Cm
     if axis == DVec3::ZERO {
         fail!("polyWedgeFace: give a hinge with -ed, or -ax and -cen");
     }
-    let turn = DQuat::from_axis_angle(axis, (angle / steps as f64).to_radians());
+    let turn = DQuat::from_axis_angle(axis, angle / steps as f64);
     let mut cur = sel.clone();
     for _ in 0..steps {
         cur = extrude_faces(m, &cur, &ExtrudeOptions { offset: 0.0, individual: false, symmetry: None, inset: 0.0, keep_back: false }).faces;

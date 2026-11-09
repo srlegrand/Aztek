@@ -446,15 +446,15 @@ fn zero_pivot_rotation_lines_pivot_axes_up_with_the_world_or_the_object() {
 #[test]
 fn closest_euler_avoids_flips() {
     let m = DMat3::from_mat4(euler_to_matrix(
-        DVec3::new(170.0, 10.0, -175.0),
+        DVec3::new(170_f64.to_radians(), 10_f64.to_radians(), (-175_f64).to_radians()),
         RotateOrder::Xyz,
     ));
-    let out = xf::closest_euler(&m, RotateOrder::Xyz, DVec3::new(530.0, 10.0, 185.0));
-    assert!(approx(out.x, 530.0) && approx(out.z, 185.0));
+    let out = xf::closest_euler(&m, RotateOrder::Xyz, DVec3::new(530_f64.to_radians(), 10_f64.to_radians(), (185_f64).to_radians()));
+    assert!(approx(out.x.to_degrees(), 530.0) && approx(out.z.to_degrees(), 185.0));
     for o in 0..6 {
         let order = RotateOrder::from_index(o);
-        let r = DMat3::from_mat4(euler_to_matrix(DVec3::new(25.0, 160.0, -70.0), order));
-        let got = xf::closest_euler(&r, order, DVec3::new(100.0, 120.0, -200.0));
+        let r = DMat3::from_mat4(euler_to_matrix(DVec3::new(25_f64.to_radians(), 160_f64.to_radians(), (-70_f64).to_radians()), order));
+        let got = xf::closest_euler(&r, order, DVec3::new(100_f64.to_radians(), 120_f64.to_radians(), (-200_f64).to_radians()));
         let back = DMat3::from_mat4(euler_to_matrix(got, order));
         assert!((0..3).all(|c| (back.col(c) - r.col(c)).length() < 1e-9));
     }

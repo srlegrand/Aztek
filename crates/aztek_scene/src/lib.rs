@@ -95,6 +95,7 @@ pub mod scene_file;
 pub mod sculpt;
 pub mod scripted;
 pub mod session;
+pub mod unit_tables;
 pub mod shading;
 pub mod soft_select;
 pub mod split_rings_modifier;

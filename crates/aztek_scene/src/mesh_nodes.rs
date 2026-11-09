@@ -775,7 +775,7 @@ fn primitives() -> Vec<Primitive> {
                             let q = m.position(p);
                             let out = DVec3::new(q.x, 0.0, q.z).normalize_or_zero();
                             let center = out * radius;
-                            let turn = DQuat::from_axis_angle(DVec3::Y.cross(out).normalize_or_zero(), twist.to_radians());
+                            let turn = DQuat::from_axis_angle(DVec3::Y.cross(out).normalize_or_zero(), twist);
                             m.set_position(p, center + turn * (q - center));
                         }
                     }

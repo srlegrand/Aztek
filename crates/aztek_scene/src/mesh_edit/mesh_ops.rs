@@ -38,7 +38,7 @@ fn set_mesh(g: &mut crate::graph::Graph, p: PlugRef, m: Mesh) -> CmdResult<()> {
 }
 
 fn soft_edge_op(a: &Args, m: &mut Mesh, sel: &Ids, sym: Option<&SymmetryMap>) -> CmdResult<EditResult> {
-    let angle = a.float("angle", 180.0);
+    let angle = a.float("angle", std::f64::consts::PI).to_degrees();
     let edges = with_mirror(m, sym, sel, K::Edge);
     if angle >= 180.0 {
         set_soft_edges(m, &edges);
@@ -228,7 +228,7 @@ pub fn register(c: &mut Commands<Session>) {
     c.register(
         Cmd::new("polyQuadrangulate", "Join neighbouring triangles into quads.", |s, a| {
             let mut a2 = a.clone();
-            a2.flags.insert("angle".into(), json!(a.float("maxAngle", 40.0)));
+            a2.flags.insert("angle".into(), json!(a.float("maxAngle", 40_f64.to_radians())));
             edit_selected_op(s, "polyQuad", &a2, true, None)
         })
         .flag(flag("maxAngle", T::Float, json!(40.0), "Largest angle between the two triangles, degrees.").min(0.0).max(180.0)),

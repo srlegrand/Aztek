@@ -669,7 +669,7 @@ class MFnTransform(MFnDagNode):
         if not self._has("jointOrient"):
             return MQuaternion()
         v = _vec_attr(self._attr("jointOrient"))
-        return MEulerRotation(_math.radians(v[0]), _math.radians(v[1]), _math.radians(v[2])).asQuaternion()
+        return MEulerRotation(v[0], v[1], v[2]).asQuaternion()
 
     # Translation
 
@@ -711,10 +711,10 @@ class MFnTransform(MFnDagNode):
 
     def _euler(self):
         v = _vec_attr(self._attr("rotate"))
-        return MEulerRotation(_math.radians(v[0]), _math.radians(v[1]), _math.radians(v[2]), int(_cmds.getAttr(self._attr("rotateOrder"))))
+        return MEulerRotation(v[0], v[1], v[2], int(_cmds.getAttr(self._attr("rotateOrder"))))
 
     def _set_euler(self, e):
-        _set_vec_attr(self._attr("rotate"), (_math.degrees(e.x), _math.degrees(e.y), _math.degrees(e.z)))
+        _set_vec_attr(self._attr("rotate"), (e.x, e.y, e.z))
 
     def rotation(self, space=MSpace.kTransform, asQuaternion=False):
         if space == MSpace.kWorld:
@@ -750,11 +750,11 @@ class MFnTransform(MFnDagNode):
         if not self._has("rotateAxis"):
             return MQuaternion()
         v = _vec_attr(self._attr("rotateAxis"))
-        return MEulerRotation(_math.radians(v[0]), _math.radians(v[1]), _math.radians(v[2])).asQuaternion()
+        return MEulerRotation(v[0], v[1], v[2]).asQuaternion()
 
     def setRotateOrientation(self, q, space=MSpace.kTransform, balance=True):
         e = MEulerRotation.decompose(q.asMatrix(), 0)
-        _set_vec_attr(self._attr("rotateAxis"), (_math.degrees(e.x), _math.degrees(e.y), _math.degrees(e.z)))
+        _set_vec_attr(self._attr("rotateAxis"), (e.x, e.y, e.z))
         return self
 
     # Scale
@@ -1728,8 +1728,6 @@ class MFnUnitAttribute(MFnNumericAttribute):
             d = d.asCentimeters()
         elif isinstance(d, MTime):
             d = d.asUnits(MTime.uiUnit())
-        elif unitType == MFnUnitAttribute.kAngle:
-            d = _math.degrees(d)
         unit = {1: "angle", 2: "distance", 3: "time"}.get(unitType)
         self._obj = _new_attr(MFn.kUnitAttribute, longName, shortName, "float", float(d), unit=unit)
         return self.object()

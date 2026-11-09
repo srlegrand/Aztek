@@ -544,7 +544,7 @@ fn look_rotation(forward: DVec3, up: DVec3) -> DVec3 {
     let sy = (-x.z).clamp(-1.0, 1.0);
     let ry = sy.asin();
     let (rx, rz) = if ry.cos().abs() > 1e-6 { (y.z.atan2(z.z), x.y.atan2(x.x)) } else { ((-z.y).atan2(y.y), 0.0) };
-    DVec3::new(rx.to_degrees(), ry.to_degrees(), rz.to_degrees())
+    DVec3::new(rx, ry, rz)
 }
 
 fn aim(s: &mut Session, c: &Camera, eye: DVec3, target: DVec3) -> CmdResult<()> {
@@ -606,10 +606,10 @@ fn cam_arg(a: &Args) -> Option<String> {
 fn home_of(name: &str) -> (DVec3, DVec3, f64) {
     let short = name.rsplit('|').next().unwrap_or(name);
     match short {
-        "top" => (DVec3::new(0.0, 1000.1, 0.0), DVec3::new(-90.0, 0.0, 0.0), 1000.1),
+        "top" => (DVec3::new(0.0, 1000.1, 0.0), DVec3::new(-std::f64::consts::FRAC_PI_2, 0.0, 0.0), 1000.1),
         "front" => (DVec3::new(0.0, 0.0, 1000.1), DVec3::ZERO, 1000.1),
-        "side" => (DVec3::new(1000.1, 0.0, 0.0), DVec3::new(0.0, 90.0, 0.0), 1000.1),
-        _ => (DVec3::new(28.0, 21.0, 28.0), DVec3::new(-27.9, 45.0, 0.0), 44.8),
+        "side" => (DVec3::new(1000.1, 0.0, 0.0), DVec3::new(0.0, std::f64::consts::FRAC_PI_2, 0.0), 1000.1),
+        _ => (DVec3::new(28.0, 21.0, 28.0), DVec3::new((-27.9_f64).to_radians(), std::f64::consts::FRAC_PI_4, 0.0), 44.8),
     }
 }
 
@@ -632,7 +632,7 @@ fn view_set(s: &mut Session, a: &Args) -> CmdResult {
         set_plug(s, c.sh, cam::COI, PlugValue::Float(coi))?;
     } else if a.bool("persp") {
         let (_, r, _) = home_of("persp");
-        let m = glam::DMat3::from_euler(glam::EulerRot::ZYX, r.z.to_radians(), r.y.to_radians(), r.x.to_radians());
+        let m = glam::DMat3::from_euler(glam::EulerRot::ZYX, r.z, r.y, r.x);
         put_eye(s, &c, center + m.z_axis * dist)?;
         set_plug(s, c.tr, Transform::ROTATE, PlugValue::Vec3(r))?;
     } else if a.bool("top") {
@@ -1116,7 +1116,7 @@ pub fn register(s: &mut Session) {
                 v = l.get(1).and_then(Value::as_f64).unwrap_or(v);
             }
             let pivot = a.get("pivotPoint").and_then(vec3_of).unwrap_or(c.center());
-            let turn = glam::DMat3::from_axis_angle(DVec3::Y, -h.to_radians()) * glam::DMat3::from_axis_angle(c.axes.x_axis, -v.to_radians());
+            let turn = glam::DMat3::from_axis_angle(DVec3::Y, -h) * glam::DMat3::from_axis_angle(c.axes.x_axis, -v);
             let eye = pivot + turn * (c.eye - pivot);
             let fwd = turn * c.forward();
             let up = turn * c.axes.y_axis;

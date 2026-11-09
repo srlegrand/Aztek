@@ -19,6 +19,14 @@ mod lights;
 mod shading;
 mod nurbs;
 
+use aztek_ops::units;
+use std::cell::Cell;
+
+thread_local! {
+    /// Centimetres and radians per unit of the file being read.
+    static FILE_UNITS: Cell<(f64, f64)> = const { Cell::new((1.0, std::f64::consts::PI / 180.0)) };
+}
+
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt::Write as _;
 use std::sync::Arc;
@@ -478,7 +486,8 @@ impl Doc {
     }
 
     fn parse(text: &str) -> Doc {
-        let mut d = Doc { light_set: Vec::new(), relationships: Vec::new(), nodes: Vec::new(), by_name: HashMap::new(), conns: Vec::new(), lin: 1.0, ang: 1.0, fps: None, warnings: Vec::new(), refs: Vec::new(), ref_load: Vec::new(), instances: Vec::new(), ref_conns: Vec::new(), up_z: false, requires: Vec::new() };
+        FILE_UNITS.with(|u| u.set((1.0, std::f64::consts::PI / 180.0)));
+        let mut d = Doc { light_set: Vec::new(), relationships: Vec::new(), nodes: Vec::new(), by_name: HashMap::new(), conns: Vec::new(), lin: 1.0, ang: std::f64::consts::PI / 180.0, fps: None, warnings: Vec::new(), refs: Vec::new(), ref_load: Vec::new(), instances: Vec::new(), ref_conns: Vec::new(), up_z: false, requires: Vec::new() };
         let mut lex = Lexer::new(text);
         let mut st = Vec::new();
         let mut current: Option<usize> = None;
@@ -825,8 +834,14 @@ impl Doc {
         while k + 1 < st.len() {
             let v = st[k + 1].text().unwrap_or("");
             match st[k].text().unwrap_or("") {
-                "-l" | "-linear" => self.lin = linear_unit(v).unwrap_or(1.0),
-                "-a" | "-angle" => self.ang = if v.starts_with("rad") { 180.0 / std::f64::consts::PI } else { 1.0 },
+                "-l" | "-linear" => {
+                    self.lin = linear_unit(v).unwrap_or(1.0);
+                    FILE_UNITS.with(|u| u.set((self.lin, u.get().1)));
+                }
+                "-a" | "-angle" => {
+                    self.ang = if v.starts_with("rad") { 1.0 } else { std::f64::consts::PI / 180.0 };
+                    FILE_UNITS.with(|u| u.set((u.get().0, self.ang)));
+                }
                 "-t" | "-time" => self.fps = time_unit(v),
                 _ => {}
             }
@@ -1169,22 +1184,9 @@ const PLAIN_NODES: &[&str] = &["collider", "rigidBody", "dynamicConstraint", "he
 const PLAIN_SHAPES: &[&str] = &["solver", "particles", "field", "emitter", "follicle", "distanceDimShape", "paramDimension", "annotationShape", "dropoffLocator", "lattice", "baseLattice", "softModHandle", "mayaUsdProxyShape", "AL_usdmaya_ProxyShape", "ProxyUsdGeomCamera"];
 
 /// Nodes written and read attribute by attribute, with their connections: utility nodes and expressions.
-/// What a file's unitConversion does here, where angles are degrees: the reference's factors between radians and degrees come out as 1, and what
-/// is left is a rig's own scale: 0.1 on a blend, -1, or 2.5 degrees per unit written as 0.0436.
+/// What a file's unitConversion does: values are in stored units, as in the reference, so its factor means what it says.
 fn conversion_factor(n: &MaNode) -> f64 {
-    let cf = n.num(&["cf", "conversionFactor"]).unwrap_or(1.0);
-    let k = if cf != 0.0 && cf.abs() < 0.05 {
-        cf / 1_f64.to_radians()
-    } else if cf.abs() >= 5.0 {
-        cf / 1_f64.to_degrees()
-    } else {
-        cf
-    };
-    if (k - k.round()).abs() < 1e-6 {
-        k.round()
-    } else {
-        k
-    }
+    n.num(&["cf", "conversionFactor"]).unwrap_or(1.0)
 }
 
 /// A unitConversion that changes a value, and so has to exist here.
@@ -1451,8 +1453,7 @@ fn curve_keys(n: &MaNode, doc: &Doc, fps: f64) -> Keys {
         for (i, c) in n.elements(ys, 1) {
             let (Some(y), Some(&dx)) = (c[0].num(), x.get(&i)) else { continue };
             let per_second = if dx.abs() < 1e-12 { y.signum() * 1e6 } else { y / dx };
-            let unit = if angle { 180.0 / std::f64::consts::PI } else { 1.0 };
-            out.insert(i, per_second * unit / fps);
+            out.insert(i, per_second / fps);
         }
         out
     };
@@ -2877,7 +2878,7 @@ fn xform_values(v: &[Tok]) -> Option<(DVec3, DVec3, DVec3)> {
     }
     let n = |i: usize| v.get(i).and_then(Tok::num);
     let s = DVec3::new(n(1)?, n(2)?, n(3)?);
-    let r = DVec3::new(n(4)?, n(5)?, n(6)?) * (180.0 / std::f64::consts::PI);
+    let r = DVec3::new(n(4)?, n(5)?, n(6)?);
     let t = DVec3::new(n(8)?, n(9)?, n(10)?);
     Some((t, r, s))
 }
@@ -2988,7 +2989,13 @@ pub(crate) fn add_attr_edit(g: &mut Graph, n: NodeId, long: &str, short: &str, a
     g.add_attr(n, def).is_ok()
 }
 
-fn plug_value(def: &AttrDef, comp: i32, values: &[Tok], factor: f64) -> Option<PlugValue> {
+fn plug_value(def: &AttrDef, comp: i32, values: &[Tok], _factor: f64) -> Option<PlugValue> {
+    // The file's numbers are in the units its header names; what's stored is centimetres and radians.
+    let factor = match def.unit {
+        units::Unit::Linear => FILE_UNITS.with(Cell::get).0,
+        units::Unit::Angle => FILE_UNITS.with(Cell::get).1,
+        _ => 1.0,
+    };
     let f0 = values.first()?;
     Some(match def.ty {
         _ if comp >= 0 => PlugValue::Float(f0.num()? * factor),
@@ -3480,6 +3487,11 @@ fn range_text(a: usize, b: usize) -> String {
 }
 
 /// Three numbers, with no negative zeros.
+/// A vector as the file holds it: in the current units, which its header names.
+fn file_vec(unit: units::Unit, v: DVec3) -> DVec3 {
+    DVec3::new(units::to_user(unit, v.x), units::to_user(unit, v.y), units::to_user(unit, v.z))
+}
+
 fn vec_text(v: DVec3) -> String {
     let n = |x: f64| if x == 0.0 { 0.0 } else { x };
     format!("{} {} {}", n(v.x), n(v.y), n(v.z))
@@ -3553,9 +3565,10 @@ impl Writer<'_> {
             match v {
                 PlugValue::Vec3(x) => {
                     let ty = if a.has(flags::COLOR) { "float3" } else { "double3" };
-                    let _ = writeln!(self.out, "\tsetAttr \".{name}\" -type \"{ty}\" {} ;", vec_text(x));
+                    let _ = writeln!(self.out, "\tsetAttr \".{name}\" -type \"{ty}\" {} ;", vec_text(file_vec(a.unit, x)));
                 }
                 PlugValue::Float(x) => {
+                    let x = units::to_user(a.unit, x);
                     let _ = writeln!(self.out, "\tsetAttr {kflag}\".{name}\" {x};");
                 }
                 PlugValue::Int(x) => {
@@ -3923,7 +3936,8 @@ impl Writer<'_> {
         let count = keys.keys.len();
         if count > 0 {
             let last = range_text(0, count - 1);
-            let pairs = keys.keys.iter().map(|k| format!("{} {}", k.t, k.v)).collect::<Vec<_>>().join(" ");
+            let value_unit = if t.name.ends_with('A') { units::Unit::Angle } else if t.name.ends_with('L') { units::Unit::Linear } else { units::Unit::None };
+            let pairs = keys.keys.iter().map(|k| format!("{} {}", k.t, units::to_user(value_unit, k.v))).collect::<Vec<_>>().join(" ");
             let _ = writeln!(self.out, "\tsetAttr -s {count} \".ktv[{last}]\"  {pairs};");
             let list = |f: &dyn Fn(&Key) -> String| keys.keys.iter().map(f).collect::<Vec<_>>().join(" ");
             if keys.keys.iter().any(|k| k.itt != Tangent::Auto) {
@@ -3940,7 +3954,7 @@ impl Writer<'_> {
                 let _ = writeln!(self.out, "\tsetAttr -s {count} \".kbd[{last}]\"  {};", list(&|k| if k.breakdown { "yes".into() } else { "no".to_string() }));
             }
             // Fixed slopes as vectors one frame long.
-            let unit = if t.name.ends_with('A') { std::f64::consts::PI / 180.0 } else { 1.0 };
+            let unit = 1.0;
             let dx = 1.0 / anim::fps();
             for (i, k) in keys.keys.iter().enumerate() {
                 if k.itt == Tangent::Fixed {
@@ -4015,10 +4029,10 @@ impl Writer<'_> {
                 };
                 let (tot, tor) = (at("target.targetOffsetTranslate", e), at("target.targetOffsetRotate", e));
                 if tot != DVec3::ZERO {
-                    let _ = writeln!(body, "\tsetAttr \".tg[{e}].tot\" -type \"double3\" {} ;", vec_text(tot));
+                    let _ = writeln!(body, "\tsetAttr \".tg[{e}].tot\" -type \"double3\" {} ;", vec_text(file_vec(units::Unit::Linear, tot)));
                 }
                 if tor != DVec3::ZERO {
-                    let _ = writeln!(body, "\tsetAttr \".tg[{e}].tor\" -type \"double3\" {} ;", vec_text(tor));
+                    let _ = writeln!(body, "\tsetAttr \".tg[{e}].tor\" -type \"double3\" {} ;", vec_text(file_vec(units::Unit::Angle, tor)));
                 }
             }
         }
@@ -4027,7 +4041,7 @@ impl Writer<'_> {
             let v = g.node(id).unwrap().data().vec3(i);
             let default = if t.name == "scaleConstraint" { DVec3::ONE } else { DVec3::ZERO };
             if v != default {
-                let _ = writeln!(body, "\tsetAttr \".o\" -type \"double3\" {} ;", vec_text(v));
+                let _ = writeln!(body, "\tsetAttr \".o\" -type \"double3\" {} ;", vec_text(file_vec(t.attrs[i].unit, v)));
             }
         }
         if let Some(i) = t.attr_index("interpType") {
@@ -4157,7 +4171,7 @@ impl Writer<'_> {
         let mut body = String::new();
         let _ = writeln!(body, "createNode ikEffector -n {} -p {};", quoted(&eff_name), quoted(&pp));
         let _ = writeln!(body, "\tsetAttr \".v\" no;");
-        let _ = writeln!(body, "\tsetAttr \".t\" -type \"double3\" {} ;", vec_text(end_t));
+        let _ = writeln!(body, "\tsetAttr \".t\" -type \"double3\" {} ;", vec_text(file_vec(units::Unit::Linear, end_t)));
         let _ = writeln!(body, "\tsetAttr \".hd\" yes;");
         self.pending.push(body);
         if self.solvers.insert(solver.clone()) {
@@ -4206,7 +4220,7 @@ impl Writer<'_> {
             let jn = g.node(j).unwrap();
             let jo = DQuat::from_mat4(&euler_to_matrix(jn.data().vec3(Joint::JOINT_ORIENT), RotateOrder::Xyz));
             let ro = jn.data().int(Transform::ROTATE_ORDER);
-            let rad = r * (std::f64::consts::PI / 180.0);
+            let rad = r;
             let _ = writeln!(
                 body,
                 "\tsetAttr \".xm[{e}]\" -type \"matrix\" \"xform\" {} {} {ro} {} 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 {} {} {} {} 1 1 1 yes;",
@@ -4352,10 +4366,11 @@ impl Writer<'_> {
                         let _ = writeln!(out, "\tsetAttr \".{attr}\" -type \"float2\" {} {} ;", fmt_num(x.x), fmt_num(x.y));
                     } else {
                         let ty = if def.has(flags::COLOR) { "float3" } else { "double3" };
-                        let _ = writeln!(out, "\tsetAttr \".{attr}\" -type \"{ty}\" {} ;", vec_text(*x));
+                        let _ = writeln!(out, "\tsetAttr \".{attr}\" -type \"{ty}\" {} ;", vec_text(file_vec(def.unit, *x)));
                     }
                 }
                 PlugValue::Float(x) => {
+                    let x = units::to_user(g.attr(p).unit, *x);
                     let _ = writeln!(out, "\tsetAttr \".{attr}\" {x};");
                 }
                 PlugValue::Int(x) => {
@@ -4670,7 +4685,7 @@ pub fn write_text(s: &mut Session, file_name: &str, only: Option<&[NodeId]>) -> 
     for p in plugins {
         let _ = writeln!(w.out, "requires {} {};", quoted(&p), quoted(&crate::scripted::plugin_version(&p)));
     }
-    let _ = writeln!(w.out, "currentUnit -l centimeter -a degree -t {};", time_unit_name(fps));
+    let _ = writeln!(w.out, "currentUnit -l {} -a {} -t {};", units::linear_full_name(), units::angle_full_name(), time_unit_name(fps));
     let _ = writeln!(w.out, "fileInfo \"application\" \"aztek\";");
     let _ = writeln!(w.out, "fileInfo \"version\" \"{}\";", env!("CARGO_PKG_VERSION"));
     w.out.push_str(&ref_head);
@@ -4906,6 +4921,10 @@ pub fn open_scene(s: &mut Session, path: &str) -> Result<Vec<String>, String> {
         g.begin_batch();
         g.undo_stack_mut().set_enabled(false);
         let w = read_text(s, &text, false);
+        // The scene takes on the file's units, as it does its frame rate.
+        let (lin, ang) = FILE_UNITS.with(Cell::get);
+        units::set_linear(lin);
+        units::set_angle(ang);
         let g = &mut s.graph;
         g.undo_stack_mut().set_enabled(true);
         g.undo_stack_mut().clear();

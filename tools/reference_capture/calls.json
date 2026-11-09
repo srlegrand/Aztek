@@ -100,10 +100,10 @@
     {"id": "units.pal.keys", "area": "units", "setup": "polyCube; setKeyframe -t 24 -v 1 -at tx pCube1; currentUnit -t pal;", "call": "keyframe -q -tc pCube1.tx;", "expect": [25.0]},
     {"id": "units.pal.keys.noupdate", "area": "units", "setup": "polyCube; setKeyframe -t 24 -v 1 -at tx pCube1; currentUnit -ua 0 -t pal;", "call": "keyframe -q -tc pCube1.tx;", "expect": [24.0]},
     {"id": "units.ntsc.time", "area": "units", "setup": "currentUnit -t film; currentTime 24; currentUnit -t ntsc;", "call": "currentTime -q;", "expect": 30.0},
-    {"id": "units.fps.custom", "area": "units", "setup": "currentUnit -t 48fps;", "call": "currentUnit -q -t;", "expect": "48fps"},
+    {"id": "units.fps.custom", "area": "units", "setup": "currentUnit -t 37fps;", "call": "currentUnit -q -t;", "expect": "37fps"},
     {"id": "units.unitConversion", "area": "units", "setup": "polyCube -n a; polyCube -n b; connectAttr a.tx b.rx;", "call": "listConnections -s 1 -d 0 b.rx;", "expect": ["unitConversion1"]},
     {"id": "units.unitConversion.factor", "area": "units", "setup": "polyCube -n a; polyCube -n b; connectAttr a.tx b.rx;", "call": "getAttr unitConversion1.conversionFactor;", "expect": 0.017453292519943295},
-    {"id": "units.convertUnit", "area": "units", "setup": "", "call": "convertUnit -f \"1m\" -t \"cm\";", "expect": "100cm"},
+    {"id": "units.convertUnit", "area": "units", "setup": "", "call": "convertUnit -f \"m\" -t \"cm\" \"1\";", "expect": "100cm"},
 
     {"id": "select.invert", "area": "select", "setup": "polyCube; polyCube; polyCube; select -r pCube1; InvertSelection;", "call": "ls -sl;", "expect": ["pCube2", "pCube3"]},
     {"id": "hotkey.query", "area": "hotkey", "setup": "polyCube; select -r pCube1; nameCommand -ann \"cube\" -c \"polyCube\" makeCubeNameCommand; hotkey -k \"F12\" -n \"makeCubeNameCommand\";", "call": "hotkey -q -k \"F12\" -n;", "expect": "makeCubeNameCommand"},

@@ -74,11 +74,12 @@ fn group_element(g: &Graph, path: &str) -> Option<Vec<PlugRef>> {
 
 /// The reference's name for an attribute's type.
 pub(crate) fn ref_type(a: &AttrDef, component: bool) -> &'static str {
-    let angular = a.name.starts_with("rotate") && !a.name.contains("Order") && !a.name.contains("Pivot");
-    let linear = matches!(a.name.as_str(), "translate" | "rotatePivot" | "scalePivot" | "rotatePivotTranslate" | "scalePivotTranslate");
+    use aztek_ops::units::Unit;
     match a.ty {
-        PlugType::Vec3 if component && angular => "doubleAngle",
-        PlugType::Vec3 if component && linear => "doubleLinear",
+        PlugType::Float if a.unit == Unit::Angle => "doubleAngle",
+        PlugType::Float if a.unit == Unit::Linear => "doubleLinear",
+        PlugType::Vec3 if component && a.unit == Unit::Angle => "doubleAngle",
+        PlugType::Vec3 if component && a.unit == Unit::Linear => "doubleLinear",
         PlugType::Vec3 if component => "double",
         PlugType::Vec3 if !a.child_names[0].is_empty() && a.child_names[2].is_empty() => "double2",
         PlugType::Vec3 if a.has(flags::COLOR) => "float3",
@@ -152,6 +153,13 @@ fn read(g: &mut Graph, p: &PlugRef) -> CmdResult {
         return Ok(json!([x.x, x.y]));
     }
     Ok(to_json(&v))
+}
+
+/// What a plug named by a script measures, when it measures something.
+fn plug_unit(s: &Session, name: &str) -> Option<aztek_ops::units::Unit> {
+    let p = s.graph.plug(name).ok()?;
+    let unit = s.graph.attr(&p).unit;
+    (unit != aztek_ops::units::Unit::None).then_some(unit)
 }
 
 fn get_attr(s: &mut Session, a: &Args, prev: &aztek_ops::RunFn<Session>) -> CmdResult {
@@ -248,6 +256,19 @@ fn read_args(g: &mut Graph, a: &Args) -> CmdResult {
 
 fn set_attr(s: &mut Session, a: &Args, prev: &aztek_ops::RunFn<Session>) -> CmdResult {
     let Some(name) = a.pos_str(0).map(str::to_string) else { fail!("setAttr: expected (plug, value)") };
+    // A script's number is in the current unit.
+    let converted;
+    let a = match plug_unit(s, &name).filter(|_| aztek_ops::units::user_call()) {
+        Some(unit) => {
+            let mut c = a.clone();
+            for v in c.positional.iter_mut().skip(1) {
+                aztek_ops::units::json_to_stored(unit, v);
+            }
+            converted = c;
+            &converted
+        }
+        None => a,
+    };
     if let Some(r) = crate::deform_paint::set_weights(&mut s.graph, &name, &a.positional[1..]) {
         return r;
     }
@@ -759,7 +780,13 @@ pub fn register(c: &mut Commands<Session>) {
                 }
                 return Ok(to_json(&v));
             }
-            get_attr(s, a, prev)
+            let mut v = get_attr(s, a, prev)?;
+            if aztek_ops::units::user_call() && !a.bool("type") && !a.bool("size") && !a.bool("multiIndices") {
+                if let Some(unit) = plug_unit(s, a.pos_str(0).unwrap_or_default()) {
+                    aztek_ops::units::json_to_user(unit, &mut v);
+                }
+            }
+            Ok(v)
         },
     );
     extend(
@@ -980,7 +1007,12 @@ pub fn register(c: &mut Commands<Session>) {
                 return Ok(json!(pairs.iter().all(|(p, q)| g.source(q) == Some(*p))));
             }
             let (sp, dp) = (g.plug(x)?, g.plug(y)?);
-            let exact = g.source(&dp) == Some(sp);
+            // A conversion node between them doesn't part them.
+            let through = g.source(&dp).filter(|c| g.node(c.node).is_some_and(|n| n.ty().name == "unitConversion")).and_then(|c| {
+                let input = g.node(c.node)?.ty().attr_index("input")?;
+                g.source(&PlugRef::new(c.node, input as i32))
+            });
+            let exact = g.source(&dp) == Some(sp) || through == Some(sp);
             // A whole Vec3 drives its children, child by child.
             let parts = dp.component >= 0 && sp.component == dp.component && g.source(&PlugRef { component: -1, ..dp }) == Some(PlugRef { component: -1, ..sp });
             Ok(json!(exact || parts))

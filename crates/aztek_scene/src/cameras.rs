@@ -182,10 +182,10 @@ pub fn make_defaults(g: &mut Graph) {
             }
         };
         // The values the reference's own scene files hold for a new scene.
-        made("persp", DVec3::new(28.0, 21.0, 28.0), DVec3::new(-27.938352729602379, 45.0, 0.0), false, 44.82186966202994, "-p");
-        made("top", DVec3::new(0.0, 1000.1, 0.0), DVec3::new(-90.0, 0.0, 0.0), true, 1000.1, "-t");
+        made("persp", DVec3::new(28.0, 21.0, 28.0), DVec3::new((-27.938352729602379_f64).to_radians(), 45_f64.to_radians(), 0.0), false, 44.82186966202994, "-p");
+        made("top", DVec3::new(0.0, 1000.1, 0.0), DVec3::new(-std::f64::consts::FRAC_PI_2, 0.0, 0.0), true, 1000.1, "-t");
         made("front", DVec3::new(0.0, 0.0, 1000.1), DVec3::ZERO, true, 1000.1, "-f");
-        made("side", DVec3::new(1000.1, 0.0, 0.0), DVec3::new(0.0, 90.0, 0.0), true, 1000.1, "-s");
+        made("side", DVec3::new(1000.1, 0.0, 0.0), DVec3::new(0.0, std::f64::consts::FRAC_PI_2, 0.0), true, 1000.1, "-s");
         for set in ["defaultLightSet", "defaultObjectSet"] {
             let _ = crate::object_sets::create(g, set, &[], false);
         }
@@ -336,8 +336,8 @@ fn apply(g: &mut Graph, a: &aztek_ops::Args, tr: NodeId, sh: NodeId) -> CmdResul
         let len = d.length();
         if len > 1e-9 {
             let z = d / len;
-            let yaw = z.x.atan2(z.z).to_degrees();
-            let pitch = z.y.clamp(-1.0, 1.0).asin().to_degrees();
+            let yaw = z.x.atan2(z.z);
+            let pitch = z.y.clamp(-1.0, 1.0).asin();
             g.set_value(plug(tr, Transform::ROTATE), PlugValue::Vec3(rotate_for(yaw, pitch)))?;
             g.set_value(plug(sh, COI), PlugValue::Float(len))?;
         }

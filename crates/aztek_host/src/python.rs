@@ -331,10 +331,26 @@ pub fn register_commands(s: &mut Session) {
 fn call(py: Python<'_>, name: &str, args: &str, kwargs: &str) -> PyResult<String> {
     let args: Vec<Value> = serde_json::from_str(args).unwrap_or_default();
     let kwargs: Map<String, Value> = serde_json::from_str(kwargs).unwrap_or_default();
-    host(py, |c| match c.py_call(name, args, kwargs) {
-        Ok(v) => v.to_string(),
-        Err(e) => json!({ "__error__": e }).to_string(),
+    let stored = STORED_UNITS.with(Cell::get);
+    host(py, |c| {
+        let run = |c: &mut Core| c.py_call(name, args, kwargs);
+        let r = if stored { aztek_ops::units::stored(|| run(c)) } else { aztek_ops::units::as_script(|| run(c)) };
+        match r {
+            Ok(v) => v.to_string(),
+            Err(e) => json!({ "__error__": e }).to_string(),
+        }
     })
+}
+
+thread_local! {
+    /// Set while the Python API calls a command: its values are stored ones.
+    static STORED_UNITS: Cell<bool> = const { Cell::new(false) };
+}
+
+/// The API says it's calling, and gets back what it said before.
+#[pyfunction]
+fn stored_units(on: bool) -> bool {
+    STORED_UNITS.with(|s| s.replace(on))
 }
 
 #[pyfunction]
@@ -431,6 +447,7 @@ fn source(name: &str) -> Option<&'static str> {
 #[pymodule]
 fn _aztek(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(call, m)?)?;
+    m.add_function(wrap_pyfunction!(stored_units, m)?)?;
     m.add_function(wrap_pyfunction!(mel, m)?)?;
     m.add_function(wrap_pyfunction!(write, m)?)?;
     m.add_function(wrap_pyfunction!(exists, m)?)?;

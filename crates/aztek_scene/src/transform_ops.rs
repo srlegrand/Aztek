@@ -41,7 +41,7 @@ fn orthonormal(m: &DMat3) -> DMat3 {
 }
 
 fn wrap_toward(a: f64, hint: f64) -> f64 {
-    a + 360.0 * ((hint - a) / 360.0).round()
+    a + std::f64::consts::TAU * ((hint - a) / std::f64::consts::TAU).round()
 }
 
 fn rotation_of(g: &Graph, id: NodeId) -> DMat3 {
@@ -263,9 +263,9 @@ pub fn closest_euler(rotation: &DMat3, order: RotateOrder, hint: DVec3) -> DVec3
     ];
     let ax = AXES[order as usize];
     let mut b = a;
-    b[ax[0]] += 180.0;
-    b[ax[1]] = 180.0 - b[ax[1]];
-    b[ax[2]] += 180.0;
+    b[ax[0]] += std::f64::consts::PI;
+    b[ax[1]] = std::f64::consts::PI - b[ax[1]];
+    b[ax[2]] += std::f64::consts::PI;
     let fit = |mut e: DVec3| {
         for i in 0..3 {
             e[i] = wrap_toward(e[i], hint[i]);

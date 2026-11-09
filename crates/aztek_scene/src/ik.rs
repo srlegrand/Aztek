@@ -477,7 +477,7 @@ fn solve_plane(input: &SolveInput) -> Vec<DVec3> {
             if y.length() < 1e-9 {
                 y = any_perpendicular(x1);
             }
-            let y = (rotation_about(x1, input.twist.to_radians()) * y).normalize();
+            let y = (rotation_about(x1, input.twist) * y).normalize();
             DMat3::from_cols(x1, y, x1.cross(y)) * f0.transpose()
         }
     };
@@ -597,12 +597,12 @@ fn solve_spline(input: &SolveInput) -> (Vec<DVec3>, Option<DVec3>) {
         let t = if n > 1 { i as f64 / (n - 1) as f64 } else { 1.0 };
         let w = match &input.advanced {
             Some(a) => {
-                let spin = DQuat::from_axis_angle(want, a.twist_at(t, input.twist, input.roll).to_radians());
+                let spin = DQuat::from_axis_angle(want, a.twist_at(t, input.twist, input.roll));
                 let f = rot3(&worlds[i]).transpose() * rest_dir;
                 DMat3::from_quat(spin) * a.frame(f, want, a.up_at(t, targets[i]))
             }
             None => {
-                let spin = DQuat::from_axis_angle(want, (input.roll + input.twist * t).to_radians());
+                let spin = DQuat::from_axis_angle(want, input.roll + input.twist * t);
                 DMat3::from_quat(spin * turn) * rot3(&worlds[i])
             }
         };

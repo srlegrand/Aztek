@@ -186,7 +186,7 @@ fn material_push(base: Push, m: &DrawMaterial, sets: Option<&MatSets>) -> (MatPu
     if let Some(t) = placed {
         uv = [t.repeat[0], t.repeat[1], t.offset[0], t.offset[1]];
         frame = [t.coverage[0].max(1e-6), t.coverage[1].max(1e-6), t.translate_frame[0], t.translate_frame[1]];
-        rot = [t.rotate_uv.to_radians(), t.rotate_frame.to_radians()];
+        rot = [t.rotate_uv, t.rotate_frame];
         flags |= t.wrap[0] as i32 | (t.wrap[1] as i32) << 1 | (t.mirror[0] as i32) << 2 | (t.mirror[1] as i32) << 3;
         gain = t.gain;
         offs = t.color_offset;
@@ -2445,7 +2445,7 @@ impl Viewport {
         Some(o + d * ((pivot - o).dot(n) / den))
     }
 
-    /// World Euler angles for a rotation about a world axis.
+    /// World Euler angles, in radians, for a rotation in degrees about a world axis.
     fn euler_about(axis: DVec3, deg: f64) -> [f64; 3] {
         let q = glam::DQuat::from_axis_angle(axis.normalize_or_zero(), deg.to_radians());
         let e = aztek_scene::transform::matrix_to_euler(&DMat3::from_quat(q), aztek_scene::transform::RotateOrder::Xyz);
@@ -2533,7 +2533,7 @@ impl Viewport {
                         let ang = snap(sweep(ax));
                         if self.frame == DMat3::IDENTITY {
                             let mut by = [0.0; 3];
-                            by[i] = ang;
+                            by[i] = ang.to_radians();
                             by
                         } else {
                             Self::euler_about(ax, ang)

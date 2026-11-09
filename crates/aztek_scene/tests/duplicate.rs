@@ -54,7 +54,7 @@ fn full(s: &Session, made: &Value) -> Vec<String> {
 
 #[test]
 fn repeat_maths_steps_about_a_pivot_compose_into_runs() {
-    let s = Step { rotate: DVec3::new(0.0, 90.0, 0.0), ..Default::default() };
+    let s = Step { rotate: DVec3::new(0.0, 90_f64.to_radians(), 0.0), ..Default::default() };
     let step = step_matrix(&s, DVec3::ZERO, &DMat3::IDENTITY);
     let m = copy_matrices(&DMat4::from_translation(DVec3::new(100.0, 0.0, 0.0)), &step, 4);
     assert_eq!(m.len(), 4);

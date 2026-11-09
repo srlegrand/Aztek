@@ -94,10 +94,10 @@ pub fn rotate_cameras(s: &mut Session, z: bool) {
             }
             let (t, r) = (n.vec3(Transform::TRANSLATE), n.vec3(Transform::ROTATE));
             // The Euler angles in xyz order: R = Rz Ry Rx.
-            let m = DMat3::from_euler(EulerRot::ZYX, r.z.to_radians(), r.y.to_radians(), r.x.to_radians());
+            let m = DMat3::from_euler(EulerRot::ZYX, r.z, r.y, r.x);
             let (rz, ry, rx) = (turn * m).to_euler(EulerRot::ZYX);
             let _ = g.set_value(PlugRef::new(id, Transform::TRANSLATE as i32), PlugValue::Vec3(turn * t));
-            let _ = g.set_value(PlugRef::new(id, Transform::ROTATE as i32), PlugValue::Vec3(DVec3::new(rx, ry, rz) * (180.0 / std::f64::consts::PI)));
+            let _ = g.set_value(PlugRef::new(id, Transform::ROTATE as i32), PlugValue::Vec3(DVec3::new(rx, ry, rz)));
         }
     });
 }

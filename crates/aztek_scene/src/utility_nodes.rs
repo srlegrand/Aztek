@@ -593,7 +593,7 @@ fn table() -> Vec<Spec> {
                 let angle = x.angle_between(y);
                 let axis = x.cross(y).normalize_or_zero();
                 set(d, "axis", axis);
-                set(d, "angle", angle.to_degrees());
+                set(d, "angle", angle);
                 let q = if axis == DVec3::ZERO { DQuat::IDENTITY } else { DQuat::from_axis_angle(axis, angle) };
                 set(d, "euler", quat_euler(q, RotateOrder::Xyz));
             }),

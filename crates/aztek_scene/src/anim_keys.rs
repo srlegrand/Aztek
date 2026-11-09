@@ -137,7 +137,8 @@ fn set_keyframe(s: &mut Session, a: &Args) -> CmdResult {
                 }
                 continue;
             }
-            let mut v = value;
+            // A script's value is in the current unit of what it keys.
+            let mut v = value.map(|x| if aztek_ops::units::user_call() { aztek_ops::units::to_stored(s.graph.attr(&p).unit, x) } else { x });
             if minimize && anim::curve_type_for(&s.graph, &p) == "animCurveTA" {
                 // The turn nearest the previous key's, so the curve doesn't spin round the long way.
                 let now = match v {
@@ -148,7 +149,7 @@ fn set_keyframe(s: &mut Session, a: &Args) -> CmdResult {
                     let k = anim::keys_of(&s.graph, c);
                     let before = k.keys.iter().rev().find(|e| e.t < t - 1e-6).or(k.keys.first());
                     if let Some(prev) = before {
-                        v = Some(now + 360.0 * ((prev.v - now) / 360.0).round());
+                        v = Some(now + std::f64::consts::TAU * ((prev.v - now) / std::f64::consts::TAU).round());
                     }
                 }
             }
@@ -272,6 +273,7 @@ fn keyframe(s: &mut Session, a: &Args) -> CmdResult {
     let adjust = a.get("adjustBreakdown").and_then(bool_value).unwrap_or(true);
     let mut n = 0;
     for (_, c) in &curves {
+        let vu = aztek_ops::units::factor(anim::curve_unit(&s.graph, *c));
         let mut k = anim::keys_of(&s.graph, *c);
         let before = k.keys.clone();
         let picked: Vec<usize> = k.keys.iter().enumerate().filter(|(i, x)| pick.hits(*c, *i, x)).map(|(i, _)| i).collect();
@@ -284,6 +286,7 @@ fn keyframe(s: &mut Session, a: &Args) -> CmdResult {
                 key.tick = b;
             }
             if let Some(v) = vc {
+                let v = if aztek_ops::units::user_call() { v * vu } else { v };
                 key.v = if rel { key.v + v } else { v };
             }
         }
@@ -347,9 +350,10 @@ fn keyframe_query(s: &mut Session, a: &Args, curves: &[(PlugRef, NodeId)], pick:
             }
             count += 1;
             times.push(json!(k.t));
-            values.push(json!(k.v));
+            let shown = if aztek_ops::units::user_call() { aztek_ops::units::to_user(anim::curve_unit(&s.graph, *c), k.v) } else { k.v };
+            values.push(json!(shown));
             both.push(json!(k.t));
-            both.push(json!(k.v));
+            both.push(json!(shown));
             indices.push(json!(i));
             ticks.push(json!(k.tick));
             if k.breakdown {
@@ -467,13 +471,14 @@ fn tan_of(k: &Keys, i: usize, out: bool) -> Tan {
     Tan { slope: if out { so } else { si }, weight: if k.weighted { x.hypot(y) } else { 1.0 } }
 }
 
-/// The angle of a slope per frame: the reference measures in value per second.
-fn angle_of(slope: f64) -> f64 {
-    (slope * anim::fps()).atan().to_degrees()
+/// The angle of a slope per frame: the reference measures in value per second, values as people read them, so a turn
+/// of 45 degrees over a second is a tangent of 45 degrees whatever is stored.
+fn angle_of(slope: f64, value_unit: f64) -> f64 {
+    (slope / value_unit * anim::fps()).atan().to_degrees()
 }
 
-fn slope_of_angle(deg: f64) -> f64 {
-    deg.to_radians().tan() / anim::fps()
+fn slope_of_angle(deg: f64, value_unit: f64) -> f64 {
+    deg.to_radians().tan() / anim::fps() * value_unit
 }
 
 fn slope_of_xy(x: f64, y: f64) -> f64 {
@@ -481,11 +486,11 @@ fn slope_of_xy(x: f64, y: f64) -> f64 {
 }
 
 /// Writes one side's edits (angle, then x and y, then weight), absolute or relative.
-fn edited(t: Tan, k: &Keys, i: usize, out: bool, flags: [Option<f64>; 4], rel: bool) -> Tan {
+fn edited(t: Tan, k: &Keys, i: usize, out: bool, flags: [Option<f64>; 4], rel: bool, vu: f64) -> Tan {
     let [angle, x, y, weight] = flags;
     let mut t = t;
     if let Some(d) = angle {
-        t.slope = slope_of_angle(if rel { angle_of(t.slope) + d } else { d });
+        t.slope = slope_of_angle(if rel { angle_of(t.slope, vu) + d } else { d }, vu);
     }
     if x.is_some() || y.is_some() {
         let (cx, cy) = k.tangent_vector(i, out);
@@ -522,6 +527,7 @@ fn key_tangent(s: &mut Session, a: &Args) -> CmdResult {
     let weighted = a.get("weightedTangents").and_then(bool_value);
     let mut n = 0;
     for (_, c) in &curves {
+        let vu = aztek_ops::units::factor(anim::curve_unit(&s.graph, *c));
         let mut k = anim::keys_of(&s.graph, *c);
         if let Some(w) = weighted {
             if w != k.weighted {
@@ -560,8 +566,8 @@ fn key_tangent(s: &mut Session, a: &Args) -> CmdResult {
             let edit_out = out_flags.iter().any(Option::is_some);
             if edit_in || edit_out {
                 let (ti, to) = (tan_of(&k, i, false), tan_of(&k, i, true));
-                let new_in = edited(ti, &k, i, false, in_flags, rel);
-                let new_out = edited(to, &k, i, true, out_flags, rel);
+                let new_in = edited(ti, &k, i, false, in_flags, rel, vu);
+                let new_out = edited(to, &k, i, true, out_flags, rel, vu);
                 let locked = k.keys[i].tan_lock;
                 // Locked tangents turn together; only the side named changes length.
                 let (slope_in, slope_out) = match (edit_in, edit_out, locked) {
@@ -583,7 +589,7 @@ fn key_tangent(s: &mut Session, a: &Args) -> CmdResult {
             }
             if unify {
                 let (ti, to) = (tan_of(&k, i, false), tan_of(&k, i, true));
-                let mid = slope_of_angle(0.5 * (angle_of(ti.slope) + angle_of(to.slope)));
+                let mid = slope_of_angle(0.5 * (angle_of(ti.slope, vu) + angle_of(to.slope, vu)), vu);
                 let key = &mut k.keys[i];
                 key.itt = Tangent::Fixed;
                 key.ott = Tangent::Fixed;
@@ -664,6 +670,7 @@ fn key_tangent_query(s: &Session, a: &Args, curves: &[(PlugRef, NodeId)], pick: 
     }
     let mut out = Vec::new();
     for (_, c) in curves {
+        let vu = aztek_ops::units::factor(anim::curve_unit(&s.graph, *c));
         let k = anim::keys_of(g, *c);
         for (i, key) in k.keys.iter().enumerate() {
             if !pick.hits(*c, i, key) {
@@ -674,8 +681,8 @@ fn key_tangent_query(s: &Session, a: &Args, curves: &[(PlugRef, NodeId)], pick: 
             let (ox, oy) = k.tangent_vector(i, true);
             for q in &asked {
                 out.push(match q.as_str() {
-                    "inAngle" => json!(angle_of(si)),
-                    "outAngle" => json!(angle_of(so)),
+                    "inAngle" => json!(angle_of(si, vu)),
+                    "outAngle" => json!(angle_of(so, vu)),
                     "inWeight" => json!(ix.hypot(iy)),
                     "outWeight" => json!(ox.hypot(oy)),
                     "ix" => json!(ix),

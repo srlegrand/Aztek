@@ -504,7 +504,7 @@ fn projection(s: &mut Session, vp: &Viewport, node: NodeId, ty: &str, dpr: f64, 
     let (_, world) = owner(s, node)?;
     let n = m.node.clone();
     let c = DVec3::new(get(s, &n, "projectionCenterX"), get(s, &n, "projectionCenterY"), get(s, &n, "projectionCenterZ"));
-    let r = DVec3::new(get(s, &n, "rotateX"), get(s, &n, "rotateY"), get(s, &n, "rotateZ")) * (std::f64::consts::PI / 180.0);
+    let r = DVec3::new(get(s, &n, "rotateX"), get(s, &n, "rotateY"), get(s, &n, "rotateZ"));
     let axes = DMat3::from_quat(glam::DQuat::from_euler(glam::EulerRot::ZYX, r.z, r.y, r.x));
     let at = world.transform_point3(c);
     let len = vp.handle_len(at, dpr);
@@ -677,11 +677,11 @@ pub fn value_at(vp: &Viewport, h: &Handle, start: DVec2, px: DVec2) -> Option<f6
         Drive::Scale { axis, start: v0, len } => Some(v0 * (1.0 + along(*axis, from, unit)? / len).max(0.001)),
         Drive::Turn { centre, axis, start: v0, factor } => {
             let c = screen.project(*centre)?;
-            let mut a = ((px - c).to_angle() - (start - c).to_angle()).to_degrees();
-            if a > 180.0 {
-                a -= 360.0;
-            } else if a < -180.0 {
-                a += 360.0;
+            let mut a = (px - c).to_angle() - (start - c).to_angle();
+            if a > std::f64::consts::PI {
+                a -= std::f64::consts::TAU;
+            } else if a < -std::f64::consts::PI {
+                a += std::f64::consts::TAU;
             }
             Some(v0 + factor * a * -(vp.cam.eye() - *centre).dot(*axis).signum())
         }

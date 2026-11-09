@@ -1,5 +1,7 @@
 //! The clock: currentTime, playbackOptions, play, timeControl and currentUnit; and ghosting.
 
+use aztek_ops::units;
+
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
@@ -228,8 +230,6 @@ fn time_curves(s: &Session) -> Vec<NodeId> {
 }
 
 /// The linear and angular units are saved scene settings; nothing else in the scene reads them yet.
-static LINEAR: Mutex<Option<String>> = Mutex::new(None);
-static ANGLE: Mutex<Option<String>> = Mutex::new(None);
 
 fn current_unit(s: &mut Session, a: &Args) -> CmdResult {
     if a.bool("query") {
@@ -237,21 +237,19 @@ fn current_unit(s: &mut Session, a: &Args) -> CmdResult {
             return Ok(json!(time_unit_name(anim::fps())));
         }
         if queried(a, &["angle"]) {
-            let u = ANGLE.lock().unwrap().clone().unwrap_or("deg".into());
-            let long = u == "degree" || u == "deg";
-            return Ok(json!(if a.bool("fullName") { if long { "degree" } else { "radian" } } else if long { "deg" } else { "rad" }));
+            let u = units::angle_name();
+            return Ok(json!(if a.bool("fullName") { full_angle(u) } else { u }));
         }
-        let u = LINEAR.lock().unwrap().clone().unwrap_or("cm".into());
-        return Ok(json!(if a.bool("fullName") { full_linear(&u) } else { u.as_str() }));
+        let u = units::linear_name();
+        return Ok(json!(if a.bool("fullName") { full_linear(u) } else { u }));
     }
     if let Some(v) = a.get("linear").and_then(Value::as_str) {
-        *LINEAR.lock().unwrap() = Some(short_linear(v)?.to_string());
+        let Some(f) = units::linear_factor(v) else { fail!("currentUnit: unknown linear unit '{v}'") };
+        units::set_linear(f);
     }
     if let Some(v) = a.get("angle").and_then(Value::as_str) {
-        if !matches!(v, "deg" | "degree" | "rad" | "radian") {
-            fail!("currentUnit: unknown angle unit '{v}'");
-        }
-        *ANGLE.lock().unwrap() = Some(v.to_string());
+        let Some(f) = units::angle_factor(v) else { fail!("currentUnit: unknown angle unit '{v}'") };
+        units::set_angle(f);
     }
     if let Some(v) = a.get("time").and_then(Value::as_str) {
         let Some(new) = time_unit_fps(v) else { fail!("currentUnit: unknown time unit '{v}'") };
@@ -289,18 +287,13 @@ fn current_unit(s: &mut Session, a: &Args) -> CmdResult {
     Ok(Value::Null)
 }
 
-fn short_linear(v: &str) -> CmdResult<&'static str> {
-    Ok(match v {
-        "mm" | "millimeter" => "mm",
-        "cm" | "centimeter" => "cm",
-        "m" | "meter" => "m",
-        "km" | "kilometer" => "km",
-        "in" | "inch" => "in",
-        "ft" | "foot" => "ft",
-        "yd" | "yard" => "yd",
-        "mi" | "mile" => "mi",
-        _ => fail!("currentUnit: unknown linear unit '{v}'"),
-    })
+fn full_angle(v: &str) -> &'static str {
+    match v {
+        "rad" => "radian",
+        "min" => "minute",
+        "sec" => "second",
+        _ => "degree",
+    }
 }
 
 fn full_linear(v: &str) -> &'static str {
@@ -488,16 +481,7 @@ pub fn register(c: &mut Commands<Session>) {
     }
 }
 
-/// Metres in one scene unit, from currentUnit -linear: 0.01 in a centimetre scene.
+/// Metres in one stored unit: what's stored is centimetres, whatever the scene shows.
 pub fn metres_per_unit() -> f64 {
-    match LINEAR.lock().unwrap().as_deref().unwrap_or("cm") {
-        "mm" => 0.001,
-        "m" => 1.0,
-        "km" => 1000.0,
-        "in" => 0.0254,
-        "ft" => 0.3048,
-        "yd" => 0.9144,
-        "mi" => 1609.344,
-        _ => 0.01,
-    }
+    0.01
 }

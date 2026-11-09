@@ -336,10 +336,11 @@ fn value_text(a: &crate::plug::AttrDef, v: &PlugValue) -> Option<String> {
     Some(match v {
         PlugValue::Bool(x) => format!(" {}", *x as i32),
         PlugValue::Int(x) => format!(" {x}"),
-        PlugValue::Float(x) => format!(" {x}"),
+        PlugValue::Float(x) => format!(" {}", aztek_ops::units::to_user(a.unit, *x)),
         PlugValue::Vec3(x) => {
             let ty = if a.has(flags::COLOR) { "float3" } else { "double3" };
-            format!(" -type \"{ty}\" {} {} {}", x.x, x.y, x.z)
+            let u = |c: f64| aztek_ops::units::to_user(a.unit, c);
+            format!(" -type \"{ty}\" {} {} {}", u(x.x), u(x.y), u(x.z))
         }
         PlugValue::String(x) => format!(" -type \"string\" \"{}\"", escape(x)),
         PlugValue::Matrix(m) => format!(" -type \"matrix\" {}", m.to_cols_array().iter().map(|c| c.to_string()).collect::<Vec<_>>().join(" ")),
