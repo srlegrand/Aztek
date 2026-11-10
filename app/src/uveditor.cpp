@@ -21,8 +21,10 @@
 
 namespace az {
 
-static QString id_list(QList<int> ids) {
+// The ids as runs, "4" or "6:9": one component name each (pSphere1.e[4] pSphere1.e[6:9]), as the reference writes them.
+static QStringList id_runs(QList<int> ids) {
     std::sort(ids.begin(), ids.end());
+    ids.erase(std::unique(ids.begin(), ids.end()), ids.end());
     QStringList parts;
     for (int i = 0; i < ids.size();) {
         int j = i;
@@ -30,7 +32,7 @@ static QString id_list(QList<int> ids) {
         parts << (j > i ? QString("%1:%2").arg(ids[i]).arg(ids[j]) : QString::number(ids[i]));
         i = j + 1;
     }
-    return parts.join(",");
+    return parts;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -265,7 +267,7 @@ QJsonArray UvCanvas::targets() const {
     QJsonArray out;
     auto am = active_maps();
     for (auto it = am.begin(); it != am.end(); ++it)
-        out.append(QString("%1.map[%2]").arg(meshes_[it.key()].path, id_list(it.value().values())));
+        for (const QString& run : id_runs(it.value().values())) out.append(QString("%1.map[%2]").arg(meshes_[it.key()].path, run));
     return out;
 }
 
@@ -546,7 +548,7 @@ void UvCanvas::pick(QPointF pos, QPointF to, bool rect, Qt::KeyboardModifiers mo
                 }
             if (best >= 0) ids = {best};
         }
-        if (!ids.isEmpty()) names.append(QString("%1.%2[%3]").arg(m.path, mode_ == "face" ? "f" : "e", id_list(ids)));
+        for (const QString& run : id_runs(ids)) names.append(QString("%1.%2[%3]").arg(m.path, mode_ == "face" ? "f" : "e", run));
     }
     QJsonObject call{{"args", names}};
     if (ctrl && shift) call["add"] = true;
