@@ -31,9 +31,9 @@ fn flag(name: &str, ty: ArgType, default: Value, doc: &str) -> FlagDef {
 
 /// The reference's default for a component edit run in object mode: every component of kind on the selected meshes gets
 /// selected and kind becomes the mode, so Extrude on an object extrudes all its faces.
-fn select_whole_in_object_mode(g: &mut crate::graph::Graph, kind: K) {
+fn select_whole_in_object_mode(g: &mut crate::graph::Graph, kind: K) -> bool {
     if components::mode(g) != K::Object {
-        return;
+        return false;
     }
     g.evaluate();
     let mut all = BTreeMap::new();
@@ -47,11 +47,19 @@ fn select_whole_in_object_mode(g: &mut crate::graph::Graph, kind: K) {
         }
     }
     if all.is_empty() {
-        return;
+        return false;
     }
     let pick = |k: K| if k == kind { all.clone() } else { BTreeMap::new() };
     components::set_all(g, pick(K::Vertex), pick(K::Edge), pick(K::Face));
     components::set_mode_undoable(g, kind);
+    true
+}
+
+/// Back to object mode with the objects still selected and no components picked: where the reference leaves an
+/// operation that was given whole objects.
+fn back_to_objects(g: &mut crate::graph::Graph) {
+    components::set_all(g, BTreeMap::new(), BTreeMap::new(), BTreeMap::new());
+    components::set_mode_undoable(g, K::Object);
 }
 
 /// The named curve's first spline as a polyline in the selected mesh's space, for polyBridge's Path.
@@ -498,7 +506,8 @@ pub fn register(c: &mut Commands<Session>) {
 
     c.register(
         Cmd::new("polyBevel", "Bevel the selected edges (vertex or face selections convert to their edges).", |s, a| {
-            select_whole_in_object_mode(&mut s.graph, K::Edge);
+            // A whole object bevels every edge and stays selected as an object, as in the reference.
+            let whole = select_whole_in_object_mode(&mut s.graph, K::Edge);
             let offset = a.float("offset", 2.0);
             // Faces bevel the border of each selected region, not the edges between selected faces (the reference).
             let from_faces = components::mode(&s.graph) == K::Face;
@@ -519,6 +528,9 @@ pub fn register(c: &mut Commands<Session>) {
             if a.bool("clamp") && used < offset - 1e-9 {
                 crate::last_op::limit_flag(s, "offset", json!((used * 1000.0).floor() / 1000.0));
             }
+            if whole {
+                back_to_objects(&mut s.graph);
+            }
             Ok(out)
         })
         .flag(FlagDef::new("offset", "o", T::Float, Value::Null, "Width, cm.").min(0.0))
@@ -526,7 +538,7 @@ pub fn register(c: &mut Commands<Session>) {
         .flag(FlagDef::new("offsetAsFraction", "oaf", T::Bool, Value::Null, "Width by fraction rather than distance."))
         .flag(FlagDef::new("depth", "dp", T::Float, Value::Null, "How far the bevel rounds out; held for the node."))
         .flag(FlagDef::new("chamfer", "c", T::Bool, Value::Null, "Flat across rather than round."))
-        .flag(flag("segments", T::Int, json!(1), "Segments across the bevel.").min(1.0).max(64.0))
+        .flag(FlagDef::new("segments", "sg", T::Int, json!(1), "Segments across the bevel.").min(1.0).max(64.0))
         .flag(flag("profile", T::Float, json!(0.5), "0.5 round, 0.25 straight, toward 1 square.").min(0.0).max(1.0))
         .flag(flag("clamp", T::Bool, json!(true), "Keep widths from overlapping."))
         .flag(flag("smoothingAngle", T::Float, json!(30.0), "New edges sharper than this are hard.").min(0.0).max(180.0)),

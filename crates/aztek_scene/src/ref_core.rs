@@ -245,7 +245,8 @@ fn ls(s: &mut Session, a: &aztek_ops::Args) -> CmdResult {
         ids = g.nodes();
     }
     if a.bool("hilite") {
-        ids = components::hilited_meshes(g);
+        // Nothing is hilited in object mode, as in the reference.
+        ids = if components::mode(g) == components::ComponentMode::Object { Vec::new() } else { components::hilited_meshes(g) };
     }
     for n in &names {
         if components::is_component_string(n) {

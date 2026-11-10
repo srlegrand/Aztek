@@ -1112,3 +1112,11 @@ from whatever drives it in the same pass instead of a second evaluation after ea
 went from 114 to 75 ms a step on two cores, an arm from 34 to 17.
 
 The Script Editor's history is kept from start-up: opening it shows everything since, as the reference's does.
+
+### Object and component mode after modelling (10/11/2026)
+
+Checked against the reference's behaviour: Bevel given a whole object bevels every edge and leaves the object selected
+in object mode (it used to switch to edge mode with every edge picked, so the next click or Ctrl+D worked on edges).
+Duplicate copies a mesh with construction history as it looks now, with no history, as the reference's Duplicate does
+without -upstreamNodes; the copy used to take a broken chain of the history nodes and came out empty. A stack of
+Aztek's own modifiers is still copied live. `ls -hl` is empty in object mode. `polyBevel -sg` sets the segments.

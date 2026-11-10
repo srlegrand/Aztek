@@ -196,8 +196,9 @@ fn copy_node(
                 let root = instancing::root(g, s);
                 instancing::copy_history(g, root, c, &mut own)?;
             }
-            // As the reference copies a deformed mesh: what it looks like now, with no deformers.
-            Mode::Copy if crate::deform_sets::is_deformed(g, s) => {
+            // As the reference copies a deformed mesh, or one with construction history: what it looks like now, with
+            // no deformers and no history. A stack of Aztek's own modifiers is copied live instead.
+            Mode::Copy if crate::deform_sets::is_deformed(g, s) || (g.source(&PlugRef::new(s, crate::mesh_nodes::MeshNode::IN_MESH as i32)).is_some() && crate::modifiers::stack(g, s).is_empty()) => {
                 g.evaluate();
                 let v = g.value(&PlugRef::new(s, crate::mesh_nodes::MeshNode::OUT_MESH as i32))?;
                 g.set_value(PlugRef::new(c, crate::mesh_nodes::MeshNode::IN_MESH as i32), v)?;

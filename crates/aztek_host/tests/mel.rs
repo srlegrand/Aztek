@@ -208,3 +208,21 @@ fn rig_commands_take_the_reference_spellings() {
     c.mel("ikSystem -e -sol 0;");
     assert_eq!(c.mel("ikSystem -q -sol;"), json!(false));
 }
+
+/// As in the reference: a bevel given a whole object leaves it selected in object mode, and Ctrl+D copies what the
+/// mesh looks like with no history.
+#[test]
+fn bevel_an_object_then_duplicate_it() {
+    let mut c = Core::new();
+    mel(&mut c, "polyCube; select -r pCube1; polyBevel;");
+    assert_eq!(mel(&mut c, "selectMode -q -object;"), json!(true));
+    assert_eq!(mel(&mut c, "ls -sl;"), json!(["pCube1"]));
+    assert_eq!(mel(&mut c, "ls -hl;"), json!([]));
+    let beveled = faces(&mut c, "pCube1");
+    assert!(beveled > 6);
+    mel(&mut c, "select -r pCube1; duplicate;");
+    assert_eq!(mel(&mut c, "listRelatives -s pCube2;"), json!(["pCubeShape2"]));
+    assert_eq!(mel(&mut c, "listHistory pCube2;"), json!(["pCubeShape2"]));
+    assert_eq!(faces(&mut c, "pCube2"), beveled);
+    assert!(errors(&mut c).is_empty());
+}
