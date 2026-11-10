@@ -317,6 +317,7 @@ class _MeshIter:
         self._k = 0
 
     def _set_component(self, component):
+        self._n = None
         if component is None or component.isNull():
             self._ids = None
             return
@@ -339,7 +340,11 @@ class _MeshIter:
         return self._index()
 
     def isDone(self):
-        return self._k >= (self._total() if self._ids is None else len(self._ids))
+        # The count is taken once a walk starts: a loop of next() and isDone() should not ask the scene each step.
+        n = self.__dict__.get("_n")
+        if n is None:
+            n = self._n = self._total() if self._ids is None else len(self._ids)
+        return self._k >= n
 
     def next(self):
         self._k += 1
@@ -350,6 +355,7 @@ class _MeshIter:
             obj = args[0]
             self.__init__(obj, args[1] if len(args) > 1 else None)
         self._k = 0
+        self._n = None
         return self
 
     def count(self):
@@ -361,6 +367,7 @@ class _MeshIter:
             _fail(message="Index out of range")
         prev = self._index() if not self.isDone() else -1
         self._ids = None
+        self._n = None
         self._k = index
         return prev
 
@@ -726,6 +733,7 @@ class MItMeshFaceVertex(_MeshIter):
 
     def _set_component(self, component):
         self._ids = None
+        self._n = None
         if component is not None and not component.isNull():
             m = _mesh_data(self._shape)
             if component._kind == "comp" and component._fn == self._fn:

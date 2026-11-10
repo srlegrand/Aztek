@@ -20,7 +20,7 @@ use aztek_undo::FnAction;
 use std::ffi::CString;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
+use pyo3::types::{PyBytes, PyDict};
 use serde_json::{json, Map, Value};
 
 use crate::core::{Core, LineKind};
@@ -411,18 +411,22 @@ fn scene_version(py: Python<'_>) -> PyResult<u64> {
 #[pyfunction]
 fn mesh_arrays<'py>(py: Python<'py>, id: NodeId) -> PyResult<Bound<'py, PyDict>> {
     let m = host(py, |c| crate::python_api::mesh_arrays(c, id))?.map_err(PyRuntimeError::new_err)?;
+    // The numbers go across as raw bytes, which Python takes into array.array in one copy: a list of Python floats
+    // for every number of a big mesh takes seconds to build.
     let d = PyDict::new(py);
+    let f = |v: &Vec<f64>| PyBytes::new(py, bytemuck::cast_slice(v));
+    let i = |v: &Vec<i64>| PyBytes::new(py, bytemuck::cast_slice(v));
     d.set_item("shape", m.shape)?;
-    d.set_item("points", m.points)?;
-    d.set_item("counts", m.counts)?;
-    d.set_item("connects", m.connects)?;
-    d.set_item("corner_edges", m.corner_edges)?;
-    d.set_item("edges", m.edges)?;
-    d.set_item("corner_normals", m.corner_normals)?;
-    d.set_item("point_normals", m.point_normals)?;
+    d.set_item("points", f(&m.points))?;
+    d.set_item("counts", i(&m.counts))?;
+    d.set_item("connects", i(&m.connects))?;
+    d.set_item("corner_edges", i(&m.corner_edges))?;
+    d.set_item("edges", i(&m.edges))?;
+    d.set_item("corner_normals", f(&m.corner_normals))?;
+    d.set_item("point_normals", f(&m.point_normals))?;
     d.set_item("has_uvs", m.has_uvs)?;
-    d.set_item("corner_maps", m.corner_maps)?;
-    d.set_item("map_uvs", m.map_uvs)?;
+    d.set_item("corner_maps", i(&m.corner_maps))?;
+    d.set_item("map_uvs", f(&m.map_uvs))?;
     d.set_item("point_ids", m.point_ids)?;
     d.set_item("edge_ids", m.edge_ids)?;
     d.set_item("face_ids", m.face_ids)?;
@@ -439,6 +443,9 @@ fn source(name: &str) -> Option<&'static str> {
         "om_iter" => include_str!("../python/om_iter.py"),
         "om_plugin" => include_str!("../python/om_plugin.py"),
         "om_anim" => include_str!("../python/om_anim.py"),
+        "om1" => include_str!("../python/om1.py"),
+        "om1_anim" => include_str!("../python/om1_anim.py"),
+        "om1_mpx" => include_str!("../python/om1_mpx.py"),
         "pxr_shim" => include_str!("../python/pxr_shim.py"),
         _ => return None,
     })

@@ -17,7 +17,7 @@ The tools we build our work on shouldn't belong to whoever bought them last. Too
 
 A 3D application for modelling, UVs, rigging, animation, dynamics and rendering, with the industry-standard commands, hotkeys, menus and file format. Rust core (scene graph, commands,
 geometry, Vulkan viewport), Qt Widgets shell in C++, a MEL interpreter, and embedded Python with `aztek.cmds`,
-compatibility modules so existing scripts import unchanged, and an API 2.0 subset. Reads and writes `.ma` files and reads `.mb` files. [PARITY.md](PARITY.md) has the behaviour
+compatibility modules so existing scripts import unchanged, and the Python API (2.0, and 1.0 as `maya.OpenMaya`). Reads and writes `.ma` files and reads `.mb` files. [PARITY.md](PARITY.md) has the behaviour
 target and status, including known differences; [docs/COMMANDS.md](docs/COMMANDS.md) lists all 1108 commands.
 
 Website: [srlegrand.github.io/Aztek](https://srlegrand.github.io/Aztek/). Licence: [MIT-0](LICENSE).
@@ -142,8 +142,8 @@ filled in with. GitHub takes files up to 25 MB and images up to 10 MB.
 
 **Scripting**
 
-- **Scripting:** MEL (procedures, arrays, control flow, backticks), Python, the API 2.0 subset, Python plug-ins with
-  `MPxCommand` and `MPxNode`; `scriptJob`, `scriptNode` and `evalDeferred`.
+- **Scripting:** MEL (procedures, arrays, control flow, backticks), Python, the Python API 2.0 and 1.0 (`maya.OpenMaya`,
+  `MScriptUtil` and all), Python plug-ins of either API with `MPxCommand` and `MPxNode`; `scriptJob`, `scriptNode` and `evalDeferred`.
 
   ![A MEL script in the Script Editor building cubes with expressions, then playing them](docs/scripting.gif)
 - **Script-built interface:** `window`, layouts, controls, menus and dialogs from MEL or Python become Qt widgets;

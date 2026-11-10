@@ -231,15 +231,27 @@ __main__.cmds = cmds
 
 
 class _ApiImporter:
-    """aztek.api.OpenMaya and OpenMayaAnim, embedded in the host and loaded on first import; maya.api.* are the same."""
+    """aztek.api.OpenMaya and OpenMayaAnim, embedded in the host and loaded on first import; maya.api.* are the same.
+    maya.OpenMaya, maya.OpenMayaAnim and maya.OpenMayaMPx are API 1.0, built on them."""
 
     PARTS = {
         "OpenMaya": ["om_values", "om_core", "om_fn", "om_iter", "om_plugin"],
         "OpenMayaAnim": ["om_anim"],
     }
 
+    # The 1.0 modules: maya.OpenMaya and the rest, over the 2.0 ones.
+    V1 = {
+        "OpenMaya": ["om1"],
+        "OpenMayaAnim": ["om1_anim"],
+        "OpenMayaMPx": ["om1_mpx"],
+    }
+
     def find_spec(self, name, path=None, target=None):
         parts = name.split(".")
+        if len(parts) == 2 and parts[0] == "maya" and parts[1] in self.V1:
+            import importlib.machinery as m
+
+            return m.ModuleSpec(name, self)
         if len(parts) >= 2 and parts[0] in ("aztek", "maya") and parts[1] == "api":
             import importlib.machinery as m
 
@@ -260,6 +272,10 @@ class _ApiImporter:
 
     def exec_module(self, module):
         parts = module.__spec__.name.split(".")
+        if len(parts) == 2 and parts[1] in self.V1:
+            for part in self.V1[parts[1]]:
+                exec(compile(_aztek.source(part), "<%s>" % part, "exec"), module.__dict__)
+            return
         if len(parts) != 3 or "_loaded" in module.__dict__:
             return
         module.__dict__["_loaded"] = True

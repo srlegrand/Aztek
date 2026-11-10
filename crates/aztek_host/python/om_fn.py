@@ -1,5 +1,6 @@
 # aztek.api.OpenMaya, function sets: nodes, transforms, meshes, curves, sets, attributes, data, components.
 import __main__ as _main
+import array as _array
 
 
 class _CInt(int):
@@ -49,7 +50,7 @@ def _flush_points():
     for shape, moves in work.items():
         if not _api("node.exists", id=shape):
             continue
-        p = _az.mesh_arrays(shape)["points"]
+        p = _numbers("d", _az.mesh_arrays(shape)["points"])
         for i, v in moves.items():
             p[i * 3], p[i * 3 + 1], p[i * 3 + 2] = v
         _write_points(shape, p)
@@ -60,11 +61,20 @@ _main._before_call[:] = [_flush_points]
 
 def _write_points(shape, flat):
     name = _api("node.info", id=shape)["path"]
-    pts = [flat[i : i + 3] for i in range(0, len(flat), 3)]
+    pts = [list(flat[i : i + 3]) for i in range(0, len(flat), 3)]
     _json_ok = _az.call("setMeshPoints", _json.dumps([name]), _json.dumps({"points": pts}))
     r = _json.loads(_json_ok)
     if isinstance(r, dict) and "__error__" in r:
         raise RuntimeError(r["__error__"])
+
+
+def _numbers(code, raw):
+    """An array the host sent as bytes (or, from older callers, a list)."""
+    if isinstance(raw, (bytes, bytearray)):
+        a = _array.array(code)
+        a.frombytes(raw)
+        return a
+    return raw
 
 
 class _MeshData:
@@ -72,16 +82,16 @@ class _MeshData:
 
     def __init__(self, d):
         self.shape = d["shape"]
-        self.points = d["points"]
-        self.counts = d["counts"]
-        self.connects = d["connects"]
-        self.corner_edges = d["corner_edges"]
-        self.edges = d["edges"]
-        self.corner_normals = d["corner_normals"]
-        self.point_normals = d["point_normals"]
+        self.points = _numbers("d", d["points"])
+        self.counts = _numbers("q", d["counts"])
+        self.connects = _numbers("q", d["connects"])
+        self.corner_edges = _numbers("q", d["corner_edges"])
+        self.edges = _numbers("q", d["edges"])
+        self.corner_normals = _numbers("d", d["corner_normals"])
+        self.point_normals = _numbers("d", d["point_normals"])
         self.has_uvs = d["has_uvs"]
-        self.corner_maps = d["corner_maps"]
-        self.map_uvs = d["map_uvs"]
+        self.corner_maps = _numbers("q", d["corner_maps"])
+        self.map_uvs = _numbers("d", d["map_uvs"])
         self.num_vertices = len(self.points) // 3
         self.num_edges = len(self.edges) // 2
         self.num_faces = len(self.counts)
@@ -130,11 +140,11 @@ class _MeshData:
 
     def face_vertices(self, f):
         a, b = self.face(f)
-        return self.connects[a:b]
+        return list(self.connects[a:b])
 
     def face_edges(self, f):
         a, b = self.face(f)
-        return self.corner_edges[a:b]
+        return list(self.corner_edges[a:b])
 
     def edge_ends(self, e):
         if not 0 <= e < self.num_edges:
@@ -974,16 +984,37 @@ class MFnMesh(MFnDagNode):
     # Points
 
     def getPoints(self, space=MSpace.kObject):
-        m = self._m()
         out = MPointArray()
+        list.extend(out, self._point_list(space, MPoint))
+        return out
+
+    def _point_list(self, space, cls):
+        """The points as `cls` (MPoint or a subclass), built without going through MPoint's constructor: this is the
+        call scripts make on whole meshes."""
+        m = self._m()
         p = m.points
+        n = m.num_vertices * 3
+        new = object.__new__
+        out = [None] * m.num_vertices
+        k = 0
         if space == MSpace.kWorld:
-            w = m.world()
-            for i in range(m.num_vertices):
-                list.append(out, MPoint(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]) * w)
+            a = m.world()._m
+            for i in range(0, n, 3):
+                x, y, z = p[i], p[i + 1], p[i + 2]
+                o = new(cls)
+                w = x * a[3] + y * a[7] + z * a[11] + a[15]
+                o.x = x * a[0] + y * a[4] + z * a[8] + a[12]
+                o.y = x * a[1] + y * a[5] + z * a[9] + a[13]
+                o.z = x * a[2] + y * a[6] + z * a[10] + a[14]
+                o.w = w
+                out[k] = o
+                k += 1
         else:
-            for i in range(m.num_vertices):
-                list.append(out, MPoint(p[i * 3], p[i * 3 + 1], p[i * 3 + 2]))
+            for i in range(0, n, 3):
+                o = new(cls)
+                o.x, o.y, o.z, o.w = float(p[i]), float(p[i + 1]), float(p[i + 2]), 1.0
+                out[k] = o
+                k += 1
         return out
 
     def getFloatPoints(self, space=MSpace.kObject):
@@ -993,15 +1024,28 @@ class MFnMesh(MFnDagNode):
         m = self._m()
         if len(points) != m.num_vertices:
             _fail(message="Mesh has %d vertices, got %d points" % (m.num_vertices, len(points)))
-        flat = []
+        flat = [0.0] * (3 * len(points))
+        k = 0
         if space == MSpace.kWorld:
-            inv = m.world().inverse()
+            a = m.world().inverse()._m
             for p in points:
-                q = MPoint(p) * inv
-                flat.extend((q.x / q.w, q.y / q.w, q.z / q.w))
+                if isinstance(p, MPoint):
+                    x, y, z, w = p.x, p.y, p.z, p.w
+                else:
+                    x, y, z = p[0], p[1], p[2]
+                    w = p[3] if len(p) > 3 else 1.0
+                qw = x * a[3] + y * a[7] + z * a[11] + w * a[15]
+                flat[k] = (x * a[0] + y * a[4] + z * a[8] + w * a[12]) / qw
+                flat[k + 1] = (x * a[1] + y * a[5] + z * a[9] + w * a[13]) / qw
+                flat[k + 2] = (x * a[2] + y * a[6] + z * a[10] + w * a[14]) / qw
+                k += 3
         else:
             for p in points:
-                flat.extend((p[0], p[1], p[2]))
+                if isinstance(p, MPoint):
+                    flat[k], flat[k + 1], flat[k + 2] = p.x, p.y, p.z
+                else:
+                    flat[k], flat[k + 1], flat[k + 2] = p[0], p[1], p[2]
+                k += 3
         _write_points(m.shape, flat)
         return self
 
@@ -1524,7 +1568,20 @@ class MFnAttribute(MFnBase):
         if s is None:
             _fail()
         if isinstance(s, str):
-            s = {"name": s, "short": "", "type": "float"}
+            spec = {"name": s, "short": "", "type": "float"}
+            node = self._obj._data
+            if isinstance(node, int) and not isinstance(node, bool):
+                try:
+                    i = _api("plug.info", name="%s.%s" % (_api("node.info", id=node)["path"], s))
+                except RuntimeError:
+                    i = None
+                if i is not None:
+                    spec.update(
+                        short=i["short"], type=i["type"], array=i["array"], input=i["input"] or not i["output"],
+                        keyable=i["keyable"], storable=i["storable"], hidden=i["hidden"], channelBox=i["channelBox"],
+                        color=i["color"], nice=i["nice"] or "", dynamic=i["user"],
+                    )
+            s = spec
         return s
 
     @property

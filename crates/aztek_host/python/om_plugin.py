@@ -1156,8 +1156,7 @@ def _load_one(name, quiet):
     spec = importlib.util.spec_from_file_location("_aztek_plugin_" + key, path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    if not hasattr(module, "maya_useNewAPI") and not hasattr(module, "aztek_useNewAPI"):
-        raise RuntimeError('Plug-in "%s" does not define maya_useNewAPI(): only API 2.0 plug-ins can load.' % (key,))
+    # Without maya_useNewAPI() a plug-in is an API 1.0 one: it registers through maya.OpenMayaMPx.MFnPlugin.
     if not hasattr(module, "initializePlugin"):
         raise RuntimeError('Plug-in "%s" has no initializePlugin.' % (key,))
     p = {"name": key, "path": path, "vendor": "Unknown", "version": "Unknown", "api": "Any", "module": module, "commands": [], "nodes": []}

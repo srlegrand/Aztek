@@ -339,6 +339,19 @@ dependency nodes. Differences from the reference: only dependency nodes can come
 path per DAG node, `setKeyable` only on added attributes, `MFnTransform` has no shear, and cycles are refused node by
 node, not plug by plug. MEL can't pass flags to a plug-in command with no syntax. `MRampAttribute` isn't there.
 
+Python API 1.0, as of 10/11/2026: `maya.OpenMaya`, `maya.OpenMayaAnim` and `maya.OpenMayaMPx`, built on the 2.0 classes
+above, so it covers the same classes. Each 1.0 class is its 2.0 class with the 1.0 calls on top: results handed back
+through the arguments (`sel.getDagPath(0, path)`, `mesh.getPoints(points, space)`, `it.getConnectedVertices(ids)`),
+`MScriptUtil` pointers for numbers (`asIntPtr`, `asDoublePtr`, `asDouble3Ptr`, the `get`/`set` and `ArrayItem` calls,
+`createMatrixFromList`), the long `closestIntersection`/`allIntersections` argument lists, the `getX()` spellings
+(`getTranslation`, `getRotatePivot`), calls where 2.0 has properties (`numVertices()`, `fnAttr.name()`,
+`setKeyable(True)`, `isKeyable()`), `length()` and `set(value, index)` on arrays, `m(row, col)` and `m[row][col]` on
+matrices, `MStatus` and `MCommandResult`. A plug-in without `maya_useNewAPI()` loads as a 1.0 plug-in, registered
+through `OpenMayaMPx.MFnPlugin` with `asMPxPtr` creators. `MDagPath`s compare by the path they lead to and follow their
+node through renames and reparenting. Not there in either API: `MMessage` and its callback classes, `MFnNurbsSurface`,
+`MFnCamera`, `MFnLight`, `MFnIkJoint`, `MFnLattice`, the geometry data sets (`MFnMeshData` and the array data sets),
+`MItCurveCV`, `MItSurfaceCV`, `MAnimUtil`, `MFileIO`, and the `MPx` classes beyond commands and plain nodes.
+
 NURBS surfaces, as of 06/11/2026: `nurbsSurface` shape, CVs as `surface1.cv[u][v]` (select, move, undo, tweaks on top of
 history), drawn shaded with isoparms and a CV hull in vertex mode, `selectType -cv`, `displaySmoothness` and the 1, 2, 3
 keys. `sphere`, `nurbsCube`, `cylinder`, `cone`, `torus`, `nurbsPlane` with `make*` nodes. `loft`, `revolve`, `extrude`

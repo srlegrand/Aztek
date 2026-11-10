@@ -590,7 +590,15 @@ class MDagPath:
         return True
 
     def __eq__(self, o):
-        return isinstance(o, MDagPath) and self._nodes == o._nodes
+        # By where the paths lead now: a path follows its node through renames and reparenting.
+        if not isinstance(o, MDagPath):
+            return False
+        if self._nodes == o._nodes:
+            return True
+        try:
+            return self.fullPathName() == o.fullPathName()
+        except RuntimeError:
+            return False
 
     def __ne__(self, o):
         return not self == o
@@ -632,6 +640,8 @@ def _attr_object(node, long, type_name):
     o._kind = "attr"
     o._attr = long
     o._fn = _attr_fn(type_name, long)
+    # The node it came from, so MFnAttribute can read the attribute's flags.
+    o._data = node
     return o
 
 

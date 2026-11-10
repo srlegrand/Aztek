@@ -1040,7 +1040,6 @@ fn plugins() {
     let dir = std::env::temp_dir().join(format!("aztek_om_test_{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("testPlugin.py"), PLUGIN).unwrap();
-    std::fs::write(dir.join("oldStyle.py"), "def initializePlugin(obj):\n    pass\n").unwrap();
     std::fs::write(dir.join("broken.py"), "def maya_useNewAPI():\n    pass\ndef initializePlugin(obj):\n    raise RuntimeError('cannot start')\n").unwrap();
     let dirs = dir.to_str().unwrap().replace('\\', "/");
     expect_failing(
@@ -1057,7 +1056,7 @@ print(cmds.loadPlugin("testPlugin"))
 print(cmds.pluginInfo("testPlugin", q=True, loaded=True), cmds.pluginInfo(q=True, listPlugins=True), cmds.pluginInfo("testPlugin", q=True, vendor=True), cmds.pluginInfo("testPlugin", q=True, version=True), cmds.pluginInfo("testPlugin", q=True, path=True).endswith("testPlugin.py"))
 print(sorted(cmds.pluginInfo("testPlugin", q=True, command=True)), sorted(cmds.pluginInfo("testPlugin", q=True, dependNode=True)))
 print(cmds.loadPlugin("testPlugin"), "makeLoc" in dir(cmds))
-for bad in ("oldStyle", "broken"):
+for bad in ("broken",):
     try:
         cmds.loadPlugin(bad)
     except RuntimeError as e:
@@ -1072,7 +1071,6 @@ print(cmds.pluginInfo("broken", q=True, loaded=True), cmds.loadPlugin("noSuch", 
             "True ['testPlugin'] Testers 1.2 True",
             "['asksCmd', 'boomCmd', 'innerCmd', 'makeLoc', 'modCmd', 'plainCmd'] ['chatty', 'doubler']",
             "['testPlugin'] True",
-            "Plug-in \"oldStyle\" does not define maya_useNewAPI(): only API 2.0 plug-ins can load.",
             "cannot start",
             "False []",
         ],
