@@ -197,7 +197,9 @@ impl View {
         let e = self.gpu.extent;
         self.vp.rect = [0.0, 0.0, e.width as f64, e.height as f64];
         let bg = self.background;
+        let prof = Prof::start();
         let mut frame = self.gpu.begin_frame([bg[0], bg[1], bg[2], 1.0]);
+        prof.mark("  wait for the last frame");
         if frame.is_none() {
             // Out of date (the window changed size): remake at the window's size and try once more.
             self.resize(e.width, e.height);
@@ -213,6 +215,7 @@ impl View {
         self.iso_in(core);
         let gathered = gather(&mut core.s.graph);
         let items = self.vp.filter_items(&core.s.graph, gathered);
+        prof.mark("  gather");
         self.vp.show_grid = self.show_grid;
         if crate::ctx_cmds::wants_pin() {
             if let Some(p) = self.vp.manip_pivot(&mut core.s, &items) {
@@ -234,6 +237,7 @@ impl View {
             }
         }
         self.vp.draw(&mut self.gpu, &self.r, &mut core.s, &items, self.dpr);
+        prof.mark("  draw");
         if crate::usd_view::busy() {
             core.version += 1;
         }
@@ -241,7 +245,9 @@ impl View {
             core.push(format!("// Warning: {w} //"), crate::core::LineKind::Warning);
         }
         self.overlay(core, &items);
+        prof.mark("  overlay");
         let ok = self.gpu.end_frame(index);
+        prof.mark("  submit");
         if self.want_capture {
             self.want_capture = false;
             match self.gpu.read_back(index) {
@@ -2019,4 +2025,20 @@ fn prim_box(p: &PrimDraft) -> (DVec3, DVec3) {
 #[allow(dead_code)]
 fn v3(v: DVec3) -> Vec3 {
     v.as_vec3()
+}
+
+/// With AZTEK_PROFILE set, how long each part of a frame took, on stderr.
+struct Prof(Option<std::cell::Cell<std::time::Instant>>);
+
+impl Prof {
+    fn start() -> Prof {
+        static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        Prof(ON.get_or_init(|| std::env::var_os("AZTEK_PROFILE").is_some()).then(|| std::cell::Cell::new(std::time::Instant::now())))
+    }
+    fn mark(&self, what: &str) {
+        if let Some(t) = &self.0 {
+            eprintln!("{what} {:.2}", t.get().elapsed().as_secs_f64() * 1000.0);
+            t.set(std::time::Instant::now());
+        }
+    }
 }

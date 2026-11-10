@@ -25,10 +25,13 @@ public:
     explicit Panel(QWidget* parent = nullptr);
 protected:
     virtual void refresh() = 0;
+    // False for a panel slow to rebuild: while a button is held over a view (a drag), it waits for the release.
+    virtual bool live_during_drag() const { return true; }
     void schedule();
     void showEvent(QShowEvent*) override;
 private:
     bool pending_ = false;
+    bool waiting_for_release_ = false;
 };
 
 class Outliner : public Panel {
@@ -39,6 +42,8 @@ public:
     void set_editor_options(const QJsonObject& props);
 protected:
     void refresh() override;
+    // Nothing it lists changes during a drag, and rebuilding a big scene's tree at every step costs the view frames.
+    bool live_during_drag() const override { return false; }
 private:
     void add(QTreeWidgetItem* parent, const QJsonObject& node);
     void add_prims(QTreeWidgetItem* parent, const QString& stage, const QString& prim, const QString& key);
@@ -60,7 +65,6 @@ private:
     // What the tree was last built from, to tell a change of selection from one of the tree.
     QByteArray last_shape_;
     QString last_view_;
-    bool waiting_for_release_ = false;
 };
 
 // The channels picked in the channel box, by attribute name (translateX...).
@@ -117,6 +121,9 @@ private:
 
 class AttributeEditor : public Panel {
     Q_OBJECT
+protected:
+    // Rebuilding every field costs a tenth of a second: not at every step of a drag.
+    bool live_during_drag() const override { return false; }
 public:
     // pinned: stays on this node (Copy Tab); empty follows the selection.
     explicit AttributeEditor(QWidget* parent = nullptr, const QString& pinned = QString());
@@ -127,6 +134,8 @@ private:
     QTabWidget* tabs_;
     QString current_tab_;
     QString pinned_;
+    // What the tabs were last built from: the same again (a change somewhere else) leaves them be.
+    QByteArray last_;
 };
 
 class ScriptEditor : public QWidget {

@@ -448,23 +448,6 @@ QJsonArray without_selection(const QJsonArray& nodes, QSet<QString>& selected) {
 } // namespace
 
 void Outliner::refresh() {
-    // While a button is held elsewhere (a drag in a view), the tree waits for the release: rebuilding it every step of
-    // a drag costs the view its frame rate, and nothing it lists changes until the drag is done.
-    if (QApplication::mouseButtons() != Qt::NoButton && !tree_->viewport()->underMouse()) {
-        if (!waiting_for_release_) {
-            waiting_for_release_ = true;
-            auto* t = new QTimer(this);
-            t->setInterval(80);
-            connect(t, &QTimer::timeout, this, [this, t] {
-                if (QApplication::mouseButtons() != Qt::NoButton) return;
-                t->deleteLater();
-                waiting_for_release_ = false;
-                schedule();
-            });
-            t->start();
-        }
-        return;
-    }
     const QJsonArray nodes = query("outliner", intermediates_ ? "shapes intermediate" : shapes_ ? "shapes" : "").toArray();
     QSet<QString> selected;
     const QByteArray shape = QJsonDocument(without_selection(nodes, selected)).toJson(QJsonDocument::Compact);

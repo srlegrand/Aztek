@@ -99,11 +99,30 @@ void Panel::schedule() {
     pending_ = true;
     QTimer::singleShot(0, this, [this] {
         pending_ = false;
-        if (!isVisible()) return;
+        // Not seen (closed, or a tab behind another): brought up to date when it shows, as showEvent schedules.
+        if (!isVisible() || visibleRegion().isEmpty()) return;
+        if (!live_during_drag() && QApplication::mouseButtons() != Qt::NoButton && !underMouse()) {
+            if (!waiting_for_release_) {
+                waiting_for_release_ = true;
+                auto* t = new QTimer(this);
+                t->setInterval(80);
+                connect(t, &QTimer::timeout, this, [this, t] {
+                    if (QApplication::mouseButtons() != Qt::NoButton) return;
+                    t->deleteLater();
+                    waiting_for_release_ = false;
+                    schedule();
+                });
+                t->start();
+            }
+            return;
+        }
         // Don't pull a field out from under the user's typing.
         QWidget* f = QApplication::focusWidget();
         if (f && isAncestorOf(f) && f->property("editing").toBool()) return;
+        QElapsedTimer t;
+        t.start();
         refresh();
+        profile_line(QString("panel %1").arg(metaObject()->className()), t);
     });
 }
 

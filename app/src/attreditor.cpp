@@ -1,3 +1,4 @@
+#include <QJsonDocument>
 // The Attribute Editor: a tab per node in the chain, sections by node type, sliders on ranged attributes, a Notes box, and
 // Select, Load Attributes and Copy Tab along the bottom.
 #include "panels.h"
@@ -609,6 +610,9 @@ AttributeEditor::AttributeEditor(QWidget* parent, const QString& pinned) : Panel
 
 void AttributeEditor::refresh() {
     QJsonObject ae = query("attributeEditor", pinned_).toObject();
+    const QByteArray now = QJsonDocument(ae).toJson(QJsonDocument::Compact);
+    if (now == last_ && tabs_->count()) return;
+    last_ = now;
     QString keep = current_tab_;
     tabs_->blockSignals(true);
     while (tabs_->count()) {

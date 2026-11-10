@@ -38,6 +38,13 @@ protected:
 private:
     void ensure();
     void mouse(int kind, QMouseEvent* e);
+    // Moves are handled once per pass of the event loop, the latest one: a fast mouse sends hundreds a second, and
+    // each would evaluate the scene for a place the pointer has already left.
+    void queue_move(QMouseEvent* e);
+    void flush_move();
+    bool move_queued_ = false;
+    QPointF move_at_;
+    int move_mods_ = 0, move_buttons_ = 0;
     // Settings sent before the view's surface exists, latest per key.
     QHash<QString, QString> pending_;
     int id_ = 0;

@@ -1,3 +1,4 @@
+#include <QTimer>
 #include "viewport.h"
 #include "aztek.h"
 #include "host.h"
@@ -103,7 +104,10 @@ void ViewportWidget::showEvent(QShowEvent*) {
 
 void ViewportWidget::paintEvent(QPaintEvent*) {
     ensure();
+    QElapsedTimer t;
+    t.start();
     if (id_) aztek_view_render(id_);
+    profile_line(QString("render %1").arg(camera_), t);
 }
 
 void ViewportWidget::resizeEvent(QResizeEvent*) {
@@ -121,11 +125,15 @@ void ViewportWidget::mouse(int kind, QMouseEvent* e) {
     if (!id_) return;
     double dpr = devicePixelRatioF();
     QPointF p = e->position() * dpr;
+    QElapsedTimer t;
+    t.start();
     int r = aztek_view_mouse(id_, kind, kind == 1 ? 0 : button_of(e->button()), p.x(), p.y(), mods_of(e->modifiers()), buttons_of(e->buttons()));
+    profile_line(QString("mouse %1").arg(kind), t);
     if (r) update();
 }
 
 void ViewportWidget::mousePressEvent(QMouseEvent* e) {
+    flush_move();
     setFocus();
     emit activated(this);
     // Right button without Alt opens the marking menu; Alt+right dollies.
@@ -183,9 +191,30 @@ void ViewportWidget::mouseMoveEvent(QMouseEvent* e) {
         slide_to(std::round(e->position().x() - slide_start_.x()), false);
         return;
     }
-    mouse(1, e);
+    queue_move(e);
+}
+
+void ViewportWidget::queue_move(QMouseEvent* e) {
+    move_at_ = e->position() * devicePixelRatioF();
+    move_mods_ = mods_of(e->modifiers());
+    move_buttons_ = buttons_of(e->buttons());
+    if (move_queued_) return;
+    move_queued_ = true;
+    QTimer::singleShot(0, this, [this] { flush_move(); });
+}
+
+void ViewportWidget::flush_move() {
+    if (!move_queued_) return;
+    move_queued_ = false;
+    if (!id_) return;
+    QElapsedTimer t;
+    t.start();
+    int r = aztek_view_mouse(id_, 1, 0, move_at_.x(), move_at_.y(), move_mods_, move_buttons_);
+    profile_line("mouse 1", t);
+    if (r) update();
 }
 void ViewportWidget::mouseReleaseEvent(QMouseEvent* e) {
+    flush_move();
     if (sliding_ && e->button() == Qt::MiddleButton) {
         sliding_ = false;
         slide_to(std::round(e->position().x() - slide_start_.x()), true);
@@ -197,6 +226,7 @@ void ViewportWidget::mouseReleaseEvent(QMouseEvent* e) {
 }
 
 void ViewportWidget::mouseDoubleClickEvent(QMouseEvent* e) {
+    flush_move();
     if (e->modifiers() & Qt::AltModifier) return;
     mouse(3, e);
     Host::get()->poke();

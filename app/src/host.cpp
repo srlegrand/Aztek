@@ -66,6 +66,11 @@ void python(const QString& src) {
     Host::get()->poke();
 }
 
+void profile_line(const QString& what, const QElapsedTimer& since) {
+    static const bool on = qEnvironmentVariableIsSet("AZTEK_PROFILE");
+    if (on) fprintf(stderr, "%s %.2f\n", qPrintable(what), since.nsecsElapsed() / 1e6);
+}
+
 void log(const QString& text, int kind) {
     aztek_log(text.toUtf8().constData(), kind);
     Host::get()->poke();

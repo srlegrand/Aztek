@@ -4,6 +4,7 @@
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QObject>
+#include <QElapsedTimer>
 #include <QString>
 #include <QTimer>
 
@@ -24,6 +25,8 @@ QJsonValue mel(const QString& src);
 QJsonValue mel_action(const QString& src);
 void python(const QString& src);
 void log(const QString& text, int kind = 3);
+// With AZTEK_PROFILE set: "what milliseconds" on stderr, for timing the view and panels while working.
+void profile_line(const QString& what, const QElapsedTimer& since);
 QString quote(const QString& s);
 
 // Polls the host for scene changes and new history lines.
