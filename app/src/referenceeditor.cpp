@@ -42,7 +42,7 @@ QJsonObject with_file(const QString& path, QJsonObject call) {
 
 class ReferenceEditor : public QDialog {
 public:
-    explicit ReferenceEditor(MainWindow* main) : QDialog(main, Qt::Window), main_(main) {
+    explicit ReferenceEditor(MainWindow* main) : QDialog(main, editor_window_flags()), main_(main) {
         setWindowTitle("Reference Editor");
         resize(820, 420);
         auto* v = new QVBoxLayout(this);
@@ -275,7 +275,7 @@ private:
     void list_edits(bool failed_only = false) {
         QString rfn = current();
         if (rfn.isEmpty()) return;
-        auto* d = new QDialog(this, Qt::Window);
+        auto* d = new QDialog(this, editor_window_flags());
         d->setAttribute(Qt::WA_DeleteOnClose);
         d->setWindowTitle((failed_only ? "Unresolved Edits: " : "Reference Edits: ") + rfn);
         d->resize(780, 460);

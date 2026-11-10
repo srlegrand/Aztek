@@ -263,7 +263,7 @@ private:
 
 class RenderView : public QWidget {
 public:
-    explicit RenderView(QWidget* parent) : QWidget(parent, Qt::Window) {
+    explicit RenderView(QWidget* parent) : QWidget(parent, editor_window_flags()) {
         setWindowTitle("Harold RenderView");
         setObjectName("haroldRenderView");
         auto* v = new QVBoxLayout(this);

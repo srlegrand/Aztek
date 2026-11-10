@@ -60,7 +60,7 @@ QJsonValue editors_query(const QJsonObject& q) {
 }
 
 QWidget* window_shell(QWidget* parent, const QString& title, int w, int h) {
-    auto* win = new QWidget(parent, Qt::Window);
+    auto* win = new QWidget(parent, editor_window_flags());
     win->setWindowTitle(title);
     win->resize(w, h);
     return win;
@@ -803,7 +803,7 @@ bool has_command_named(const QString& name) {
 }
 
 static QWidget* uv_set_editor(QWidget* parent) {
-    auto* w = new QWidget(parent, Qt::Window);
+    auto* w = new QWidget(parent, editor_window_flags());
     w->setWindowTitle("UV Set Editor");
     auto* v = new QVBoxLayout(w);
     auto* list = new QListWidget(w);

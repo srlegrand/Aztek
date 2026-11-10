@@ -7,6 +7,7 @@
 #include <QElapsedTimer>
 #include <QString>
 #include <QTimer>
+#include <QWidget>
 
 namespace az {
 
@@ -25,6 +26,11 @@ QJsonValue mel(const QString& src);
 QJsonValue mel_action(const QString& src);
 void python(const QString& src);
 void log(const QString& text, int kind = 3);
+// An editor window's flags: framed, with minimise, maximise and close, and kept above its parent (the main window)
+// as the reference's editors stay above its main window, wherever the user clicks.
+Qt::WindowFlags editor_window_flags();
+// The main window, the parent of an editor made from somewhere that has none to hand.
+QWidget* main_window_widget();
 // With AZTEK_PROFILE set: "what milliseconds" on stderr, for timing the view and panels while working.
 void profile_line(const QString& what, const QElapsedTimer& since);
 QString quote(const QString& s);

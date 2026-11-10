@@ -599,9 +599,9 @@ AttributeEditor::AttributeEditor(QWidget* parent, const QString& pinned) : Panel
         QWidget* w = tabs_->currentWidget();
         if (!w) return;
         // A window of its own that stays on this node.
-        auto* win = new AttributeEditor(nullptr, w->property("nodePath").toString());
+        auto* win = new AttributeEditor(main_window_widget(), w->property("nodePath").toString());
         win->setAttribute(Qt::WA_DeleteOnClose);
-        win->setWindowFlag(Qt::Window);
+        win->setWindowFlags(editor_window_flags());
         win->setWindowTitle(tabs_->tabText(tabs_->currentIndex()));
         win->resize(380, 560);
         win->show();

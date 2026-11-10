@@ -52,9 +52,9 @@ QString new_material(const QString& type) {
 }
 
 void open_attributes(const QString& node) {
-    auto* win = new AttributeEditor(nullptr, node);
+    auto* win = new AttributeEditor(main_window_widget(), node);
     win->setAttribute(Qt::WA_DeleteOnClose);
-    win->setWindowFlag(Qt::Window);
+    win->setWindowFlags(editor_window_flags());
     win->setWindowTitle(node);
     win->resize(400, 620);
     win->show();
@@ -282,7 +282,7 @@ QMenu* MainWindow::lighting_shading_menu() {
 void MainWindow::show_hypershade() {
     if (!hypershade_window_) {
         hypershade_window_ = new Hypershade(this);
-        hypershade_window_->setWindowFlag(Qt::Window);
+        hypershade_window_->setWindowFlags(editor_window_flags());
     }
     hypershade_window_->show();
     hypershade_window_->raise();

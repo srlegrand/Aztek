@@ -502,7 +502,7 @@ void ScriptUi::create(const QJsonObject& op) {
 
 void ScriptUi::build_window(Item* it, const QJsonObject& props) {
     auto* win = new ScriptWindow(main_);
-    Qt::WindowFlags fl = Qt::Window | Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowCloseButtonHint;
+    Qt::WindowFlags fl = Qt::Dialog | Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowCloseButtonHint;
     if (it->kind != "progressWindow") {
         if (as_bool(props["toolbox"])) fl = Qt::Tool | Qt::WindowTitleHint | Qt::WindowCloseButtonHint;
         if (as_bool(props["minimizeBox"], true)) fl |= Qt::WindowMinimizeButtonHint;

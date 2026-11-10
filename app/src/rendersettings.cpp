@@ -593,7 +593,7 @@ QPointer<RenderSettings> g_settings;
 void show_render_settings(QWidget* parent) {
     if (!g_settings) {
         g_settings = new RenderSettings(parent);
-        g_settings->setWindowFlag(Qt::Window);
+        g_settings->setWindowFlags(editor_window_flags());
     }
     g_settings->show();
     g_settings->raise();

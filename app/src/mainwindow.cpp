@@ -1427,7 +1427,7 @@ bool MainWindow::save_scene(bool as) {
 
 void MainWindow::show_script_editor() {
     if (!script_window_) {
-        script_window_ = new QWidget(this, Qt::Window);
+        script_window_ = new QWidget(this, editor_window_flags());
         script_window_->setWindowTitle("Script Editor");
         auto* l = new QVBoxLayout(script_window_);
         l->setContentsMargins(0, 0, 0, 0);
@@ -1445,7 +1445,7 @@ void MainWindow::show_script_editor() {
 
 void MainWindow::show_node_editor() {
     if (!node_window_) {
-        node_window_ = new QWidget(this, Qt::Window);
+        node_window_ = new QWidget(this, editor_window_flags());
         node_window_->setWindowTitle("Node Editor");
         auto* l = new QVBoxLayout(node_window_);
         l->setContentsMargins(0, 0, 0, 0);
@@ -1468,7 +1468,7 @@ void MainWindow::show_node_editor() {
 
 void MainWindow::show_dope_sheet() {
     if (!dope_window_) {
-        dope_window_ = new QWidget(this, Qt::Window);
+        dope_window_ = new QWidget(this, editor_window_flags());
         dope_window_->setWindowTitle("Dope Sheet");
         auto* l = new QVBoxLayout(dope_window_);
         l->setContentsMargins(0, 0, 0, 0);
@@ -1521,7 +1521,7 @@ void MainWindow::show_tool_settings() {
 void MainWindow::show_uv_editor() {
     if (!uv_window_) {
         uv_window_ = new UvEditor(this);
-        uv_window_->setWindowFlag(Qt::Window);
+        uv_window_->setWindowFlags(editor_window_flags());
         // Over the right of the main window, as the reference opens its editors over the panels.
         QRect g = geometry();
         uv_window_->move(g.x() + g.width() - uv_window_->width() - 340, g.y() + 140);
@@ -1534,7 +1534,7 @@ void MainWindow::show_uv_editor() {
 void MainWindow::show_graph_editor() {
     if (!graph_window_) {
         graph_window_ = new GraphEditor(this);
-        graph_window_->setWindowFlag(Qt::Window);
+        graph_window_->setWindowFlags(editor_window_flags());
         QRect g = geometry();
         graph_window_->move(g.x() + (g.width() - graph_window_->width()) / 2, g.y() + g.height() - graph_window_->height() - 140);
     }

@@ -1,3 +1,4 @@
+#include <QApplication>
 #include "host.h"
 #include "aztek.h"
 #include "scriptui.h"
@@ -69,6 +70,16 @@ void python(const QString& src) {
 void profile_line(const QString& what, const QElapsedTimer& since) {
     static const bool on = qEnvironmentVariableIsSet("AZTEK_PROFILE");
     if (on) fprintf(stderr, "%s %.2f\n", qPrintable(what), since.nsecsElapsed() / 1e6);
+}
+
+Qt::WindowFlags editor_window_flags() {
+    return Qt::Dialog | Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint;
+}
+
+QWidget* main_window_widget() {
+    for (QWidget* w : QApplication::topLevelWidgets())
+        if (w->inherits("QMainWindow")) return w;
+    return nullptr;
 }
 
 void log(const QString& text, int kind) {

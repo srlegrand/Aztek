@@ -183,7 +183,7 @@ namespace {
 
 class LayerEditor : public QDialog {
 public:
-    explicit LayerEditor(QWidget* parent) : QDialog(parent, Qt::Window) {
+    explicit LayerEditor(QWidget* parent) : QDialog(parent, editor_window_flags()) {
         setWindowTitle("USD Layer Editor");
         resize(460, 520);
         auto* v = new QVBoxLayout(this);
@@ -378,7 +378,7 @@ void show_usd_layer_editor(QWidget* parent) {
 }
 
 void show_usd_stats(QWidget* parent) {
-    auto* d = new QDialog(parent, Qt::Window);
+    auto* d = new QDialog(parent, editor_window_flags());
     d->setAttribute(Qt::WA_DeleteOnClose);
     d->setWindowTitle("USD Stats");
     d->resize(520, 560);
