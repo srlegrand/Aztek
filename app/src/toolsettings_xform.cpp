@@ -153,6 +153,10 @@ const QList<Orient> kRotateModes = {{"Object", 0}, {"World", 1}, {"Gimbal", 2}, 
 
 } // namespace
 
+void ToolSettings::show_pivot_mode(bool on) {
+    if (edit_pivot_) edit_pivot_->setChecked(on);
+}
+
 QString ToolSettings::ctx_kind() const {
     if (tool_ == "rotate") return "manipRotateContext";
     if (tool_ == "scale") return "manipScaleContext";
@@ -342,10 +346,11 @@ QWidget* ToolSettings::build_transform_page() {
     form->addRow("Curve presets:", presets);
 
     section(page, "Pivot", form);
-    auto* edit_pivot = new QPushButton("Edit Pivot", w);
-    edit_pivot->setCheckable(true);
-    connect(edit_pivot, &QPushButton::toggled, this, [this](bool on) { emit pivotMode(on); });
-    form->addRow("", edit_pivot);
+    edit_pivot_ = new QPushButton("Edit Pivot", w);
+    edit_pivot_->setCheckable(true);
+    edit_pivot_->setToolTip("Move the pivot with the manipulator, not the object (D or Insert)");
+    connect(edit_pivot_, &QPushButton::clicked, this, [this](bool on) { emit pivotMode(on); });
+    form->addRow("", edit_pivot_);
     auto* row = new QWidget(w);
     auto* buttons = new QHBoxLayout(row);
     buttons->setContentsMargins(0, 0, 0, 0);

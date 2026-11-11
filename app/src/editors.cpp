@@ -802,34 +802,113 @@ bool has_command_named(const QString& name) {
     return false;
 }
 
+// The UV Set Editor: the UV sets of the selected mesh, in their order. Picking one makes it current, which is the set
+// the UV Editor, the UV tools and the views show. New, Copy, Rename and Delete act on the one picked.
 static QWidget* uv_set_editor(QWidget* parent) {
-    auto* w = new QWidget(parent, editor_window_flags());
-    w->setWindowTitle("UV Set Editor");
+    auto* w = window_shell(parent, "UV Set Editor", 380, 300);
+    w->setObjectName("uvSetEditor");
     auto* v = new QVBoxLayout(w);
+    auto* target = new QLabel(w);
+    v->addWidget(target);
+    auto* h = new QHBoxLayout();
     auto* list = new QListWidget(w);
-    v->addWidget(list);
-    auto reload = [list] {
+    list->setObjectName("uvSetList");
+    list->setEditTriggers(QAbstractItemView::EditKeyPressed | QAbstractItemView::DoubleClicked);
+    h->addWidget(list, 1);
+    auto* buttons = new QVBoxLayout();
+    h->addLayout(buttons);
+    v->addLayout(h, 1);
+    auto* hint = new QLabel("Pick a set to make it current. Double-click to rename.", w);
+    hint->setWordWrap(true);
+    hint->setStyleSheet("color: palette(mid);");
+    v->addWidget(hint);
+
+    // The mesh asked about: the last thing selected, by its object.
+    auto mesh = [] {
+        const QStringList s = selection_names();
+        return s.isEmpty() ? QString() : s.last().section('.', 0, 0);
+    };
+    auto sets = [](const QString& m) {
+        QStringList out;
+        if (m.isEmpty()) return out;
+        for (const QJsonValue& x : ask("polyUVSet", QJsonObject{{"args", QJsonArray{m}}, {"query", true}, {"queried", QJsonArray{"allUVSets"}}}).toArray()) out << x.toString();
+        return out;
+    };
+    auto current = [](const QString& m) {
+        if (m.isEmpty()) return QString();
+        const QJsonValue c = ask("polyUVSet", QJsonObject{{"args", QJsonArray{m}}, {"query", true}, {"queried", QJsonArray{"currentUVSet"}}});
+        return c.isArray() ? c.toArray().at(0).toString() : c.toString();
+    };
+    auto reload = [list, target, mesh, sets, current, buttons] {
+        const QString m = mesh();
+        const QStringList names = sets(m);
+        const QString cur = current(m);
+        QSignalBlocker block(list);
         list->clear();
-        for (const QJsonValue& s : ask("polyUVSet", QJsonObject{{"query", true}, {"queried", QJsonArray{"allUVSets"}}}).toArray()) list->addItem(s.toString());
-        QJsonValue cur = ask("polyUVSet", QJsonObject{{"query", true}, {"queried", QJsonArray{"currentUVSet"}}});
-        QString now = cur.isArray() ? cur.toArray().at(0).toString() : cur.toString();
-        for (auto* i : list->findItems(now, Qt::MatchExactly)) list->setCurrentItem(i);
+        for (const QString& n : names) {
+            auto* item = new QListWidgetItem(n, list);
+            item->setFlags(item->flags() | Qt::ItemIsEditable);
+            item->setData(Qt::UserRole, n);
+            if (n == cur) {
+                QFont f = item->font();
+                f.setBold(true);
+                item->setFont(f);
+                list->setCurrentItem(item);
+            }
+        }
+        target->setText(names.isEmpty() ? "Select a polygon mesh." : m);
+        for (int i = 0; i < buttons->count(); ++i)
+            if (QWidget* b = buttons->itemAt(i)->widget()) b->setEnabled(!names.isEmpty());
     };
-    auto* row = new QHBoxLayout();
-    auto action = [&](const char* label, std::function<void()> f) {
+    auto picked = [list] { return list->currentItem() ? list->currentItem()->data(Qt::UserRole).toString() : QString(); };
+    auto run = [mesh, reload](QJsonObject call) {
+        const QString m = mesh();
+        if (m.isEmpty()) return;
+        call["args"] = QJsonArray{m};
+        exec("polyUVSet", call);
+        Host::get()->poke();
+        reload();
+    };
+    auto button = [&](const char* label, const char* tip, std::function<void()> f) {
         auto* b = new QPushButton(label, w);
-        QObject::connect(b, &QPushButton::clicked, w, [f, reload] { f(); reload(); });
-        row->addWidget(b);
+        b->setToolTip(tip);
+        QObject::connect(b, &QPushButton::clicked, w, f);
+        buttons->addWidget(b);
     };
-    auto picked = [list] { return list->currentItem() ? list->currentItem()->text() : QString(); };
-    action("New", [] { exec("polyUVSet", QJsonObject{{"create", true}, {"uvSet", "uvSet1"}}); });
-    action("Copy", [picked] { exec("polyUVSet", QJsonObject{{"copy", true}, {"uvSet", picked()}}); });
-    action("Set Current", [picked] { exec("polyUVSet", QJsonObject{{"currentUVSet", true}, {"uvSet", picked()}}); });
-    action("Delete", [picked] { exec("polyUVSet", QJsonObject{{"delete", true}, {"uvSet", picked()}}); });
-    v->addLayout(row);
-    auto* refresh = new QPushButton("Update from selection", w);
-    QObject::connect(refresh, &QPushButton::clicked, w, reload);
-    v->addWidget(refresh);
+    button("New", "An empty UV set", [run] { run(QJsonObject{{"create", true}}); });
+    button("Copy", "A copy of the picked set", [run, picked] {
+        if (!picked().isEmpty()) run(QJsonObject{{"copy", true}, {"uvSet", picked()}});
+    });
+    button("Rename", "Rename the picked set", [list] {
+        if (list->currentItem()) list->editItem(list->currentItem());
+    });
+    button("Delete", "Delete the picked set", [run, picked] {
+        if (!picked().isEmpty()) run(QJsonObject{{"delete", true}, {"uvSet", picked()}});
+    });
+    buttons->addStretch(1);
+    // Picking makes it current; an edited name renames it.
+    QObject::connect(list, &QListWidget::itemClicked, w, [run, current, mesh](QListWidgetItem* item) {
+        const QString name = item->data(Qt::UserRole).toString();
+        if (!name.isEmpty() && name != current(mesh())) run(QJsonObject{{"currentUVSet", true}, {"uvSet", name}});
+    });
+    QObject::connect(list, &QListWidget::itemChanged, w, [run, reload](QListWidgetItem* item) {
+        const QString was = item->data(Qt::UserRole).toString(), now = item->text().trimmed();
+        if (now.isEmpty() || now == was) {
+            reload();
+            return;
+        }
+        run(QJsonObject{{"rename", true}, {"uvSet", was}, {"newUVSet", now}});
+    });
+    // Follows the selection and whatever else changes the sets, but not while a name is being typed.
+    auto shown = std::make_shared<QString>();
+    follow_scene(w, [list, reload, mesh, sets, current, shown] {
+        if (list->findChild<QLineEdit*>()) return;
+        const QString m = mesh();
+        const QString now = m + "|" + sets(m).join("|") + "|" + current(m);
+        if (now == *shown) return;
+        *shown = now;
+        reload();
+    });
     reload();
     return w;
 }

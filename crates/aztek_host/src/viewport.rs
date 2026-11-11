@@ -2213,6 +2213,17 @@ impl Viewport {
         let view = self.cam.view();
         let right = Vec3::new(view.x_axis.x as f32, view.y_axis.x as f32, view.z_axis.x as f32);
         let up = Vec3::new(view.x_axis.y as f32, view.y_axis.y as f32, view.z_axis.y as f32);
+        // Edit Pivot mode shows on the manipulator: a ring round its centre, so it is plain the pivot is what moves.
+        if self.pivot_mode && self.manipulates() {
+            let n = 32;
+            for k in 0..n {
+                let a0 = k as f32 / n as f32 * std::f32::consts::TAU;
+                let a1 = (k + 1) as f32 / n as f32 * std::f32::consts::TAU;
+                for r in [len * 0.2, len * 0.24] {
+                    line(p + (right * a0.cos() + up * a0.sin()) * r, p + (right * a1.cos() + up * a1.sin()) * r, [255, 215, 60, 255]);
+                }
+            }
+        }
         match self.eff_tool() {
             Tool::Rotate => {
                 let ring = |u: Vec3, w: Vec3, r: f32, c: [u8; 4], line: &mut dyn FnMut(Vec3, Vec3, [u8; 4])| {

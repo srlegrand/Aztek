@@ -805,6 +805,7 @@ pub const UI_COMMANDS: &[(&str, &str)] = &[
     ("OutlinerWindow", "Show the Outliner."),
     ("AttributeEditor", "Show the Attribute Editor."),
     ("TextureViewWindow", "Open the UV Editor."),
+    ("UVSetEditor", "Open the UV Set Editor."),
     ("UVEditor", "Open the UV Editor."),
     ("PreferencesWindow", "Open the Preferences."),
     ("ToggleChannelsLayers", "Show or hide the Channel Box / Layer Editor."),

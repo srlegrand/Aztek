@@ -176,6 +176,7 @@ void MainWindow::build_runtime() {
     r("RenderSequence", "Rendering", "Render a sequence of frames", [this] { render_sequence_dialog(this); });
     r("RenderSequenceOptions", "Rendering", "Render a sequence of frames", [this] { render_sequence_dialog(this); });
     r("TextureViewWindow", "Windows", "UV Editor", [this] { show_uv_editor(); });
+    r("UVSetEditor", "Windows", "UV Set Editor", [this] { show_named_window("uvSetEditor"); });
     r("PreferencesWindow", "Windows", "Preferences", [this] { show_preferences(); });
     r("HotkeyPreferencesWindow", "Windows", "Hotkey Editor", [this] { show_hotkey_editor(); });
     r("PluginManager", "Windows", "Plug-in Manager", [this] { show_plugin_manager(); });
@@ -321,10 +322,7 @@ void MainWindow::build_runtime() {
         exec("playbackOptions", QJsonObject{{"playbackSpeed", 0}, {"loop", "continuous"}});
         toggle_play(1);
     });
-    r("TogglePivotMode", "Tools", "Move the pivot rather than the object", [this] {
-        pivot_mode_ = !pivot_mode_;
-        for (ViewportWidget* v : panels_->views()) v->set("pivotMode", pivot_mode_ ? "true" : "false");
-    });
+    r("TogglePivotMode", "Tools", "Move the pivot rather than the object", [this] { set_pivot_mode(!pivot_mode_); });
     r("ShowManipulators", "Tools", "The history node's handles", [this] { show_history_manips(); });
 
     // Held keys: a press and a release each.
@@ -336,12 +334,15 @@ void MainWindow::build_runtime() {
     hold_snap("SnapToGridPress", "SnapToGridRelease", "grid", "Snap to grids");
     hold_snap("SnapToCurvePress", "SnapToCurveRelease", "curve", "Snap to curves");
     hold_snap("SnapToPointPress", "SnapToPointRelease", "point", "Snap to points");
-    r("PivotHoldPress", "Tools", "Move the pivot while held", [this] {
+    r("PivotHoldPress", "Tools", "Edit Pivot: a tap turns it on or off, a hold edits the pivot while held", [this] {
+        pivot_hold_ms_ = QDateTime::currentMSecsSinceEpoch();
         for (ViewportWidget* v : panels_->views()) v->set("pivotMode", "true");
         help_line_->setText("Pivot: drag the manipulator to move the pivot");
     });
-    r("PivotHoldRelease", "Tools", "Move the pivot while held", [this] {
-        for (ViewportWidget* v : panels_->views()) v->set("pivotMode", pivot_mode_ ? "true" : "false");
+    r("PivotHoldRelease", "Tools", "Edit Pivot: a tap turns it on or off, a hold edits the pivot while held", [this] {
+        // A tap is the toggle, as the reference's D and Insert are; held through a drag, the mode it was in comes back.
+        const bool tap = QDateTime::currentMSecsSinceEpoch() - pivot_hold_ms_ < 300;
+        set_pivot_mode(tap ? !pivot_mode_ : pivot_mode_);
     });
     r("DiscreteRotatePress", "Tools", "Rotate in steps while held", [this] {
         for (ViewportWidget* v : panels_->views()) v->set("discreteHold", "true");
@@ -476,6 +477,13 @@ void MainWindow::set_binding(const QJsonObject& o) {
     }
     // No command: the key is left unbound.
     if (!b.press.isEmpty() || !b.release.isEmpty()) hotkeys_.append(b);
+}
+
+void MainWindow::set_pivot_mode(bool on) {
+    pivot_mode_ = on;
+    for (ViewportWidget* v : panels_->views()) v->set("pivotMode", on ? "true" : "false");
+    if (tool_settings_) tool_settings_->show_pivot_mode(on);
+    help_line_->setText(on ? "Edit Pivot: drag the manipulator to move the pivot. D or Insert leaves." : QString());
 }
 
 bool MainWindow::hotkey(QKeyEvent* k, bool press) {

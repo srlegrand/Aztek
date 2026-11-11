@@ -113,9 +113,9 @@ pub(super) fn register(c: &mut Commands<Session>) {
             if from.is_empty() {
                 fail!("polyCopyUV: name the set to copy with -uvi");
             }
-            let layer = format!("uvset:{from}");
             uv_ops::each(s, a, "polyCopyUV", "Copy UVs", "polyCopyUV", move |m, target, tp| {
                 let corners = corners_of(m, target, tp);
+                let Some(layer) = crate::uv_sets::layer(m, &from) else { return };
                 let src: Vec<[f32; 2]> = m.corner_attrs().get::<[f32; 2]>(&layer).to_vec();
                 let name = names::uv(0);
                 let uv = m.corner_attrs_mut().get_or_add::<[f32; 2]>(name.as_str());

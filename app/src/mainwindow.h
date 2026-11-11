@@ -255,6 +255,9 @@ private:
     qint64 space_down_ms_ = 0;
     bool space_held_ = false;
     bool pivot_mode_ = false;
+    // When D went down: a tap toggles Edit Pivot, a hold edits the pivot only while held.
+    qint64 pivot_hold_ms_ = 0;
+    void set_pivot_mode(bool on);
 };
 
 } // namespace az

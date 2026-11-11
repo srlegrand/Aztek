@@ -1076,11 +1076,25 @@ impl MaMesh {
             }
         }
 
-        // The current set first: Aztek's tools work on uv0.
+        // Every set the file has, under its name and in its order. The current one goes in uv0, where Aztek's tools
+        // work, and the others after it, each with the seams its own UVs make.
         let mut order: Vec<i64> = self.uv_sets.keys().copied().collect();
         order.retain(|k| !self.uv_sets[k].uvs.is_empty());
-        order.sort_by_key(|k| (self.uv_sets[k].name != self.current_uv, *k));
-        for (slot, set_id) in order.iter().enumerate() {
+        let mut set_names: Vec<String> = Vec::new();
+        for (i, k) in order.iter().enumerate() {
+            let given = self.uv_sets[k].name.replace('|', "_");
+            let mut name = if given.is_empty() { format!("map{}", i + 1) } else { given };
+            while set_names.contains(&name) {
+                name.push('_');
+            }
+            set_names.push(name);
+        }
+        let current = set_names.iter().position(|n| *n == self.current_uv).unwrap_or(0);
+        if !set_names.is_empty() {
+            crate::uv_sets::name_layers(&mut m, &set_names, &set_names[current]);
+        }
+        for (at, set_id) in order.iter().enumerate() {
+            let slot = if at == current { 0 } else if at < current { at + 1 } else { at };
             let set = &self.uv_sets[set_id];
             let mut ids = vec![-1i64; m.corner_capacity() as usize];
             let mut uv = vec![[0.0f32; 2]; m.corner_capacity() as usize];
@@ -1105,6 +1119,12 @@ impl MaMesh {
             m.corner_attrs_mut().get_or_add::<[f32; 2]>(&names::uv(slot as i32)).copy_from_slice(&uv);
             if slot == 0 {
                 mark_seams(&mut m, &ids);
+            } else {
+                let mut seams = vec![false; m.edge_capacity() as usize];
+                for e in seam_edges(&m, &ids) {
+                    seams[e as usize] = true;
+                }
+                crate::uv_sets::set_seams(&mut m, &set_names[at], &seams);
             }
         }
         m
@@ -1133,6 +1153,17 @@ fn axis_of(child: &str) -> Option<usize> {
 
 /// Edges whose two sides use different UVs at one spot get the seam flag, so coincident UVs stay separate.
 fn mark_seams(m: &mut Mesh, ids: &[i64]) {
+    let seams = seam_edges(m, ids);
+    if !seams.is_empty() {
+        let a = m.edge_attrs_mut().get_or_add::<bool>("seam");
+        for e in seams {
+            a[e as usize] = true;
+        }
+    }
+}
+
+/// The edges whose two sides use different UV ids at either end.
+fn seam_edges(m: &Mesh, ids: &[i64]) -> Vec<Index> {
     let mut seams = Vec::new();
     for c in 0..m.corner_capacity() {
         if !m.corner_valid(c) {
@@ -1149,12 +1180,7 @@ fn mark_seams(m: &mut Mesh, ids: &[i64]) {
             seams.push(m.corner_edge(c));
         }
     }
-    if !seams.is_empty() {
-        let a = m.edge_attrs_mut().get_or_add::<bool>("seam");
-        for e in seams {
-            a[e as usize] = true;
-        }
-    }
+    seams
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -3343,6 +3369,9 @@ struct Stored {
     faces: Vec<(Vec<i64>, Vec<Vec<i64>>)>,
     corners: usize,
     uv_sets: Vec<Vec<[f32; 2]>>,
+    /// The sets' names, in the order of `uv_sets`, and the current one's.
+    uv_names: Vec<String>,
+    uv_current: String,
 }
 
 fn stored_mesh(m: &Mesh) -> Stored {
@@ -3378,17 +3407,15 @@ fn stored_mesh(m: &Mesh) -> Stored {
         }
     }
     // UV sets: uv0 through the same maps the UV Editor shows; others shared where point and value agree.
-    let mut set_names: Vec<i32> = Vec::new();
-    while m.corner_attrs().has(&names::uv(set_names.len() as i32)) {
-        set_names.push(set_names.len() as i32);
-    }
+    let uv_current = crate::uv_sets::current(m);
+    let uv_names: Vec<String> = crate::uv_sets::all(m).into_iter().filter(|n| crate::uv_sets::layer(m, n).is_some_and(|l| m.corner_attrs().has(&l))).collect();
     let mut uv_sets: Vec<Vec<[f32; 2]>> = Vec::new();
     let mut corner_uv: Vec<Vec<i64>> = Vec::new();
-    for &set in &set_names {
-        let uv = m.corner_attrs().get::<[f32; 2]>(&names::uv(set));
+    for name in &uv_names {
+        let uv = m.corner_attrs().get::<[f32; 2]>(&crate::uv_sets::layer(m, name).unwrap());
         let mut map = vec![-1i64; m.corner_capacity() as usize];
         let mut vals: Vec<[f32; 2]> = Vec::new();
-        if set == 0 {
+        if *name == uv_current {
             let topo = crate::uv_ops::topo(m);
             let mut dense: HashMap<Index, i64> = HashMap::new();
             for f in 0..m.face_capacity() {
@@ -3446,7 +3473,7 @@ fn stored_mesh(m: &Mesh) -> Stored {
         let uvs: Vec<Vec<i64>> = corner_uv.iter().map(|map| cs.iter().map(|&c| map[c as usize]).collect()).collect();
         faces.push((signed, uvs));
     }
-    Stored { points, point_of, edges, faces, corners, uv_sets }
+    Stored { points, point_of, edges, faces, corners, uv_sets, uv_names, uv_current }
 }
 
 fn write_stored(out: &mut String, m: &Stored) {
@@ -3456,7 +3483,7 @@ fn write_stored(out: &mut String, m: &Stored) {
         let _ = writeln!(out, "\tsetAttr \".uvst[0].uvsn\" -type \"string\" \"map1\";");
     }
     for (k, set) in m.uv_sets.iter().enumerate() {
-        let name = if k == 0 { "map1".to_string() } else { format!("map{}", k + 1) };
+        let name = m.uv_names.get(k).cloned().unwrap_or_else(|| format!("map{}", k + 1)).replace('\\', "\\\\").replace('"', "\\\"");
         let _ = writeln!(out, "\tsetAttr \".uvst[{k}].uvsn\" -type \"string\" \"{name}\";");
         let _ = writeln!(out, "\tsetAttr -s {} \".uvst[{k}].uvsp\";", set.len());
         for (c, chunk) in set.chunks(UV_CHUNK).enumerate() {
@@ -3468,7 +3495,8 @@ fn write_stored(out: &mut String, m: &Stored) {
             let _ = writeln!(out, " ;");
         }
     }
-    let _ = writeln!(out, "\tsetAttr \".cuvs\" -type \"string\" \"map1\";");
+    let current = if m.uv_names.contains(&m.uv_current) { m.uv_current.replace('\\', "\\\\").replace('"', "\\\"") } else { "map1".to_string() };
+    let _ = writeln!(out, "\tsetAttr \".cuvs\" -type \"string\" \"{current}\";");
     let _ = writeln!(out, "\tsetAttr \".dcc\" -type \"string\" \"Ambient+Diffuse\";");
     let _ = writeln!(out, "\tsetAttr \".covm[0]\"  0 1 1;");
     let _ = writeln!(out, "\tsetAttr \".cdvm[0]\"  0 1 1;");

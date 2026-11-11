@@ -230,6 +230,26 @@ fn preserve_uvs_keeps_the_texture_on_the_surface() {
 }
 
 #[test]
+fn preserve_uvs_does_not_cut_the_uvs_open() {
+    let mut c = Core::new();
+    // A cube's corner sits on three faces mapped in three directions, and a bent plane's faces leave their plane.
+    c.mel("polyPlane -n m -w 2 -h 2 -sx 2 -sy 2; polyCube -n box;");
+    let (plane_uvs, box_uvs) = (c.mel("polyEvaluate -uv m;"), c.mel("polyEvaluate -uv box;"));
+    c.mel("manipMoveContext -e -puv 1 Move;");
+    c.mel("select m.vtx[4];");
+    c.exec("moveComponents", json!({"by": [0.3, 0.7, 0.2]})).unwrap();
+    c.exec("moveComponents", json!({"by": [-0.1, 0.2, 0.4]})).unwrap();
+    assert_eq!(c.mel("polyEvaluate -uv m;"), plane_uvs, "the plane's UV points are still shared");
+    c.mel("select m.e[0:3];");
+    c.exec("moveComponents", json!({"by": [0.1, 0.5, 0.3]})).unwrap();
+    assert_eq!(c.mel("polyEvaluate -uv m;"), plane_uvs, "after moving edges");
+    c.mel("select box.vtx[0] box.vtx[3];");
+    c.exec("moveComponents", json!({"by": [0.2, 0.1, -0.15]})).unwrap();
+    assert_eq!(c.mel("polyEvaluate -uv box;"), box_uvs, "the cube's UV points are still shared");
+    c.mel("manipMoveContext -e -puv 0 Move;");
+}
+
+#[test]
 fn keep_spacing_off_lands_each_point_on_the_grid() {
     let mut c = Core::new();
     c.mel("polyPlane -n m -w 1.5 -h 1.5 -sx 1 -sy 1; select m.vtx[0:1];");

@@ -1177,7 +1177,7 @@ fn value_v(g: &mut Graph, id: NodeId, attr: &str) -> Option<DVec3> {
     }
 }
 
-fn value_f(g: &mut Graph, id: NodeId, attr: &str) -> Option<f64> {
+pub(crate) fn value_f(g: &mut Graph, id: NodeId, attr: &str) -> Option<f64> {
     let p = plug_named(g, id, attr)?;
     g.value(&p).ok()?.scalar()
 }

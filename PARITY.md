@@ -1242,3 +1242,56 @@ Still missing from that list, as commands: `commandPort`, `fileInfo`, `lsUI`, `l
 - Not fixed: with something dirty in the scene, each `getAttr` walks every node (the dirty scan in `Graph::evaluate_dirty` and the
   rig hook `rig::sync`), about 1 ms a call at 4000 cubes. Deleting 4000 cubes takes 4.4 s. Opening a 73 MB `.ma` of one dense
   mesh takes 1.0 s and saving it 0.8 s.
+
+### Edit Pivot, Preserve UVs, UV sets, glTF export (11/11/2026)
+
+Edit Pivot (issue 23):
+
+- A drag in Edit Pivot mode did nothing: the command it sends, `movePivot` with both pivots named, asked `xform` a
+  question in a form `xform` refuses. It moves the pivot now.
+- D and Insert: a tap turns Edit Pivot on or off, as the reference's do; D held through a drag edits the pivot only
+  while held. A tap is under 300 ms. The Tool Settings button shows the mode and sets the same one. A ring round
+  the manipulator's centre shows the mode is on; the reference draws its own pivot manipulator.
+- Bake Pivot baked only a pivot orientation, so with the pivot only moved it did nothing. It bakes the position too:
+  the translate goes to the pivot, the four pivot offsets go to zero, the points are countered and children stay
+  where they are. `bakePivot -position` and `-orientation` choose; both are on by default.
+- Not done: in component mode Edit Pivot still moves the components rather than the manipulator. The pivot's
+  orientation can't be turned in the view; `setPivot -orient` sets it.
+
+Preserve UVs (issue 24): each face answered for its own corner of a moved point, and where the faces disagreed (a
+move out of their plane, or faces mapped at different scales) the UV point came apart. Corners that shared a UV take
+the mean of their faces' answers and stay one UV point.
+
+UV sets (issue 25):
+
+- A mesh's sets keep their names and order (`uv_sets.rs`). The current one is what the UV Editor, the UV tools and
+  the views use. Each set has its own seams: before, making a set current kept the other set's seams, so its shells
+  were cut wrongly. A new set is empty; `polyUVSet -create` and `-copy` return the name, made unique.
+- `.ma` files keep every set, its name, the order and the current one. Before, only numbered layers were written, as
+  map1, map2, and sets made with `polyUVSet` were lost on save.
+- The UV Set Editor (Windows > Modeling Editors, `UVSetEditor`) lists the selected mesh's sets and follows the
+  selection: picking one makes it current, New, Copy, Rename and Delete act on the one picked. The UV Editor has a
+  UV Set list.
+- Differences from the reference: textures in the views and renders go by the current set, where the reference uses
+  the first set unless `uvLink` says otherwise (`uvLink` is still stored only). No per-instance sets, no Propagate, no
+  UV Linking editors. `mesh.uvSet[i].uvSetName` and `mesh.currentUVSet` are not attributes: ask `polyUVSet -q`.
+  `polyEvaluate -uvs` counts the current set whichever is named. The editor's buttons are from memory of the
+  reference's, unchecked.
+
+Undo after reading a file: a mesh operation, then anything that evaluated the mesh, then undo left the edited mesh
+on the shape, because undoing a connection did not put back a mesh plug's own value. It does now.
+
+glTF 2.0 (issue 26): `exportGltf path [objects]`, `-all`, and File > Export All and Export Selection with a `.glb` or
+`.gltf` name.
+
+- Written: the transform hierarchy leading to meshes; meshes as they stand (deformed, triangulated, split along hard
+  edges and seams); normals; every UV set in set order (`TEXCOORD_0` is the first); vertex colours; one primitive per
+  shading group; materials as metallic-roughness with base colour, opacity, emission, metalness and roughness from
+  standardSurface (a lambert is fully rough, the other older types half), `KHR_materials_unlit` for a surfaceShader;
+  the colour texture, inside a `.glb` and by relative path from a `.gltf`, with `KHR_texture_transform` for repeat and
+  offset. Centimetres become metres. A Z-up scene gets a node over it that turns it Y up.
+- Not written: skins, animation, blend shapes, cameras, lights, textures on anything but colour, and images that are
+  not PNG or JPEG (the export says which).
+- Checked against the format's rules by a script here and against Aztek's own world bounds. Not opened in another
+  application or run through the Khronos validator: neither was available.
+- FBX is not written. The format can be written without its owner's SDK, but nothing here can read one back to check it.

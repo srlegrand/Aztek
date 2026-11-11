@@ -3,7 +3,7 @@
 Generated from the command registry by `cargo run -p aztek_host --example gen_commands`; do not edit by hand.
 Commands take the reference's flags, long or short, in MEL and in Python (`aztek.cmds` or `maya.cmds`).
 
-1115 commands.
+1117 commands.
 
 ## AL_usdmaya_LayerCreateLayer
 
@@ -381,6 +381,10 @@ Show the Tool Settings.
 ## UVEditor
 
 Open the UV Editor.
+
+## UVSetEditor
+
+Open the UV Set Editor.
 
 ## UnghostAll
 
@@ -2158,9 +2162,14 @@ Arguments: objects
 
 ## bakePivot
 
-Turn the objects onto their pivots' axes, counter-rotating their points, so the pivot orientation becomes the object's own and scale works along it. Nothing moves in the world. Instances are made unique.
+Make the pivot the objects' own origin and axes, as Bake Pivot does: with -position the translate goes to the pivot and the pivot offsets go to zero; with -orientation the rotate takes up the pivot's orientation. The points are countered, so nothing moves in the world, and children stay where they are. Both are on unless one is given. Instances are made unique.
 
 Arguments: objects
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `position` | `pos` | Bake the pivot's position. |
+| `orientation` | `ori` | Bake the pivot's orientation. |
 
 ## bakeResults
 
@@ -5541,6 +5550,16 @@ The selection and what is connected to it: -d steps (1), -et DG, EG or SG. EG an
 | --- | --- | --- |
 | `depth` | `d` | Steps away from the selection. |
 | `expansionType` | `et` | DG, EG or SG. |
+
+## exportGltf
+
+Export to glTF 2.0: a .glb file (binary, textures inside it) or a .gltf file (JSON, textures by path). The objects named, or the selection, with what is under them: hierarchy, meshes as they stand, normals, UV sets, vertex colours, materials and colour textures, in metres and Y up. Skins, animation, blend shapes, cameras and lights are not written. -all exports every top-level object.
+
+Arguments: path objects...
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `all` | `all` | Every top-level object, not the selection. |
 
 ## exportObj
 

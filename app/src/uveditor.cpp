@@ -3,7 +3,9 @@
 #include "host.h"
 #include "icons.h"
 
+#include <QAbstractItemView>
 #include <QActionGroup>
+#include <QComboBox>
 #include <QContextMenuEvent>
 #include <QJsonArray>
 #include <QKeyEvent>
@@ -823,6 +825,22 @@ UvEditor::UvEditor(QWidget* parent) : QWidget(parent) {
     });
     shade->setCheckable(true);
     shade->setChecked(true);
+    // The UV set shown: the current one of the mesh worked on. Picking another makes that one current.
+    // On a bar of its own, so it is there however narrow the window is.
+    auto* tools_bar = bar;
+    bar = new QToolBar(this);
+    bar->addWidget(new QLabel(" UV Set: ", bar));
+    uv_set_ = new QComboBox(bar);
+    uv_set_->setObjectName("uvSetChoice");
+    uv_set_->setMinimumContentsLength(10);
+    uv_set_->setToolTip("The UV set shown and edited. Windows > Modeling Editors has the UV Set Editor.");
+    connect(uv_set_, &QComboBox::activated, this, [this](int) {
+        if (uv_mesh_.isEmpty()) return;
+        exec("polyUVSet", QJsonObject{{"args", QJsonArray{uv_mesh_}}, {"currentUVSet", true}, {"uvSet", uv_set_->currentText()}});
+        Host::get()->poke();
+    });
+    bar->addWidget(uv_set_);
+    v->addWidget(tools_bar);
     v->addWidget(bar);
     v->addWidget(canvas_, 1);
     connect(Host::get(), &Host::sceneChanged, this, [this] {
@@ -847,6 +865,25 @@ void UvEditor::run(const QString& cmd, const QJsonObject& call, bool on_selectio
 
 void UvEditor::refresh() {
     canvas_->set_data(query("uvData").toObject());
+    if (uv_set_ && !uv_set_->view()->isVisible()) {
+        const QJsonArray sel = state()["selection"].toArray();
+        uv_mesh_ = sel.isEmpty() ? QString() : sel.last().toString().section('.', 0, 0);
+        QStringList names;
+        QString cur;
+        if (!uv_mesh_.isEmpty()) {
+            for (const QJsonValue& x : ask("polyUVSet", QJsonObject{{"args", QJsonArray{uv_mesh_}}, {"query", true}, {"queried", QJsonArray{"allUVSets"}}}).toArray()) names << x.toString();
+            const QJsonValue c = ask("polyUVSet", QJsonObject{{"args", QJsonArray{uv_mesh_}}, {"query", true}, {"queried", QJsonArray{"currentUVSet"}}});
+            cur = c.isArray() ? c.toArray().at(0).toString() : c.toString();
+        }
+        QStringList have;
+        for (int i = 0; i < uv_set_->count(); ++i) have << uv_set_->itemText(i);
+        if (have != names) {
+            uv_set_->clear();
+            uv_set_->addItems(names);
+        }
+        uv_set_->setEnabled(!names.isEmpty());
+        if (uv_set_->currentText() != cur) uv_set_->setCurrentText(cur);
+    }
     QJsonObject t = query("uvTexture").toObject();
     QJsonArray r = t["repeat"].toArray(), o = t["offset"].toArray();
     canvas_->set_image(t["path"].toString(), r.isEmpty() ? QPointF(1, 1) : QPointF(r.at(0).toDouble(), r.at(1).toDouble()), o.isEmpty() ? QPointF(0, 0) : QPointF(o.at(0).toDouble(), o.at(1).toDouble()));

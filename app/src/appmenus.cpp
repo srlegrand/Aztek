@@ -182,8 +182,16 @@ QMenu* MainWindow::file_menu() {
     m->addAction("Reference Editor", this, &MainWindow::show_reference_editor);
     m->addSeparator();
     auto do_export = [](bool all) {
-        QString f = QFileDialog::getSaveFileName(nullptr, all ? "Export All" : "Export Selection", "export.ma", QString("ASCII scenes (*.ma);;%1;;OBJ (*.obj);;PLY (*.ply);;STL (*.stl)").arg(kUsdFilter));
+        QString f = QFileDialog::getSaveFileName(nullptr, all ? "Export All" : "Export Selection", "export.ma", QString("ASCII scenes (*.ma);;%1;;glTF 2.0 (*.glb *.gltf);;OBJ (*.obj);;PLY (*.ply);;STL (*.stl)").arg(kUsdFilter));
         if (f.isEmpty()) return;
+        if (f.endsWith(".glb", Qt::CaseInsensitive) || f.endsWith(".gltf", Qt::CaseInsensitive)) {
+            // Its own command: the hierarchy, materials and textures go with the meshes.
+            QJsonObject call{{"args", QJsonArray{f}}};
+            if (all) call["all"] = true;
+            const QJsonObject r = exec("exportGltf", call).toObject();
+            for (const QJsonValue& n : r["notes"].toArray()) log("// Warning: " + n.toString() + " //", 4);
+            return;
+        }
         if (is_usd_file(f)) {
             usd_export(f, !all);
             return;

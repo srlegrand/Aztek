@@ -237,7 +237,7 @@ The tools we build our work on shouldn't belong to whoever bought them last. Too
 A 3D application for modelling, UVs, rigging, animation, dynamics and rendering, with the industry-standard commands, hotkeys, menus and file format. Rust core (scene graph, commands,
 geometry, Vulkan viewport), Qt Widgets shell in C++, a MEL interpreter, and embedded Python with `aztek.cmds`,
 compatibility modules so existing scripts import unchanged, and the Python API (2.0, and 1.0 as `maya.OpenMaya`). Reads and writes `.ma` files and reads `.mb` files. [PARITY.md](PARITY.md) has the behaviour
-target and status, including known differences; [docs/COMMANDS.md](docs/COMMANDS.md) lists all 1115 commands.
+target and status, including known differences; [docs/COMMANDS.md](docs/COMMANDS.md) lists all 1117 commands.
 
 Website: [srlegrand.github.io/Aztek](https://srlegrand.github.io/Aztek/). Licence: [MIT-0](LICENSE).
 
@@ -322,6 +322,9 @@ Every extra copy makes the project harder to lose.
   ![The Render View keeping up with the camera as it moves round a rig](docs/clip-ipr.gif)
 
   ![Two rigs and a row of materials rendered with Harold](docs/harold.png)
+- **UV sets and glTF:** several UV sets to a mesh, each with its own seams, kept in `.ma` files; the UV Set Editor
+  and a UV set list in the UV Editor. File > Export writes glTF 2.0 (`.glb` or `.gltf`): hierarchy, meshes, normals,
+  UV sets, vertex colours, materials and colour textures. Skins and animation are not written yet.
 - **Materials and textures:** a physically based standard surface, and lambert, blinn, phong, phongE and surfaceShader with file textures and place2dTexture, assigned to objects or faces; Textured mode (6) in the viewport; Hypershade lists; the image behind the UV Editor.
 
   ![Materials and a file texture in Textured mode](docs/materials.png)
@@ -535,6 +538,7 @@ Window Actions > Modifier key to Meta.
 | Space tap / hold | Toggle single and four views / hotbox |
 | Right button | Marking menu (Shift: modelling tools, Ctrl: selection conversion) |
 | Q W E R | Select, move, rotate, scale |
+| D or Insert | Edit Pivot on or off; hold D to edit the pivot only while held |
 | F / A, Shift+F / Shift+A | Frame selection / all, in every view |
 | F8, F9, F10, F11 | Object/component, vertex, edge, face |
 | F2, F3, F4 | Animation, Modeling, Rigging menu sets |

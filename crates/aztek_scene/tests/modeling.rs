@@ -227,6 +227,38 @@ fn bake_pivot_turns_the_object_onto_its_pivots_axes_without_moving_it() {
 }
 
 #[test]
+fn bake_pivot_makes_the_pivot_the_objects_origin() {
+    let mut s = Session::new();
+    let cube = cube100(&mut s, json!({}));
+    let child = first(run(&mut s, "polyCube", json!({"name": "bakeChild"})));
+    run(&mut s, "parent", json!({"args": [child.clone(), cube.clone()]}));
+    run(&mut s, "move", json!({"args": [cube], "by": [5, 0, 0]}));
+    run(&mut s, "rotate", json!({"args": [cube], "by": [0, 40, 0]}));
+    run(&mut s, "movePivot", json!({"args": [cube], "by": [3, 4, 0]}));
+    let id = s.graph.find(&cube).unwrap().unwrap();
+    let pivot = xf::world_pivot(&mut s.graph, id);
+    assert!((pivot - DVec3::new(8.0, 4.0, 0.0)).length() < 1e-6, "{pivot}");
+    let (before, child_before) = (world_points(&mut s, &cube), world_points(&mut s, &child));
+
+    // Orientation alone has nothing to do here.
+    run(&mut s, "bakePivot", json!({"args": [cube], "orientation": true}));
+    assert!(!approx(run(&mut s, "getAttr", json!({"args": [format!("{cube}.rotatePivot")]}))[1].as_f64().unwrap(), 0.0));
+
+    run(&mut s, "bakePivot", json!({"args": [cube]}));
+    let t = run(&mut s, "getAttr", json!({"args": [format!("{cube}.translate")]}));
+    assert!(approx(t[0].as_f64().unwrap(), 8.0) && approx(t[1].as_f64().unwrap(), 4.0) && approx(t[2].as_f64().unwrap(), 0.0), "{t}");
+    for attr in ["rotatePivot", "scalePivot", "rotatePivotTranslate", "scalePivotTranslate"] {
+        let v = run(&mut s, "getAttr", json!({"args": [format!("{cube}.{attr}")]}));
+        assert!((0..3).all(|i| approx(v[i].as_f64().unwrap(), 0.0)), "{attr} {v}");
+    }
+    assert!((xf::world_pivot(&mut s.graph, id) - pivot).length() < 1e-6);
+    same_points(&before, &world_points(&mut s, &cube));
+    same_points(&child_before, &world_points(&mut s, &child));
+    run(&mut s, "undo", json!({}));
+    same_points(&before, &world_points(&mut s, &cube));
+}
+
+#[test]
 fn freeze_without_hierarchy_leaves_childrens_values() {
     let mut s = Session::new();
     let a = first(run(&mut s, "polyCube", json!({"name": "A"})));

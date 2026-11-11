@@ -2749,7 +2749,9 @@ impl Graph {
         // Undo puts back the value the plug held before it was driven, not the last one pulled through the connection.
         let mut before = None;
         let mut new_element = false;
-        let heavy = matches!(da.ty, PlugType::Mesh | PlugType::Data);
+        // Meshes and data too: they are shared, not copied, and a mesh's first history node is undone this way. Left
+        // out, an evaluation between the edit and its undo left the edited mesh on the shape.
+        let heavy = false;
         if dst.element >= 0 {
             match self
                 .node(dst.node)

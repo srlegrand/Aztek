@@ -135,13 +135,15 @@ pub fn register(c: &mut Commands<Session>) {
                         continue;
                     }
                     // Named pivots move on their own, in world or object space, as `move` on obj.rotatePivot does.
-                    if a.bool("rotatePivot") || a.bool("scalePivot") {
+                    // Both together and in world space is the whole pivot moved: what a drag in Edit Pivot mode sends.
+                    let both = a.bool("rotatePivot") && a.bool("scalePivot") && !a.bool("objectSpace");
+                    if !both && (a.bool("rotatePivot") || a.bool("scalePivot")) {
                         let space = if a.bool("objectSpace") { "objectSpace" } else { "worldSpace" };
                         for pivot in ["rotatePivot", "scalePivot"].into_iter().filter(|p| a.bool(p)) {
                             let at = if let Some(t) = a.vec3("to") {
                                 t
                             } else {
-                                let now = s.run("xform", json!({"args": [name], "query": true, space: true, "queried": [pivot]}))?;
+                                let now = s.run("xform", json!({"args": [name], "query": true, space: true, pivot: true}))?;
                                 let v: Vec<f64> = now.as_array().map(|l| l.iter().filter_map(Value::as_f64).collect()).unwrap_or_default();
                                 let by = a.vec3("by").unwrap_or([0.0; 3]);
                                 [v.first().unwrap_or(&0.0) + by[0], v.get(1).unwrap_or(&0.0) + by[1], v.get(2).unwrap_or(&0.0) + by[2]]
@@ -289,31 +291,51 @@ pub fn register(c: &mut Commands<Session>) {
     c.register(
         CommandDef::<Session>::new(
             "bakePivot",
-            "Turn the objects onto their pivots' axes, counter-rotating their points, so the pivot orientation becomes the \
-             object's own and scale works along it. Nothing moves in the world. Instances are made unique.",
+            "Make the pivot the objects' own origin and axes, as Bake Pivot does: with -position the translate goes to the \
+             pivot and the pivot offsets go to zero; with -orientation the rotate takes up the pivot's orientation. The \
+             points are countered, so nothing moves in the world, and children stay where they are. Both are on unless \
+             one is given. Instances are made unique.",
             |s, a| {
                 let ids = top_level(s, a, "bakePivot")?;
+                let given = a.has("position") || a.has("orientation");
+                let (position, orientation) = (if given { a.bool("position") } else { true }, if given { a.bool("orientation") } else { true });
                 let g = &mut s.graph;
                 for id in ids {
                     g.evaluate();
-                    if !is_transform(g, id) {
+                    if !is_transform(g, id) || is_joint(g, id) {
                         continue;
                     }
-                    let orient = g.node(id).unwrap().vec3(Transform::PIVOT_ORIENT);
-                    if is_joint(g, id) || orient == DVec3::ZERO {
+                    let n = g.node(id).unwrap();
+                    let orient = n.vec3(Transform::PIVOT_ORIENT);
+                    let turn = orientation && orient != DVec3::ZERO;
+                    let offset = [Transform::ROTATE_PIVOT, Transform::SCALE_PIVOT, Transform::ROTATE_PIVOT_TRANSLATE, Transform::SCALE_PIVOT_TRANSLATE].iter().any(|&p| n.vec3(p) != DVec3::ZERO);
+                    let place = position && offset;
+                    if !turn && !place {
                         continue;
                     }
-                    let before = g.node(id).unwrap().matrix(Transform::MATRIX);
+                    let before = n.matrix(Transform::MATRIX);
+                    let parent = n.matrix(Transform::PARENT_MATRIX);
                     let children = children_worlds(g, id);
                     let pivot = xf::world_pivot(g, id);
-                    let turn = DMat3::from_mat4(euler_to_matrix(orient, RotateOrder::Xyz));
-                    let rotate = xf::rotated_euler(g, id, &turn, Space::Object);
-                    set(g, id, Transform::ROTATE, rotate)?;
-                    set(g, id, Transform::PIVOT_ORIENT, DVec3::ZERO)?;
+                    if turn {
+                        let axes = DMat3::from_mat4(euler_to_matrix(orient, RotateOrder::Xyz));
+                        let rotate = xf::rotated_euler(g, id, &axes, Space::Object);
+                        set(g, id, Transform::ROTATE, rotate)?;
+                        set(g, id, Transform::PIVOT_ORIENT, DVec3::ZERO)?;
+                    }
+                    if place {
+                        // With no pivot offsets the object's origin is its translate: put that at the pivot.
+                        for attr in [Transform::ROTATE_PIVOT, Transform::SCALE_PIVOT, Transform::ROTATE_PIVOT_TRANSLATE, Transform::SCALE_PIVOT_TRANSLATE] {
+                            set(g, id, attr, DVec3::ZERO)?;
+                        }
+                        set(g, id, Transform::TRANSLATE, parent.inverse().transform_point3(pivot))?;
+                    }
                     g.evaluate();
                     let after = g.node(id).unwrap().matrix(Transform::MATRIX);
                     bake_into_geometry(g, id, &(after.inverse() * before))?;
-                    xf::set_world_pivot(g, id, pivot)?;
+                    if !place {
+                        xf::set_world_pivot(g, id, pivot)?;
+                    }
                     g.evaluate();
                     for (c, world) in children {
                         keep_world(g, c, &world)?;
@@ -322,6 +344,8 @@ pub fn register(c: &mut Commands<Session>) {
                 Ok(Value::Null)
             },
         )
+        .flag(FlagDef::new("position", "pos", T::Bool, Value::Null, "Bake the pivot's position."))
+        .flag(FlagDef::new("orientation", "ori", T::Bool, Value::Null, "Bake the pivot's orientation."))
         .positional("objects"),
     );
 

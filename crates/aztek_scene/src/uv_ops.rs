@@ -258,7 +258,9 @@ pub fn project_faces(m: &mut Mesh, faces: &[Index], ty: Projection, axis: Projec
 }
 
 /// The UV change that keeps a texture on the surface as points went from `was` to `now`: at each corner of a moved point, the
-/// move in the terms of the corner's two edges, then the same in UV.
+/// move in the terms of the corner's two edges, then the same in UV. Corners of a point that shared one UV still share
+/// one after: each face answers a little differently when the move leaves its plane or the faces are mapped at different
+/// scales, and taking each face's own answer cut the UVs apart there. They take the mean of their faces' answers.
 pub fn follow_surface(m: &mut Mesh, was: &[glam::DVec3], now: &[glam::DVec3]) {
     let uv: Vec<[f32; 2]> = m.corner_attrs().get::<[f32; 2]>(UV).to_vec();
     if uv.is_empty() {
@@ -266,6 +268,8 @@ pub fn follow_surface(m: &mut Mesh, was: &[glam::DVec3], now: &[glam::DVec3]) {
     }
     let mut edit = UvEdit::default();
     let n = was.len().min(now.len());
+    // Corners by the point and the UV they had: a UV point, as the UV editor shows one.
+    let mut shared: BTreeMap<(usize, [u32; 2]), (Vec<Index>, [f64; 2], u32)> = BTreeMap::new();
     for c in 0..m.corner_capacity() {
         if !m.corner_valid(c) {
             continue;
@@ -274,6 +278,8 @@ pub fn follow_surface(m: &mut Mesh, was: &[glam::DVec3], now: &[glam::DVec3]) {
         if p >= n || (now[p] - was[p]).length_squared() < 1e-18 {
             continue;
         }
+        let key = (p, [uv[c as usize][0].to_bits(), uv[c as usize][1].to_bits()]);
+        shared.entry(key).or_insert_with(|| (Vec::new(), [0.0; 2], 0)).0.push(c);
         let (next, prev) = (m.corner_next(c), m.corner_prev(c));
         let (Some(pn), Some(pp)) = (was.get(m.corner_point(next) as usize), was.get(m.corner_point(prev) as usize)) else { continue };
         let (e1, e2) = (*pn - was[p], *pp - was[p]);
@@ -287,7 +293,19 @@ pub fn follow_surface(m: &mut Mesh, was: &[glam::DVec3], now: &[glam::DVec3]) {
         let (s, t) = ((a22 * b1 - a12 * b2) / det, (a11 * b2 - a12 * b1) / det);
         let u = uv[c as usize];
         let (un, up) = (uv[next as usize], uv[prev as usize]);
-        edit.uvs.insert(c, [u[0] + (s as f32) * (un[0] - u[0]) + (t as f32) * (up[0] - u[0]), u[1] + (s as f32) * (un[1] - u[1]) + (t as f32) * (up[1] - u[1])]);
+        let at = [u[0] as f64 + s * (un[0] - u[0]) as f64 + t * (up[0] - u[0]) as f64, u[1] as f64 + s * (un[1] - u[1]) as f64 + t * (up[1] - u[1]) as f64];
+        let group = shared.get_mut(&key).unwrap();
+        group.1 = [group.1[0] + at[0], group.1[1] + at[1]];
+        group.2 += 1;
+    }
+    for (corners, sum, count) in shared.into_values() {
+        if count == 0 {
+            continue;
+        }
+        let at = [(sum[0] / count as f64) as f32, (sum[1] / count as f64) as f32];
+        for c in corners {
+            edit.uvs.insert(c, at);
+        }
     }
     edit.apply(m);
 }

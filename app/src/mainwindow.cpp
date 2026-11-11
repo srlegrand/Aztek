@@ -936,9 +936,7 @@ void MainWindow::build_docks() {
     connect(tool_settings_, &ToolSettings::stepSnap, this, [this](const QString& k, double x) {
         for (ViewportWidget* v : panels_->views()) v->set(k, QString::number(x));
     });
-    connect(tool_settings_, &ToolSettings::pivotMode, this, [this](bool on) {
-        for (ViewportWidget* v : panels_->views()) v->set("pivotMode", on ? "true" : "false");
-    });
+    connect(tool_settings_, &ToolSettings::pivotMode, this, [this](bool on) { set_pivot_mode(on); });
     connect(tool_settings_, &ToolSettings::curveDegree, this, [this](int d) {
         for (ViewportWidget* v : panels_->views()) v->set("curveDegree", QString::number(d));
     });

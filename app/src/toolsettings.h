@@ -6,6 +6,7 @@
 #include <functional>
 
 class QCheckBox;
+class QPushButton;
 class QComboBox;
 class QFormLayout;
 class QDoubleSpinBox;
@@ -21,6 +22,8 @@ class ToolSettings : public Panel {
 public:
     explicit ToolSettings(QWidget* parent = nullptr);
     void set_tool(const QString& tool);
+    /// Shows Edit Pivot as on or off without sending it again.
+    void show_pivot_mode(bool on);
 protected:
     void refresh() override;
 private:
@@ -91,6 +94,7 @@ private:
     QCheckBox* preserve_children_ = nullptr;
     QCheckBox* preserve_uvs_ = nullptr;
     QCheckBox* keep_spacing_ = nullptr;
+    QPushButton* edit_pivot_ = nullptr;
     QCheckBox* update_triad_ = nullptr;
     QCheckBox* shift_extrude_ = nullptr;
     QCheckBox* shift_duplicate_ = nullptr;

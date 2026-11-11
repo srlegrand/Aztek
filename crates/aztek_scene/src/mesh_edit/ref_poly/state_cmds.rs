@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use aztek_geo::normals::{corner_normals, update_corner_normals, CornerNormalOptions};
 use aztek_geo::symmetry::SymmetryMap;
-use aztek_geo::{colors, names, AttrType, Index, Mesh};
+use aztek_geo::{colors, names, Index, Mesh};
 use aztek_ops::{fail, ArgType as T, Args, CmdResult, Commands};
 use glam::{DVec3, Vec3};
 use serde_json::{json, Value};
@@ -15,89 +15,37 @@ use crate::components::{ComponentMode as K, Ids};
 use crate::history::{register_op, HistoryOp};
 use crate::mesh_edit::EditResult;
 
-const UV_PREFIX: &str = "uvset:";
-const UV_CURRENT: &str = "uvcurrent:";
-
-/// The name of the set the mesh's uv0 holds.
-fn current_uv_name(m: &Mesh) -> String {
-    m.face_attrs().names().into_iter().find_map(|n| n.strip_prefix(UV_CURRENT).map(str::to_string)).unwrap_or("map1".to_string())
-}
-
-fn uv_set_names(m: &Mesh) -> Vec<String> {
-    let mut out = Vec::new();
-    if m.corner_attrs().has(names::uv(0).as_str()) || m.num_faces() > 0 {
-        out.push(current_uv_name(m));
-    }
-    out.extend(m.corner_attrs().names().into_iter().filter_map(|n| n.strip_prefix(UV_PREFIX).map(str::to_string)));
-    out
-}
-
-fn set_current_uv_name(m: &mut Mesh, name: &str) {
-    for n in m.face_attrs().names() {
-        if n.starts_with(UV_CURRENT) {
-            m.face_attrs_mut().remove(&n);
-        }
-    }
-    m.face_attrs_mut().add(&format!("{UV_CURRENT}{name}"), AttrType::Bool);
-}
-
-fn make_uv_current(m: &mut Mesh, name: &str) -> bool {
-    let current = current_uv_name(m);
-    if current == name {
-        return true;
-    }
-    let layer = format!("{UV_PREFIX}{name}");
-    if !m.corner_attrs().has(&layer) {
-        return false;
-    }
-    let uv = names::uv(0);
-    let parked = format!("{UV_PREFIX}{current}");
-    m.corner_attrs_mut().get_or_add::<[f32; 2]>(uv.as_str());
-    m.corner_attrs_mut().rename(uv.as_str(), &parked);
-    m.corner_attrs_mut().rename(&layer, uv.as_str());
-    set_current_uv_name(m, name);
-    true
-}
+use crate::uv_sets;
 
 fn uv_set_op(a: &Args, m: &mut Mesh, _sel: &Ids, _sym: Option<&SymmetryMap>) -> CmdResult<EditResult> {
     let set = a.string("uvSet", "");
     let new = a.string("newUVSet", "");
+    let named = |m: &Mesh| if set.is_empty() { uv_sets::current(m) } else { set.clone() };
     if a.bool("create") {
-        let name = if !set.is_empty() { set } else if !new.is_empty() { new } else { "uvSet1".to_string() };
-        if !uv_set_names(m).contains(&name) {
-            m.corner_attrs_mut().get_or_add::<[f32; 2]>(&format!("{UV_PREFIX}{name}"));
-        }
+        uv_sets::create(m, if !set.is_empty() { &set } else { &new });
     } else if a.bool("delete") {
-        let name = if set.is_empty() { current_uv_name(m) } else { set };
-        if name == current_uv_name(m) {
-            let next = uv_set_names(m).into_iter().find(|n| *n != name);
-            let Some(next) = next else { fail!("polyUVSet: can't delete the only UV set") };
-            make_uv_current(m, &next);
+        let name = named(m);
+        if let Err(e) = uv_sets::delete(m, &name) {
+            fail!("polyUVSet: {e}");
         }
-        m.corner_attrs_mut().remove(&format!("{UV_PREFIX}{name}"));
     } else if a.bool("rename") {
-        let name = if set.is_empty() { current_uv_name(m) } else { set };
         if new.is_empty() {
             fail!("polyUVSet: -rename needs -newUVSet");
         }
-        if name == current_uv_name(m) {
-            set_current_uv_name(m, &new);
-        } else {
-            m.corner_attrs_mut().rename(&format!("{UV_PREFIX}{name}"), &format!("{UV_PREFIX}{new}"));
+        let name = named(m);
+        if let Err(e) = uv_sets::rename(m, &name, &new) {
+            fail!("polyUVSet: {e}");
         }
     } else if a.bool("copy") {
-        let from = if set.is_empty() { current_uv_name(m) } else { set };
-        let to = if new.is_empty() { "uvSet1".to_string() } else { new };
-        let src: Vec<[f32; 2]> = if from == current_uv_name(m) {
-            m.corner_attrs().get::<[f32; 2]>(names::uv(0).as_str()).to_vec()
-        } else {
-            m.corner_attrs().get::<[f32; 2]>(&format!("{UV_PREFIX}{from}")).to_vec()
-        };
-        let layer = m.corner_attrs_mut().get_or_add::<[f32; 2]>(&format!("{UV_PREFIX}{to}"));
-        let n = layer.len().min(src.len());
-        layer[..n].copy_from_slice(&src[..n]);
-    } else if a.bool("currentUVSet") && !make_uv_current(m, &set) {
-        fail!("polyUVSet: no UV set {set}");
+        let from = named(m);
+        if uv_sets::copy(m, &from, if new.is_empty() { "uvSet1" } else { &new }).is_none() {
+            fail!("polyUVSet: no UV set {from}");
+        }
+    } else if a.bool("currentUVSet") {
+        let name = named(m);
+        if !uv_sets::set_current(m, &name) {
+            fail!("polyUVSet: no UV set {name}");
+        }
     }
     Ok(EditResult::default())
 }
@@ -497,14 +445,26 @@ pub(super) fn register(c: &mut Commands<Session>) {
                 if a.bool("query") {
                     let (_, m) = query_mesh(s, a)?;
                     if asked(a, "allUVSets") {
-                        return Ok(json!(uv_set_names(&m)));
+                        return Ok(json!(uv_sets::all(&m)));
                     }
                     if asked(a, "currentUVSet") {
-                        return Ok(json!([current_uv_name(&m)]));
+                        return Ok(json!([uv_sets::current(&m)]));
                     }
                     fail!("polyUVSet: ask -auv or -cuv");
                 }
-                run_op(s, "createUVSet", a)
+                // A new set's name is settled here, so the node makes that one each time it runs, and it is what comes back.
+                let (set, new) = (a.string("uvSet", ""), a.string("newUVSet", ""));
+                if a.bool("create") || (a.bool("copy") && new.is_empty()) {
+                    let (_, m) = query_mesh(s, a)?;
+                    let wanted = if a.bool("copy") { "uvSet1".to_string() } else if !set.is_empty() { set } else if !new.is_empty() { new } else { "uvSet1".to_string() };
+                    let name = uv_sets::unique(&m, &wanted);
+                    let mut named = a.clone();
+                    named.flags.insert(if a.bool("copy") { "newUVSet" } else { "uvSet" }.to_string(), json!(name));
+                    run_op(s, "createUVSet", &named)?;
+                    return Ok(json!([name]));
+                }
+                run_op(s, "createUVSet", a)?;
+                Ok(if a.bool("copy") || a.bool("rename") { json!([new]) } else if set.is_empty() { Value::Null } else { json!([set]) })
             },
         )),
         "polyUVSet",

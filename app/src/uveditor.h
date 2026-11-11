@@ -2,6 +2,7 @@
 // projection, unfold, layout, cut and sew tools.
 #pragma once
 #include <QHash>
+class QComboBox;
 #include <QImage>
 #include <QJsonArray>
 #include <array>
@@ -108,6 +109,8 @@ private:
     QHash<QString, QAction*> mode_buttons_;
     QHash<QString, QAction*> tool_buttons_;
     void show_tool(const QString& t);
+    ::QComboBox* uv_set_ = nullptr;
+    QString uv_mesh_;
 };
 
 } // namespace az
