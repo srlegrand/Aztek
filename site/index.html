@@ -113,10 +113,50 @@ git add -A
 git commit -m "What the fix does"
 gh pr create --fill</code></pre></li>
   </ol>
-  <h3>With an LLM</h3>
+  <h3>With an LLM, nothing to install</h3>
+  <p>No git, no build: a chat service that takes a file and can give one back is enough.</p>
+  <ol>
+    <li><a class="btn" href="https://github.com/srlegrand/Aztek/archive/refs/heads/main.zip">Download the source (.zip, about 30 MB)</a></li>
+    <li>Start a new chat, attach the zip, and send this with the problem filled in. If the service refuses the zip for
+      its size, unzip it and zip only <code>crates</code>, <code>app</code>, <code>CLAUDE.md</code> and
+      <code>PARITY.md</code> (about 5 MB).
+<pre><code>The attached zip is the source of Aztek (https://github.com/srlegrand/Aztek), a 3D application
+with a Rust core under crates/ and a Qt interface in C++ under app/src. Unzipped, everything
+sits in one top folder (Aztek-main).
+
+Read CLAUDE.md first: it holds the project's rules and layout. PARITY.md says how each area
+is meant to behave.
+
+The problem:
+&lt;What you did, what happened, and what you expected instead. Paste the issue's text and
+its number if there is one.&gt;
+
+Do this, in order:
+1. Find the code responsible and tell me what causes the problem.
+2. Make the smallest change that fixes it, in the style of the code around it. Don't
+   refactor, rename or reformat what the fix doesn't need.
+3. If the fix can be tested, add a test in that crate's tests/ folder.
+4. If the change alters behaviour that PARITY.md describes, update PARITY.md.
+
+Give me the result as one file to download, named my-fix.patch: a unified diff that
+`git apply` accepts, with paths from the repository's root (a/crates/..., b/crates/...,
+without the Aztek-main folder), holding only the lines that change and their context. Add
+no credit or attribution lines anywhere. If you can't make a file, put the whole diff in
+one code block.
+
+Then tell me, in a few lines: the files you changed and why, how to check the fix by hand
+in the app, and what you could not build, run or verify.</code></pre></li>
+    <li>Save what it gives back as <code>my-fix.patch</code> and attach it to the
+      <a href="https://github.com/srlegrand/Aztek/issues">issue</a> it fixes or to a
+      <a href="https://github.com/srlegrand/Aztek/issues/new">new one</a>. You need a GitHub account for that, nothing
+      else.</li>
+    <li>Say in the issue that the patch was made this way and has not been built or run: nobody has yet seen it work,
+      so it gets checked before it goes in.</li>
+  </ol>
+  <h3>With an LLM, in the built source</h3>
   <p>A coding assistant that can read the folder and run commands in it can find the code and make the change with
-    you. Clone and build first, start the assistant in the <code>Aztek</code> folder, and give it this, with the problem
-    filled in:</p>
+    you, and build and test what it changes. Clone and build first, start the assistant in the <code>Aztek</code>
+    folder, and give it this, with the problem filled in:</p>
 <pre><code>You are working in a clone of Aztek (https://github.com/srlegrand/Aztek), a 3D application
 with a Rust core under crates/ and a Qt interface in C++ under app/src.
 

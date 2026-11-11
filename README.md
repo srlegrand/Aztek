@@ -107,10 +107,54 @@ ones, and there is nothing to ask first.
    If git asks who you are at the commit, tell it once: `git config --global user.name "Your Name"` and
    `git config --global user.email "you@example.com"`.
 
-### With an LLM
+### With an LLM, nothing to install
 
-A coding assistant that can read the folder and run commands in it can do steps 2 and 3 with you. Clone and build
-first (step 1), start the assistant in the `Aztek` folder, and give it this, with the problem filled in:
+No git, no build: a chat service that takes a file and can give one back is enough.
+
+1. Download the source: [Aztek-main.zip](https://github.com/srlegrand/Aztek/archive/refs/heads/main.zip) (about 30 MB).
+2. Start a new chat, attach the zip, and send this with the problem filled in. If the service refuses the zip for its
+   size, unzip it and zip only `crates`, `app`, `CLAUDE.md` and `PARITY.md` (about 5 MB).
+
+   ```text
+   The attached zip is the source of Aztek (https://github.com/srlegrand/Aztek), a 3D application
+   with a Rust core under crates/ and a Qt interface in C++ under app/src. Unzipped, everything
+   sits in one top folder (Aztek-main).
+
+   Read CLAUDE.md first: it holds the project's rules and layout. PARITY.md says how each area
+   is meant to behave.
+
+   The problem:
+   <What you did, what happened, and what you expected instead. Paste the issue's text and
+   its number if there is one.>
+
+   Do this, in order:
+   1. Find the code responsible and tell me what causes the problem.
+   2. Make the smallest change that fixes it, in the style of the code around it. Don't
+      refactor, rename or reformat what the fix doesn't need.
+   3. If the fix can be tested, add a test in that crate's tests/ folder.
+   4. If the change alters behaviour that PARITY.md describes, update PARITY.md.
+
+   Give me the result as one file to download, named my-fix.patch: a unified diff that
+   `git apply` accepts, with paths from the repository's root (a/crates/..., b/crates/...,
+   without the Aztek-main folder), holding only the lines that change and their context. Add
+   no credit or attribution lines anywhere. If you can't make a file, put the whole diff in
+   one code block.
+
+   Then tell me, in a few lines: the files you changed and why, how to check the fix by hand
+   in the app, and what you could not build, run or verify.
+   ```
+
+3. Save what it gives back as `my-fix.patch`, and attach it to the issue it fixes or to a
+   [new issue](https://github.com/srlegrand/Aztek/issues/new). You need a GitHub account for that, nothing else. If
+   GitHub refuses the file, zip it first.
+4. Say in the issue that the patch was made this way and has not been built or run: nobody has yet seen it work, so
+   it gets checked before it goes in.
+
+### With an LLM, in the built source
+
+A coding assistant that can read the folder and run commands in it can do steps 2 and 3 with you, and build and test
+what it changes. Clone and build first (step 1), start the assistant in the `Aztek` folder, and give it this, with the
+problem filled in:
 
 ```text
 You are working in a clone of Aztek (https://github.com/srlegrand/Aztek), a 3D application
