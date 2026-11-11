@@ -157,6 +157,9 @@ elseif(APPLE)
                         "-framework Security" "-framework SystemConfiguration" objc iconv dl pthread m)
 else()
   target_link_libraries(aztek PRIVATE dl pthread m)
+  # Qt's targets name libraries the program calls nothing in (libOpenGL); a linker that records them all makes the
+  # program refuse to start on a system without them.
+  target_link_options(aztek PRIVATE "LINKER:--as-needed")
 endif()
 
 # Install: the binary, and on Linux its desktop entry and icon (cmake --install build --prefix ~/.local).
