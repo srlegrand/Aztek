@@ -34,7 +34,7 @@
 namespace az {
 
 QPixmap splash_pixmap() {
-    // 1200 x 700 artwork (app/icons/make_splash.py), shown at 600 x 350.
+    // 1200 x 670 artwork (app/icons/make_splash.py), shown at 600 x 335.
     QPixmap pm(":/aztek-splash.png");
     QPainter p(&pm);
     p.setRenderHint(QPainter::TextAntialiasing);
@@ -42,7 +42,7 @@ QPixmap splash_pixmap() {
     f.setPixelSize(30);
     p.setFont(f);
     p.setPen(QColor(235, 235, 235));
-    p.drawText(QRect(44, 600, 600, 50), Qt::AlignLeft | Qt::AlignVCenter,
+    p.drawText(QRect(44, 584, 600, 50), Qt::AlignLeft | Qt::AlignVCenter,
                QString("Aztek  Version %1").arg(AZTEK_VERSION));
     p.end();
     pm.setDevicePixelRatio(2.0);

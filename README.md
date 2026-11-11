@@ -216,7 +216,7 @@ The tools we build our work on shouldn't belong to whoever bought them last. Too
 A 3D application for modelling, UVs, rigging, animation, dynamics and rendering, with the industry-standard commands, hotkeys, menus and file format. Rust core (scene graph, commands,
 geometry, Vulkan viewport), Qt Widgets shell in C++, a MEL interpreter, and embedded Python with `aztek.cmds`,
 compatibility modules so existing scripts import unchanged, and the Python API (2.0, and 1.0 as `maya.OpenMaya`). Reads and writes `.ma` files and reads `.mb` files. [PARITY.md](PARITY.md) has the behaviour
-target and status, including known differences; [docs/COMMANDS.md](docs/COMMANDS.md) lists all 1111 commands.
+target and status, including known differences; [docs/COMMANDS.md](docs/COMMANDS.md) lists all 1115 commands.
 
 Website: [srlegrand.github.io/Aztek](https://srlegrand.github.io/Aztek/). Licence: [MIT-0](LICENSE).
 
@@ -325,6 +325,10 @@ Every extra copy makes the project harder to lose.
 
   ![A window built from MEL: sliders, a colour slider and buttons driving a procedure](docs/script-window.png)
 - **C++ plug-ins:** a kit to rebuild a plug-in from its source against Aztek's headers. Commands, nodes and deformers load; more classes are coming.
+- **Plug-in Manager and user folder:** load, unload and auto load plug-ins from one window. Preferences > User Folder points Aztek at an
+  existing scripts, plug-ins, modules and prefs folder where it is, copies it into `~/aztek`, or uses a custom folder; `userSetup` scripts,
+  `.mod` modules and the environment file are read. A compiled plug-in not built with the kit is listed and marked instead of failing.
+  See [docs/PLUGINS.md](docs/PLUGINS.md).
 
 **Interface**
 
@@ -557,7 +561,7 @@ The command line and the Script Editor take MEL (`polyCube -w 2 -sx 3; select -r
     cmds.polyCube(cube, q=True, w=True)
 
 `aztek.cmds` is the module of record; the compatibility modules map onto it, so existing scripts run unchanged. Python plug-ins load
-with `loadPlugin`. C++ plug-ins rebuilt with the kit in `devkit/` load too.
+with `loadPlugin`. C++ plug-ins rebuilt with the kit in `devkit/` load too ([docs/PLUGINS.md](docs/PLUGINS.md)).
 
 ## Compatibility
 

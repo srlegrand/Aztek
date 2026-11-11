@@ -244,15 +244,25 @@ fn store(g: &mut Graph, set: NodeId, list: &[Member]) -> CmdResult<()> {
 }
 
 fn merged(mut list: Vec<Member>, extra: &[Member]) -> Vec<Member> {
+    // Where each node and kind already is in the list: a set of thousands is merged in one pass, not one per member.
+    let key = |m: &Member| (m.node, std::mem::discriminant(&m.kind));
+    let mut at: std::collections::HashMap<_, usize> = std::collections::HashMap::with_capacity(list.len() + extra.len());
+    for (i, m) in list.iter().enumerate() {
+        at.entry(key(m)).or_insert(i);
+    }
     for m in extra {
         let mut m = m.clone();
         normalize(&mut m.ids);
         if m.kind != ComponentMode::Object && m.ids.is_empty() {
             continue;
         }
-        match list.iter_mut().find(|x| x.node == m.node && x.kind == m.kind) {
-            None => list.push(m),
-            Some(x) if m.kind != ComponentMode::Object => {
+        match at.get(&key(&m)) {
+            None => {
+                at.insert(key(&m), list.len());
+                list.push(m);
+            }
+            Some(&i) if m.kind != ComponentMode::Object => {
+                let x = &mut list[i];
                 x.ids.extend(m.ids);
                 normalize(&mut x.ids);
             }
@@ -504,6 +514,57 @@ pub fn add(g: &mut Graph, set: NodeId, list: &[Member]) -> CmdResult<()> {
 }
 
 /// A set's members replaced as they are, with no change to weights: for a deformer's set, kept in step by its callers.
+/// Which of these nodes a set holds, whole or by components, told from the ids its entries are bound to. None when an
+/// entry is not bound to a live node (read from a file and not yet looked up, or of an unloaded reference): `members`
+/// answers then. For asking about a few nodes without naming every member of a large set.
+pub(crate) fn holds_any(g: &Graph, set: NodeId, nodes: &[NodeId]) -> Option<Vec<NodeId>> {
+    with_stored(g, set, |s| {
+        let mut out = Vec::new();
+        for e in &s.entries {
+            let b = e.bound.lock().unwrap();
+            if b.id == NO_NODE || b.referenced {
+                return None;
+            }
+            if nodes.contains(&b.id) && g.node(b.id).is_some() && !out.contains(&b.id) {
+                out.push(b.id);
+            }
+        }
+        Some(out)
+    })
+    .unwrap_or(Some(Vec::new()))
+}
+
+/// Adds whole-object members a set does not hold yet, as one undoable set, leaving its other entries as they are:
+/// what `set_members_raw` stores for the old members and these, without naming every old member again.
+pub(crate) fn append_objects_raw(g: &mut Graph, set: NodeId, extra: &[NodeId]) -> CmdResult<()> {
+    let ns = g.node(set).map(|n| n.namespace().to_string()).unwrap_or_default();
+    let mut d = SetMembers::default();
+    if let Some(kept) = with_stored(g, set, |old| {
+        old.entries
+            .iter()
+            .filter(|e| {
+                let b = e.bound.lock().unwrap().clone();
+                // A member whose node was deleted is dropped, as a full store drops it.
+                if b.id != NO_NODE && !b.referenced {
+                    return g.node(b.id).is_some();
+                }
+                // Read from a file, or of a reference: bound now if its node is there, kept by name if not.
+                bind(g, &ns, e);
+                true
+            })
+            .cloned()
+            .collect::<Vec<_>>()
+    }) {
+        d.entries = kept;
+    }
+    for &id in extra {
+        let Some(n) = g.node(id) else { continue };
+        d.entries.push(Entry { bound: Mutex::new(Binding { id, name: g.path(id), referenced: n.reference_id() != 0 }), kind: ComponentMode::Object, ids: Vec::new() });
+    }
+    g.set_value(PlugRef::new(set, MEMBERS as i32), PlugValue::Data(Some(Arc::new(d))))?;
+    Ok(())
+}
+
 pub(crate) fn set_members_raw(g: &mut Graph, set: NodeId, list: &[Member]) -> CmdResult<()> {
     store(g, set, &merged(Vec::new(), list))
 }

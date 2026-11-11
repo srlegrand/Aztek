@@ -31,7 +31,6 @@ pub struct SkelInfo {
     pub above: NodeId,
     pub blend_names: Vec<String>,
     pub blend_plugs: Vec<PlugRef>,
-    pub animated: bool,
 }
 
 pub struct Binding {
@@ -176,7 +175,7 @@ pub fn plan(s: &mut Session, o: &Opts, roots: &[NodeId], base: &str) -> Result<P
         let (mut joints, mut tokens) = (Vec::new(), Vec::new());
         joint_tree(g, r, "", o, &mut joints, &mut tokens);
         skel_path.insert(r, plan.skels.len());
-        plan.skels.push(SkelInfo { anim: format!("{path}/Animation"), path, joints, tokens, bind: Vec::new(), rest: Vec::new(), above: g.parent(r), blend_names: Vec::new(), blend_plugs: Vec::new(), animated: false });
+        plan.skels.push(SkelInfo { anim: format!("{path}/Animation"), path, joints, tokens, bind: Vec::new(), rest: Vec::new(), above: g.parent(r), blend_names: Vec::new(), blend_plugs: Vec::new() });
     }
 
     for &m in &blend_only {
@@ -188,7 +187,7 @@ pub fn plan(s: &mut Session, o: &Opts, roots: &[NodeId], base: &str) -> Result<P
         plan.new_prims.push((holder.clone(), "SkelRoot".into()));
         ov.insert(x, holder.clone());
         let path = format!("{holder}/Skel");
-        plan.skels.push(SkelInfo { anim: format!("{path}/Animation"), path, joints: Vec::new(), tokens: Vec::new(), bind: Vec::new(), rest: Vec::new(), above: NO_NODE, blend_names: Vec::new(), blend_plugs: Vec::new(), animated: false });
+        plan.skels.push(SkelInfo { anim: format!("{path}/Animation"), path, joints: Vec::new(), tokens: Vec::new(), bind: Vec::new(), rest: Vec::new(), above: NO_NODE, blend_names: Vec::new(), blend_plugs: Vec::new() });
         let idx = plan.skels.len() - 1;
         plan.bound.push(Binding { shape: m, prim: String::new(), skeleton: idx, skin: None, blend: None });
     }

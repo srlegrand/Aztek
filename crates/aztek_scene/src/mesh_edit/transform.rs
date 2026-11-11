@@ -70,8 +70,13 @@ fn drive_wedge(g: &Graph, node: NodeId, sym: &SymmetryMap, points: &[Index]) -> 
     }
 }
 
-#[derive(PartialEq, PartialOrd)]
+#[derive(PartialEq)]
 struct Dist(f64);
+impl PartialOrd for Dist {
+    fn partial_cmp(&self, o: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(o))
+    }
+}
 impl Eq for Dist {}
 impl Ord for Dist {
     fn cmp(&self, o: &Self) -> std::cmp::Ordering {

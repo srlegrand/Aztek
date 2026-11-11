@@ -178,6 +178,7 @@ void MainWindow::build_runtime() {
     r("TextureViewWindow", "Windows", "UV Editor", [this] { show_uv_editor(); });
     r("PreferencesWindow", "Windows", "Preferences", [this] { show_preferences(); });
     r("HotkeyPreferencesWindow", "Windows", "Hotkey Editor", [this] { show_hotkey_editor(); });
+    r("PluginManager", "Windows", "Plug-in Manager", [this] { show_plugin_manager(); });
     r("AttributeEditor", "Windows", "Attribute Editor", [this] { show_attribute_editor(); });
     auto window = [this](const char* name, const char* id, const char* ann) {
         QString w = id;

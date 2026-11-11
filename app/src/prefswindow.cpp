@@ -13,10 +13,14 @@
 #include <QApplication>
 #include <QPushButton>
 #include <QRadioButton>
+#include <QScrollArea>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
+#include <QFileDialog>
+#include <QLineEdit>
+#include <QMessageBox>
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QJsonArray>
@@ -128,9 +132,16 @@ Preferences::Preferences(QWidget* parent) : QDialog(parent) {
     QObject::connect(this, &QObject::destroyed, this, [savers] { delete savers; });
 
     auto page = [cats, pages, this](const QString& name) {
-        auto* w = new QWidget(pages);
+        // Scrolls when a page is taller than the window.
+        auto* scroll = new QScrollArea(pages);
+        scroll->setWidgetResizable(true);
+        scroll->setFrameShape(QFrame::NoFrame);
+        scroll->viewport()->setAutoFillBackground(false);
+        auto* w = new QWidget(scroll);
+        w->setAutoFillBackground(false);
         auto* f = new QFormLayout(w);
-        pages->addWidget(w);
+        scroll->setWidget(w);
+        pages->addWidget(scroll);
         cats->addItem(name);
         return f;
     };
@@ -258,6 +269,170 @@ Preferences::Preferences(QWidget* parent) : QDialog(parent) {
     number(f, "Undo queue length (0 infinite)", "undoQueue", 0, 0, 100000, 10, 0);
     check(f, "Autosave", "autosave", false);
     number(f, "Autosave every (minutes)", "autosaveMinutes", 10, 1, 240, 1, 0);
+    // User Folder: where scripts, plug-ins, modules and preferences kept between versions are looked for. Aztek's
+    // own, an existing folder used where it is, or any other folder laid out the same way.
+    f = page("User Folder");
+    {
+        const QJsonObject uf = ask("aztekUserFolder", QJsonObject{{"query", true}}).toObject();
+        const QString mode = uf["mode"].toString("aztek"), detected = uf["detected"].toString();
+        auto* own = new QRadioButton("Aztek's own folder", this);
+        auto* link = new QRadioButton("Use a Maya folder where it is", this);
+        auto* custom = new QRadioButton("A custom folder", this);
+        own->setObjectName("userFolderOwn");
+        link->setObjectName("userFolderLink");
+        custom->setObjectName("userFolderCustom");
+        (mode == "link" ? link : mode == "custom" ? custom : own)->setChecked(true);
+        auto folder_row = [this](const QString& text, const QString& title) {
+            auto* w = new QWidget(this);
+            auto* h = new QHBoxLayout(w);
+            h->setContentsMargins(22, 0, 0, 0);
+            auto* edit = new QLineEdit(text, w);
+            auto* browse = new QPushButton("Browse...", w);
+            h->addWidget(edit, 1);
+            h->addWidget(browse);
+            connect(browse, &QPushButton::clicked, this, [this, edit, title] {
+                const QString d = QFileDialog::getExistingDirectory(this, title, edit->text());
+                if (!d.isEmpty()) edit->setText(d);
+            });
+            return std::make_pair(w, edit);
+        };
+        auto note = [this](const QString& text) {
+            auto* l = new QLabel(text, this);
+            l->setWordWrap(true);
+            l->setContentsMargins(22, 0, 0, 6);
+            l->setStyleSheet("color: palette(mid);");
+            return l;
+        };
+        f->addRow(own);
+        f->addRow(note(uf["ownFolder"].toString() + ", with scripts, plug-ins, modules and prefs folders inside."));
+        f->addRow(link);
+        auto [link_w, link_edit] = folder_row(mode == "link" ? uf["folder"].toString() : detected, "Maya Folder");
+        link_edit->setPlaceholderText(detected.isEmpty() ? "No Maya folder was found: browse to one" : detected);
+        f->addRow(link_w);
+        auto* version = new QComboBox(this);
+        auto fill_versions = [version, link_edit](const QString& keep) {
+            version->clear();
+            version->addItem("Newest", "");
+            const QJsonArray vs = ask("aztekUserFolder", QJsonObject{{"query", true}, {"listVersions", link_edit->text()}}).toArray();
+            for (const QJsonValue& v : vs) version->addItem(v.toString(), v.toString());
+            const int i = version->findData(keep);
+            version->setCurrentIndex(i < 0 ? 0 : i);
+        };
+        fill_versions(mode == "link" ? uf["version"].toString() : QString());
+        connect(link_edit, &QLineEdit::editingFinished, this, [fill_versions, version] { fill_versions(version->currentData().toString()); });
+        auto* version_w = new QWidget(this);
+        auto* version_h = new QHBoxLayout(version_w);
+        version_h->setContentsMargins(22, 0, 0, 0);
+        version_h->addWidget(new QLabel("Version:", version_w));
+        version_h->addWidget(version);
+        version_h->addStretch(1);
+        f->addRow(version_w);
+        f->addRow(note("Its scripts, plug-ins, modules, Maya.env and saved preferences are read from there. Aztek never writes into it."));
+        f->addRow(custom);
+        auto [custom_w, custom_edit] = folder_row(mode == "custom" ? uf["folder"].toString() : QString(), "User Folder");
+        f->addRow(custom_w);
+        f->addRow(note("Any folder laid out the same way: scripts, plug-ins, modules and prefs, with or without a version's folder."));
+        auto enable = [own, link, custom, link_w, version_w, custom_w] {
+            link_w->setEnabled(link->isChecked());
+            version_w->setEnabled(link->isChecked());
+            custom_w->setEnabled(custom->isChecked());
+        };
+        enable();
+        for (QRadioButton* r : {own, link, custom}) connect(r, &QRadioButton::toggled, this, enable);
+        auto* user_setup = new QCheckBox("Run userSetup.mel and userSetup.py at start", this);
+        user_setup->setChecked(uf["userSetup"].toBool(true));
+        f->addRow(user_setup);
+
+        auto* copy = new QPushButton("Copy a Maya Folder into Aztek's...", this);
+        copy->setToolTip("Copies its scripts, plug-ins, modules and preferences into Aztek's own folder and uses that. Nothing already there is replaced, and the folder copied from is left as it is.");
+        auto* shelves = new QPushButton("Import Its Shelves", this);
+        shelves->setToolTip("Adds the shelves saved in the folder in use (prefs/shelves/shelf_*.mel) to the shelf bar.");
+        auto* plugins = new QPushButton("Plug-in Manager...", this);
+        auto* actions = new QWidget(this);
+        auto* actions_h = new QHBoxLayout(actions);
+        actions_h->setContentsMargins(0, 8, 0, 0);
+        actions_h->addWidget(copy);
+        actions_h->addWidget(shelves);
+        actions_h->addWidget(plugins);
+        actions_h->addStretch(1);
+        f->addRow(actions);
+        auto* summary = new QLabel(this);
+        summary->setObjectName("userFolderSummary");
+        summary->setWordWrap(true);
+        summary->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        f->addRow(summary);
+        auto describe = [summary, shelves](const QJsonObject& u) {
+            auto there = [](const QJsonValue& list) {
+                QStringList out;
+                for (const QJsonValue& v : list.toArray())
+                    if (v["exists"].toBool()) out << v["path"].toString();
+                return out;
+            };
+            QStringList mods;
+            for (const QJsonValue& m : u["found"].toArray()) mods << m["name"].toString() + " " + m["version"].toString();
+            const int n_shelves = u["shelves"].toArray().size();
+            const QStringList scripts = there(u["scripts"]), plugs = there(u["plugins"]);
+            // Short, so the page fits: the folders themselves are in the tooltip.
+            summary->setText(QString("<b>In use:</b> %1%2<br>Script folders: %3. Plug-in folders: %4. Saved shelves: %5.<br>Modules: %6")
+                                 .arg(u["root"].toString().toHtmlEscaped(), u["usedVersion"].toString().isEmpty() ? QString() : " (version " + u["usedVersion"].toString().toHtmlEscaped() + ")")
+                                 .arg(scripts.size())
+                                 .arg(plugs.size())
+                                 .arg(n_shelves)
+                                 .arg(mods.isEmpty() ? QString("(none)") : mods.join(", ").toHtmlEscaped()));
+            summary->setToolTip("Script folders:\n" + (scripts.isEmpty() ? QString("(none there yet)") : scripts.join("\n")) + "\n\nPlug-in folders:\n" + (plugs.isEmpty() ? QString("(none there yet)") : plugs.join("\n")));
+            shelves->setEnabled(n_shelves > 0);
+        };
+        describe(uf);
+        connect(plugins, &QPushButton::clicked, this, [this] {
+            if (auto* w = qobject_cast<MainWindow*>(parentWidget())) w->show_plugin_manager();
+        });
+        connect(shelves, &QPushButton::clicked, this, [this] {
+            QStringList files;
+            for (const QJsonValue& v : ask("aztekUserFolder", QJsonObject{{"query", true}}).toObject()["shelves"].toArray()) files << v.toString();
+            if (auto* w = qobject_cast<MainWindow*>(parentWidget())) {
+                const int n = w->import_shelves(files);
+                QMessageBox::information(this, "Import Shelves", QString("%1 shelf file%2 found, %3 added. A shelf already on the bar by the same name is left as it is.").arg(files.size()).arg(files.size() == 1 ? "" : "s").arg(n));
+            }
+        });
+        connect(copy, &QPushButton::clicked, this, [this, link_edit, version, own, describe] {
+            const QString from = QFileDialog::getExistingDirectory(this, "Folder to Copy", link_edit->text());
+            if (from.isEmpty()) return;
+            const QString to = ask("aztekUserFolder", QJsonObject{{"query", true}}).toObject()["ownFolder"].toString();
+            if (QMessageBox::question(this, "Copy Folder", QString("Copy the scripts, plug-ins, modules and preferences of\n%1\ninto\n%2 ?\n\nNothing already there is replaced, and the folder copied from is left as it is.").arg(from, to)) != QMessageBox::Yes) return;
+            QApplication::setOverrideCursor(Qt::WaitCursor);
+            const QJsonObject r = az::exec("aztekUserFolder", QJsonObject{{"copyFrom", from}, {"version", version->currentData().toString()}}).toObject();
+            QApplication::restoreOverrideCursor();
+            if (r.isEmpty()) {
+                QMessageBox::warning(this, "Copy Folder", "The copy failed. The reason is in the Script Editor.");
+                return;
+            }
+            own->setChecked(true);
+            describe(ask("aztekUserFolder", QJsonObject{{"query", true}}).toObject());
+            QString text = QString("%1 files copied, %2 already there and kept.").arg(r["copied"].toInt()).arg(r["kept"].toInt());
+            const int failed = r["failed"].toArray().size();
+            if (failed > 0) text += QString("\n%1 could not be copied; the first is %2").arg(failed).arg(r["failed"].toArray().first().toString());
+            QMessageBox::information(this, "Copy Folder", text);
+        });
+        savers->append([own, link, custom, link_edit, custom_edit, version, user_setup, uf](QSettings&) {
+            const QString mode = link->isChecked() ? "link" : custom->isChecked() ? "custom" : "aztek";
+            const QString folder = link->isChecked() ? link_edit->text().trimmed() : custom->isChecked() ? custom_edit->text().trimmed() : QString();
+            const QString ver = link->isChecked() ? version->currentData().toString() : QString();
+            // The folder in use may have changed under a Copy since the page was made: compare with what is saved now.
+            const QJsonObject now = ask("aztekUserFolder", QJsonObject{{"query", true}}).toObject();
+            if (mode == now["mode"].toString() && folder == now["folder"].toString() && ver == now["version"].toString() && user_setup->isChecked() == now["userSetup"].toBool(true)) return;
+            if (mode != "aztek" && folder.isEmpty()) {
+                log("// Warning: User Folder: no folder was given, so the choice was left as it was //", 4);
+                return;
+            }
+            QJsonObject call{{"mode", mode}, {"userSetup", user_setup->isChecked()}};
+            if (mode != "aztek") {
+                call["folder"] = folder;
+                call["version"] = ver;
+            }
+            if (!az::exec("aztekUserFolder", call).isUndefined())
+                log("// The user folder's scripts, plug-ins and modules are in use now. Its userSetup scripts and saved preferences are read when Aztek starts. //");
+        });
+    }
     f = page("Modeling");
     number(f, "Face normal length", "normalSize", 0.4, 0.001, 100, 0.1, 3);
     check(f, "Keep faces together on extrude", "keepFacesTogether", true);
@@ -281,7 +456,7 @@ Preferences::Preferences(QWidget* parent) : QDialog(parent) {
         emit changed();
         reject();
     });
-    resize(640, 420);
+    resize(640, 540);
 }
 
 void MainWindow::show_preferences() {

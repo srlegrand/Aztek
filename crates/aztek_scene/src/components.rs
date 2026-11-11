@@ -1237,7 +1237,7 @@ pub fn register(c: &mut Commands<Session>) {
             if mode(g) != ComponentMode::Face {
                 fail!("selectByAngle: no faces selected");
             }
-            let cos_limit = (a.float("angle", 30.0) * 3.14159265358979323846 / 180.0).cos();
+            let cos_limit = (a.float("angle", 30.0) * std::f64::consts::PI / 180.0).cos();
             g.open_chunk("Select by Angle");
             for (node, ids) in selected_all(g, ComponentMode::Face).clone() {
                 let Some(m) = mesh_of(g, node) else { continue };

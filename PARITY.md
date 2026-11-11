@@ -62,7 +62,7 @@ Save. With Z up:
   and USD import convert to it; USD import with `-axisAndUnitMethod overwritePrefs` takes the stage's axis.
 - Not changed by the axis: attribute defaults (aim vectors, gravity and field directions). Unchecked against the
   reference: whether its gravity and nucleus defaults follow Z up.
-- Batch mode (`aztek --batch`) starts Y up with the default units: it doesn't read the saved preferences.
+- Batch mode (`aztek --batch`) starts Y up with the default units: it doesn't read the saved preferences. It does use the user folder: its paths and modules, the plug-ins marked Auto load and `userSetup`.
 - Left as they are: HumanIK's per-joint state attributes keep what their solver works in. Attributes Aztek adds itself with no counterpart (`hardAngle`, `minAngle`) and UV angles the reference documents in degrees (`polyEditUV -angle`, `polyMoveUV -ra`) stay in degrees.
 - Unverified, all on the capture list: whether `xform -q -m` answers in the current unit (here centimetres), whether a primitive's default size follows the unit (here it doesn't: `polyCube` with no `-w` in a metre scene is 1 cm wide), and whether `polyEvaluate -b` scales (1.11).
 
@@ -1172,3 +1172,63 @@ in object mode (it used to switch to edge mode with every edge picked, so the ne
 Duplicate copies a mesh with construction history as it looks now, with no history, as the reference's Duplicate does
 without -upstreamNodes; the copy used to take a broken chain of the history nodes and came out empty. A stack of
 Aztek's own modifiers is still copied live. `ls -hl` is empty in object mode. `polyBevel -sg` sets the segments.
+
+### Plug-in Manager and the user folder (11/11/2026)
+
+Windows > Settings/Preferences > Plug-in Manager: every plug-in file on the plug-in path grouped by folder, Loaded and Auto load
+ticks, Browse, Refresh, a filter and an information box, as the reference's. Auto load is kept by file in `pluginPrefs.json`.
+`pluginInfo -autoload` and `-listPluginsPath`, `internalVar` for the user folder's places, `moduleInfo`.
+
+The user folder (Preferences > User Folder, `aztekUserFolder`) is Aztek's own (`~/aztek`), an existing folder of the reference's
+used in place, or a custom one; an existing folder can be copied into Aztek's own. From it: `scripts` (MEL and Python paths),
+`plug-ins`, `modules` with `.mod` files (`MAYAVERSION`, `PLATFORM` and `LOCALE` conditions, `=`, `:=`, `+=`, `+:=`, `scripts:` and
+`plug-ins:` lines), `Maya.env` or `Aztek.env`, the optionVars in `prefs/userPrefs.mel` as defaults, `userSetup.mel` (the first on
+the path) and every `userSetup.py`, and its shelves on request.
+
+Differences from the reference:
+
+- A compiled plug-in built for the reference is listed as "Compiled for Maya" and never loaded; it is told by reading the file for
+  what it exports, not by loading it.
+- The reference writes its preferences into its user folder. Aztek keeps its own in `~/.aztek` and never writes to a linked folder.
+- Of the saved preferences only optionVars are read. Hotkeys, marking menus, colours, window layouts and `pluginPrefs.mel` are not.
+- `.mod` conditions other than the three above stop the line being read as conditions; `[r]` recursion on `scripts:` is taken as
+  the folder alone. Module blocks for several versions: the block for the version in use, else the first.
+- Plug-ins are listed one folder deep, as the reference lists them.
+- `internalVar -mayaInstallDir` is Aztek's folder.
+- Not checked against the reference: the order of `userSetup` against auto loaded plug-ins (plug-ins first here).
+
+### Script functions for files, the shell and dates (11/11/2026)
+
+`fopen`, `fclose`, `fprint`, `fwrite`, `fread`, `fgetline`, `fgetword`, `feof`, `fflush`, `frewind`, `popen`, `pclose`, `system`,
+`date` (`-format`, `-date`, `-time`, `-shortDate`, `-shortTime`), `timerX`, `filetest`, `fileExtension`, `basenameEx`, `trace`,
+`format -stringArg`, `rehash`, `gauss`, `sphrand`, `noise`, `hermite`, `rot`, `stringArrayRemoveAtIndex`, `stringAddPrefix`,
+`stringRemovePrefix`, `attributeExists`. Found missing by running a list of the reference's common commands against the build.
+
+Differences from the reference, none checked against it:
+
+- `noise` is gradient noise in the same range, zero at whole numbers; its values are not the reference's. `gauss` and `sphrand`
+  draw from Aztek's own generator, so a seeded script gives other numbers.
+- `fwrite` and `fread` take strings (ended by a zero byte), ints and floats in four bytes each; the reference's byte layout for
+  numbers was not checked.
+- `filetest` has `-e -f -d -r -w -x -s -z -l`; the others are an error.
+- `date` is local time on Linux and macOS, UTC on Windows.
+- `trace` writes to the terminal. `rehash` does nothing: scripts are looked for on the path each time.
+- A file opened for reading is read whole at `fopen`.
+
+Still missing from that list, as commands: `commandPort`, `fileInfo`, `lsUI`, `listAnimatable`, `scriptEditorInfo`, `hotkeySet`,
+`dimWhen`, `memory`, `exec`, `treeView`, `iconTextScrollList`, `channelBox`, `cmdScrollFieldExecuter`, `cmdScrollFieldReporter`,
+`toolBar`, `draggerContext`, `repeatLast`, `quit`, `createRenderLayer` and the render layer commands, `cacheFile`, `geometryCache`,
+`timeEditor`, `AbcExport`, `AbcImport`, `FBXExport`, `FBXImport`, `gpuCache`, the fluid commands, `polyToSubdiv`, `subdiv`.
+
+### Audit and timing (11/11/2026)
+
+- Compiler warnings: none. Clippy stopped at its first errors in `aztek_dyn`, so the crates after it were never linted; those
+  errors are fixed (ordering types whose `PartialOrd` was derived beside a hand-written `Ord`, two literal values of pi, an empty
+  range on purpose, the C interface's pointer arguments) and it now runs through the workspace with style warnings only.
+- `-staticSingleSample` on USD export changes nothing: samples all alike are written as a static value either way.
+- Creating meshes slowed with every mesh in the scene: each new one re-read and re-wired the whole default shading group, and the
+  search for a free default name counted from 1. 4000 `polyCube` calls took 40 s and take 1.9 s; 4000 `spaceLocator` 0.84 s to 0.08 s
+  (release build, batch).
+- Not fixed: with something dirty in the scene, each `getAttr` walks every node (the dirty scan in `Graph::evaluate_dirty` and the
+  rig hook `rig::sync`), about 1 ms a call at 4000 cubes. Deleting 4000 cubes takes 4.4 s. Opening a 73 MB `.ma` of one dense
+  mesh takes 1.0 s and saving it 0.8 s.

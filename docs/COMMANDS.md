@@ -3,7 +3,7 @@
 Generated from the command registry by `cargo run -p aztek_host --example gen_commands`; do not edit by hand.
 Commands take the reference's flags, long or short, in MEL and in Python (`aztek.cmds` or `maya.cmds`).
 
-1111 commands.
+1115 commands.
 
 ## AL_usdmaya_LayerCreateLayer
 
@@ -2084,6 +2084,10 @@ Runs a compiled plug-in's message callback by its id; scriptJobs the kit makes c
 
 Arguments: callback id, then what it is told
 
+## aztekPlugins
+
+Every plug-in file in the folders of the plug-in path, for the Plug-in Manager: its name, file, folder, kind (aztek, python, or foreign for one compiled for another application), and whether it is loaded and loads at start.
+
 ## aztekPython
 
 Run Python from inside a command, as schema translators do.
@@ -2106,6 +2110,20 @@ What file runs for a USD type or extension.
 | `open` |  | See file. |
 | `exportAll` |  | See file. |
 | `exportSelected` |  | See file. |
+
+## aztekUserFolder
+
+Where scripts, plug-ins, modules and preferences kept between versions are looked for: -mode aztek (Aztek's own folder), link (an existing folder of the reference's, used in place and never written to) or custom, with -folder and -version; -copyFrom folder copies one into Aztek's own. -q describes what is in force.
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `query` | `q` | Describe the choice, the folders on each path and the modules found. |
+| `mode` | `m` | aztek, link or custom. |
+| `folder` | `f` | The folder for link and custom. |
+| `version` | `v` | The version's subfolder to use; empty takes the newest. |
+| `userSetup` | `us` | Whether userSetup scripts run at start. |
+| `copyFrom` | `cf` | Copy this folder into Aztek's own and use that. |
+| `listVersions` | `lv` | The versions a folder holds, newest first. |
 
 ## bakeClip
 
@@ -8346,6 +8364,24 @@ Arguments: name
 | `query` | `q` |  |
 | `edit` | `e` |  |
 
+## internalVar
+
+The user folder's places, each ending in a slash: -userAppDir, -userScriptDir, -userPrefDir, -userShelfDir and the rest.
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `userAppDir` | `uad` | The user folder. |
+| `userScriptDir` | `usd` | Its scripts. |
+| `userPrefDir` | `upd` | Its preferences. |
+| `userShelfDir` | `ush` | Its shelves. |
+| `userMarkingMenuDir` | `umm` | Its marking menus. |
+| `userBitmapsDir` | `ubd` | Its icons. |
+| `userHotkeyDir` | `uhk` | Its hotkeys. |
+| `userPresetsDir` | `ups` | Its presets. |
+| `userWorkspaceDir` | `uwd` | Its projects. |
+| `userTmpDir` | `utd` | The temporary folder. |
+| `mayaInstallDir` | `mid` | Where the application is installed. |
+
 ## intersect
 
 Curves where two surfaces cross, sampled from their tessellation: one object per run, -cos on the first surface. Returns [curves..., node].
@@ -10294,6 +10330,18 @@ A mesh's modifier stack, bottom (applied first) to top.
 
 Arguments: mesh
 
+## moduleInfo
+
+Ask about the modules found: -listModules, or -moduleName with -path, -version or -definition.
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `listModules` | `lm` | Their names. |
+| `moduleName` | `mn` | The module asked about. |
+| `path` | `p` | Where it is. |
+| `version` | `v` | Its version. |
+| `definition` | `d` | Its .mod file. |
+
 ## morph
 
 Morph: points move to the matching points of -morphTarget. Returns [morph1].
@@ -11963,6 +12011,8 @@ Arguments: plug-in name
 | `command` | `c` | The commands it registered. |
 | `dependNode` | `dn` | The node types it registered. |
 | `apiVersion` | `av` | The API version it asked for. |
+| `autoload` | `a` | Whether it loads at start: -e -autoload true name sets it, -q -autoload name asks. |
+| `listPluginsPath` | `lsp` | The folders plug-ins are looked for in. |
 
 ## pointConstraint
 

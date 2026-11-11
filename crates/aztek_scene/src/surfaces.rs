@@ -298,6 +298,8 @@ pub fn parse_cv_ranges(g: &Graph, shape: NodeId, inner: &str) -> Option<Vec<u32>
     let (nu, nv) = counts(g, shape);
     let (a, b) = inner.split_once("][").unwrap_or((inner, "*"));
     let (us, vs) = (index_range(a, nu), index_range(b, nv));
+    // An empty surface has empty ranges.
+    #[allow(clippy::reversed_empty_ranges)]
     let (us, vs) = if nu == 0 || nv == 0 { (us.or(Some(1..=0))?, vs.or(Some(1..=0))?) } else { (us?, vs?) };
     let mut out = Vec::new();
     for u in us {

@@ -181,8 +181,13 @@ fn boundary_mask(ch: &Chart) -> Vec<bool> {
     mask
 }
 
-#[derive(Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, PartialEq)]
 struct Dist(f64);
+impl PartialOrd for Dist {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
 impl Eq for Dist {}
 impl Ord for Dist {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {

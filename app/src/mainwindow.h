@@ -52,6 +52,10 @@ class MainWindow : public QMainWindow {
 public:
     /// File > New Scene's options: the units a new scene starts in.
     void new_scene_options();
+    /// Adds the reference's shelf files to the shelf bar, skipping the ones already there by name. Returns how many.
+    int import_shelves(const QStringList& files);
+    /// Windows > Settings/Preferences > Plug-in Manager.
+    void show_plugin_manager();
     MainWindow();
     PanelLayout* panels() const { return panels_; }
     void run_startup(const QString& script, const QString& screenshot);

@@ -81,6 +81,8 @@ fn face_centres(c: &mut Core, mesh: &str) -> usize {
     unpaired(&centres, 0.0)
 }
 
+// Some fields are only read through Debug, in a failure's message.
+#[allow(dead_code)]
 #[derive(Debug)]
 struct Outcome {
     action: String,

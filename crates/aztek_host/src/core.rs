@@ -109,6 +109,7 @@ impl Core {
         #[cfg(feature = "python")]
         crate::python::register_commands(&mut c.s);
         crate::native_plugin::register_commands(&mut c.s);
+        crate::user_folder::register_commands(&mut c.s);
         aztek_scene::unit_tables::tag_commands(&mut c.s.commands);
         c
     }
@@ -173,7 +174,15 @@ impl Core {
     /// optionVars are saved as they change.
     pub fn use_prefs(&mut self) {
         crate::ui_cmds::set_keeps_prefs(true);
-        let saved = crate::ui_cmds::saved_option_vars();
+        // The user folder first: its folders go on the script, plug-in and module paths, and the optionVars its
+        // preferences hold stand in for the ones Aztek hasn't saved itself.
+        let folder = crate::user_folder::apply(&crate::user_folder::load_choice());
+        let mut saved = crate::ui_cmds::saved_option_vars();
+        if let Some(prefs) = &folder.prefs {
+            for (k, v) in crate::user_folder::saved_option_vars(prefs) {
+                saved.entry(k).or_insert(v);
+            }
+        }
         crate::ui_cmds::apply_startup_prefs(&saved);
         for (k, v) in saved {
             self.s.option_vars.entry(k).or_insert(v);
@@ -183,6 +192,33 @@ impl Core {
         self.s.scene_path = None;
         self.settings = Settings::now();
         crate::host_general::grid_units_changed();
+    }
+
+    /// What runs once the interface is up: the plug-ins marked to load at start, then the user folder's userSetup
+    /// scripts. Returns the Python ones, for the caller to run outside the core.
+    pub fn startup_scripts(&mut self) -> Vec<std::path::PathBuf> {
+        for e in crate::native_plugin::load_autoload(&mut self.s) {
+            self.push(format!("// Warning: {e} //"), LineKind::Warning);
+        }
+        if !crate::user_folder::load_choice().user_setup {
+            return Vec::new();
+        }
+        let mut dirs: Vec<std::path::PathBuf> = Vec::new();
+        for var in ["AZTEK_SCRIPT_PATH", "MAYA_SCRIPT_PATH", "PYTHONPATH"] {
+            if let Some(v) = std::env::var_os(var) {
+                for d in std::env::split_paths(&v) {
+                    if !d.as_os_str().is_empty() && !dirs.contains(&d) {
+                        dirs.push(d);
+                    }
+                }
+            }
+        }
+        // One userSetup.mel, the first on the path; every userSetup.py, as the reference runs them.
+        if let Some(mel) = dirs.iter().map(|d| d.join("userSetup.mel")).find(|p| p.is_file()) {
+            let quoted = mel.to_string_lossy().replace('\\', "/").replace('"', "\\\"");
+            self.mel(&format!("source \"{quoted}\";"));
+        }
+        dirs.iter().map(|d| d.join("userSetup.py")).filter(|p| p.is_file()).collect()
     }
 
     /// Saves the optionVars when a command changed them.
@@ -751,7 +787,7 @@ fn python_source(_core: &mut Core, _src: &str) -> Result<(), String> {
     Err("python: this build has no Python.".into())
 }
 
-/// Windows and tools scripts open by the reference's runtime command names; the UI takes them from `take_ui_requests`.
+// Windows and tools scripts open by the reference's runtime command names; the UI takes them from `take_ui_requests`.
 thread_local! {
     // Per thread, as the host is: one UI thread in the app, and tests in parallel don't take each other's.
     static UI_REQUESTS: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };

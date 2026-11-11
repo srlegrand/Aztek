@@ -22,7 +22,7 @@ use serde_json::{json, Value};
 
 use crate::core::{Core, LineKind};
 
-pub use load::register_commands;
+pub use load::{load_autoload, register_commands};
 
 pub const ABI_VERSION: u32 = 1;
 

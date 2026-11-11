@@ -187,9 +187,14 @@ impl Topology {
 pub fn stretch_paths(t: &Topology, rest: &[DVec3]) -> (Vec<u32>, Vec<u32>, Vec<f64>) {
     use std::cmp::Reverse;
     use std::collections::BinaryHeap;
-    #[derive(PartialEq, PartialOrd)]
+    #[derive(PartialEq)]
     struct D(f64);
     impl Eq for D {}
+    impl PartialOrd for D {
+        fn partial_cmp(&self, o: &Self) -> Option<std::cmp::Ordering> {
+            Some(self.cmp(o))
+        }
+    }
     impl Ord for D {
         fn cmp(&self, o: &Self) -> std::cmp::Ordering {
             self.0.total_cmp(&o.0)
@@ -289,9 +294,14 @@ pub fn stretch_paths(t: &Topology, rest: &[DVec3]) -> (Vec<u32>, Vec<u32>, Vec<f
 pub fn tethers(t: &Topology, rest: &[DVec3], anchors: &[u32]) -> Vec<(u32, u32, f64)> {
     use std::cmp::Reverse;
     use std::collections::BinaryHeap;
-    #[derive(PartialEq, PartialOrd)]
+    #[derive(PartialEq)]
     struct D(f64);
     impl Eq for D {}
+    impl PartialOrd for D {
+        fn partial_cmp(&self, o: &Self) -> Option<std::cmp::Ordering> {
+            Some(self.cmp(o))
+        }
+    }
     impl Ord for D {
         fn cmp(&self, o: &Self) -> std::cmp::Ordering {
             self.0.total_cmp(&o.0)

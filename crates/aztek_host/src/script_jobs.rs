@@ -132,7 +132,7 @@ fn job_state(s: &mut Session, w: &Watch) -> Value {
 pub fn note_command(name: &str, call: &Value) -> bool {
     let on = |k: &str| call.get(k).is_some_and(|v| v.as_bool().unwrap_or(v.as_i64().is_some_and(|i| i != 0)));
     let mut opened = false;
-    let mut note = |e: &str| with_jobs(|j| j.noted.push(e.to_string()));
+    let note = |e: &str| with_jobs(|j| j.noted.push(e.to_string()));
     match name {
         "undo" => note("Undo"),
         "redo" => note("Redo"),

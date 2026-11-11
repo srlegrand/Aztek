@@ -73,6 +73,7 @@ add_executable(aztek WIN32
   app/src/appmenus.cpp
   app/src/dynmenus.cpp
   app/src/prefswindow.cpp
+  app/src/pluginmanager.cpp
   app/src/feedback.cpp
   app/src/editors.cpp
   app/src/attreditor.cpp

@@ -213,7 +213,7 @@ fn writes_back(name: &str, count: usize) -> Option<usize> {
     match name {
         "clear" | "appendStringArray" => Some(0),
         "tokenize" if count >= 2 => Some(count - 1),
-        "stringArrayInsertAtIndex" | "intArrayInsertAtIndex" | "floatArrayInsertAtIndex" => Some(1),
+        "stringArrayInsertAtIndex" | "intArrayInsertAtIndex" | "floatArrayInsertAtIndex" | "stringArrayRemoveAtIndex" => Some(1),
         _ => None,
     }
 }

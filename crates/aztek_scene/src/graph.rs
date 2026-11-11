@@ -788,6 +788,9 @@ pub struct Graph {
     plans: Vec<EvalPlan>,
     /// Short name -> nodes.
     names: HashMap<String, Vec<NodeId>>,
+    /// For a wanted name already taken, the number its search for a free one last stopped at: every number before it
+    /// is taken, so the next search starts there. Forgotten whenever a name is given up.
+    name_hints: std::sync::Mutex<HashMap<String, i64>>,
     rel: IdMap<Relations>,
     roots: Vec<NodeId>,
     /// dst -> src
@@ -907,6 +910,7 @@ impl Graph {
             wiring: 0,
             plans: Vec::new(),
             names: HashMap::new(),
+            name_hints: std::sync::Mutex::new(HashMap::new()),
             rel: Default::default(),
             roots: Vec::new(),
             inputs: BTreeMap::new(),
@@ -1110,6 +1114,7 @@ impl Graph {
         self.restructured();
         self.nodes.clear();
         self.names.clear();
+        self.name_hints.lock().unwrap().clear();
         self.rel.clear();
         self.roots.clear();
         self.wiring += 1;
@@ -1188,10 +1193,21 @@ impl Graph {
         } else {
             1
         };
+        // Across the scene and for a new node, what is taken only grows until a name is given up: the search goes on
+        // from where the last one for this name stopped, so the thousandth pCube1 does not count from 1 again.
+        let hinted = global && self_id == NO_NODE;
+        if hinted {
+            if let Some(&h) = self.name_hints.lock().unwrap().get(wanted) {
+                n = n.max(h);
+            }
+        }
         loop {
             // A trailing number keeps its padding: arm_01 gives arm_02, ctl_009 gives ctl_010.
             let candidate = format!("{stem}{n:0width$}");
             if !taken(&candidate) {
+                if hinted {
+                    self.name_hints.lock().unwrap().insert(wanted.to_string(), n);
+                }
                 return candidate;
             }
             n += 1;
@@ -1259,6 +1275,7 @@ impl Graph {
     }
 
     fn erase_name(&mut self, name: &str, id: NodeId) {
+        self.name_hints.lock().unwrap().clear();
         if let Some(ids) = self.names.get_mut(name) {
             if let Some(i) = ids.iter().position(|&x| x == id) {
                 ids.remove(i);

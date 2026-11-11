@@ -1,7 +1,6 @@
 //! Reading geometry prims into Aztek meshes: Mesh with its primvars, and the implicit shapes as polygons. Used by import
 //! and by pulling prims into the scene.
 
-use std::collections::HashMap;
 
 use aztek_geo::attribute::{names, AttrType, INVALID};
 use aztek_geo::primitives as prims;
@@ -359,4 +358,3 @@ pub fn primvar_names(prim: &Prim) -> Vec<String> {
     primvars_of(prim).into_iter().map(|(_, n, _)| n).collect()
 }
 
-pub(crate) type SubsetFaces = HashMap<String, Vec<u32>>;

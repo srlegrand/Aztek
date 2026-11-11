@@ -122,6 +122,9 @@ fn same(a: &Value, b: &Value) -> bool {
 
 /// A builtin by name; None when there is none of that name.
 pub fn call(it: &mut Interp, name: &str, a: &mut Vec<Value>) -> Option<R<Value>> {
+    if super::builtins_sys::NAMES.contains(&name) {
+        return Some(super::builtins_sys::run(it, name, a));
+    }
     if !NAMES.contains(&name) {
         return None;
     }
@@ -254,7 +257,7 @@ fn run(it: &mut Interp, name: &str, a: &mut Vec<Value>) -> R<Value> {
             if crate::core::UI_COMMANDS.iter().any(|(n, _)| *n == w) {
                 return Ok(Value::Str("Run Time Command".into()));
             }
-            if it.is_command(&w) || NAMES.contains(&w.as_str()) {
+            if it.is_command(&w) || NAMES.contains(&w.as_str()) || super::builtins_sys::NAMES.contains(&w.as_str()) {
                 return Ok(Value::Str("Command".into()));
             }
             Ok(Value::Str(match find_script(&w) {
@@ -265,7 +268,7 @@ fn run(it: &mut Interp, name: &str, a: &mut Vec<Value>) -> R<Value> {
         "exists" => {
             need(1)?;
             let w = s(&a[0]);
-            Ok(Value::Int((it.is_proc(&w) || it.is_command(&w) || NAMES.contains(&w.as_str()) || find_script(&w).is_some()) as i32))
+            Ok(Value::Int((it.is_proc(&w) || it.is_command(&w) || NAMES.contains(&w.as_str()) || super::builtins_sys::NAMES.contains(&w.as_str()) || find_script(&w).is_some()) as i32))
         }
         "about" => {
             let flag = a.iter().map(s).find(|f| f.starts_with('-')).unwrap_or_default();

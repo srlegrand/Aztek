@@ -566,11 +566,10 @@ fn camera_shape(s: &Session, node: NodeId) -> Option<NodeId> {
 }
 
 /// The eye's translate, and the centre of interest out along the view.
-fn camera(s: &mut Session, vp: &Viewport, node: NodeId, shape: NodeId, dpr: f64, m: &mut Manip) {
+fn camera(s: &mut Session, _vp: &Viewport, node: NodeId, shape: NodeId, _dpr: f64, m: &mut Manip) {
     let xf = aztek_scene::dag::transform_of(&s.graph, node);
     let w = aztek_scene::rig::world(&mut s.graph, xf);
     let at = w.w_axis.truncate();
-    let len = vp.handle_len(at, dpr);
     let forward = -w.z_axis.truncate().normalize_or_zero();
     let shape_name = s.graph.path(shape);
     let coi = get(s, &shape_name, "centerOfInterest");

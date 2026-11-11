@@ -602,7 +602,7 @@ pub fn run_status(src: &str) -> i32 {
 
 pub fn run(src: &str) {
     if let Err(e) = ensure() {
-        with_core(|core| core.push(format!("# Error: {e} #"), LineKind::Error));
+        let _ = with_core(|core| core.push(format!("# Error: {e} #"), LineKind::Error));
         return;
     }
     let r = Python::attach(|py| -> PyResult<()> {
@@ -610,7 +610,7 @@ pub fn run(src: &str) {
         main.getattr("_aztek_run")?.call1((src,))?;
         Ok(())
     });
-    with_core(|core| {
+    let _ = with_core(|core| {
         if let Err(e) = r {
             core.push(format!("# Error: {e} #"), LineKind::Error);
         }

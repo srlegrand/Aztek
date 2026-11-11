@@ -701,12 +701,6 @@ impl View {
     // -----------------------------------------------------------------------------------------------------------------
     // Mouse
 
-    fn camera_state(&self) -> [f64; 9] {
-        let c = &self.vp.cam;
-        let eye = c.eye();
-        [eye.x, eye.y, eye.z, c.yaw, c.pitch, c.distance, c.ortho_width, c.hfov, c.orthographic as i32 as f64]
-    }
-
     /// Follows the camera node when a script moved it.
     fn read_camera(&mut self, core: &mut Core) {
         use aztek_scene::cameras as cam;

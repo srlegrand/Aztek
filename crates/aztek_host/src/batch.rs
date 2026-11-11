@@ -102,6 +102,12 @@ fn run_script(path: &str) -> i32 {
 
 /// Runs the batch; the status is the first failing step's, and steps after it don't run.
 pub fn run(args: &[String]) -> i32 {
+    run_with(args, false)
+}
+
+/// As `run`; with `user_folder`, the user folder's paths, modules, auto loaded plug-ins and userSetup scripts are
+/// there first, as the application has them. The saved optionVars are still not read.
+fn run_with(args: &[String], user_folder: bool) -> i32 {
     let steps = match parse(args) {
         Ok(s) => s,
         Err(e) => {
@@ -111,6 +117,10 @@ pub fn run(args: &[String]) -> i32 {
     };
     aztek_core::set_batch_mode(true);
     crate::aztek_init();
+    if user_folder {
+        crate::user_folder::apply(&crate::user_folder::load_choice());
+        crate::aztek_startup_scripts();
+    }
     for step in &steps {
         let status = match step {
             Step::Scene(path) => match crate::with(|h| h.core.open(path)) {
@@ -145,5 +155,5 @@ pub fn run(args: &[String]) -> i32 {
 #[no_mangle]
 pub extern "C" fn aztek_batch(argc: i32, argv: *const *const c_char) -> i32 {
     let args: Vec<String> = (0..argc.max(0) as usize).map(|i| crate::cstr(unsafe { *argv.add(i) })).collect();
-    run(&args)
+    run_with(&args, true)
 }

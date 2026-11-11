@@ -110,6 +110,9 @@ int main(int argc, char** argv) {
         splash->finish(&w);
         splash->deleteLater();
     }
+    // The plug-ins marked to load at start and the user folder's userSetup scripts, with the window there for the
+    // menus and shelves they add.
+    aztek_startup_scripts();
     if (!args.positionalArguments().isEmpty()) w.open_file(args.positionalArguments().first());
     w.run_startup(args.value(script), args.value(shot));
     return app.exec();

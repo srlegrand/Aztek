@@ -897,6 +897,7 @@ QMenu* MainWindow::windows_menu() {
     prefs->addAction("Preferences...", this, &MainWindow::show_preferences);
     prefs->addAction("Hotkey Editor...", [this] { show_hotkey_editor(); });
     prefs->addAction("Shelf Editor...", [this] { shelf_bar_->open_editor(); });
+    prefs->addAction("Plug-in Manager...", [this] { show_plugin_manager(); });
     return m;
 }
 

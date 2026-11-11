@@ -83,7 +83,7 @@ fn make_texture(c: &mut Ctx, tex: &Prim) -> Result<Option<NodeId>, String> {
     if let Some((xf, _)) = source_of(c, &tex.attribute("inputs:st")) {
         if shader_id(&xf) == "UsdTransform2d" {
             let name = c.s.graph.path(place);
-            let mut put = |c: &mut Ctx, attr: &str, v: f64| {
+            let put = |c: &mut Ctx, attr: &str, v: f64| {
                 let _ = c.s.run("setAttr", json!({"args": [format!("{name}.{attr}"), v]}));
             };
             if let Ok(Some(v)) = xf.attribute("inputs:scale").get_at::<gf::Vec2f>(at(None)) {

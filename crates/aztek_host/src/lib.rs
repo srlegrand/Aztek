@@ -1,6 +1,9 @@
 //! The host library the Qt shell links: a C interface over the session, script history, scene snapshots and the
 //! Vulkan model panels. Strings are UTF-8; strings returned are freed with aztek_free. Main thread only.
 
+// The C interface takes pointers from the Qt shell; its functions stay safe to name so the shell's header matches.
+#![allow(clippy::not_unsafe_ptr_arg_deref)]
+
 pub mod dyn_draw;
 pub mod axis_orient;
 mod batch;
@@ -31,6 +34,7 @@ pub mod scriptui;
 pub mod tools;
 pub mod ui_cmds;
 pub mod update;
+pub mod user_folder;
 pub mod view;
 pub mod usd_view;
 pub mod viewport;
@@ -130,6 +134,9 @@ pub extern "C" fn aztek_free(p: *mut c_char) {
 #[no_mangle]
 pub extern "C" fn aztek_image_load(path: *const c_char, width: *mut i32, height: *mut i32) -> *mut u8 {
     let Ok(d) = textures::decode(&cstr(path)) else { return std::ptr::null_mut() };
+    if width.is_null() || height.is_null() {
+        return std::ptr::null_mut();
+    }
     unsafe {
         *width = d.width as i32;
         *height = d.height as i32;
@@ -155,6 +162,20 @@ pub extern "C" fn aztek_init() {
 #[no_mangle]
 pub extern "C" fn aztek_use_prefs() {
     with(|h| h.core.use_prefs());
+}
+
+/// Once the main window is up: loads the plug-ins marked to load at start and runs the user folder's userSetup
+/// scripts, which may add menus and shelves.
+#[no_mangle]
+pub extern "C" fn aztek_startup_scripts() {
+    let python = with(|h| h.core.startup_scripts());
+    #[cfg(feature = "python")]
+    for file in python {
+        let path = file.to_string_lossy().replace('\\', "/");
+        python::run(&format!("import __main__\nexec(compile(open({path:?}, encoding='utf-8').read(), {path:?}, 'exec'), __main__.__dict__)"));
+    }
+    #[cfg(not(feature = "python"))]
+    let _ = python;
 }
 
 pub use batch::{aztek_batch, run as batch_run};

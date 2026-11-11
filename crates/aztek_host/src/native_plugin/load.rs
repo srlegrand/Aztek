@@ -26,7 +26,181 @@ fn search_path() -> Vec<PathBuf> {
 }
 
 fn is_native(p: &Path) -> bool {
-    p.extension().and_then(|e| e.to_str()).is_some_and(|e| ["so", "dll", "mll"].contains(&e.to_ascii_lowercase().as_str()))
+    p.extension().and_then(|e| e.to_str()).is_some_and(|e| ["so", "dll", "mll", "bundle"].contains(&e.to_ascii_lowercase().as_str()))
+}
+
+/// What a plug-in file is, told without loading it.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Kind {
+    /// Built with Aztek's kit.
+    Aztek,
+    /// A Python plug-in.
+    Python,
+    /// A compiled plug-in built against the reference's libraries: it can't load here.
+    Foreign,
+    /// A library that isn't a plug-in of either.
+    Other,
+}
+
+impl Kind {
+    pub fn name(self) -> &'static str {
+        match self {
+            Kind::Aztek => "aztek",
+            Kind::Python => "python",
+            Kind::Foreign => "foreign",
+            Kind::Other => "other",
+        }
+    }
+}
+
+fn holds(hay: &[u8], needle: &[u8]) -> bool {
+    // By the first byte, then the rest: most positions are passed over at once.
+    let (first, rest) = (needle[0], &needle[1..]);
+    let mut from = 0;
+    while let Some(p) = hay[from..].iter().position(|&b| b == first) {
+        let at = from + p + 1;
+        if hay[at..].starts_with(rest) {
+            return true;
+        }
+        from = at;
+    }
+    false
+}
+
+/// Reads a plug-in file's bytes for what it exports and links: Aztek's kit gives every plug-in `aztek_plugin_abi`;
+/// one built for the reference has `initializePlugin` and names its libraries. Nothing of the file is run.
+pub fn kind_of(path: &Path) -> Kind {
+    if path.extension().is_some_and(|e| e == "py") {
+        return Kind::Python;
+    }
+    // Remembered by size and time, so a list made again does not read a large library again.
+    let stamp = std::fs::metadata(path).ok().map(|m| (m.len(), m.modified().ok()));
+    if let Some(k) = KINDS.with(|c| c.borrow().get(path).filter(|(s, _)| *s == stamp).map(|(_, k)| *k)) {
+        return k;
+    }
+    let Ok(bytes) = std::fs::read(path) else { return Kind::Other };
+    let kind = if holds(&bytes, b"aztek_plugin_abi") {
+        Kind::Aztek
+    } else if holds(&bytes, b"initializePlugin") || holds(&bytes, b"OpenMaya") {
+        Kind::Foreign
+    } else {
+        Kind::Other
+    };
+    KINDS.with(|c| c.borrow_mut().insert(path.to_path_buf(), (stamp, kind)));
+    kind
+}
+
+type Stamp = Option<(u64, Option<std::time::SystemTime>)>;
+thread_local! {
+    static KINDS: std::cell::RefCell<std::collections::HashMap<PathBuf, (Stamp, Kind)>> = std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+pub const FOREIGN_NOTE: &str = "This plug-in was compiled for Maya. It needs to be recompiled for Aztek from its source, with Aztek's plug-in kit (docs/PLUGINS.md).";
+
+/// Where the names of the plug-ins loaded at start are kept.
+fn autoload_file() -> PathBuf {
+    crate::user_folder::prefs_base().join("pluginPrefs.json")
+}
+
+/// The plug-ins loaded at start, by file path.
+pub fn autoload_list() -> Vec<String> {
+    std::fs::read_to_string(autoload_file())
+        .ok()
+        .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+        .and_then(|v| v["autoload"].as_array().map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect()))
+        .unwrap_or_default()
+}
+
+fn set_autoload(path: &str, on: bool) -> std::io::Result<()> {
+    let mut list = autoload_list();
+    list.retain(|p| p != path);
+    if on {
+        list.push(path.to_string());
+    }
+    std::fs::create_dir_all(crate::user_folder::prefs_base())?;
+    std::fs::write(autoload_file(), json!({"autoload": list}).to_string())
+}
+
+/// Every plug-in file in the folders of the plug-in path, in the path's order, then what is loaded from elsewhere.
+fn list_plugins(s: &mut Session) -> Value {
+    let mut loaded: Vec<(String, String)> = PLUGINS.with(|p| p.borrow().iter().map(|x| (x.name.clone(), x.path.clone())).collect());
+    if python_started() {
+        let mut f = Map::new();
+        f.insert("listPlugins".into(), json!(true));
+        if let Ok(Value::Array(names)) = python_call(s, "plugin_info", None, &f) {
+            for n in names.iter().filter_map(Value::as_str) {
+                let mut f = Map::new();
+                f.insert("path".into(), json!(true));
+                let path = python_call(s, "plugin_info", Some(n), &f).ok().and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default();
+                loaded.push((n.to_string(), path));
+            }
+        }
+    }
+    let auto = autoload_list();
+    let same = |a: &str, b: &Path| !a.is_empty() && (Path::new(a) == b || std::fs::canonicalize(a).ok() == std::fs::canonicalize(b).ok());
+    let mut out = Vec::new();
+    let mut seen: Vec<PathBuf> = Vec::new();
+    let row = |path: &Path, folder: &Path, loaded: &[(String, String)]| {
+        let kind = kind_of(path);
+        if kind == Kind::Other {
+            return None;
+        }
+        let name = key_of(&path.to_string_lossy());
+        let is_loaded = loaded.iter().any(|(n, p)| same(p, path) || (p.is_empty() && *n == name));
+        Some(json!({
+            "name": name,
+            "file": path.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default(),
+            "path": path.to_string_lossy(),
+            "folder": folder.to_string_lossy(),
+            "kind": kind.name(),
+            "loaded": is_loaded,
+            "autoload": auto.iter().any(|a| same(a, path)),
+            "note": if kind == Kind::Foreign { FOREIGN_NOTE } else { "" },
+        }))
+    };
+    for dir in search_path() {
+        if seen.contains(&dir) {
+            continue;
+        }
+        seen.push(dir.clone());
+        let Ok(rd) = std::fs::read_dir(&dir) else { continue };
+        let mut files: Vec<PathBuf> = rd.flatten().map(|e| e.path()).filter(|p| p.is_file() && (is_native(p) || p.extension().is_some_and(|e| e == "py"))).collect();
+        files.sort();
+        for f in files {
+            if let Some(r) = row(&f, &dir, &loaded) {
+                out.push(r);
+            }
+        }
+    }
+    // Loaded by path from somewhere off the plug-in path.
+    for (name, path) in &loaded {
+        let p = Path::new(path);
+        if path.is_empty() || out.iter().any(|r| same(r["path"].as_str().unwrap_or(""), p)) {
+            continue;
+        }
+        let folder = p.parent().unwrap_or(Path::new("")).to_path_buf();
+        match row(p, &folder, &loaded) {
+            Some(r) => out.push(r),
+            None => out.push(json!({"name": name, "file": name, "path": path, "folder": folder.to_string_lossy(), "kind": "aztek", "loaded": true, "autoload": false, "note": ""})),
+        }
+    }
+    Value::Array(out)
+}
+
+/// Loads the plug-ins marked to load at start. One that fails is reported and the rest go on.
+pub fn load_autoload(s: &mut Session) -> Vec<String> {
+    let mut errors = Vec::new();
+    for path in autoload_list() {
+        if !Path::new(&path).is_file() {
+            errors.push(format!("Plug-in {path} is marked to load at start and is no longer there."));
+            continue;
+        }
+        let a = Args { positional: vec![json!(path)], flags: Map::new() };
+        if let Err(e) = load_plugin(s, &a) {
+            errors.push(format!("{path}: {e}"));
+        }
+    }
+    errors
 }
 
 /// A compiled plug-in's file: a path, or a name looked for on the plug-in path.
@@ -65,7 +239,7 @@ fn python_file(name: &str) -> bool {
 pub(crate) fn key_of(name: &str) -> String {
     let p = Path::new(name);
     let base = p.file_name().and_then(|b| b.to_str()).unwrap_or(name);
-    for ext in ["so", "dll", "mll", "py"] {
+    for ext in ["so", "dll", "mll", "bundle", "py"] {
         if let Some(stem) = base.strip_suffix(&format!(".{ext}")) {
             return stem.to_string();
         }
@@ -203,6 +377,9 @@ fn load_plugin(s: &mut Session, a: &Args) -> CmdResult {
             continue;
         }
         if let Some(path) = find_native(name) {
+            if kind_of(&path) == Kind::Foreign {
+                return Err(CommandError::new(format!("{}: {FOREIGN_NOTE}", path.display())));
+            }
             load_native(s, &key, &path).map_err(CommandError::new)?;
             out.push(json!(key));
             continue;
@@ -240,6 +417,24 @@ fn unload_plugin(s: &mut Session, a: &Args) -> CmdResult {
 
 fn plugin_info(s: &mut Session, a: &Args) -> CmdResult {
     let on = |k: &str| a.bool(k);
+    if a.get("autoload").is_some() {
+        let Some(name) = a.positional.first().and_then(Value::as_str) else { return Err(CommandError::new("pluginInfo: name a plug-in")) };
+        // By its file: the one loaded under that name, or the one that name finds on the path.
+        let key = key_of(name);
+        let rows = list_plugins(s);
+        let row = rows.as_array().and_then(|r| r.iter().find(|r| r["path"] == name).or_else(|| r.iter().find(|r| r["name"] == key.as_str())));
+        let Some(path) = row.and_then(|r| r["path"].as_str()).map(str::to_string).or_else(|| Path::new(name).is_file().then(|| name.to_string())) else {
+            return Err(CommandError::new(format!("Plug-in \"{name}\" was not found on the plug-in path.")));
+        };
+        if on("query") {
+            return Ok(json!(autoload_list().iter().any(|p| *p == path)));
+        }
+        set_autoload(&path, on("autoload")).map_err(|e| CommandError::new(format!("pluginInfo: {e}")))?;
+        return Ok(Value::Null);
+    }
+    if on("listPluginsPath") {
+        return Ok(json!(search_path().iter().map(|p| p.to_string_lossy().into_owned()).collect::<Vec<_>>()));
+    }
     if on("listPlugins") {
         let mut names = loaded_names();
         if python_started() {
@@ -321,7 +516,17 @@ pub fn register_commands(s: &mut Session) {
             .flag(b("command", "c", "The commands it registered."))
             .flag(b("dependNode", "dn", "The node types it registered."))
             .flag(b("apiVersion", "av", "The API version it asked for."))
+            .flag(b("autoload", "a", "Whether it loads at start: -e -autoload true name sets it, -q -autoload name asks."))
+            .flag(b("listPluginsPath", "lsp", "The folders plug-ins are looked for in."))
             .undoable(false),
+    );
+    s.register(
+        CommandDef::<Session>::new(
+            "aztekPlugins",
+            "Every plug-in file in the folders of the plug-in path, for the Plug-in Manager: its name, file, folder, kind (aztek, python, or foreign for one compiled for another application), and whether it is loaded and loads at start.",
+            |s, _a| Ok(list_plugins(s)),
+        )
+        .undoable(false),
     );
     s.register(
         CommandDef::<Session>::new("aztekPluginCallback", "Runs a compiled plug-in's message callback by its id; scriptJobs the kit makes call it.", |s, a| {

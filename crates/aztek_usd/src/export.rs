@@ -599,11 +599,8 @@ fn export_inner(s: &mut Session, o: &Opts) -> Result<(), String> {
         write_xform_ops(&mut out, &prim, &mut tracks, o)?;
         let list = tracks.map.remove(&prim).unwrap_or_default();
         for (name, mut tr) in list {
-            if !o.static_single || tr.track.samples.len() != 1 {
-                tr.track.settle();
-            } else {
-                tr.track.settle();
-            }
+            // Samples all alike are written as a static value whatever -staticSingleSample says.
+            tr.track.settle();
             let pp = out.attr_track(&prim, &name, &tr.ty, &tr.track)?;
             if let Some(i) = &tr.interpolation {
                 out.attr_field(&pp, "interpolation", Value::Token(i.as_str().into()));

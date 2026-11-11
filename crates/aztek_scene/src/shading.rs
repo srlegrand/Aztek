@@ -8,7 +8,7 @@
 //! Colours are scene linear. The viewport reads materials through `draw_materials` and `face_groups`.
 
 use std::any::Any;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -546,13 +546,19 @@ fn iog_attr(g: &Graph, shape: NodeId) -> Option<(i32, i32)> {
 pub fn wire(g: &mut Graph, sg: NodeId) -> CmdResult<()> {
     let Some(dsm) = plug_named(g, sg, "dagSetMembers") else { return Ok(()) };
     let connected: Vec<(PlugRef, PlugRef)> = g.elements(&dsm).into_iter().filter_map(|e| g.source(&e).map(|s| (e, s))).collect();
+    // By node and attribute, the first connected in element order: a group of thousands is matched in one pass.
+    let mut first: HashMap<(NodeId, i32), PlugRef> = HashMap::with_capacity(connected.len());
+    for (_, s) in &connected {
+        first.entry((s.node, s.attr)).or_insert(*s);
+    }
+    let sources: HashSet<PlugRef> = connected.iter().map(|c| c.1).collect();
     let mut wanted: Vec<PlugRef> = Vec::new();
     for m in os::members(g, sg) {
         let Some((iog, og)) = iog_attr(g, m.node) else { continue };
         if m.kind == ComponentMode::Object {
-            let p = connected.iter().map(|c| c.1).find(|s| s.node == m.node && s.attr == iog);
+            let p = first.get(&(m.node, iog)).copied();
             wanted.push(p.unwrap_or_else(|| PlugRef::element(m.node, iog, 0)));
-        } else if let Some(p) = connected.iter().map(|c| c.1).find(|s| s.node == m.node && s.attr == og) {
+        } else if let Some(p) = first.get(&(m.node, og)).copied() {
             wanted.push(p);
         } else {
             // The first object group this shape has free.
@@ -563,14 +569,15 @@ pub fn wire(g: &mut Graph, sg: NodeId) -> CmdResult<()> {
             wanted.push(PlugRef::element(m.node, og, k));
         }
     }
+    let keep: HashSet<PlugRef> = wanted.iter().copied().collect();
     for (e, s) in &connected {
-        if !wanted.contains(s) {
+        if !keep.contains(s) {
             g.disconnect(e);
             let _ = g.remove_element(e);
         }
     }
     for s in wanted {
-        if !connected.iter().any(|c| c.1 == s) {
+        if !sources.contains(&s) {
             g.connect(&s, &dsm, true)?;
         }
     }
@@ -630,15 +637,43 @@ pub(crate) fn adopt_new_meshes(s: &mut Session) {
     if !is_shading_group(g, init) {
         return;
     }
-    let fresh: Vec<Member> = (from..to)
-        .filter(|&id| is_shaded_shape(g, id) && groups_of(g, id).is_empty() && crate::instancing::source(g, id) == NO_NODE)
-        .map(Member::object)
-        .collect();
-    if !fresh.is_empty() {
-        if let Err(e) = assign(g, init, &fresh) {
-            log::warn!("default shading group: {e}");
+    let shapes: Vec<NodeId> = (from..to).filter(|&id| is_shaded_shape(g, id) && crate::instancing::source(g, id) == NO_NODE).collect();
+    if shapes.is_empty() {
+        return;
+    }
+    // Which of them a group already shades, asked of each group's bound entries: with thousands of meshes in the
+    // default group, naming every member for every new mesh made creating them slower with each one.
+    let mut shaded: Vec<NodeId> = Vec::new();
+    let mut quick = true;
+    for sg in all_groups(g) {
+        match os::holds_any(g, sg, &shapes) {
+            Some(held) => shaded.extend(held),
+            None => quick = false,
         }
     }
+    let fresh: Vec<NodeId> = if quick { shapes.into_iter().filter(|id| !shaded.contains(id)).collect() } else { shapes.into_iter().filter(|&id| groups_of(g, id).is_empty()).collect() };
+    if fresh.is_empty() {
+        return;
+    }
+    let r = if quick { adopt(g, init, &fresh) } else { assign(g, init, &fresh.iter().map(|&id| Member::object(id)).collect::<Vec<_>>()) };
+    if let Err(e) = r {
+        log::warn!("default shading group: {e}");
+    }
+}
+
+/// Whole shapes no group shades join one: its member list and its dagSetMembers each gain them, as `assign` leaves
+/// both, without going over the members the group already has.
+fn adopt(g: &mut Graph, sg: NodeId, shapes: &[NodeId]) -> CmdResult<()> {
+    os::append_objects_raw(g, sg, shapes)?;
+    let Some(dsm) = plug_named(g, sg, "dagSetMembers") else { return Ok(()) };
+    for &shape in shapes {
+        let Some((iog, _)) = iog_attr(g, shape) else { continue };
+        let from = PlugRef::element(shape, iog, 0);
+        if !g.destinations(&from).iter().any(|d| d.node == sg) {
+            g.connect(&from, &dsm, true)?;
+        }
+    }
+    Ok(())
 }
 
 /// A reader builds what the file says: nothing it made joins the default group afterwards.

@@ -561,7 +561,7 @@ fn probe_directions() -> &'static [DVec3] {
     DIRS.get_or_init(|| {
         let mut d = vec![DVec3::X, -DVec3::X, DVec3::Y, -DVec3::Y, DVec3::Z, -DVec3::Z];
         let n = 90;
-        let golden = 3.14159265358979323846 * (3.0 - 5f64.sqrt());
+        let golden = std::f64::consts::PI * (3.0 - 5f64.sqrt());
         for i in 0..n {
             let z = 1.0 - 2.0 * (i as f64 + 0.5) / n as f64;
             let r = (1.0 - z * z).sqrt();
