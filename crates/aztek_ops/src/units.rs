@@ -218,8 +218,32 @@ pub fn in_stored() -> bool {
     DEPTH.with(Cell::get) > 0
 }
 
+thread_local! {
+    // The units a new scene starts in: File > New Scene's options, centimetres and degrees unless changed.
+    static DEFAULT_CM: Cell<f64> = const { Cell::new(1.0) };
+    static DEFAULT_RAD: Cell<f64> = const { Cell::new(PI / 180.0) };
+}
+
+/// The units a new scene starts in, as factors (centimetres per unit, radians per unit). A factor of 0 leaves that one.
+pub fn set_defaults(cm_per_unit: f64, rad_per_unit: f64) {
+    if cm_per_unit > 0.0 {
+        DEFAULT_CM.with(|c| c.set(cm_per_unit));
+    }
+    if rad_per_unit > 0.0 {
+        DEFAULT_RAD.with(|c| c.set(rad_per_unit));
+    }
+}
+
+pub fn default_cm_per_unit() -> f64 {
+    DEFAULT_CM.with(Cell::get)
+}
+
+pub fn default_rad_per_unit() -> f64 {
+    DEFAULT_RAD.with(Cell::get)
+}
+
 /// Back to the defaults, for a new scene.
 pub fn reset() {
-    set_linear(1.0);
-    set_angle(PI / 180.0);
+    set_linear(default_cm_per_unit());
+    set_angle(default_rad_per_unit());
 }

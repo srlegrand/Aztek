@@ -21,8 +21,6 @@ use ArgType::{Bool as B, Float as F, Int as I, List as L, String as S};
 /// Scene and session settings the commands in this module and its neighbours hold.
 #[derive(Default)]
 pub struct Extras {
-    /// False is Y up.
-    pub up_axis_z: bool,
     pub cycle_check: Option<bool>,
     pub evaluation_mode: Option<String>,
     pub thread_count: Option<i64>,
@@ -64,24 +62,26 @@ fn on_off(v: &Value) -> bool {
 
 fn up_axis_cmd(s: &mut Session, a: &Args) -> CmdResult {
     if a.bool("query") {
-        return Ok(json!(if s.extras.up_axis_z { "z" } else { "y" }));
+        return Ok(json!(crate::world::up_name()));
     }
-    let Some(axis) = a.get("axis").and_then(Value::as_str) else { fail!("upAxis: use -axis y or z, or -q -axis") };
+    let Some(axis) = a.get("axis").and_then(Value::as_str) else { fail!("upAxis: the -axis flag is mandatory") };
     let z = match axis {
         "y" | "Y" => false,
         "z" | "Z" => true,
         _ => fail!("upAxis: the axis must be y or z"),
     };
-    if z != s.extras.up_axis_z {
-        s.extras.up_axis_z = z;
-        if a.get("rotateView").map_or(true, on_off) {
+    if z != crate::world::up_z() {
+        crate::world::set_up_z(z);
+        // -rv turns the cameras about X with the world, so the ground stays where it was on screen.
+        if a.get("rotateView").is_some_and(on_off) {
             rotate_cameras(s, z);
         }
     }
-    Ok(json!(if z { "z" } else { "y" }))
+    Ok(Value::Null)
 }
 
-/// The default cameras to how they sit under the new up axis. Others stay, as scene content.
+/// The views' cameras turned a quarter about X with the world, as `upAxis -rv` turns them: the ground stays where it
+/// was on screen. Other cameras are scene content and stay.
 pub fn rotate_cameras(s: &mut Session, z: bool) {
     let g = &mut s.graph;
     let turn = DMat3::from_rotation_x(if z { 90f64.to_radians() } else { (-90f64).to_radians() });
@@ -787,7 +787,7 @@ fn closest_cmd(s: &mut Session, a: &Args, ty: &str) -> CmdResult {
 
 pub fn register(c: &mut Commands<Session>) {
     c.register(
-        q_flags(Cmd::new("upAxis", "The scene's up axis: -ax y or z, -rv moves the default cameras with it (on by default). -q -ax asks.", up_axis_cmd))
+        q_flags(Cmd::new("upAxis", "The world's up axis, a preference kept between scenes: -ax y or z; -rv turns the cameras with it so the ground stays put on screen. -q -ax asks.", up_axis_cmd))
             .flag(f("axis", "ax", ArgType::Any, "y or z."))
             .flag(f("rotateView", "rv", B, "Turn the default cameras too."))
             .undoable(false),

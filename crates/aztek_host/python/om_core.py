@@ -1469,15 +1469,23 @@ class MGlobal:
 
     @staticmethod
     def isYAxisUp():
-        return True
+        return _cmds.upAxis(q=True, axis=True) == "y"
 
     @staticmethod
     def isZAxisUp():
-        return False
+        return _cmds.upAxis(q=True, axis=True) == "z"
 
     @staticmethod
     def upAxis():
-        return MVector(0, 1, 0)
+        return MVector(0, 0, 1) if MGlobal.isZAxisUp() else MVector(0, 1, 0)
+
+    @staticmethod
+    def setYAxisUp(rotateView=False):
+        _cmds.upAxis(axis="y", rotateView=bool(rotateView))
+
+    @staticmethod
+    def setZAxisUp(rotateView=False):
+        _cmds.upAxis(axis="z", rotateView=bool(rotateView))
 
     @staticmethod
     def getFunctionSetList(obj):

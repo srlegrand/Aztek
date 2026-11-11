@@ -450,20 +450,9 @@ pub fn symmetry_label(spec: &SymmetrySpec) -> String {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum UpAxis {
-    #[default]
-    Y,
-    Z,
-}
-
-/// World up as the scene's up axis pref sets it: +Y, or +Z in a Z-up scene.
-pub fn scene_up(g: &Graph) -> DVec3 {
-    if g.up_axis == UpAxis::Z {
-        DVec3::Z
-    } else {
-        DVec3::Y
-    }
+/// World up as the up axis preference sets it: +Y, or +Z when Z is up.
+pub fn scene_up(_g: &Graph) -> DVec3 {
+    crate::world::up()
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -1161,7 +1150,7 @@ pub fn place_primitive(g: &mut Graph, xform: NodeId, position: DVec3, normal: DV
             if domed && gen.float(gen.ty().attr_index("fraction").unwrap()) < 1.0 {
                 g.evaluate();
                 if let Some(m) = g.node(src.node).unwrap().value(src.attr as usize).as_mesh() {
-                    at -= up * m.bounds().min[if g.up_axis == UpAxis::Z { 2 } else { 1 }];
+                    at -= up * m.bounds().min[crate::world::up_index()];
                 }
             }
         }
@@ -1254,8 +1243,7 @@ pub fn register(c: &mut Commands<Session>) {
             p.ty,
             &format!("Create a {} mesh. Returns [mesh, generator] (generator is None with generator=False).", p.display),
             move |s, a| {
-                let g = &mut s.graph;
-                let default_up = if g.up_axis == UpAxis::Z { "z" } else { "y" };
+                let default_up = crate::world::up_name();
                 // The reference gives the axis as a vector (-ax 1 0 0).
                 let up_flag = a.get("axis").filter(|v| v.is_string()).or(a.get("upAxis"));
                 let by_vector = a.get("axis").is_some_and(Value::is_array);

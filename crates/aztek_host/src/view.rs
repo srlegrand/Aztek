@@ -634,7 +634,16 @@ impl View {
         }
         let (_, call) = self.last_drag.as_ref()?;
         let by = call.get("by").or_else(|| call.get("uvn"))?.as_array()?;
-        let t: Vec<String> = by.iter().filter_map(Value::as_f64).map(|x| format!("{x:.3}")).collect();
+        // In the current units, as the channel box shows them.
+        let name = self.last_drag.as_ref().map(|(n, _)| n.as_str()).unwrap_or("");
+        let k = if name.starts_with("rotate") {
+            1.0 / aztek_ops::units::rad_per_unit()
+        } else if name.starts_with("move") || name.starts_with("polyMove") {
+            1.0 / aztek_ops::units::cm_per_unit()
+        } else {
+            1.0
+        };
+        let t: Vec<String> = by.iter().filter_map(Value::as_f64).map(|x| format!("{:.3}", x * k)).collect();
         Some((self.vp.screen().project(d.pivot)?, t.join(" ")))
     }
 
@@ -721,8 +730,7 @@ impl View {
             let hfa = d.float(cam::H_APERTURE);
             ((2.0 * (hfa * 25.4 * 0.5 / fl.max(1e-6)).atan()).to_degrees(), d.float(cam::ORTHO_WIDTH), d.float(cam::COI).max(1e-3), d.bool(cam::ORTHOGRAPHIC))
         };
-        let yaw = z.x.atan2(z.z).to_degrees();
-        let pitch = z.y.clamp(-1.0, 1.0).asin().to_degrees();
+        let (yaw, pitch) = crate::camera::Camera::angles_of(z);
         let state = [eye.x, eye.y, eye.z, yaw, pitch, coi, ow, hfov, ortho as i32 as f64];
         let same = self.cam_sync.is_some_and(|s| s.iter().zip(&state).all(|(a, b)| (a - b).abs() < 1e-6));
         if same {
@@ -756,7 +764,7 @@ impl View {
         // Driven or locked cameras keep to what drives them.
         g.without_undo(|g| {
             let _ = g.set_value(PlugRef::new(tr, Transform::TRANSLATE as i32), PlugValue::Vec3(eye));
-            let _ = g.set_value(PlugRef::new(tr, Transform::ROTATE as i32), PlugValue::Vec3(cam::rotate_for(yaw.to_radians(), pitch.to_radians())));
+            let _ = g.set_value(PlugRef::new(tr, Transform::ROTATE as i32), PlugValue::Vec3(cam::world_rotation(cam::rotate_for(yaw.to_radians(), pitch.to_radians()))));
             if light.is_some() {
                 if let Some(i) = g.node(sh).and_then(|n| n.ty().attr_index("centerOfIllumination")) {
                     let _ = g.set_value(PlugRef::new(sh, i as i32), PlugValue::Float(dist));
@@ -1491,8 +1499,8 @@ impl View {
         let Some(p) = self.prim else { return };
         let (c, size) = prim_box(&p);
         let (x, z) = (size.x * 0.5, size.z * 0.5);
-        let corners = [DVec3::new(-x, 0.0, -z), DVec3::new(x, 0.0, -z), DVec3::new(x, 0.0, z), DVec3::new(-x, 0.0, z)];
-        let up = DVec3::Y * p.height;
+        let corners = [DVec3::new(-x, 0.0, -z), DVec3::new(x, 0.0, -z), DVec3::new(x, 0.0, z), DVec3::new(-x, 0.0, z)].map(aztek_scene::world::to_world);
+        let up = aztek_scene::world::up() * p.height;
         let green = [70, 255, 120, 255];
         for i in 0..4 {
             let (a, b) = (c + corners[i], c + corners[(i + 1) % 4]);
@@ -1519,8 +1527,8 @@ impl View {
                 _ => json!({"radius": radius}),
             };
             if core.exec(&kind, call).is_ok() {
-                let y = if p.height.abs() > 1e-6 { c.y + p.height * 0.5 } else { c.y };
-                let _ = core.exec("move", json!({"to": [c.x, y, c.z]}));
+                let at = if p.height.abs() > 1e-6 { c + aztek_scene::world::up() * p.height * 0.5 } else { c };
+                let _ = core.exec("move", json!({"to": [at.x, at.y, at.z]}));
             }
             return;
         }
@@ -1529,8 +1537,8 @@ impl View {
         let made = if cube { core.exec("polyCube", json!({"width": w, "height": height, "depth": d})) } else { core.exec("polyPlane", json!({"width": w, "height": d})) };
         if made.is_ok() {
             // A cube stands on its base, or hangs from it when the height was dragged down.
-            let y = if cube { c.y + height * 0.5 * if p.height < 0.0 { -1.0 } else { 1.0 } } else { c.y };
-            let _ = core.exec("move", json!({"to": [c.x, y, c.z]}));
+            let at = if cube { c + aztek_scene::world::up() * height * 0.5 * if p.height < 0.0 { -1.0 } else { 1.0 } } else { c };
+            let _ = core.exec("move", json!({"to": [at.x, at.y, at.z]}));
         }
     }
 
@@ -2031,10 +2039,10 @@ fn bezier_cvs(anchors: &[(DVec3, DVec3)]) -> Vec<DVec3> {
     out
 }
 
-/// A draft's base: its middle, and its size along X and Z.
+/// A draft's base: its middle, and its size along the ground's two axes (as x and z, in the Y up frame).
 fn prim_box(p: &PrimDraft) -> (DVec3, DVec3) {
     let c = (p.a + p.b) * 0.5;
-    (c, (p.a - p.b).abs())
+    (c, aztek_scene::world::from_world(p.a - p.b).abs())
 }
 
 #[allow(dead_code)]

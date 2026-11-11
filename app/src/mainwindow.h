@@ -50,6 +50,8 @@ struct HotkeyBinding {
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
+    /// File > New Scene's options: the units a new scene starts in.
+    void new_scene_options();
     MainWindow();
     PanelLayout* panels() const { return panels_; }
     void run_startup(const QString& script, const QString& screenshot);

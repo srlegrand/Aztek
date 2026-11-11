@@ -3,7 +3,7 @@
 Generated from the command registry by `cargo run -p aztek_host --example gen_commands`; do not edit by hand.
 Commands take the reference's flags, long or short, in MEL and in Python (`aztek.cmds` or `maya.cmds`).
 
-1108 commands.
+1111 commands.
 
 ## AL_usdmaya_LayerCreateLayer
 
@@ -271,6 +271,10 @@ The Human IK window: characters, sources, definitions and controls.
 ## InsertJointTool
 
 The insert joint tool: drag from a joint to add one on the bone.
+
+## InvertSelection
+
+The runtime command for invertSelection.
 
 ## JointTool
 
@@ -2073,6 +2077,12 @@ Arguments: the light
 | Flag | Short | Description |
 | --- | --- | --- |
 | `set` | `set` | In or out. |
+
+## aztekPluginCallback
+
+Runs a compiled plug-in's message callback by its id; scriptJobs the kit makes call it.
+
+Arguments: callback id, then what it is told
 
 ## aztekPython
 
@@ -3916,6 +3926,7 @@ Arguments: meshes
 | `edit` | `e` | Edit an existing node. |
 | `name` | `n` | Name of the new node. |
 | `solver` | `sv` | The solver to join (the newest, or a new one). |
+| `preset` | `p` | The material it starts as: silk, cotton (the default), leather, heavyDenim or rubber. |
 
 ## createCurveWarp
 
@@ -3974,6 +3985,7 @@ Arguments: meshes
 | `edit` | `e` | Edit an existing node. |
 | `name` | `n` | Name of the new node. |
 | `solver` | `sv` | The solver to join (the newest, or a new one). |
+| `preset` | `p` | The material it starts as: silk, cotton (the default), leather, heavyDenim or rubber. |
 
 ## createNConstraint
 
@@ -4990,7 +5002,8 @@ Arguments: objects (the selection when none)
 | `divisionsV` | `dv` | Isoparms within a span along V. |
 | `pointsWire` | `pw` | Points to a drawn span. |
 | `pointsShaded` | `ps` | Shaded fineness. |
-| `polygonObject` | `po` | Accepted for existing scripts. |
+| `polygonObject` | `po` | Meshes: 1 the cage, 2 the cage and the smoothed mesh, 3 the smoothed mesh. |
+| `query` | `q` | Ask: -po answers per object. |
 | `all` | `all` | Every surface. |
 
 ## displayStats
@@ -6882,7 +6895,7 @@ Arguments: objects
 | `name` | `n` | Group name. |
 | `empty` | `em` | Create an empty group. |
 | `parent` | `p` | Parent for the new group. |
-| `world` | `w` | Under the world (the default here). |
+| `world` | `w` | Under the world, not the members' shared parent. |
 | `absolute` | `a` | Keep world placement (the default). |
 | `relative` | `r` | Keep local placement. |
 | `useAsGroup` | `uag` | Accepted for existing scripts. |
@@ -7304,6 +7317,7 @@ Bind a key: -k the key, -alt -ctl -sht modifiers, -n the name command for press,
 
 | Flag | Short | Description |
 | --- | --- | --- |
+| `query` | `q` | Ask what the key is bound to: -n for press, -rn for release. |
 | `keyShortcut` | `k` | The key. |
 | `altModifier` | `alt` | With Alt. |
 | `ctrlModifier` | `ctl` | With Ctrl. |
@@ -7459,6 +7473,15 @@ Arguments: objects, for -assign
 | `shaderNetworksSelectMaterialNodes` | `smn` | Select the materials of the selected objects. |
 | `listUpstreamNodes` | `lun` | The nodes upstream of this one. |
 | `listDownstreamNodes` | `ldn` | The nodes downstream of this one. |
+| `listUpstreamShaderNodes` | `lus` | The shading nodes upstream of this one. |
+| `listDownstreamShaderNodes` | `lds` | The shading nodes downstream of this one. |
+| `shaderNetwork` | `snw` | Select the networks of the selected materials. |
+| `duplicate` | `d` | Copy the selected materials with what feeds them. |
+| `resetGraphPosition` | `rgp` | Accepted: the Node Editor lays out for itself. |
+| `resetSwatch` | `rs` | Accepted: swatches redraw on change. |
+| `incremental` | `inc` | Accepted for existing scripts. |
+| `clearWorkArea` | `cwa` | Accepted: the Node Editor has its own work area. |
+| `networks` | `n` | Accepted for existing scripts. |
 
 ## iconTextButton
 
@@ -9259,7 +9282,7 @@ Every object set's name in creation order. quickSelect=True lists only quick sel
 
 ## loadPlugin
 
-Load a Python plug-in: a .py file by path, or by name from the folders in AZTEK_PLUG_IN_PATH and MAYA_PLUG_IN_PATH. Returns its name in a list.
+Load a plug-in: a compiled one (.so, .dll) built with Aztek's kit or a Python one (.py), by path or by name from the folders in AZTEK_PLUG_IN_PATH and MAYA_PLUG_IN_PATH. Returns its name in a list.
 
 Arguments: plug-in file or name
 
@@ -10399,6 +10422,9 @@ Arguments: objects
 
 | Flag | Short | Description |
 | --- | --- | --- |
+| `rotatePivot` | `rp` | Only the rotate pivot. |
+| `scalePivot` | `sp` | Only the scale pivot. |
+| `objectSpace` | `os` | The values are in the object's space, not the world's. |
 | `by` | `r` | World offset. |
 | `to` |  | World position. |
 
@@ -10459,6 +10485,7 @@ Arguments: meshes
 | `edit` | `e` | Edit an existing node. |
 | `name` | `n` | Name of the new node. |
 | `solver` | `sv` | The solver to join (the newest, or a new one). |
+| `preset` | `p` | The material it starts as: silk, cotton (the default), leather, heavyDenim or rubber. |
 
 ## nParticle
 
@@ -10578,6 +10605,17 @@ Arguments: the new character's name, then joints
 ## newScene
 
 Clear the scene. Not undoable.
+
+## newSceneUnits
+
+The units a new scene starts in, as File > New Scene's options set them: -linear, -angle, -time. -q gives them.
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `linear` | `l` | Linear unit. |
+| `angle` | `a` | Angle unit. |
+| `time` | `t` | Time unit. |
+| `query` | `q` | Query mode. |
 
 ## newton
 
@@ -12266,7 +12304,7 @@ Bevel the selected edges (vertex or face selections convert to their edges).
 | `offsetAsFraction` | `oaf` | Width by fraction rather than distance. |
 | `depth` | `dp` | How far the bevel rounds out; held for the node. |
 | `chamfer` | `c` | Flat across rather than round. |
-| `segments` |  | Segments across the bevel. |
+| `segments` | `sg` | Segments across the bevel. |
 | `profile` |  | 0.5 round, 0.25 straight, toward 1 square. |
 | `clamp` |  | Keep widths from overlapping. |
 | `smoothingAngle` |  | New edges sharper than this are hard. |
@@ -13442,6 +13480,14 @@ Arguments: meshes or components (the selection when none)
 | `vertexComponent` | `vc` | Selected vertex count. |
 | `edgeComponent` | `ec` | Selected edge count. |
 | `faceComponent` | `fc` | Selected face count. |
+| `uvComponent` | `uvc` | Selected UV count. |
+| `uvShell` | `us` | UV shell count. |
+| `uvShellIds` | `uid` | The UV shell of each selected UV. |
+| `uvsInShell` | `uis` | The UVs in this UV shell. |
+| `activeUVShells` | `aus` | The UV shells the selection touches. |
+| `activeShells` | `as` | The mesh shells the selection touches. |
+| `uvSetName` | `uvs` | The UV set: the current one here. |
+| `displayStats` | `ds` | Accepted for existing scripts. |
 | `boundingBox2d` | `b2` | UV bounds: [[umin, umax], [vmin, vmax]]. |
 | `boundingBoxComponent2d` | `bc2` | UV bounds of the components named. |
 
@@ -18539,6 +18585,8 @@ Arguments: type
 
 | Flag | Short | Description |
 | --- | --- | --- |
+| `isColorManaged` | `icm` | The node's colours are colour managed. Accepted: textures read their colour space here. |
+| `asRendering` | `ar` | A rendering node. |
 | `asUtility` | `au` | A utility. |
 | `asShader` | `as` | A shader. |
 | `asTexture` | `at` | A texture. |
@@ -21367,13 +21415,13 @@ Arguments: bodies to act on
 
 ## unloadPlugin
 
-Unload a plug-in: its uninitializePlugin runs and its commands and node types go.
+Unload a plug-in: its uninitializePlugin runs and its commands and node types go. A compiled one in use by the scene needs -force.
 
 Arguments: plug-in name
 
 | Flag | Short | Description |
 | --- | --- | --- |
-| `force` | `f` | Accepted for scripts. |
+| `force` | `f` | Unload even with its nodes in the scene. |
 
 ## untangleUV
 
@@ -21414,7 +21462,7 @@ Arguments: surfaces (the selection when none)
 
 ## upAxis
 
-The scene's up axis: -ax y or z, -rv moves the default cameras with it (on by default). -q -ax asks.
+The world's up axis, a preference kept between scenes: -ax y or z; -rv turns the cameras with it so the ground stays put on screen. -q -ax asks.
 
 | Flag | Short | Description |
 | --- | --- | --- |

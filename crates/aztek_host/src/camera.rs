@@ -1,6 +1,8 @@
 //! View cameras: the perspective camera tumbling about its centre of interest, and the orthographic top, front and
-//! side cameras.
+//! side cameras. Yaw and pitch are in the Y up frame (`aztek_scene::world`): about world up, above the ground, whichever
+//! axis is up.
 
+use aztek_scene::world::{from_world, to_world};
 use glam::{DMat4, DVec2, DVec3};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -55,7 +57,7 @@ impl Camera {
     pub fn new(kind: CamKind) -> Camera {
         let mut c = Camera { kind, coi: DVec3::ZERO, yaw: 0.0, pitch: 0.0, distance: 1000.0, hfov: 54.43, ortho_width: 30.0, orthographic: kind != CamKind::Persp, roll: 0.0 };
         match kind {
-            CamKind::Persp => c.look_from(DVec3::new(28.0, 21.0, 28.0)),
+            CamKind::Persp => c.look_from(to_world(DVec3::new(28.0, 21.0, 28.0))),
             CamKind::Top => {
                 c.pitch = 90.0;
             }
@@ -70,7 +72,7 @@ impl Camera {
     }
 
     pub fn look_from(&mut self, eye: DVec3) {
-        let d = eye - self.coi;
+        let d = from_world(eye - self.coi);
         self.distance = d.length().max(1e-6);
         self.yaw = d.x.atan2(d.z).to_degrees();
         self.pitch = (d.y / self.distance).clamp(-1.0, 1.0).asin().to_degrees();
@@ -78,7 +80,13 @@ impl Camera {
 
     pub fn dir_to_eye(&self) -> DVec3 {
         let (y, p) = (self.yaw.to_radians(), self.pitch.to_radians());
-        DVec3::new(p.cos() * y.sin(), p.sin(), p.cos() * y.cos())
+        to_world(DVec3::new(p.cos() * y.sin(), p.sin(), p.cos() * y.cos()))
+    }
+
+    /// Yaw and pitch, degrees, looking from the centre of interest along a world direction.
+    pub fn angles_of(dir: DVec3) -> (f64, f64) {
+        let d = from_world(dir).normalize_or_zero();
+        (d.x.atan2(d.z).to_degrees(), d.y.clamp(-1.0, 1.0).asin().to_degrees())
     }
 
     pub fn eye(&self) -> DVec3 {
@@ -86,8 +94,8 @@ impl Camera {
     }
 
     pub fn view(&self) -> DMat4 {
-        // Straight down: up is -Z so X runs right, as the reference's top view.
-        let up = if self.pitch.abs() > 89.99 { DVec3::new(0.0, 0.0, -self.pitch.signum()) } else { DVec3::Y };
+        // Straight down: up is -Z (+Y when Z is up) so X runs right, as the reference's top view.
+        let up = to_world(if self.pitch.abs() > 89.99 { DVec3::new(0.0, 0.0, -self.pitch.signum()) } else { DVec3::Y });
         let m = DMat4::look_at_rh(self.eye(), self.coi, up);
         if self.roll == 0.0 {
             m

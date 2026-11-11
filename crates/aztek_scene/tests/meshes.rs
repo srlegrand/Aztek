@@ -5,7 +5,7 @@ use aztek_ops::{execute, CallSource};
 use aztek_scene::components::{self, ComponentMode};
 use aztek_scene::last_op;
 use aztek_scene::mesh_edit::transform;
-use aztek_scene::mesh_nodes::{MeshNode, UpAxis};
+use aztek_scene::mesh_nodes::MeshNode;
 use aztek_scene::transform::Transform;
 use aztek_scene::Session;
 use glam::DVec3;
@@ -163,9 +163,9 @@ fn every_primitive_has_up_axis_defaulting_to_the_scene_up_axis() {
     }
     assert!(s.run("polyCube", json!({"width": 100.0, "height": 100.0, "depth": 100.0, "upAxis": "w"})).is_err());
 
-    s.graph.up_axis = UpAxis::Z;
+    aztek_scene::world::set_up_z(true);
     let r = run(&mut s, "polyCone", json!({"radius": 50.0, "height": 100.0}));
-    s.graph.up_axis = UpAxis::Y;
+    aztek_scene::world::set_up_z(false);
     assert_eq!(up_axis_of(&s, &r[1]), 2);
 }
 

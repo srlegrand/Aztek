@@ -6,7 +6,7 @@ use aztek_geo::nurbs::{Form, NurbsCurve, NurbsSurface};
 use aztek_ops::{fail, ArgType, Args, CmdResult, CommandDef, Commands, FlagDef};
 use aztek_scene::anim::{self, Tangent};
 use aztek_scene::graph::{Graph, SelectMode};
-use aztek_scene::mesh_nodes::{self, MeshNode, UpAxis};
+use aztek_scene::mesh_nodes::{self, MeshNode};
 use aztek_scene::plug::{flags, AttrDef, NodeId, PlugRef, PlugType, PlugValue, NO_NODE};
 use aztek_scene::session::Session;
 use aztek_scene::transform::{decompose_full, euler_near, matrix_to_euler, DagNode, RotateOrder, Transform};
@@ -719,12 +719,28 @@ fn read_instancer(c: &mut Ctx, prim: &Prim, tr: NodeId) -> Result<(), String> {
 fn conversion(c: &mut Ctx) -> Option<DMat4> {
     let mut m = DMat4::IDENTITY;
     let mut any = false;
-    if c.o.up_axis && c.o.axis_method != "overwritePrefs" {
+    if c.o.up_axis && c.o.axis_method == "overwritePrefs" {
+        // The stage's axis becomes the preference, as `upAxis -ax z -rv` would make it.
         let up = c.stage.stage_metadata("upAxis").ok().flatten().and_then(|v| match v {
             Value::Token(t) => Some(t.as_str().to_string()),
             _ => None,
         });
-        let scene_z = c.s.graph.up_axis == UpAxis::Z;
+        if let Some(z) = up.as_deref().and_then(|u| match u {
+            "Z" => Some(true),
+            "Y" => Some(false),
+            _ => None,
+        }) {
+            if z != aztek_scene::world::up_z() {
+                aztek_scene::world::set_up_z(z);
+                aztek_scene::system_cmds::rotate_cameras(c.s, z);
+            }
+        }
+    } else if c.o.up_axis {
+        let up = c.stage.stage_metadata("upAxis").ok().flatten().and_then(|v| match v {
+            Value::Token(t) => Some(t.as_str().to_string()),
+            _ => None,
+        });
+        let scene_z = aztek_scene::world::up_z();
         match up.as_deref() {
             Some("Z") if !scene_z => {
                 m = DMat4::from_rotation_x(-std::f64::consts::FRAC_PI_2);

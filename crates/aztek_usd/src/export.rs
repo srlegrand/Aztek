@@ -166,7 +166,7 @@ fn frames_of(a: &Args) -> Vec<f64> {
     out
 }
 
-fn opts_of(a: &Args, s: &Session) -> CmdResult<Opts> {
+fn opts_of(a: &Args, _s: &Session) -> CmdResult<Opts> {
     let file = a.string("file", "");
     let file = if file.is_empty() { a.pos_str(0).unwrap_or("").to_string() } else { file };
     if file.is_empty() {
@@ -177,7 +177,7 @@ fn opts_of(a: &Args, s: &Session) -> CmdResult<Opts> {
     let out_dir = std::path::Path::new(&abs).parent().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
     let pairs = |n: &str, k: usize| -> Vec<Vec<String>> { multi(a, n).chunks(k).filter(|c| c.len() == k).map(<[String]>::to_vec).collect() };
     let up = a.string("upAxis", "mayaPrefs");
-    let scene_up = if s.graph.up_axis == aztek_scene::mesh_nodes::UpAxis::Z { "Z" } else { "Y" };
+    let scene_up = if aztek_scene::world::up_z() { "Z" } else { "Y" };
     Ok(Opts {
         file: abs,
         default_format: a.string("defaultUSDFormat", "usdc"),

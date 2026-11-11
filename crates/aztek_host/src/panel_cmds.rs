@@ -10,6 +10,7 @@ use aztek_ops::{fail, ArgType, Args, CmdResult, CommandDef, CommandError, FlagDe
 use aztek_scene::cameras as cam;
 use aztek_scene::plug::{PlugRef, PlugValue};
 use aztek_scene::transform::Transform;
+use aztek_scene::world;
 use aztek_scene::Session;
 use glam::{DMat3, DVec3};
 use serde_json::{json, Map, Value};
@@ -550,7 +551,7 @@ fn look_rotation(forward: DVec3, up: DVec3) -> DVec3 {
 fn aim(s: &mut Session, c: &Camera, eye: DVec3, target: DVec3) -> CmdResult<()> {
     let fwd = target - eye;
     put_eye(s, c, eye)?;
-    set_plug(s, c.tr, Transform::ROTATE, PlugValue::Vec3(look_rotation(fwd, DVec3::Y)))?;
+    set_plug(s, c.tr, Transform::ROTATE, PlugValue::Vec3(look_rotation(fwd, world::up())))?;
     set_plug(s, c.sh, cam::COI, PlugValue::Float(fwd.length().max(1e-3)))
 }
 
@@ -602,15 +603,10 @@ fn cam_arg(a: &Args) -> Option<String> {
     a.named().into_iter().next()
 }
 
-/// The reference's home for a default camera; other cameras go to the perspective's.
+/// The reference's home for a default camera, turned with the world when Z is up; other cameras go to the
+/// perspective's.
 fn home_of(name: &str) -> (DVec3, DVec3, f64) {
-    let short = name.rsplit('|').next().unwrap_or(name);
-    match short {
-        "top" => (DVec3::new(0.0, 1000.1, 0.0), DVec3::new(-std::f64::consts::FRAC_PI_2, 0.0, 0.0), 1000.1),
-        "front" => (DVec3::new(0.0, 0.0, 1000.1), DVec3::ZERO, 1000.1),
-        "side" => (DVec3::new(1000.1, 0.0, 0.0), DVec3::new(0.0, std::f64::consts::FRAC_PI_2, 0.0), 1000.1),
-        _ => (DVec3::new(28.0, 21.0, 28.0), DVec3::new((-27.9_f64).to_radians(), std::f64::consts::FRAC_PI_4, 0.0), 44.8),
-    }
+    cam::home(name)
 }
 
 fn view_set(s: &mut Session, a: &Args) -> CmdResult {
@@ -618,10 +614,12 @@ fn view_set(s: &mut Session, a: &Args) -> CmdResult {
     let c = camera_of(s, Some(&name), "viewSet")?;
     let center = c.center();
     let dist = c.coi;
+    // Directions in the Y up frame, turned with the world: -top looks down world up whichever axis that is.
     let side = |s: &mut Session, dir: DVec3| -> CmdResult<()> {
+        let up = world::to_world(if dir.y.abs() > 0.9 { -DVec3::Z * dir.y.signum() } else { DVec3::Y });
+        let dir = world::to_world(dir);
         let eye = center + dir * dist;
         put_eye(s, &c, eye)?;
-        let up = if dir.y.abs() > 0.9 { -DVec3::Z * dir.y.signum() } else { DVec3::Y };
         set_plug(s, c.tr, Transform::ROTATE, PlugValue::Vec3(look_rotation(-dir, up)))
     };
     let mut fit = a.bool("fit");
@@ -634,6 +632,7 @@ fn view_set(s: &mut Session, a: &Args) -> CmdResult {
         let (_, r, _) = home_of("persp");
         let m = glam::DMat3::from_euler(glam::EulerRot::ZYX, r.z, r.y, r.x);
         put_eye(s, &c, center + m.z_axis * dist)?;
+        // r is already turned with the world.
         set_plug(s, c.tr, Transform::ROTATE, PlugValue::Vec3(r))?;
     } else if a.bool("top") {
         side(s, DVec3::Y)?;
@@ -1008,7 +1007,7 @@ pub fn register(s: &mut Session) {
             let c = camera_of(s, cam_arg(a).as_deref(), "viewPlace")?;
             let eye = a.get("eye").and_then(vec3_of).unwrap_or(c.eye);
             let target = a.get("lookAt").and_then(vec3_of).unwrap_or_else(|| eye + c.forward() * c.coi);
-            let up = a.get("up").and_then(vec3_of).unwrap_or(DVec3::Y);
+            let up = a.get("up").and_then(vec3_of).unwrap_or_else(world::up);
             put_eye(s, &c, eye)?;
             set_plug(s, c.tr, Transform::ROTATE, PlugValue::Vec3(look_rotation(target - eye, up)))?;
             set_plug(s, c.sh, cam::COI, PlugValue::Float((target - eye).length().max(1e-3)))?;
@@ -1116,7 +1115,7 @@ pub fn register(s: &mut Session) {
                 v = l.get(1).and_then(Value::as_f64).unwrap_or(v);
             }
             let pivot = a.get("pivotPoint").and_then(vec3_of).unwrap_or(c.center());
-            let turn = glam::DMat3::from_axis_angle(DVec3::Y, -h) * glam::DMat3::from_axis_angle(c.axes.x_axis, -v);
+            let turn = glam::DMat3::from_axis_angle(world::up(), -h) * glam::DMat3::from_axis_angle(c.axes.x_axis, -v);
             let eye = pivot + turn * (c.eye - pivot);
             let fwd = turn * c.forward();
             let up = turn * c.axes.y_axis;

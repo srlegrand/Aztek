@@ -760,6 +760,7 @@ fn register_scene(c: &mut Commands<Session>) {
     c.register(
         Cmd::new("newScene", "Clear the scene. Not undoable.", |s, _| {
             aztek_ops::units::reset();
+            crate::anim_time::set_time_unit(&crate::anim_time::default_time_unit());
             s.graph.clear();
             s.extras = Default::default();
             crate::anim::set_frame(&mut s.graph, crate::anim::range().min);

@@ -158,6 +158,45 @@ pub fn rotate_for(yaw: f64, pitch: f64) -> DVec3 {
     DVec3::new(-pitch, yaw, 0.0)
 }
 
+/// Where a default camera sits for a new scene, and `viewSet -home` puts it: (translate, rotate in radians, centre of
+/// interest). The values the reference's own scene files hold, turned with the world when Z is up. Other names get the
+/// perspective camera's.
+pub fn home(name: &str) -> (DVec3, DVec3, f64) {
+    home_for(name, crate::world::up_z())
+}
+
+/// `home` for a given up axis: a scene file's defaults are the ones of the axis it was saved in.
+pub fn home_for(name: &str, z_up: bool) -> (DVec3, DVec3, f64) {
+    let short = name.rsplit('|').next().unwrap_or(name);
+    let (t, r, coi) = match short {
+        "top" => (DVec3::new(0.0, 1000.1, 0.0), DVec3::new(-std::f64::consts::FRAC_PI_2, 0.0, 0.0), 1000.1),
+        "front" => (DVec3::new(0.0, 0.0, 1000.1), DVec3::ZERO, 1000.1),
+        "side" => (DVec3::new(1000.1, 0.0, 0.0), DVec3::new(0.0, std::f64::consts::FRAC_PI_2, 0.0), 1000.1),
+        _ => (DVec3::new(28.0, 21.0, 28.0), DVec3::new((-27.938352729602379_f64).to_radians(), 45_f64.to_radians(), 0.0), 44.82186966202994),
+    };
+    if !z_up {
+        return (t, r, coi);
+    }
+    (DVec3::new(t.x, -t.z, t.y), turn_rotation(r), coi)
+}
+
+/// A rotate (XYZ, radians) set up for Y up, turned with the world.
+pub fn world_rotation(r: DVec3) -> DVec3 {
+    if crate::world::up_z() {
+        turn_rotation(r)
+    } else {
+        r
+    }
+}
+
+/// A rotate (XYZ, radians) turned a quarter about X, from Y up to Z up.
+fn turn_rotation(r: DVec3) -> DVec3 {
+    let m = DMat3::from_rotation_x(std::f64::consts::FRAC_PI_2) * DMat3::from_euler(glam::EulerRot::ZYX, r.z, r.y, r.x);
+    let (rz, ry, rx) = m.to_euler(glam::EulerRot::ZYX);
+    let tidy = |v: f64| if v.abs() < 1e-12 { 0.0 } else { v };
+    DVec3::new(tidy(rx), tidy(ry), tidy(rz))
+}
+
 /// Makes persp, top, front and side, hidden as the reference's are, plus the default sets. None of it goes on the undo stack.
 pub fn make_defaults(g: &mut Graph) {
     crate::shading::make_defaults(g);
@@ -181,11 +220,10 @@ pub fn make_defaults(g: &mut Graph) {
                 }
             }
         };
-        // The values the reference's own scene files hold for a new scene.
-        made("persp", DVec3::new(28.0, 21.0, 28.0), DVec3::new((-27.938352729602379_f64).to_radians(), 45_f64.to_radians(), 0.0), false, 44.82186966202994, "-p");
-        made("top", DVec3::new(0.0, 1000.1, 0.0), DVec3::new(-std::f64::consts::FRAC_PI_2, 0.0, 0.0), true, 1000.1, "-t");
-        made("front", DVec3::new(0.0, 0.0, 1000.1), DVec3::ZERO, true, 1000.1, "-f");
-        made("side", DVec3::new(1000.1, 0.0, 0.0), DVec3::new(0.0, std::f64::consts::FRAC_PI_2, 0.0), true, 1000.1, "-s");
+        for (name, ortho, flag) in [("persp", false, "-p"), ("top", true, "-t"), ("front", true, "-f"), ("side", true, "-s")] {
+            let (t, r, coi) = home(name);
+            made(name, t, r, ortho, coi, flag);
+        }
         for set in ["defaultLightSet", "defaultObjectSet"] {
             let _ = crate::object_sets::create(g, set, &[], false);
         }

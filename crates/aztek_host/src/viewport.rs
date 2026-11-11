@@ -442,6 +442,8 @@ pub struct Viewport {
     meshes: HashMap<NodeId, GpuMesh>,
     mats: MatTable,
     grid: Option<(Buffer, u32)>,
+    /// The up axis the grid was built for: it lies on the ground, so it is rebuilt when the axis changes.
+    grid_up_z: bool,
     pub wireframe: bool,
     pub wire_on_shaded: bool,
     pub tool: Tool,
@@ -494,6 +496,7 @@ impl Viewport {
             meshes: HashMap::new(),
             mats: Default::default(),
             grid: None,
+            grid_up_z: false,
             wireframe: false,
             wire_on_shaded: false,
             tool: Tool::Select,
@@ -557,18 +560,24 @@ impl Viewport {
         Screen { view_proj: self.view_proj(), width: self.rect[2], height: self.rect[3] }
     }
 
-    /// The reference's grid: 12 units each way, a line per unit, darker every 5, black axes; in the view's own plane for the
-    /// orthographic cameras.
+    /// The reference's grid: 12 units each way, a line per unit, darker every 5, black axes; on the ground (XZ, or XY when
+    /// Z is up), and in the view's own plane for the orthographic cameras.
     fn grid_lines(&self) -> Vec<LineVertex> {
         let n = ((self.grid_extent / self.grid_spacing).round() as i32).clamp(1, 200);
         let s = self.grid_spacing as f32;
         let ext = n as f32 * s;
-        // Maps (u, v) in the grid plane to world.
+        // Maps (u, v) in the grid plane to world, through the Y up frame.
+        let z_up = aztek_scene::world::up_z();
         let to = |u: f32, v: f32| -> [f32; 3] {
-            match self.cam.kind {
+            let p = match self.cam.kind {
                 CamKind::Front => [u, v, 0.0],
                 CamKind::Side => [0.0, v, -u],
                 _ => [u, 0.0, v],
+            };
+            if z_up {
+                [p[0], -p[2], p[1]]
+            } else {
+                p
             }
         };
         let mut v = Vec::new();
@@ -690,7 +699,11 @@ impl Viewport {
         r.set_viewport(gpu, x as f32, y as f32, w as f32, h as f32);
         let vp = self.view_proj();
         let view = self.cam.view();
+        if self.grid.is_some() && self.grid_up_z != aztek_scene::world::up_z() {
+            self.reset_grid(gpu);
+        }
         if self.grid.is_none() {
+            self.grid_up_z = aztek_scene::world::up_z();
             let lines = self.grid_lines();
             self.grid = Some((gpu.buffer_with(vk::BufferUsageFlags::VERTEX_BUFFER, &lines), lines.len() as u32));
         }
@@ -1621,8 +1634,9 @@ impl Viewport {
         let (o, d) = self.cam.ray(px, self.size());
         let (n, p0) = match self.cam.kind {
             CamKind::Persp => {
-                if d.y.abs() > 0.05 {
-                    (DVec3::Y, DVec3::ZERO)
+                let up = aztek_scene::world::up();
+                if d.dot(up).abs() > 0.05 {
+                    (up, DVec3::ZERO)
                 } else {
                     ((self.cam.eye() - self.cam.coi).normalize(), self.cam.coi)
                 }
@@ -2393,8 +2407,9 @@ impl Viewport {
                 None => return world,
             },
             _ => {
-                // Tool Settings' step, or a held J: whole steps of the offset, or of the world when absolute.
-                let step = if self.step_move > 0.0 { self.step_move } else if self.discrete_hold { 1.0 } else { 0.0 };
+                // Tool Settings' step, or a held J: whole steps of the offset, or of the world when absolute. The step
+                // is in the current linear unit.
+                let step = if self.step_move > 0.0 { self.step_move } else if self.discrete_hold { 1.0 } else { 0.0 } * aztek_ops::units::cm_per_unit();
                 if step <= 0.0 {
                     return world;
                 }

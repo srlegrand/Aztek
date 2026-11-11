@@ -29,15 +29,40 @@ PLAN 1.14, partly (09/11/2026). An instanced shape behaves as one shape to a scr
 
 ## Units
 
-Done 09/11/2026 (PLAN 1.1). What's stored is centimetres and radians. A command called from a script or the interface is in the current units, and `execute` converts its flags, arguments and results by tags in `crates/aztek_scene/src/unit_tables.rs`; commands called by other commands, viewport tools and the Python API are in stored units. `currentUnit` lives in `aztek_ops::units`, per scene: a new scene goes back to cm and degrees, opening a file takes on the file's.
+Done 09/11/2026 (PLAN 1.1). What's stored is centimetres and radians. A command called from a script or the interface is in the current units, and `execute` converts its flags, arguments and results by tags in `crates/aztek_scene/src/unit_tables.rs`; commands called by other commands, viewport tools and the Python API are in stored units. `currentUnit` lives in `aztek_ops::units`, per scene: a new scene starts in File > New Scene's default working units (cm, degrees and film unless changed, kept as the `workingUnitLinearDefault`, `workingUnitAngularDefault` and `workingUnitTimeDefault` optionVars), opening a file takes on the file's.
 
 - Scene files: written in the scene's current units, which the header names; read by the units the file names. `.ma` angle curves hold stored radians once read. Tangents in files stay as the file has them (value per second).
 - `connectAttr` between plugs that measure different things makes a `unitConversion` node with the reference's factor (translate to rotate is 0.0174533), one per axis for a whole vector. `disconnectAttr` removes it, `isConnected` sees through it, `listConnections` shows it unless `-scn`. A file's own connection is taken as written.
 - Python API (`maya.api.OpenMaya`, plug-ins): centimetres and radians whatever the scene, as the reference's are. `MAngle.uiUnit` and `MDistance.uiUnit` follow `currentUnit`.
 - Panels: Channel Box and its multi-edit (`+=`, `-=`, `*=`, `/=` work on what's shown), Attribute Editor, Graph Editor and Dope Sheet key values read in the current units through `query.rs`. Manipulator drags work in stored units and echo in the current ones.
 - Expressions: angular plugs read in the current unit unless `-uc none`, distances under `-uc all`.
-- Time: film, pal, ntsc, show and the rest of the reference's names, and custom rates such as `37fps`. Keys keep their seconds across a change unless `-ua 0`. Frames are what's stored, rescaled on a change, where the reference stores ticks: same results.
+- Time: film, pal, ntsc, show and the rest of the reference's names, `29.97df` as its own unit beside `29.97fps`, and custom rates such as `37fps`. Keys keep their seconds across a change unless `-ua 0` (Keep keys at current frame). Frames are what's stored, rescaled on a change, where the reference stores ticks: same results.
+- Preferences > Settings, as of 10/11/2026: Working Units (linear, angular, time, Keep keys at current frame) set the current scene's units; New Scene Options (File > New Scene's option box) set the defaults. A change tells `scriptJob -e linearUnitChanged`, `angularUnitChanged` and `timeUnitChanged`.
+- Grid: `grid` sizes and spacings are in the current linear unit, as the reference's are, so 12 units each way is 12 metres in a metre scene. The move tool's step and a held J step in the linear unit; the drag's readout in the view shows the current units.
 - USD stages hold degrees: converted where they meet the scene.
+
+## Up axis
+
+As of 10/11/2026. Y or Z up, as Preferences > Settings > World Coordinate System sets it: a preference kept between
+sessions (`optionVar upAxisDirection`), not part of a scene, so a new scene keeps it. `upAxis -ax z` changes it;
+`-rv` turns the default cameras with the world so the ground stays where it was on screen, as the Preferences do on
+Save. With Z up:
+
+- The default cameras of a new scene, `viewSet -home`, `-top` (down Z, Y up the screen), `-front` (from -Y),
+  `-side`, `-persp`, `orbit`, `tumble` and `viewPlace` work about Z; the views tumble about Z and their pitch is
+  above the XY ground.
+- The grid lies on XY in the perspective view. Clicks that place on the ground (joints, curves, interactive
+  primitives, `X` grid snapping) use XY.
+- Primitives are built standing up Z (their `upAxis` attribute says z).
+- Saving writes the reference's `upAxisScriptNode` (`upAxis -ax "z"; viewSet -home persp;`). Opening such a file in a Y
+  up session switches to Z up and homes the perspective camera, as running that script does; the node isn't kept and
+  is written again on save. A Y up file opened in a Z up session leaves the session Z up, as the reference does. The
+  file's default cameras start from the defaults of the axis it was saved in.
+- `MGlobal.isYAxisUp`, `isZAxisUp`, `upAxis`, `setYAxisUp` and `setZAxisUp` follow it. OBJ, PLY and STL `-upAxis`
+  and USD import convert to it; USD import with `-axisAndUnitMethod overwritePrefs` takes the stage's axis.
+- Not changed by the axis: attribute defaults (aim vectors, gravity and field directions). Unchecked against the
+  reference: whether its gravity and nucleus defaults follow Z up.
+- Batch mode (`aztek --batch`) starts Y up with the default units: it doesn't read the saved preferences.
 - Left as they are: HumanIK's per-joint state attributes keep what their solver works in. Attributes Aztek adds itself with no counterpart (`hardAngle`, `minAngle`) and UV angles the reference documents in degrees (`polyEditUV -angle`, `polyMoveUV -ra`) stay in degrees.
 - Unverified, all on the capture list: whether `xform -q -m` answers in the current unit (here centimetres), whether a primitive's default size follows the unit (here it doesn't: `polyCube` with no `-w` in a metre scene is 1 cm wide), and whether `polyEvaluate -b` scales (1.11).
 
@@ -391,7 +416,7 @@ softens nothing; `dropoffLocator` marks the place and doesn't change the wire. N
 Animation (`anim_misc.rs`, `characters.rs`): `timeWarp` (linear between its frames), `setKeyPath`, `selectKeyframe`,
 `tickDrawSpecial`, `recordAttr` (kept for scripts; no `record`), `bakeClip`, `clipMatching`, `bakeSimulation`, `animDisplay`,
 `keyingGroup`, `characterMap`. Not here: `characterize`.
-System (`system_cmds.rs`): `upAxis` (the default cameras turn; saved; the grid and the rest stay Y up), `cycleCheck`, `convertUnit`,
+System (`system_cmds.rs`): `upAxis` (see Up axis), `cycleCheck`, `convertUnit`,
 `copyAttr`, `evaluationManager` and `threadCount` (settings only), `dgInfo`, `dgtimer` (zeros), `displayColor`, `displayRGBColor`,
 `colorIndex`, `displayLevelOfDetail`, `displayPref`, `displayStats`, `displaySurface` (all kept for scripts, not yet drawn by),
 `listNodeTypes`, `listLights` (empty), `selectPriority`, `selectedNodes`, `findType`, `objectCenter`, `nearestPointOnMesh`,
@@ -463,7 +488,7 @@ As of 11/11/2026:
 Not yet in the interface: Topology symmetry (World X, Y, Z act in object space: `setSymmetry` has no world mode), Cut,
 curve Edit Point and Curve Point modes, UV and Vertex Face component modes in the marking menu,
 per-object display toggles are not saved with the scene,
-Outliner reorder between siblings, linear units and Z up. Roll stays in the view, not the
+Outliner reorder between siblings. Roll stays in the view, not the
 camera node.
 
 Scripts that build their own interface, as of 07/11/2026. The ELF commands (`window`, the layouts, the controls and

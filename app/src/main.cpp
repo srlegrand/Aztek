@@ -102,6 +102,8 @@ int main(int argc, char** argv) {
         splash->showMessage("Starting the core...", Qt::AlignBottom | Qt::AlignRight, QColor(150, 150, 150));
         app.processEvents();
     }
+    // The saved preferences first: the up axis and units decide the first scene's cameras and grid.
+    aztek_use_prefs();
     az::MainWindow w;
     w.show();
     if (splash) {

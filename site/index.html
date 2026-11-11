@@ -19,13 +19,14 @@
 <header class="top">
   <a class="brand" href="#"><img src="img/aztek-icon.png" alt="" width="28" height="28"><span>Aztek</span></a>
   <nav>
+    <a href="#feedback">Anything off?</a>
+    <a href="#fix">Fix it</a>
     <a href="#download">Download</a>
     <a href="#glance">Features</a>
     <a href="#dynamics">Dynamics</a>
     <a href="#rendering">Rendering</a>
     <a href="#examples">Examples</a>
     <a href="#copy">Copy it</a>
-    <a href="#fix">Fix it</a>
     <a href="#licence">Licence</a>
     <a href="https://github.com/srlegrand/Aztek">GitHub</a>
   </nav>
@@ -42,6 +43,79 @@
         files open and save, <code>.mb</code> files open, production rigs pose. Over fifty example scenes to start from. MIT-0, for Linux, Windows and macOS.</p>
     </div>
   </div>
+</section>
+
+<section class="feedback" id="feedback">
+  <div class="fb-copy">
+    <span class="fb-pill">This doesn't feel right!</span>
+    <h2>Anything off? One button.</h2>
+    <p>Aztek should feel like second nature to anyone who has spent years in a 3D package. If something doesn't work, or
+      works but doesn't feel quite right (a hotkey, a drag, a default, a menu in the wrong place), press the orange button
+      at the right of the shelf bar. The small arrow on its left folds it away; it stays in the Help menu.</p>
+    <p>Say what you did and what you expected; that's the whole report. Add a screenshot you can draw on, or a copy of the
+      scene, if it helps. It opens a filled-in GitHub issue in your browser, so every rough edge anyone notices ends up in
+      one <a href="https://github.com/srlegrand/Aztek/issues">public list</a>. Nothing is sent until you press Submit there.</p>
+  </div>
+  <img src="img/feedback.png" alt="The This doesn't feel right! window over the main window" loading="lazy">
+</section>
+
+<section class="fix" id="fix">
+  <h2>Fix it yourself</h2>
+  <p>If something is wrong and you can see how to fix it, fix it and send the change. Small fixes are as welcome as
+    large ones, and there is nothing to ask first.</p>
+  <ol>
+    <li><strong>Get the source and build it.</strong>
+<pre><code>git clone https://github.com/srlegrand/Aztek.git
+cd Aztek
+./build.sh --deps --run</code></pre></li>
+    <li><strong>Find the code.</strong> The Rust core is under <code>crates/</code>, the Qt interface under
+      <code>app/src</code>. Searching for a command's name, a menu label or an error message usually lands on the right
+      file. <a href="https://github.com/srlegrand/Aztek/blob/main/PARITY.md">PARITY.md</a> says how each area is meant
+      to behave.</li>
+    <li><strong>Make the change and check it.</strong> <code>./build.sh --run</code> rebuilds and starts Aztek;
+      <code>cargo test -p aztek_scene</code> runs a crate's tests.</li>
+    <li><strong>Send it.</strong> As a patch, with no fork needed:
+<pre><code>git add -A
+git diff --cached &gt; my-fix.patch</code></pre>
+      and attach the file to the <a href="https://github.com/srlegrand/Aztek/issues">issue</a> it fixes or to a new one.
+      Or <a href="https://github.com/srlegrand/Aztek/fork">fork the repository</a>, push a branch and open a pull
+      request.</li>
+  </ol>
+  <h3>With an LLM</h3>
+  <p>A coding assistant that can read the folder and run commands in it can find the code and make the change with
+    you. Clone and build first, start the assistant in the <code>Aztek</code> folder, and give it this, with the problem
+    filled in:</p>
+<pre><code>You are working in a clone of Aztek (https://github.com/srlegrand/Aztek), a 3D application
+with a Rust core under crates/ and a Qt interface in C++ under app/src.
+
+Read CLAUDE.md first: it holds the project's rules and layout. PARITY.md says how each area
+is meant to behave.
+
+The problem:
+&lt;What you did, what happened, and what you expected instead. Paste the issue's text and
+its number if there is one.&gt;
+
+Do this, in order:
+1. Find the code responsible and tell me what causes the problem before changing anything.
+2. Make the smallest change that fixes it, in the style of the code around it. Don't
+   refactor, rename or reformat what the fix doesn't need.
+3. If the fix can be tested, add a test in that crate's tests/ folder, and run the crate's
+   tests: cargo test -p &lt;crate&gt;.
+4. Build with ./build.sh (build.bat on Windows, ./build-macos.sh on macOS) and fix what
+   doesn't compile.
+5. If the change alters behaviour that PARITY.md describes, update PARITY.md.
+6. Don't commit or push, and add no credit or attribution lines anywhere.
+
+When you are done:
+- run: git add -A &amp;&amp; git diff --cached &gt; my-fix.patch
+- list the files you changed and why, in a few lines
+- give me the steps to check the fix by hand in the app
+- say plainly what you could not test or verify</code></pre>
+  <p>Then build, start Aztek and check the fix yourself by the steps it gives: it can be wrong while sounding sure.
+    Read the patch before sending it, and say in the issue what you checked.</p>
+  <p class="small">One fix per patch, a line on what was wrong and what happens now. A change you send goes in under
+    MIT-0 like everything else. The full steps are in the
+    <a href="https://github.com/srlegrand/Aztek#fix-it-yourself">README</a>.</p>
 </section>
 
 <section class="download" id="download">
@@ -314,79 +388,6 @@ cmds.setKeyframe(cube, at='ty', t=24, v=5)</code></pre>
       <figure class="wide"><img src="img/examples-menu.png" alt="File, Examples, Modelling submenu" loading="lazy"><figcaption><b>File &gt; Examples</b> Every scene opens without a warning; a test plays each one.</figcaption></figure>
     </div>
   </article>
-</section>
-
-<section class="feedback" id="feedback">
-  <div class="fb-copy">
-    <span class="fb-pill">This doesn't feel right!</span>
-    <h2>Anything off? One button.</h2>
-    <p>Aztek should feel like second nature to anyone who has spent years in a 3D package. If something doesn't work, or
-      works but doesn't feel quite right (a hotkey, a drag, a default, a menu in the wrong place), press the orange button
-      at the right of the shelf bar. The small arrow on its left folds it away; it stays in the Help menu.</p>
-    <p>Say what you did and what you expected; that's the whole report. Add a screenshot you can draw on, or a copy of the
-      scene, if it helps. It opens a filled-in GitHub issue in your browser, so every rough edge anyone notices ends up in
-      one <a href="https://github.com/srlegrand/Aztek/issues">public list</a>. Nothing is sent until you press Submit there.</p>
-  </div>
-  <img src="img/feedback.png" alt="The This doesn't feel right! window over the main window" loading="lazy">
-</section>
-
-<section class="fix" id="fix">
-  <h2>Fix it yourself</h2>
-  <p>If something is wrong and you can see how to fix it, fix it and send the change. Small fixes are as welcome as
-    large ones, and there is nothing to ask first.</p>
-  <ol>
-    <li><strong>Get the source and build it.</strong>
-<pre><code>git clone https://github.com/srlegrand/Aztek.git
-cd Aztek
-./build.sh --deps --run</code></pre></li>
-    <li><strong>Find the code.</strong> The Rust core is under <code>crates/</code>, the Qt interface under
-      <code>app/src</code>. Searching for a command's name, a menu label or an error message usually lands on the right
-      file. <a href="https://github.com/srlegrand/Aztek/blob/main/PARITY.md">PARITY.md</a> says how each area is meant
-      to behave.</li>
-    <li><strong>Make the change and check it.</strong> <code>./build.sh --run</code> rebuilds and starts Aztek;
-      <code>cargo test -p aztek_scene</code> runs a crate's tests.</li>
-    <li><strong>Send it.</strong> As a patch, with no fork needed:
-<pre><code>git add -A
-git diff --cached &gt; my-fix.patch</code></pre>
-      and attach the file to the <a href="https://github.com/srlegrand/Aztek/issues">issue</a> it fixes or to a new one.
-      Or <a href="https://github.com/srlegrand/Aztek/fork">fork the repository</a>, push a branch and open a pull
-      request.</li>
-  </ol>
-  <h3>With an LLM</h3>
-  <p>A coding assistant that can read the folder and run commands in it can find the code and make the change with
-    you. Clone and build first, start the assistant in the <code>Aztek</code> folder, and give it this, with the problem
-    filled in:</p>
-<pre><code>You are working in a clone of Aztek (https://github.com/srlegrand/Aztek), a 3D application
-with a Rust core under crates/ and a Qt interface in C++ under app/src.
-
-Read CLAUDE.md first: it holds the project's rules and layout. PARITY.md says how each area
-is meant to behave.
-
-The problem:
-&lt;What you did, what happened, and what you expected instead. Paste the issue's text and
-its number if there is one.&gt;
-
-Do this, in order:
-1. Find the code responsible and tell me what causes the problem before changing anything.
-2. Make the smallest change that fixes it, in the style of the code around it. Don't
-   refactor, rename or reformat what the fix doesn't need.
-3. If the fix can be tested, add a test in that crate's tests/ folder, and run the crate's
-   tests: cargo test -p &lt;crate&gt;.
-4. Build with ./build.sh (build.bat on Windows, ./build-macos.sh on macOS) and fix what
-   doesn't compile.
-5. If the change alters behaviour that PARITY.md describes, update PARITY.md.
-6. Don't commit or push, and add no credit or attribution lines anywhere.
-
-When you are done:
-- run: git add -A &amp;&amp; git diff --cached &gt; my-fix.patch
-- list the files you changed and why, in a few lines
-- give me the steps to check the fix by hand in the app
-- say plainly what you could not test or verify</code></pre>
-  <p>Then build, start Aztek and check the fix yourself by the steps it gives: it can be wrong while sounding sure.
-    Read the patch before sending it, and say in the issue what you checked.</p>
-  <p class="small">One fix per patch, a line on what was wrong and what happens now. A change you send goes in under
-    MIT-0 like everything else. The full steps are in the
-    <a href="https://github.com/srlegrand/Aztek#fix-it-yourself">README</a>.</p>
 </section>
 
 <section class="works" id="works">

@@ -8,43 +8,6 @@
   <a href="https://srlegrand.github.io/Aztek/"><img src="https://img.shields.io/badge/Website-white?style=for-the-badge" alt="Website"></a>
 </p>
 
-## Why
-
-The tools we build our work on shouldn't belong to whoever bought them last. Too many of them were bought, left to stand still, and kept on subscription while bugs older than some of the people using them went unfixed. Aztek works the way you already work, and it belongs to everyone who uses it: no account, no subscription, no owner who can sell it, shelve it or switch it off.
-
-**Back it up, clone it, fork it.** As long as one copy exists somewhere, nobody can take it away. See [Copy it anywhere](#copy-it-anywhere).
-
-[![Build](https://github.com/srlegrand/Aztek/actions/workflows/build.yml/badge.svg)](https://github.com/srlegrand/Aztek/actions/workflows/build.yml)
-
-A 3D application for modelling, UVs, rigging, animation, dynamics and rendering, with the industry-standard commands, hotkeys, menus and file format. Rust core (scene graph, commands,
-geometry, Vulkan viewport), Qt Widgets shell in C++, a MEL interpreter, and embedded Python with `aztek.cmds`,
-compatibility modules so existing scripts import unchanged, and the Python API (2.0, and 1.0 as `maya.OpenMaya`). Reads and writes `.ma` files and reads `.mb` files. [PARITY.md](PARITY.md) has the behaviour
-target and status, including known differences; [docs/COMMANDS.md](docs/COMMANDS.md) lists all 1108 commands.
-
-Website: [srlegrand.github.io/Aztek](https://srlegrand.github.io/Aztek/). Licence: [MIT-0](LICENSE).
-
-**Download** from the [latest release](https://github.com/srlegrand/Aztek/releases/latest): Windows installer or zip, Rocky Linux 9 and 8 `.rpm`, Ubuntu 24.04 and 22.04 `.deb`, an AppImage for any other Linux, Linux `.tar.gz`, and an early macOS build for Apple silicon. Install steps are under [Install](#install).
-
-| Modelling history | A flag in a breeze | A tower knocked down |
-| --- | --- | --- |
-| ![Extrude, width and bevel keyed on their history nodes](docs/clip-modelling.gif) | ![A cloth flag nailed to its pole, in a breeze](docs/clip-flag.gif) | ![A tower of blocks knocked down by a heavy ball](docs/clip-tower.gif) |
-
-![A production rig opened from its .ma file](docs/production-rig.png)
-
-A production character rig, opened from its `.ma` file and posed: 414 joints, 37 skinClusters, 17
-blendShapes, 82 IK handles, follicles, ribbons and wires. It opens in about 3 seconds and responds in 13 to 44 ms per change.
-
-## Copy it anywhere
-
-Copying Aztek somewhere else is welcome. Clone it, fork it, mirror it or re-host it on any git server or other version
-control: Codeberg, GitLab, a forge in your country, a server at your studio, a drive in your pocket. With or without
-changes, under your own name or none. There is nothing to ask and no one to credit: the licence is [MIT-0](LICENSE).
-Every extra copy makes the project harder to lose.
-
-    git clone --mirror https://github.com/srlegrand/Aztek.git
-    cd Aztek.git
-    git push --mirror <your repository's URL>
-
 ## This doesn't feel right!
 
 Aztek should feel like second nature to anyone who has spent years in a 3D package. If something doesn't work, or works but
@@ -150,6 +113,43 @@ What helps it go in quickly: one fix per patch, a line on what was wrong and wha
 if there is one. A change you send goes in under [MIT-0](LICENSE) like everything else here. And if you would rather
 keep the fix in your own copy, that is fine too: see [Copy it anywhere](#copy-it-anywhere).
 
+## Why
+
+The tools we build our work on shouldn't belong to whoever bought them last. Too many of them were bought, left to stand still, and kept on subscription while bugs older than some of the people using them went unfixed. Aztek works the way you already work, and it belongs to everyone who uses it: no account, no subscription, no owner who can sell it, shelve it or switch it off.
+
+**Back it up, clone it, fork it.** As long as one copy exists somewhere, nobody can take it away. See [Copy it anywhere](#copy-it-anywhere).
+
+[![Build](https://github.com/srlegrand/Aztek/actions/workflows/build.yml/badge.svg)](https://github.com/srlegrand/Aztek/actions/workflows/build.yml)
+
+A 3D application for modelling, UVs, rigging, animation, dynamics and rendering, with the industry-standard commands, hotkeys, menus and file format. Rust core (scene graph, commands,
+geometry, Vulkan viewport), Qt Widgets shell in C++, a MEL interpreter, and embedded Python with `aztek.cmds`,
+compatibility modules so existing scripts import unchanged, and the Python API (2.0, and 1.0 as `maya.OpenMaya`). Reads and writes `.ma` files and reads `.mb` files. [PARITY.md](PARITY.md) has the behaviour
+target and status, including known differences; [docs/COMMANDS.md](docs/COMMANDS.md) lists all 1111 commands.
+
+Website: [srlegrand.github.io/Aztek](https://srlegrand.github.io/Aztek/). Licence: [MIT-0](LICENSE).
+
+**Download** from the [latest release](https://github.com/srlegrand/Aztek/releases/latest): Windows installer or zip, Rocky Linux 9 and 8 `.rpm`, Ubuntu 24.04 and 22.04 `.deb`, an AppImage for any other Linux, Linux `.tar.gz`, and an early macOS build for Apple silicon. Install steps are under [Install](#install).
+
+| Modelling history | A flag in a breeze | A tower knocked down |
+| --- | --- | --- |
+| ![Extrude, width and bevel keyed on their history nodes](docs/clip-modelling.gif) | ![A cloth flag nailed to its pole, in a breeze](docs/clip-flag.gif) | ![A tower of blocks knocked down by a heavy ball](docs/clip-tower.gif) |
+
+![A production rig opened from its .ma file](docs/production-rig.png)
+
+A production character rig, opened from its `.ma` file and posed: 414 joints, 37 skinClusters, 17
+blendShapes, 82 IK handles, follicles, ribbons and wires. It opens in about 3 seconds and responds in 13 to 44 ms per change.
+
+## Copy it anywhere
+
+Copying Aztek somewhere else is welcome. Clone it, fork it, mirror it or re-host it on any git server or other version
+control: Codeberg, GitLab, a forge in your country, a server at your studio, a drive in your pocket. With or without
+changes, under your own name or none. There is nothing to ask and no one to credit: the licence is [MIT-0](LICENSE).
+Every extra copy makes the project harder to lose.
+
+    git clone --mirror https://github.com/srlegrand/Aztek.git
+    cd Aztek.git
+    git push --mirror <your repository's URL>
+
 ## What's in it
 
 **Modelling**
@@ -238,6 +238,8 @@ keep the fix in your own copy, that is fine too: see [Copy it anywhere](#copy-it
 
 - **Interface:** menu sets, shelves with an editor, hotkey editor, marking menus, hotbox, channel box, outliner, attribute
   editor, node editor, tool settings, panel layouts, workspaces.
+- **Units and up axis:** Y or Z up throughout (cameras, views, grid, primitives, files), and working units in every
+  linear, angular and time unit, set in Preferences > Settings, with new scene defaults in File > New Scene's options.
 
 ![Aztek](docs/screenshot.png)
 

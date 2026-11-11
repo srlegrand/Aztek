@@ -7,9 +7,12 @@
 #include "viewport.h"
 #include "widgets.h"
 
+#include <algorithm>
+
 #include <QAbstractButton>
 #include <QApplication>
 #include <QPushButton>
+#include <QRadioButton>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialogButtonBox>
@@ -28,6 +31,80 @@
 #include <QVBoxLayout>
 
 namespace az {
+
+namespace {
+// The working units the reference offers, as (name, label). Time is in its order: frame rates, then clock units.
+const QList<QPair<QString, QString>> kLinearUnits = {{"mm", "millimeter"}, {"cm", "centimeter"}, {"m", "meter"}, {"km", "kilometer"},
+                                                     {"in", "inch"}, {"ft", "foot"}, {"yd", "yard"}, {"mi", "mile"}};
+const QList<QPair<QString, QString>> kAngularUnits = {{"deg", "degrees"}, {"rad", "radians"}};
+const QList<QPair<QString, QString>> kTimeUnits = {
+    {"2fps", "2 fps"}, {"3fps", "3 fps"}, {"4fps", "4 fps"}, {"5fps", "5 fps"}, {"6fps", "6 fps"}, {"8fps", "8 fps"},
+    {"10fps", "10 fps"}, {"12fps", "12 fps"}, {"game", "15 fps (Game)"}, {"16fps", "16 fps"}, {"20fps", "20 fps"},
+    {"23.976fps", "23.976 fps"}, {"film", "24 fps (Film)"}, {"pal", "25 fps (PAL)"}, {"29.97fps", "29.97 fps"},
+    {"29.97df", "29.97 df (drop frame)"}, {"ntsc", "30 fps (NTSC)"}, {"40fps", "40 fps"}, {"47.952fps", "47.952 fps"},
+    {"show", "48 fps (Show)"}, {"palf", "50 fps (PAL Field)"}, {"59.94fps", "59.94 fps"}, {"ntscf", "60 fps (NTSC Field)"},
+    {"75fps", "75 fps"}, {"80fps", "80 fps"}, {"100fps", "100 fps"}, {"120fps", "120 fps"}, {"125fps", "125 fps"},
+    {"150fps", "150 fps"}, {"200fps", "200 fps"}, {"240fps", "240 fps"}, {"250fps", "250 fps"}, {"300fps", "300 fps"},
+    {"375fps", "375 fps"}, {"400fps", "400 fps"}, {"500fps", "500 fps"}, {"600fps", "600 fps"}, {"750fps", "750 fps"},
+    {"1200fps", "1200 fps"}, {"1500fps", "1500 fps"}, {"2000fps", "2000 fps"}, {"3000fps", "3000 fps"},
+    {"6000fps", "6000 fps"}, {"44100fps", "44100 fps"}, {"48000fps", "48000 fps"}, {"millisec", "milliseconds"},
+    {"sec", "seconds"}, {"min", "minutes"}, {"hour", "hours"}};
+
+// A combo box of units, its data the unit's name; the current one is `now`, added when it isn't listed (a custom rate).
+QComboBox* unit_combo(QWidget* parent, const QList<QPair<QString, QString>>& units, const QString& now) {
+    auto* c = new QComboBox(parent);
+    for (const auto& u : units) c->addItem(u.second, u.first);
+    int i = c->findData(now);
+    if (i < 0 && !now.isEmpty()) {
+        c->addItem(now, now);
+        i = c->count() - 1;
+    }
+    c->setCurrentIndex(std::max(i, 0));
+    return c;
+}
+
+QString text_of(const QJsonValue& v) { return v.isArray() ? v.toArray().first().toString() : v.toString(); }
+} // namespace
+
+// File > New Scene's options: the units a new scene starts in, kept as the reference's optionVars.
+void MainWindow::new_scene_options() {
+    QWidget* parent = this;
+    auto* d = new QDialog(parent);
+    d->setAttribute(Qt::WA_DeleteOnClose);
+    d->setWindowTitle("New Scene Options");
+    auto* lay = new QVBoxLayout(d);
+    auto* f = new QFormLayout();
+    lay->addLayout(f);
+    auto saved = [](const char* key, const QString& def) {
+        QString v = text_of(mel(QString("optionVar -q \"%1\"").arg(key)));
+        return v.isEmpty() || v == "0" ? def : v;
+    };
+    auto* lin = unit_combo(d, kLinearUnits, saved("workingUnitLinearDefault", "cm"));
+    auto* ang = unit_combo(d, kAngularUnits, saved("workingUnitAngularDefault", "deg"));
+    auto* tim = unit_combo(d, kTimeUnits, saved("workingUnitTimeDefault", "film"));
+    f->addRow(new QLabel("<b>Default Working Units</b>", d));
+    f->addRow("Linear:", lin);
+    f->addRow("Angular:", ang);
+    f->addRow("Time:", tim);
+    auto* bb = new QDialogButtonBox(d);
+    auto* make = bb->addButton("New Scene", QDialogButtonBox::AcceptRole);
+    auto* apply = bb->addButton("Apply", QDialogButtonBox::ApplyRole);
+    bb->addButton("Close", QDialogButtonBox::RejectRole);
+    lay->addWidget(bb);
+    auto store = [lin, ang, tim] {
+        mel(QString("optionVar -sv \"workingUnitLinearDefault\" \"%1\" -sv \"workingUnitAngularDefault\" \"%2\" -sv \"workingUnitTimeDefault\" \"%3\"")
+                .arg(lin->currentData().toString(), ang->currentData().toString(), tim->currentData().toString()));
+        exec_quiet("newSceneUnits", QJsonObject{{"linear", lin->currentData().toString()}, {"angle", ang->currentData().toString()}, {"time", tim->currentData().toString()}});
+    };
+    QObject::connect(apply, &QPushButton::clicked, d, store);
+    QObject::connect(make, &QPushButton::clicked, d, [this, d, store] {
+        store();
+        new_scene();
+        d->accept();
+    });
+    QObject::connect(bb, &QDialogButtonBox::rejected, d, &QDialog::reject);
+    d->show();
+}
 
 namespace {
 void option_var(const QString& key, const QJsonValue& v) {
@@ -133,17 +210,51 @@ Preferences::Preferences(QWidget* parent) : QDialog(parent) {
     choice(f, "Playback speed", "playbackSpeed", {"Play every frame", "Real-time", "Half", "Twice"}, "Real-time");
     choice(f, "Looping", "playbackLoop", {"Once", "Oscillate", "Continuous"}, "Continuous");
     f = page("Settings");
+    // World Coordinate System: a preference kept between scenes. Saving a change turns the views with the world
+    // (upAxis -rv), as the reference does.
+    f->addRow(new QLabel("<b>World Coordinate System</b>", this));
+    auto* up_row = new QWidget(this);
+    auto* up_lay = new QHBoxLayout(up_row);
+    up_lay->setContentsMargins(0, 0, 0, 0);
+    auto* up_y = new QRadioButton("Y", up_row);
+    auto* up_z = new QRadioButton("Z", up_row);
+    up_lay->addWidget(up_y);
+    up_lay->addWidget(up_z);
+    up_lay->addStretch(1);
+    const bool z_now = text_of(mel("upAxis -q -ax")) == "z";
+    (z_now ? up_z : up_y)->setChecked(true);
+    f->addRow("Up axis:", up_row);
+    savers->append([up_z, z_now](QSettings&) {
+        if (up_z->isChecked() != z_now) az::exec("upAxis", QJsonObject{{"axis", up_z->isChecked() ? "z" : "y"}, {"rotateView", true}});
+    });
+    // Working Units: the current scene's, saved with it. A new scene starts in File > New Scene's options.
+    f->addRow(new QLabel("<b>Working Units</b>", this));
+    const QString lin_now = text_of(mel("currentUnit -q -l")), ang_now = text_of(mel("currentUnit -q -a")), time_now = text_of(mel("currentUnit -q -t"));
+    auto* lin = unit_combo(this, kLinearUnits, lin_now);
+    auto* ang = unit_combo(this, kAngularUnits, ang_now);
+    auto* tim = unit_combo(this, kTimeUnits, time_now);
+    auto* keep = new QCheckBox("Keep keys at current frame", this);
+    keep->setToolTip("When the time unit changes, keys keep their frame numbers instead of their time in seconds.");
+    f->addRow("Linear:", lin);
+    f->addRow("Angular:", ang);
+    f->addRow("Time:", tim);
+    f->addRow("", keep);
+    savers->append([lin, ang, tim, keep, lin_now, ang_now, time_now](QSettings&) {
+        QJsonObject call;
+        if (lin->currentData().toString() != lin_now) call["linear"] = lin->currentData().toString();
+        if (ang->currentData().toString() != ang_now) call["angle"] = ang->currentData().toString();
+        if (tim->currentData().toString() != time_now) {
+            call["time"] = tim->currentData().toString();
+            call["updateAnimation"] = !keep->isChecked();
+        }
+        if (!call.isEmpty()) az::exec("currentUnit", call);
+    });
+    auto* new_opts = new QPushButton("New Scene Options...", this);
+    connect(new_opts, &QPushButton::clicked, this, [this] {
+        if (auto* w = qobject_cast<MainWindow*>(parentWidget())) w->new_scene_options();
+    });
+    f->addRow("", new_opts);
     check(f, "Construction history on at start", "constructionHistory", true);
-    auto* units = new QComboBox(this);
-    units->addItem("centimeter");
-    units->setEnabled(false);
-    units->setToolTip("Other units are not available yet");
-    f->addRow("Working units, linear:", units);
-    auto* up = new QComboBox(this);
-    up->addItem("Y");
-    up->setEnabled(false);
-    up->setToolTip("Z up is not available yet");
-    f->addRow("World coordinate system, up axis:", up);
     number(f, "Undo queue length (0 infinite)", "undoQueue", 0, 0, 100000, 10, 0);
     check(f, "Autosave", "autosave", false);
     number(f, "Autosave every (minutes)", "autosaveMinutes", 10, 1, 240, 1, 0);
@@ -200,10 +311,10 @@ void MainWindow::apply_prefs() {
         v->set("stepMove", QString::number(s.value("prefs/stepMove", 0.0).toDouble()));
         v->set("stepRotate", QString::number(s.value("prefs/stepRotate", 0.0).toDouble()));
         v->set("stepScale", QString::number(s.value("prefs/stepScale", 0.0).toDouble()));
-        v->set("gridSpacing", QString::number(s.value("prefs/gridSpacing", 1.0).toDouble()));
-        v->set("gridSize", QString::number(s.value("prefs/gridSize", 12.0).toDouble()));
         v->set("disp", QString("{\"normalSize\":%1}").arg(s.value("prefs/normalSize", 0.4).toDouble()));
     }
+    // The grid goes through the grid command: its numbers are in the current linear unit, as the reference's are.
+    exec_quiet("grid", QJsonObject{{"spacing", s.value("prefs/gridSpacing", 1.0).toDouble() * 5.0}, {"divisions", 5}, {"size", s.value("prefs/gridSize", 12.0).toDouble()}});
     auto ui_pref = [](const char* name, const QJsonValue& v) { exec_quiet("uiPref", QJsonObject{{"args", QJsonArray{name, v}}}); };
     ui_pref("manipReadout", s.value("prefs/manipReadout", true).toBool());
     ui_pref("paintSelectRadius", s.value("prefs/paintSelectRadius", 22.0).toDouble());

@@ -8,6 +8,8 @@ extern "C" {
 
 void aztek_free(char* p);
 void aztek_init(void);
+// The application's start-up: reads the saved preferences (up axis, new scene units, optionVars) and keeps them.
+void aztek_use_prefs(void);
 char* aztek_mel(const char* src);
 int aztek_python(const char* src);
 char* aztek_exec(const char* name, const char* call_json);

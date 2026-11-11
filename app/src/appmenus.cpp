@@ -144,7 +144,7 @@ void MainWindow::add_recent_project(const QString& dir) {
 
 QMenu* MainWindow::file_menu() {
     auto* m = new QMenu("File", this);
-    m->addAction(icon("new"), "New Scene\tCtrl+N", [this] { new_scene(); });
+    m->addAction(new OptionRow("New Scene", "Ctrl+N", [this] { new_scene(); }, [this] { new_scene_options(); }, m));
     m->addAction(icon("open"), "Open Scene...\tCtrl+O", this, &MainWindow::open_scene);
     m->addAction(icon("save"), "Save Scene\tCtrl+S", [this] { save_scene(false); });
     m->addAction("Save Scene As...\tCtrl+Shift+S", [this] { save_scene(true); });

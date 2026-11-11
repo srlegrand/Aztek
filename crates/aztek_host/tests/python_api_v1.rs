@@ -113,6 +113,10 @@ v = om.MVector(1, 0, 0) ^ om.MVector(0, 1, 0)
 print(v.z, type(v).__name__, isinstance(v, om.MVector))
 st = om.MStatus()
 print(bool(st), st.error())
+om.MGlobal.setZAxisUp(True)
+print(om.MGlobal.isZAxisUp(), om.MGlobal.upAxis(), cmds.upAxis(q=True, ax=True))
+om.MGlobal.setYAxisUp(True)
+print(om.MGlobal.isYAxisUp())
 "#,
         &[
             "3.0 1.5708",
@@ -126,6 +130,8 @@ print(bool(st), st.error())
             "4 7 MIntArray",
             "1.0 MVector True",
             "True False",
+            "True (0, 0, 1) z",
+            "True",
         ],
     );
 }

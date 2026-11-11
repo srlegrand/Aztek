@@ -65,6 +65,31 @@ pub const TIME_UNITS: &[(&str, f64)] = &[
     ("millisec", 1000.0),
 ];
 
+thread_local! {
+    /// The time unit a new scene starts in: File > New Scene's options, film unless changed.
+    static DEFAULT_TIME: std::cell::RefCell<String> = std::cell::RefCell::new("film".to_string());
+}
+
+pub fn default_time_unit() -> String {
+    DEFAULT_TIME.with(|t| t.borrow().clone())
+}
+
+pub fn set_default_time_unit(name: &str) -> bool {
+    if time_unit_fps(name).is_none() {
+        return false;
+    }
+    DEFAULT_TIME.with(|t| *t.borrow_mut() = name.to_string());
+    true
+}
+
+/// Makes a time unit current with nothing else changed: no keys move. A new scene and a file being read do this.
+pub fn set_time_unit(name: &str) {
+    if let Some(f) = time_unit_fps(name) {
+        anim::set_fps(f);
+        anim::set_drop_frame(name == "29.97df");
+    }
+}
+
 pub fn time_unit_fps(name: &str) -> Option<f64> {
     if let Some((_, v)) = TIME_UNITS.iter().find(|(n, _)| *n == name) {
         return Some(*v);
@@ -72,8 +97,12 @@ pub fn time_unit_fps(name: &str) -> Option<f64> {
     name.strip_suffix("fps").and_then(|n| n.parse::<f64>().ok()).filter(|v| *v > 0.0)
 }
 
-/// The name of a frame rate: film for 24, or "90fps" for one the reference has no name for.
+/// The name of a frame rate: film for 24, or "90fps" for one the reference has no name for. 29.97 is 29.97df when the
+/// current unit is drop frame.
 pub fn time_unit_name(fps: f64) -> String {
+    if (fps - 29.97).abs() < 1e-9 && anim::drop_frame() {
+        return "29.97df".into();
+    }
     match TIME_UNITS.iter().find(|(_, v)| (v - fps).abs() < 1e-9) {
         Some((n, _)) => n.to_string(),
         None => format!("{fps}fps"),
@@ -254,6 +283,7 @@ fn current_unit(s: &mut Session, a: &Args) -> CmdResult {
     if let Some(v) = a.get("time").and_then(Value::as_str) {
         let Some(new) = time_unit_fps(v) else { fail!("currentUnit: unknown time unit '{v}'") };
         let old = anim::fps();
+        let drop = v == "29.97df";
         let update = a.get("updateAnimation").and_then(Value::as_bool).unwrap_or(true);
         if (new - old).abs() > 1e-12 {
             let frame = anim::frame(&s.graph);
@@ -283,6 +313,7 @@ fn current_unit(s: &mut Session, a: &Args) -> CmdResult {
                 anim::set_frame(&mut s.graph, frame);
             }
         }
+        anim::set_drop_frame(drop);
     }
     Ok(Value::Null)
 }

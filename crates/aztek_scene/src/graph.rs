@@ -836,8 +836,6 @@ pub struct Graph {
     /// The isolation set the viewport shows, if any.
     pub active_isolation: Option<crate::isolation::Set>,
     pub inherit_listeners: BTreeMap<i32, crate::isolation::InheritListener>,
-    /// The scene's up axis pref.
-    pub up_axis: crate::mesh_nodes::UpAxis,
     /// The sphere the latest polySpherize used.
     pub last_sphere: crate::conform_commands::SphereState,
     /// What the last hide hid, for showLastHidden.
@@ -948,7 +946,6 @@ impl Graph {
             components: Default::default(),
             active_isolation: None,
             inherit_listeners: BTreeMap::new(),
-            up_axis: Default::default(),
             last_sphere: Default::default(),
             last_hidden: Vec::new(),
             construction_history: true,

@@ -12,7 +12,7 @@ use rayon::prelude::*;
 use serde_json::{json, Value};
 
 use crate::graph::{Graph, SelectMode};
-use crate::mesh_nodes::{MeshNode, UpAxis};
+use crate::mesh_nodes::MeshNode;
 use crate::modifiers;
 
 use crate::plug::{PlugRef, PlugValue};
@@ -31,13 +31,13 @@ fn unit_scale(unit: &str, cmd: &str) -> CmdResult<f64> {
 }
 
 /// File space to the scene's: unit scale plus the turn between the file's up axis and the scene's.
-fn file_to_scene(g: &Graph, a: &Args, cmd: &str) -> CmdResult<DMat4> {
+fn file_to_scene(_g: &Graph, a: &Args, cmd: &str) -> CmdResult<DMat4> {
     let s = unit_scale(&a.string("unit", ""), cmd)?;
     let up = a.string("upAxis", "z");
     if up != "y" && up != "z" {
         fail!("{cmd}: upAxis must be y or z");
     }
-    let (file_z, scene_z) = (up == "z", g.up_axis == UpAxis::Z);
+    let (file_z, scene_z) = (up == "z", crate::world::up_z());
     let cols = |c: [[f64; 4]; 4]| DMat4::from_cols(DVec4::from(c[0]), DVec4::from(c[1]), DVec4::from(c[2]), DVec4::from(c[3]));
     Ok(if file_z && !scene_z {
         // (x, y, z) -> (x, z, -y)

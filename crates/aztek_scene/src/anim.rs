@@ -17,6 +17,8 @@ use crate::session::Session;
 // Settings
 
 static FPS_BITS: AtomicU64 = AtomicU64::new(0x4038_0000_0000_0000); // 24.0
+/// 29.97 frames a second counted as drop frame timecode (`29.97df`) rather than plain `29.97fps`.
+static DROP_FRAME: AtomicBool = AtomicBool::new(false);
 static AUTO_KEY: AtomicBool = AtomicBool::new(false);
 
 #[derive(Clone, Debug)]
@@ -79,7 +81,16 @@ pub fn fps() -> f64 {
 pub(crate) fn set_fps(v: f64) {
     if v > 0.0 {
         FPS_BITS.store(v.to_bits(), Ordering::Relaxed);
+        DROP_FRAME.store(false, Ordering::Relaxed);
     }
+}
+
+pub fn drop_frame() -> bool {
+    DROP_FRAME.load(Ordering::Relaxed)
+}
+
+pub(crate) fn set_drop_frame(on: bool) {
+    DROP_FRAME.store(on, Ordering::Relaxed);
 }
 
 pub fn auto_key() -> bool {

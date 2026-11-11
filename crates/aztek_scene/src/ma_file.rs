@@ -383,6 +383,8 @@ struct Doc {
     lin: f64,
     ang: f64,
     fps: Option<f64>,
+    /// The time unit is 29.97df.
+    drop_frame: bool,
     warnings: Vec<String>,
     /// file -r lines.
     refs: Vec<crate::references::FileRef>,
@@ -414,21 +416,7 @@ fn linear_unit(s: &str) -> Option<f64> {
     })
 }
 
-const TIME_UNITS: &[(&str, f64)] = &[("game", 15.0), ("film", 24.0), ("pal", 25.0), ("ntsc", 30.0), ("show", 48.0), ("palf", 50.0), ("ntscf", 60.0)];
-
-fn time_unit(s: &str) -> Option<f64> {
-    if let Some((_, f)) = TIME_UNITS.iter().find(|(n, _)| *n == s) {
-        return Some(*f);
-    }
-    s.strip_suffix("fps").and_then(|n| n.parse().ok())
-}
-
-fn time_unit_name(fps: f64) -> String {
-    match TIME_UNITS.iter().find(|(_, f)| (*f - fps).abs() < 1e-9) {
-        Some((n, _)) => n.to_string(),
-        None => format!("{fps}fps"),
-    }
-}
+use crate::anim_time::{time_unit_fps as time_unit, time_unit_name};
 
 impl Doc {
     fn find(&self, path: &str) -> Option<usize> {
@@ -488,7 +476,7 @@ impl Doc {
 
     fn parse(text: &str) -> Doc {
         FILE_UNITS.with(|u| u.set((1.0, std::f64::consts::PI / 180.0)));
-        let mut d = Doc { light_set: Vec::new(), relationships: Vec::new(), nodes: Vec::new(), by_name: HashMap::new(), conns: Vec::new(), lin: 1.0, ang: std::f64::consts::PI / 180.0, fps: None, warnings: Vec::new(), refs: Vec::new(), ref_load: Vec::new(), instances: Vec::new(), ref_conns: Vec::new(), up_z: false, requires: Vec::new() };
+        let mut d = Doc { light_set: Vec::new(), relationships: Vec::new(), nodes: Vec::new(), by_name: HashMap::new(), conns: Vec::new(), lin: 1.0, ang: std::f64::consts::PI / 180.0, fps: None, drop_frame: false, warnings: Vec::new(), refs: Vec::new(), ref_load: Vec::new(), instances: Vec::new(), ref_conns: Vec::new(), up_z: false, requires: Vec::new() };
         let mut lex = Lexer::new(text);
         let mut st = Vec::new();
         let mut current: Option<usize> = None;
@@ -844,7 +832,10 @@ impl Doc {
                     self.ang = if v.starts_with("rad") { 1.0 } else { std::f64::consts::PI / 180.0 };
                     FILE_UNITS.with(|u| u.set((u.get().0, self.ang)));
                 }
-                "-t" | "-time" => self.fps = time_unit(v),
+                "-t" | "-time" => {
+                    self.fps = time_unit(v);
+                    self.drop_frame = v == "29.97df";
+                }
                 _ => {}
             }
             k += 2;
@@ -3043,6 +3034,7 @@ fn build(s: &mut Session, doc: &Doc, import: bool) -> Vec<String> {
     if !import {
         if let Some(f) = doc.fps {
             let _ = s.run("playbackOptions", json!({"framesPerSecond": f}));
+            anim::set_drop_frame(doc.drop_frame);
         }
     }
     let count = doc.nodes.len();
@@ -3086,7 +3078,8 @@ fn build(s: &mut Session, doc: &Doc, import: bool) -> Vec<String> {
     b.create_shading_groups(import);
     for i in 0..count {
         // The reference's own configuration scripts stay out: their content is read above and their MEL is for its interface.
-        if is_plain_node(&doc.nodes[i].ty) && !matches!(doc.nodes[i].name.as_str(), "sceneConfigurationScriptNode" | "uiConfigurationScriptNode") {
+        // The up axis script node is run as the file is read and written again on save.
+        if is_plain_node(&doc.nodes[i].ty) && !matches!(doc.nodes[i].name.as_str(), "sceneConfigurationScriptNode" | "uiConfigurationScriptNode" | "upAxisScriptNode") {
             b.create_plain(i);
         }
         if scales(&doc.nodes[i]) {
@@ -3290,11 +3283,23 @@ pub fn read_text(s: &mut Session, text: &str, import: bool) -> Vec<String> {
             before.push(format!("reference {} not loaded: {e}", r.path));
         }
     }
-    if doc.up_z && !import {
-        s.extras.up_axis_z = true;
-        crate::system_cmds::rotate_cameras(s, true);
+    // A Z up scene's script node: `upAxis -ax "z"; viewSet -home persp;` when the session is Y up. Run here rather than
+    // kept, so it works without the interface and is written afresh on save.
+    let switch_up = doc.up_z && !import && !crate::world::up_z();
+    if switch_up {
+        crate::world::set_up_z(true);
+    }
+    // The file holds its default cameras' values that differ from the defaults of the axis it was saved in: start them
+    // there.
+    if !import {
+        for name in ["persp", "top", "front", "side"] {
+            reset_camera(s, name, doc.up_z);
+        }
     }
     let mut warnings = build(s, &doc, import);
+    if switch_up {
+        home_camera(s, "persp");
+    }
     crate::references::end_read(s, &mut warnings);
     crate::shading::scene_was_read(s);
     warnings.extend(before);
@@ -4812,7 +4817,7 @@ pub fn write_text(s: &mut Session, file_name: &str, only: Option<&[NodeId]>) -> 
     w.out.push_str(&ref_tail);
 
     // The reference keeps a Z up scene's axis in this script node.
-    if w.s.extras.up_axis_z {
+    if crate::world::up_z() {
         let _ = writeln!(w.out, "createNode script -n \"upAxisScriptNode\";");
         let _ = writeln!(w.out, "\tsetAttr \".b\" -type \"string\" \"string $currentAxis = `upAxis -q -ax`; if ($currentAxis != \\\"z\\\") {{ upAxis -ax \\\"z\\\"; viewSet -home persp; }}\";");
         let _ = writeln!(w.out, "\tsetAttr \".st\" 2;");
@@ -4945,7 +4950,7 @@ pub fn write_file(s: &mut Session, path: &str, format: Format, only: Option<&[No
             let mut doc = crate::scene_file::serialize(&s.graph, false);
             let r = anim::range();
             doc["references"] = Value::Array(crate::references::to_doc(s));
-            doc["upAxis"] = json!(if s.extras.up_axis_z { "z" } else { "y" });
+            doc["upAxis"] = json!(crate::world::up_name());
             doc["playbackOptions"] = json!({"minTime": r.min, "maxTime": r.max, "animationStartTime": r.anim_start, "animationEndTime": r.anim_end, "framesPerSecond": anim::fps(), "currentTime": anim::frame(&s.graph)});
             let text = serde_json::to_string_pretty(&doc).map_err(|e| e.to_string())?;
             std::fs::write(path, text).map_err(|e| format!("{path}: {e}"))?;
@@ -5001,9 +5006,9 @@ pub fn open_scene(s: &mut Session, path: &str) -> Result<Vec<String>, String> {
                 let _ = s.run("currentTime", json!({"args": [t]}));
             }
         }
-        if doc.get("upAxis").and_then(Value::as_str) == Some("z") {
-            s.extras.up_axis_z = true;
-            crate::system_cmds::rotate_cameras(s, true);
+        if doc.get("upAxis").and_then(Value::as_str) == Some("z") && !crate::world::up_z() {
+            crate::world::set_up_z(true);
+            home_camera(s, "persp");
         }
         let mut w = w;
         if let Some(list) = doc.get("references").and_then(Value::as_array) {
@@ -5252,4 +5257,22 @@ pub fn register(c: &mut Commands<Session>) {
         .flag(b("returnNewNodes", "rnn", "With a reference, return the new nodes."))
         .flag(t("namespace", "ns", "The namespace a reference goes under.")),
     );
+}
+
+/// `viewSet -home` for a default camera, as a Z up scene's script node asks for when it switches the axis.
+fn home_camera(s: &mut Session, name: &str) {
+    reset_camera(s, name, crate::world::up_z());
+}
+
+/// A default camera to its home for an up axis.
+fn reset_camera(s: &mut Session, name: &str, z_up: bool) {
+    let g = &mut s.graph;
+    let Ok(Some(tr)) = g.find(name) else { return };
+    let Some(sh) = crate::cameras::shape_of(g, tr) else { return };
+    let (t, r, coi) = crate::cameras::home_for(name, z_up);
+    g.without_undo(|g| {
+        let _ = g.set_value(PlugRef::new(tr, Transform::TRANSLATE as i32), PlugValue::Vec3(t));
+        let _ = g.set_value(PlugRef::new(tr, Transform::ROTATE as i32), PlugValue::Vec3(r));
+        let _ = g.set_value(PlugRef::new(sh, crate::cameras::COI as i32), PlugValue::Float(coi));
+    });
 }

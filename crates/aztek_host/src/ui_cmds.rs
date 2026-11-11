@@ -100,6 +100,62 @@ pub fn selection_locked() -> bool {
     with_ui(|u| u.lock_selection)
 }
 
+thread_local! {
+    static KEEP_PREFS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Whether optionVars are saved between sessions: the application turns it on; tests and other embedders leave the
+/// user's preferences alone.
+pub fn keeps_prefs() -> bool {
+    KEEP_PREFS.with(std::cell::Cell::get)
+}
+
+pub fn set_keeps_prefs(on: bool) {
+    KEEP_PREFS.with(|c| c.set(on));
+}
+
+/// The optionVars saved by the last session.
+pub fn saved_option_vars() -> std::collections::BTreeMap<String, Value> {
+    std::fs::read_to_string(option_var_file())
+        .ok()
+        .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+        .and_then(|v| v.as_object().cloned())
+        .map(|m| m.into_iter().collect())
+        .unwrap_or_default()
+}
+
+/// Saves the optionVars for the next session, when preferences are kept.
+pub fn save_option_var_map(vars: &std::collections::BTreeMap<String, Value>) {
+    if !keeps_prefs() {
+        return;
+    }
+    let p = option_var_file();
+    if let Some(d) = p.parent() {
+        let _ = std::fs::create_dir_all(d);
+    }
+    let m: Map<String, Value> = vars.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+    let _ = std::fs::write(p, Value::Object(m).to_string());
+}
+
+/// What the preferences say before the first scene: the up axis (`upAxisDirection`) and the units a new scene starts
+/// in (`workingUnitLinearDefault`, `workingUnitAngularDefault`, `workingUnitTimeDefault`), as the reference reads them
+/// from its preferences at start-up.
+pub fn apply_startup_prefs(vars: &std::collections::BTreeMap<String, Value>) {
+    let text = |k: &str| vars.get(k).and_then(|v| v.as_str().map(str::to_string));
+    if let Some(a) = text("upAxisDirection") {
+        aztek_scene::world::set_up_z(a.eq_ignore_ascii_case("z"));
+    }
+    let lin = text("workingUnitLinearDefault").and_then(|u| aztek_ops::units::linear_factor(&u));
+    let ang = text("workingUnitAngularDefault").and_then(|u| aztek_ops::units::angle_factor(&u));
+    aztek_ops::units::set_defaults(lin.unwrap_or(0.0), ang.unwrap_or(0.0));
+    aztek_ops::units::reset();
+    if let Some(t) = text("workingUnitTimeDefault") {
+        if aztek_scene::anim_time::set_default_time_unit(&t) {
+            aztek_scene::anim_time::set_time_unit(&t);
+        }
+    }
+}
+
 pub fn pref_bool(name: &str, fallback: bool) -> bool {
     // From MEL a flag arrives as 0 or 1, in a number or a word.
     let truth = |v: &Value| match v {
@@ -263,6 +319,41 @@ fn reg(s: &mut Session, c: Cmd) {
 }
 
 pub fn register(s: &mut Session) {
+    reg(
+        s,
+        Cmd::new(
+            "newSceneUnits",
+            "The units a new scene starts in, as File > New Scene's options set them: -linear, -angle, -time. -q gives them.",
+            |_s, a| {
+                use aztek_ops::units;
+                if a.bool("query") {
+                    let name = |f: f64| units::LINEAR_UNITS.iter().find(|u| (u.2 - f).abs() < 1e-12).map(|u| u.0).unwrap_or("cm");
+                    let ang = if (units::default_rad_per_unit() - 1.0).abs() < 1e-12 { "rad" } else { "deg" };
+                    return Ok(json!({"linear": name(units::default_cm_per_unit()), "angle": ang, "time": aztek_scene::anim_time::default_time_unit()}));
+                }
+                let lin = match a.get("linear").and_then(Value::as_str) {
+                    Some(u) => units::linear_factor(u).ok_or_else(|| aztek_ops::CommandError::new(format!("newSceneUnits: unknown linear unit '{u}'")))?,
+                    None => 0.0,
+                };
+                let ang = match a.get("angle").and_then(Value::as_str) {
+                    Some(u) => units::angle_factor(u).ok_or_else(|| aztek_ops::CommandError::new(format!("newSceneUnits: unknown angle unit '{u}'")))?,
+                    None => 0.0,
+                };
+                if let Some(t) = a.get("time").and_then(Value::as_str) {
+                    if !aztek_scene::anim_time::set_default_time_unit(t) {
+                        fail!("newSceneUnits: unknown time unit '{t}'");
+                    }
+                }
+                units::set_defaults(lin, ang);
+                Ok(Value::Null)
+            },
+        )
+        .flag(f("linear", "l", ArgType::String, "Linear unit."))
+        .flag(f("angle", "a", ArgType::String, "Angle unit."))
+        .flag(f("time", "t", ArgType::String, "Time unit."))
+        .flag(f("query", "q", ArgType::Bool, "Query mode."))
+        .undoable(false),
+    );
     reg(
         s,
         Cmd::new("optionVar", "Named preference values kept between sessions. -iv, -fv, -sv set; -q reads; -ex tests; -rm removes.", |_s, a| {

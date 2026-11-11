@@ -241,17 +241,24 @@ fn grid_value(s: &State, name: &str) -> Value {
     s.grid.get(name).or_else(|| s.grid_defaults.get(name)).cloned().unwrap_or_else(|| grid_default(name))
 }
 
-/// Tells each model panel's view what the grid should be.
+/// Tells each model panel's view what the grid should be. Its size and spacing are in the current linear unit, as the
+/// reference's are: 12 units each way is 12 metres in a metre scene.
 fn send_grid(s: &State) {
-    let spacing = grid_value(s, "spacing").as_f64().unwrap_or(5.0);
+    let k = aztek_ops::units::cm_per_unit();
+    let spacing = grid_value(s, "spacing").as_f64().unwrap_or(5.0) * k;
     let divisions = grid_value(s, "divisions").as_f64().unwrap_or(5.0).max(1.0);
-    let size = grid_value(s, "size").as_f64().unwrap_or(12.0);
+    let size = grid_value(s, "size").as_f64().unwrap_or(12.0) * k;
     let on = grid_value(s, "toggle").as_bool().unwrap_or(true);
     for panel in ["modelPanel1", "modelPanel2", "modelPanel3", "modelPanel4"] {
         for (key, value) in [("grid", json!(on)), ("gridSpacing", json!(spacing / divisions)), ("gridSize", json!(size))] {
             push_ui_request(format!("panelSet|{}", json!({"panel": panel, "key": key, "value": value})));
         }
     }
+}
+
+/// The linear unit changed: the grid is sent again at its new size.
+pub(crate) fn grid_units_changed() {
+    with(|s| send_grid(s));
 }
 
 fn grid(_session: &mut Session, a: &Args) -> CmdResult {

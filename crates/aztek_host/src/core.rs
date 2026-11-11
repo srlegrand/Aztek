@@ -65,11 +65,35 @@ pub struct Core {
     in_idle: bool,
     /// The Show Manipulator tool's node and drag.
     pub node_manip: crate::node_manip::State,
+    /// The up axis and units as last seen, to tell when a command changed them.
+    settings: Settings,
+    /// The optionVars as last saved.
+    saved_vars: std::collections::BTreeMap<String, Value>,
+}
+
+/// The world settings commands change: the up axis and the current units.
+#[derive(Clone, PartialEq, Default)]
+struct Settings {
+    up_z: bool,
+    linear: &'static str,
+    angle: &'static str,
+    time: String,
+}
+
+impl Settings {
+    fn now() -> Settings {
+        Settings {
+            up_z: aztek_scene::world::up_z(),
+            linear: aztek_ops::units::linear_name(),
+            angle: aztek_ops::units::angle_name(),
+            time: aztek_scene::anim_time::time_unit_name(aztek_scene::anim::fps()),
+        }
+    }
 }
 
 impl Core {
     pub fn new() -> Core {
-        let mut c = Core { s: Session::new(), log: Vec::new(), log_read: 0, version: 1, preview: Vec::new(), mel_state: Default::default(), in_idle: false, node_manip: Default::default() };
+        let mut c = Core { s: Session::new(), log: Vec::new(), log_read: 0, version: 1, preview: Vec::new(), mel_state: Default::default(), in_idle: false, node_manip: Default::default(), settings: Settings::now(), saved_vars: Default::default() };
         register_ui_commands(&mut c.s);
         crate::ui_cmds::register(&mut c.s);
         crate::scriptui::register(&mut c.s);
@@ -91,7 +115,7 @@ impl Core {
 
     /// A core around a session moved here while Python is called back from inside a command: no UI commands of its own.
     pub(crate) fn nested(s: Session) -> Core {
-        Core { s, log: Vec::new(), log_read: 0, version: 1, preview: Vec::new(), mel_state: Default::default(), in_idle: false, node_manip: Default::default() }
+        Core { s, log: Vec::new(), log_read: 0, version: 1, preview: Vec::new(), mel_state: Default::default(), in_idle: false, node_manip: Default::default(), settings: Settings::now(), saved_vars: Default::default() }
     }
 
     /// A new scene has the default cameras and sets, as the reference's does. Cheap when they're there.
@@ -121,7 +145,57 @@ impl Core {
     }
 
     /// After a command: what it did that jobs can't see in the scene, and the scripts it asked to run when free.
+    /// Tells what changed the up axis or the units: the preference is kept (`upAxisDirection`), jobs hear of a unit
+    /// change, and the grid, sized in the linear unit, is sent again.
+    pub(crate) fn note_settings(&mut self) {
+        let now = Settings::now();
+        if now == self.settings {
+            return;
+        }
+        let was = std::mem::replace(&mut self.settings, now.clone());
+        if now.up_z != was.up_z {
+            self.s.option_vars.insert("upAxisDirection".into(), json!(aztek_scene::world::up_name()));
+        }
+        if now.linear != was.linear {
+            crate::script_jobs::note_event("linearUnitChanged");
+            crate::host_general::grid_units_changed();
+        }
+        if now.angle != was.angle {
+            crate::script_jobs::note_event("angularUnitChanged");
+        }
+        if now.time != was.time {
+            crate::script_jobs::note_event("timeUnitChanged");
+        }
+        self.version += 1;
+    }
+
+    /// Reads the saved preferences and starts a scene under them: the application's start-up. From here on the
+    /// optionVars are saved as they change.
+    pub fn use_prefs(&mut self) {
+        crate::ui_cmds::set_keeps_prefs(true);
+        let saved = crate::ui_cmds::saved_option_vars();
+        crate::ui_cmds::apply_startup_prefs(&saved);
+        for (k, v) in saved {
+            self.s.option_vars.entry(k).or_insert(v);
+        }
+        self.saved_vars = self.s.option_vars.clone();
+        let _ = self.exec_quiet("newScene", json!({}), CallSource::Ui);
+        self.s.scene_path = None;
+        self.settings = Settings::now();
+        crate::host_general::grid_units_changed();
+    }
+
+    /// Saves the optionVars when a command changed them.
+    fn save_option_vars(&mut self) {
+        if crate::ui_cmds::keeps_prefs() && self.s.option_vars != self.saved_vars {
+            crate::ui_cmds::save_option_var_map(&self.s.option_vars);
+            self.saved_vars = self.s.option_vars.clone();
+        }
+    }
+
     fn after_command(&mut self, name: &str, call: &Value, ok: bool) {
+        self.note_settings();
+        self.save_option_vars();
         crate::usd_view::note_events();
         for w in crate::script_jobs::take_warnings() {
             self.push(format!("// Warning: {w} //"), LineKind::Warning);
@@ -205,6 +279,7 @@ impl Core {
             return;
         }
         self.in_idle = true;
+        self.note_settings();
         crate::attr_ui::idle(self);
         crate::host_general::watch(&mut self.s);
         self.run_conditions();
@@ -424,6 +499,7 @@ impl Core {
         let saved = crate::scriptui::set_from_python(true);
         let r = self.py_call_inner(typed, args, kwargs);
         crate::scriptui::set_from_python(saved);
+        self.note_settings();
         r
     }
 

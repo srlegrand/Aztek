@@ -28,12 +28,22 @@ fn up_axis() {
     let mut s = Session::new();
     aztek_scene::cameras::make_defaults(&mut s.graph);
     assert_eq!(run(&mut s, "upAxis", json!({"q": true, "ax": true})), "y");
+    // Without -rv the cameras stay where they are.
     run(&mut s, "upAxis", json!({"ax": "z"}));
     assert_eq!(run(&mut s, "upAxis", json!({"q": true, "ax": true})), "z");
-    // The side camera stays on X; persp's Y height becomes Z.
-    close3(&get(&mut s, "persp.translate"), [28.0, -28.0, 21.0]);
-    run(&mut s, "upAxis", json!({"ax": "y"}));
     close3(&get(&mut s, "persp.translate"), [28.0, 21.0, 28.0]);
+    run(&mut s, "upAxis", json!({"ax": "y"}));
+    // -rv turns them with the world: persp's Y height becomes Z, the side camera stays on X.
+    run(&mut s, "upAxis", json!({"ax": "z", "rv": true}));
+    close3(&get(&mut s, "persp.translate"), [28.0, -28.0, 21.0]);
+    close3(&get(&mut s, "top.translate"), [0.0, 0.0, 1000.1]);
+    close3(&get(&mut s, "top.rotate"), [0.0, 0.0, 0.0]);
+    close3(&get(&mut s, "front.translate"), [0.0, -1000.1, 0.0]);
+    close3(&get(&mut s, "front.rotate"), [90.0, 0.0, 0.0]);
+    close3(&get(&mut s, "side.rotate"), [90.0, 0.0, 90.0]);
+    run(&mut s, "upAxis", json!({"ax": "y", "rv": true}));
+    close3(&get(&mut s, "persp.translate"), [28.0, 21.0, 28.0]);
+    close3(&get(&mut s, "top.rotate"), [-90.0, 0.0, 0.0]);
     assert!(s.run("upAxis", json!({"ax": "x"})).is_err());
 }
 
@@ -41,15 +51,39 @@ fn up_axis() {
 fn up_axis_saves() {
     let mut s = Session::new();
     aztek_scene::cameras::make_defaults(&mut s.graph);
-    run(&mut s, "upAxis", json!({"ax": "z"}));
+    run(&mut s, "upAxis", json!({"ax": "z", "rv": true}));
     run(&mut s, "polyCube", json!({}));
     let path = temp("zup.ma");
     run(&mut s, "file", json!({"args": [path.clone()], "save": true}));
     let text = std::fs::read_to_string(&path).unwrap();
     assert!(text.contains("upAxisScriptNode"));
+    // Opened in a Y up session, the file switches it to Z up, as its script node does, and the default cameras are
+    // the Z up ones. The script node isn't kept as a node: saving writes it again.
+    run(&mut s, "upAxis", json!({"ax": "y", "rv": true}));
     let mut t = Session::new();
-    run(&mut t, "file", json!({"args": [path], "open": true, "force": true}));
+    aztek_scene::cameras::make_defaults(&mut t.graph);
+    run(&mut t, "file", json!({"args": [path.clone()], "open": true, "force": true}));
     assert_eq!(run(&mut t, "upAxis", json!({"q": true, "ax": true})), "z");
+    close3(&get(&mut t, "top.translate"), [0.0, 0.0, 1000.1]);
+    close3(&get(&mut t, "top.rotate"), [0.0, 0.0, 0.0]);
+    close3(&get(&mut t, "persp.translate"), [28.0, -28.0, 21.0]);
+    assert!(run(&mut t, "ls", json!({"type": "script"})).as_array().unwrap().is_empty());
+    run(&mut t, "file", json!({"args": [path.clone()], "save": true}));
+    assert_eq!(std::fs::read_to_string(&path).unwrap().matches("upAxisScriptNode").count(), 1);
+    // A new scene keeps the preference, with Z up cameras.
+    run(&mut t, "newScene", json!({}));
+    aztek_scene::cameras::make_defaults(&mut t.graph);
+    assert_eq!(run(&mut t, "upAxis", json!({"q": true, "ax": true})), "z");
+    close3(&get(&mut t, "front.rotate"), [90.0, 0.0, 0.0]);
+    // A Y up scene saved now has no script node and leaves a Z up session as it is.
+    run(&mut t, "upAxis", json!({"ax": "y", "rv": true}));
+    let flat = temp("yup.ma");
+    run(&mut t, "file", json!({"args": [flat.clone()], "save": true}));
+    assert!(!std::fs::read_to_string(&flat).unwrap().contains("upAxisScriptNode"));
+    run(&mut t, "upAxis", json!({"ax": "z", "rv": true}));
+    run(&mut t, "file", json!({"args": [flat], "open": true, "force": true}));
+    assert_eq!(run(&mut t, "upAxis", json!({"q": true, "ax": true})), "z");
+    run(&mut t, "upAxis", json!({"ax": "y"}));
 }
 
 #[test]

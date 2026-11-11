@@ -150,6 +150,13 @@ pub extern "C" fn aztek_init() {
     with(|_| ());
 }
 
+/// The application's start-up: reads the saved preferences (the up axis, the units a new scene starts in, the
+/// optionVars) and keeps them from here on. Call first, before anything else.
+#[no_mangle]
+pub extern "C" fn aztek_use_prefs() {
+    with(|h| h.core.use_prefs());
+}
+
 pub use batch::{aztek_batch, run as batch_run};
 
 /// Runs MEL-style source; returns the last result as JSON.
