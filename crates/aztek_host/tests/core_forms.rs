@@ -175,3 +175,25 @@ fn python_forms() {
     py("cmds.setAttr('y.hiddenInOutliner', True)");
     assert!(!names(&query_outliner()).contains(&"y".to_string()));
 }
+
+/// DAG Objects Only off: the nodes that aren't in the DAG are listed too, a skin's bind pose among them.
+#[test]
+fn outliner_lists_other_nodes_when_asked() {
+    aztek_init();
+    py("import maya.cmds as cmds\ncmds.file(new=True, f=True)\ncmds.polyCube(n='skinned')\ncmds.select(cl=True)\ncmds.joint(n='root')\ncmds.skinCluster('root', 'skinned')");
+    let all = |arg: &str| {
+        let (name, arg) = (CString::new("outliner").unwrap(), CString::new(arg).unwrap());
+        let p = aztek_query(name.as_ptr(), arg.as_ptr());
+        let s = unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned();
+        aztek_free(p);
+        serde_json::from_str::<Value>(&s).unwrap()
+    };
+    let types = |v: &Value| v.as_array().unwrap().iter().map(|n| n["type"].as_str().unwrap().to_string()).collect::<Vec<_>>();
+    let dag_only = types(&all(""));
+    assert!(!dag_only.contains(&"dagPose".to_string()) && !dag_only.contains(&"skinCluster".to_string()), "{dag_only:?}");
+    let every = types(&all("dg"));
+    for t in ["dagPose", "skinCluster", "polyCube", "lambert"] {
+        assert!(every.contains(&t.to_string()), "{t} missing from {every:?}");
+    }
+    assert!(every.contains(&"transform".to_string()));
+}

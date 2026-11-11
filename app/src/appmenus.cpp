@@ -1092,6 +1092,27 @@ void MainWindow::marking_menu(QPoint global, int mods) {
         // Ctrl+Shift: primitives, as the reference's.
         items = {{"Sphere", 0, run("polySphere")}, {"Cube", 2, run("polyCube")}, {"Cylinder", 4, run("polyCylinder")}, {"Plane", 6, run("polyPlane")},
                  {"Cone", 1, run("polyCone")}, {"Torus", 3, run("polyTorus")}, {"Disc", 5, run("polyDisc")}, {"Pipe", 7, run("polyPipe")}};
+    } else if ((mods & 1) && selection_names().isEmpty()) {
+        // Shift with nothing selected: the polygon primitives of the Create menu, made as its items make them
+        // (Interactive Creation and the option boxes' saved settings apply).
+        auto prim = [this](const char* command) {
+            QString c = command;
+            return [this, c] {
+                static const QHash<QString, QString> drawn{{"polyCube", "createCube"}, {"polyPlane", "createPlane"}, {"polySphere", "createSphere"}, {"polyCylinder", "createCylinder"}, {"polyCone", "createCone"}, {"polyTorus", "createTorus"}};
+                if (drawn.contains(c) && QSettings().value("prefs/interactiveCreation", false).toBool()) {
+                    set_tool(drawn[c]);
+                    return;
+                }
+                exec(c, OptionsDialog::saved(c));
+            };
+        };
+        const bool interactive = QSettings().value("prefs/interactiveCreation", false).toBool();
+        items = {{"Poly Cube", 0, prim("polyCube")}, {"Poly Cone", 1, prim("polyCone")}, {"Poly Cylinder", 2, prim("polyCylinder")}, {"Poly Torus", 3, prim("polyTorus")},
+                 {"Poly Plane", 4, prim("polyPlane")}, {"Poly Pyramid", 5, prim("polyPyramid")}, {"Poly Sphere", 6, prim("polySphere")},
+                 {"Create Polygon Tool", 7, [this] { set_tool("createPolygon"); }},
+                 {"Poly Disc", -1, prim("polyDisc")}, {"Poly Pipe", -1, prim("polyPipe")}, {"Poly Prism", -1, prim("polyPrism")}, {"Poly Helix", -1, prim("polyHelix")},
+                 {"Platonic Solid", -1, prim("polyPlatonicSolid")}, {"Super Shape", -1, prim("polySuperShape")},
+                 {"Interactive Creation", -1, [interactive] { QSettings().setValue("prefs/interactiveCreation", !interactive); }, true, interactive}};
     } else if (mods & 1) {
         // Shift: the modelling tools for the current component type.
         if (mode == "face") {

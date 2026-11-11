@@ -183,6 +183,22 @@ jobs:
           name: aztek-rpm-el${{ matrix.el }}
           path: dist/*.rpm
 
+      # One file for every other Linux: built here, on the oldest C library, so it runs on anything newer.
+      # A failure here leaves the release without an AppImage rather than without a release.
+      - name: AppImage
+        if: matrix.el == 8
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +u; . /opt/rh/gcc-toolset-13/enable; set -u
+          AZTEK_QT=/opt/qt/6.8.3/gcc_64 AZTEK_PYTHON=/usr/bin/python3.12 packaging/appimage/build-appimage.sh build appimage
+
+      - uses: actions/upload-artifact@v4
+        if: matrix.el == 8
+        with:
+          name: aztek-appimage
+          path: appimage/*.AppImage
+
   # Each package installed in a clean container, where only its declared dependencies can satisfy it.
   verify-rpm:
     needs: rocky
@@ -232,6 +248,35 @@ jobs:
 
       - name: Smoke test
         run: packaging/linux/smoke-test.sh
+
+  # The AppImage unpacked and started on systems newer than the one it was built on, with no Qt or Python of theirs.
+  verify-appimage:
+    needs: rocky
+    runs-on: ubuntu-24.04
+    container: ubuntu:${{ matrix.ubuntu }}
+    strategy:
+      fail-fast: false
+      matrix:
+        ubuntu: ["24.04", "rolling"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: aztek-appimage
+          path: pkg
+
+      - name: Install what a desktop has
+        run: |
+          apt-get update
+          apt-get install -y xvfb xauth file libvulkan1 libgl1 libegl1 libfontconfig1 libfreetype6 libx11-6 libx11-xcb1 libxcb1 libglib2.0-0 libdbus-1-3
+
+      # Unpacked rather than mounted: a container has no FUSE.
+      - name: Smoke test
+        run: |
+          chmod +x pkg/*.AppImage
+          pkg/*.AppImage --appimage-extract >/dev/null
+          AZTEK_BIN="$PWD/squashfs-root/AppRun" packaging/linux/smoke-test.sh
 
   windows:
     needs: gate
@@ -355,7 +400,7 @@ jobs:
 
   # Every push to main replaces the "latest" pre-release; a v* tag makes a versioned release.
   release:
-    needs: [gate, linux, ubuntu-2204, rocky, verify-rpm, verify-deb, windows, macos]
+    needs: [gate, linux, ubuntu-2204, rocky, verify-rpm, verify-deb, verify-appimage, windows, macos]
     if: >-
       always() && needs.gate.outputs.go == 'true'
       && needs.linux.result == 'success' && needs.ubuntu-2204.result == 'success' && needs.rocky.result == 'success'
@@ -372,6 +417,11 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           merge-multiple: true
+
+      # Only an AppImage that started in the clean systems is released.
+      - name: Unverified AppImage
+        if: needs.verify-appimage.result != 'success'
+        run: rm -f aztek-*.AppImage
 
       - name: Release
         if: github.ref == 'refs/heads/main'

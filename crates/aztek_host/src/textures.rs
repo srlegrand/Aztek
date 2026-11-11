@@ -56,6 +56,8 @@ pub struct TextureCache {
     commands: vk::CommandPool,
     /// Bound where a material has no texture: one white texel.
     white: Option<Entry>,
+    /// The UV Editor's checker, shown on meshes in the views.
+    checker: Option<Entry>,
     entries: HashMap<(String, bool), Entry>,
     /// Files that failed to decode, with the time they had: tried again when the file changes.
     failed: HashMap<(String, bool), Option<SystemTime>>,
@@ -111,7 +113,7 @@ impl TextureCache {
             let commands = d
                 .create_command_pool(&vk::CommandPoolCreateInfo::default().queue_family_index(gpu.shared.queue_family).flags(vk::CommandPoolCreateFlags::TRANSIENT), None)
                 .expect("texture commands");
-            TextureCache { layout, pool, sampler, commands, white: None, entries: HashMap::new(), failed: HashMap::new(), warned: HashSet::new(), warnings: Vec::new() }
+            TextureCache { layout, pool, sampler, commands, white: None, checker: None, entries: HashMap::new(), failed: HashMap::new(), warned: HashSet::new(), warnings: Vec::new() }
         }
     }
 
@@ -119,7 +121,7 @@ impl TextureCache {
     pub fn release(&mut self, device: &ash::Device, allocator: &std::sync::Mutex<gpu_allocator::vulkan::Allocator>) {
         unsafe {
             let _ = device.device_wait_idle();
-            for mut e in self.entries.drain().map(|x| x.1).chain(self.white.take()) {
+            for mut e in self.entries.drain().map(|x| x.1).chain(self.white.take()).chain(self.checker.take()) {
                 device.destroy_image_view(e.view, None);
                 device.destroy_image(e.image, None);
                 if let Some(a) = e.alloc.take() {
@@ -136,6 +138,27 @@ impl TextureCache {
             self.white = self.upload(gpu, &d, false, None);
         }
         self.white.as_ref().map_or(vk::DescriptorSet::null(), |e| e.set)
+    }
+
+    /// The checker's set: eight squares each way in a UV tile, light and mid grey.
+    pub fn checker(&mut self, gpu: &Gpu) -> vk::DescriptorSet {
+        if self.checker.is_none() {
+            const SIZE: u32 = 512;
+            const SQUARE: u32 = SIZE / 8;
+            let mut rgba = Vec::with_capacity((SIZE * SIZE * 4) as usize);
+            // Row 0 of the image is the top of the tile: V runs up.
+            for y in 0..SIZE {
+                for x in 0..SIZE {
+                    let (cx, cy) = (x / SQUARE, y / SQUARE);
+                    let light = (cx + cy) % 2 == 1;
+                    let c: [u8; 3] = if light { [200, 200, 200] } else { [90, 90, 90] };
+                    rgba.extend_from_slice(&[c[0], c[1], c[2], 255]);
+                }
+            }
+            let d = Decoded { width: SIZE, height: SIZE, rgba, has_alpha: false };
+            self.checker = self.upload(gpu, &d, true, None);
+        }
+        self.checker.as_ref().map_or(vk::DescriptorSet::null(), |e| e.set)
     }
 
     /// A file's texture: loaded on first use, reloaded when it changes on disk. None when it can't be read.

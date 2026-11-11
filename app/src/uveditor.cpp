@@ -740,6 +740,9 @@ void UvEditor::apply_flags(const QJsonObject& p) {
     if (p.contains("displayCheckered")) {
         canvas_->show_checker = p["displayCheckered"].toBool();
         canvas_->update();
+        exec_quiet("uiPref", QJsonObject{{"args", QJsonArray{"uvChecker", canvas_->show_checker}}});
+        Host::get()->poke();
+        if (auto* a = findChild<QAction*>("uvCheckerAction")) a->setChecked(canvas_->show_checker);
     }
     if (p.contains("displayUVShaded")) {
         canvas_->shaded = p["displayUVShaded"].toBool();
@@ -804,11 +807,16 @@ UvEditor::UvEditor(QWidget* parent) : QWidget(parent) {
     display_image->setCheckable(true);
     display_image->setChecked(true);
     display_image->setToolTip("Display Image: the material's texture behind the UVs");
+    // The checker shows behind the UVs here and on the meshes in the views, as the reference's does.
     QAction* checker = bar->addAction("Checker", [this](bool on) {
         canvas_->show_checker = on;
         canvas_->update();
+        exec_quiet("uiPref", QJsonObject{{"args", QJsonArray{"uvChecker", on}}});
+        Host::get()->poke();
     });
     checker->setCheckable(true);
+    checker->setObjectName("uvCheckerAction");
+    checker->setToolTip("Checker Map: a checker on the selected meshes, here and in the views");
     QAction* shade = bar->addAction("Shaded", [this](bool on) {
         canvas_->shaded = on;
         canvas_->update();

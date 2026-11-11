@@ -22,7 +22,7 @@ target and status, including known differences; [docs/COMMANDS.md](docs/COMMANDS
 
 Website: [srlegrand.github.io/Aztek](https://srlegrand.github.io/Aztek/). Licence: [MIT-0](LICENSE).
 
-**Download** from the [latest release](https://github.com/srlegrand/Aztek/releases/latest): Windows installer or zip, Rocky Linux 9 and 8 `.rpm`, Ubuntu 24.04 and 22.04 `.deb`, Linux `.tar.gz`, and an early macOS build for Apple silicon. Install steps are under [Install](#install).
+**Download** from the [latest release](https://github.com/srlegrand/Aztek/releases/latest): Windows installer or zip, Rocky Linux 9 and 8 `.rpm`, Ubuntu 24.04 and 22.04 `.deb`, an AppImage for any other Linux, Linux `.tar.gz`, and an early macOS build for Apple silicon. Install steps are under [Install](#install).
 
 | Modelling history | A flag in a breeze | A tower knocked down |
 | --- | --- | --- |
@@ -269,7 +269,7 @@ Packages are on the [releases page](https://github.com/srlegrand/Aztek/releases)
 Preferences > Interface, and Help > Check for Updates works either way. The check asks GitHub for the latest release and
 sends nothing else: no identifiers, nothing about you or your scenes. That is the only request Aztek makes by itself. When
 a newer version is out it shows what changed and offers to install it the way this copy was installed: the Windows
-installer runs, a `.deb` or `.rpm` installs with your password, the macOS app and the Linux tarball are replaced in
+installer runs, a `.deb` or `.rpm` installs with your password, the macOS app, the AppImage and the Linux tarball are replaced in
 place, and a Windows zip opens its download. Downloads are checked against the release's checksum. A copy built from
 source is pointed at `git pull`. It goes through the proxy in `HTTPS_PROXY`, minding `NO_PROXY`.
 
@@ -278,6 +278,7 @@ source is pointed at `git pull`. It goes through the proxy in `HTTPS_PROXY`, min
 | Rocky Linux 8 | `aztek-<version>-1.el8.x86_64.rpm` | `sudo dnf install ./aztek-*.el8.x86_64.rpm` (Qt is bundled) |
 | Rocky Linux 9 | `aztek-<version>-1.el9.x86_64.rpm` | `sudo dnf install epel-release`, then `sudo dnf install ./aztek-*.el9.x86_64.rpm` |
 | Ubuntu 22.04, 24.04 | `aztek_<version>-1_ubuntu22.04_amd64.deb`, `..._ubuntu24.04_...` | `sudo apt install ./aztek_*.deb` |
+| Any other Linux, x86_64 | `aztek-<version>-x86_64.AppImage` | `chmod +x aztek-*.AppImage`, then run it (Qt and Python are inside) |
 | Windows 10 and 11 | `aztek-<version>-setup-x64.exe`, or the zip | Run it. It isn't signed, so SmartScreen asks first |
 | macOS 14+, Apple silicon (early) | `aztek-macos-arm64.zip` | `brew install python@3.12`, unzip, then right-click Aztek.app and Open the first time: it isn't notarized |
 

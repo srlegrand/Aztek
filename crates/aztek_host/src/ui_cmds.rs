@@ -101,7 +101,18 @@ pub fn selection_locked() -> bool {
 }
 
 pub fn pref_bool(name: &str, fallback: bool) -> bool {
-    with_ui(|u| u.prefs.get(name).and_then(Value::as_bool).unwrap_or(fallback))
+    // From MEL a flag arrives as 0 or 1, in a number or a word.
+    let truth = |v: &Value| match v {
+        Value::Bool(b) => Some(*b),
+        Value::Number(n) => n.as_f64().map(|x| x != 0.0),
+        Value::String(t) => match t.as_str() {
+            "1" | "true" | "on" | "yes" => Some(true),
+            "0" | "false" | "off" | "no" => Some(false),
+            _ => None,
+        },
+        _ => None,
+    };
+    with_ui(|u| u.prefs.get(name).and_then(truth).unwrap_or(fallback))
 }
 
 pub fn pref_f64(name: &str, fallback: f64) -> f64 {
@@ -760,7 +771,7 @@ pub fn register(s: &mut Session) {
         s,
         Cmd::new("uiPref", "An interface setting the views read: uiPref name value. No value returns it.", |_s, a| {
             let Some(name) = a.pos_str(0).map(str::to_string) else { fail!("uiPref: give a name") };
-            let list = a.get("args").and_then(Value::as_array).cloned().unwrap_or_default();
+            let list = a.get("args").and_then(Value::as_array).cloned().unwrap_or_else(|| a.positional.clone());
             with_ui(|u| {
                 if let Some(v) = list.get(1) {
                     u.prefs.insert(name, v.clone());

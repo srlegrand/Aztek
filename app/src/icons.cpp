@@ -280,6 +280,12 @@ QPixmap draw(const QString& name, int size) {
         p.setPen(Qt::NoPen);
         p.drawRect(QRectF(4, 10, 17, 13));
         p.drawPolygon(QPolygonF({{21, 14}, {28, 10}, {28, 23}, {21, 19}}));
+    } else if (name == "dgNode") {
+        // A node that isn't in the DAG: a box with its two plugs.
+        p.setBrush(Qt::NoBrush);
+        p.drawRoundedRect(QRectF(8, 8, 16, 16), 3, 3);
+        p.drawLine(QPointF(3, 16), QPointF(8, 16));
+        p.drawLine(QPointF(24, 16), QPointF(29, 16));
     } else if (name == "set" || name == "objectSet") {
         p.setBrush(Qt::NoBrush);
         p.drawEllipse(QRectF(4, 8, 14, 14));

@@ -290,7 +290,6 @@ void Outliner::add(QTreeWidgetItem* parent, const QJsonObject& node) {
     bool cam_default = ic == "camera" && QStringList{"persp", "top", "front", "side"}.contains(node["name"].toString());
     if (hide_cameras_ && cam_default) return;
     if (hidden_types_.contains(ic == "objectSet" ? QString("set") : ic)) return;
-    if (dag_only_ && (ic == "set" || ic == "objectSet")) return;
     auto* it = parent ? new QTreeWidgetItem(parent) : new QTreeWidgetItem(tree_);
     QString path = node["path"].toString();
     it->setText(0, node["name"].toString());
@@ -448,7 +447,7 @@ QJsonArray without_selection(const QJsonArray& nodes, QSet<QString>& selected) {
 } // namespace
 
 void Outliner::refresh() {
-    const QJsonArray nodes = query("outliner", intermediates_ ? "shapes intermediate" : shapes_ ? "shapes" : "").toArray();
+    const QJsonArray nodes = query("outliner", QString(intermediates_ ? "shapes intermediate" : shapes_ ? "shapes" : "") + (dag_only_ ? "" : " dg")).toArray();
     QSet<QString> selected;
     const QByteArray shape = QJsonDocument(without_selection(nodes, selected)).toJson(QJsonDocument::Compact);
     // Only the selection changed (or nothing did): mark it on the rows there are, as moving an object changes nothing here.

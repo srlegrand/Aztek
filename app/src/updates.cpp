@@ -8,6 +8,8 @@
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDir>
+#include <cstdio>
+
 #include <QFile>
 #include <QFileInfo>
 #include <QHash>
@@ -99,6 +101,8 @@ Kind this_install() {
 #endif
     return {"macApp", QString("macos-%1.zip").arg(QSysInfo::currentCpuArchitecture() == "arm64" ? "arm64" : "x86_64")};
 #else
+    // An AppImage says where its file is; the program itself runs from a read-only mount of it.
+    if (!qEnvironmentVariableIsEmpty("APPIMAGE")) return {"appimage", "x86_64.AppImage"};
     if (QCoreApplication::applicationFilePath().startsWith("/usr/")) {
         QHash<QString, QString> os = os_release();
         QString id = os.value("ID"), like = os.value("ID_LIKE"), ver = os.value("VERSION_ID");
@@ -194,6 +198,25 @@ void finish(QWidget* w, const Kind& k, const QString& file, const std::function<
         run_as_root(w, {"apt-get", "install", "-y", file}, may_quit);
     } else if (k.id == "rpm") {
         run_as_root(w, {"dnf", "install", "-y", file}, may_quit);
+    } else if (k.id == "appimage") {
+        // The one file swapped for the new one, which is then what starts.
+        const QString image = qEnvironmentVariable("APPIMAGE");
+        if (!QFileInfo(QFileInfo(image).absolutePath()).isWritable()) {
+            QMessageBox::information(w, "Update", "The AppImage's folder isn't writable. The new one is here:\n" + file);
+            return;
+        }
+        QFile::setPermissions(file, QFile::permissions(file) | QFile::ExeOwner | QFile::ExeGroup | QFile::ExeOther);
+        const QString staged = image + ".new";
+        QFile::remove(staged);
+        if (!QFile::copy(file, staged) || !QFile::setPermissions(staged, QFile::permissions(file)) || std::rename(staged.toLocal8Bit().constData(), image.toLocal8Bit().constData()) != 0) {
+            QFile::remove(staged);
+            QMessageBox::warning(w, "Update", "The AppImage couldn't be replaced. The new one is here:\n" + file);
+            return;
+        }
+        if (QMessageBox::question(w, "Update Installed", "The new version is installed. Restart Aztek now?", QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes) == QMessageBox::Yes && may_quit()) {
+            QProcess::startDetached(image, {});
+            qApp->quit();
+        }
     } else if (k.id == "tarball") {
         // Unpacked over this copy: the running program's file is replaced, not written into.
         QString dir = QCoreApplication::applicationDirPath();
@@ -303,6 +326,8 @@ void found(QWidget* w, bool manual, const QJsonObject& rel, const std::function<
         how = "Aztek closes, swaps in the new Aztek.app and starts it again.";
     } else if (k.id == "deb" || k.id == "rpm") {
         how = "The package is installed with your password, then Aztek restarts.";
+    } else if (k.id == "appimage") {
+        how = "The AppImage file is replaced with the new one, then Aztek restarts.";
     } else if (k.id == "tarball") {
         how = "The new version is unpacked over this one, then Aztek restarts.";
     } else {

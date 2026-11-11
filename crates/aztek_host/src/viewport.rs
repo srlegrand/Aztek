@@ -705,6 +705,8 @@ impl Viewport {
         let g = &s.graph;
         let mode = components::mode(g);
         let sel = g.selection().to_vec();
+        // The UV Editor's Checker: on the meshes whose UVs it shows, the selected ones.
+        let checker_set = (r.materials && crate::ui_cmds::pref_bool("uvChecker", false)).then(|| crate::textures::with_cache(gpu, |c| c.checker(gpu)));
         let lead = sel.last().copied();
         let mut transparent: Vec<Clear> = Vec::new();
         for it in items {
@@ -826,6 +828,7 @@ impl Viewport {
             let is_surface = surfaces::is_surface(g, it.shape);
             let selected = !is_surface && self.disp.highlight && (sel.contains(&it.xf) || sel.contains(&it.shape));
             let hilited = selected && mode != ComponentMode::Object;
+            let checkered = !is_surface && (sel.contains(&it.xf) || sel.contains(&it.shape));
             let child_lit = !is_surface && self.disp.highlight && ds::select_state(g, it.shape, &sel) == ds::SelectState::Child;
             let wire_sel: &[NodeId] = if self.disp.highlight { &sel } else { &[] };
             let wire = ds::wire_color(g, it.shape, wire_sel, "polymesh", WIRE);
@@ -1108,7 +1111,7 @@ impl Viewport {
                         pc.n2[3] = self.disp.flat as i32 as f32;
                         r.push(gpu, &pc);
                         r.draw(gpu, vb, Some((ib, *n)), 0);
-                    } else if self.disp.default_material && (self.disp.light_mode == crate::lighting::LightMode::Default || !r.materials) {
+                    } else if self.disp.default_material && (self.disp.light_mode == crate::lighting::LightMode::Default || !r.materials) && !(checker_set.is_some() && checkered) {
                         r.bind(gpu, if self.disp.backface { Kind::ShadedCull } else { Kind::Shaded });
                         let mut pc = push(mvp, it.world, view, [0.5, 0.5, 0.5, 1.0], retopo, 1.0);
                         pc.n2[3] = self.disp.flat as i32 as f32;
@@ -1145,11 +1148,21 @@ impl Viewport {
                         for (bi, b) in draw_list.iter().enumerate() {
                             let green = no_material();
                             let grey = default_grey();
-                            let plain = self.disp.default_material;
-                            let m = if plain { &grey } else if b.group == NO_NODE { &green } else { self.mats.materials.get(&b.group).or(self.mats.fallback.as_ref()).unwrap_or(&green) };
+                            let white_mat = DrawMaterial { color: [1.0; 3], ..no_material() };
+                            let checker_sets = checker_set.filter(|_| checkered).map(|set| MatSets { color: Some(set), alpha: None, alpha_has_alpha: false });
+                            let plain = self.disp.default_material || checker_sets.is_some();
+                            let m = if checker_sets.is_some() {
+                                &white_mat
+                            } else if plain {
+                                &grey
+                            } else if b.group == NO_NODE {
+                                &green
+                            } else {
+                                self.mats.materials.get(&b.group).or(self.mats.fallback.as_ref()).unwrap_or(&green)
+                            };
                             let mut pc = push(mvp, it.world, view, [m.color[0], m.color[1], m.color[2], 1.0], retopo, 1.0);
                             pc.n2[3] = self.disp.flat as i32 as f32;
-                            let (mut mp, clear) = material_push(pc, m, if plain { None } else { self.mats.sets.get(&b.group).filter(|_| style.textured) });
+                            let (mut mp, clear) = material_push(pc, m, if checker_sets.is_some() { checker_sets.as_ref() } else if plain { None } else { self.mats.sets.get(&b.group).filter(|_| style.textured) });
                             stamp_lights(&self.lit, &mut mp, it.shape, if plain { NO_NODE } else { b.group });
                             // The isolated draws are for this frame only, so see-through ones go now rather than later.
                             if clear && shown_batches.is_none() && r.materials {
@@ -1158,7 +1171,7 @@ impl Viewport {
                             }
                             let (Some(ib), Some(uvs)) = (draw_ib, entry.uvs.as_ref()) else { continue };
                             if r.materials {
-                                let sets = if plain { None } else { self.mats.sets.get(&b.group).filter(|_| style.textured) };
+                                let sets = if checker_sets.is_some() { checker_sets.as_ref() } else if plain { None } else { self.mats.sets.get(&b.group).filter(|_| style.textured) };
                                 let white = crate::textures::with_cache(gpu, |c| c.white(gpu));
                                 let kind = match (clear, self.disp.backface) {
                                     (false, false) => Kind::Material,

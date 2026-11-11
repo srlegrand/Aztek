@@ -127,11 +127,12 @@ fn usd_shape_of(g: &Graph, id: NodeId) -> Value {
     shape.map_or(Value::Null, |s| json!(g.full_path(s)))
 }
 
-/// `arg` holds the words shapes and intermediate. Deformers' sets and original shapes show only with intermediate, as
+/// `arg` holds the words shapes, intermediate and dg (the nodes that aren't in the DAG as well). Deformers' sets and original shapes show only with intermediate, as
 /// The reference's Display > Intermediate Objects does.
 pub fn outliner(core: &Core, arg: &str) -> Value {
     let show_intermediate = arg.contains("intermediate");
     let shapes = arg.contains("shapes") || show_intermediate;
+    let all_nodes = arg.split_whitespace().any(|w| w == "dg");
     let g = &core.s.graph;
     let sel = g.selection().to_vec();
     let mut out = Vec::new();
@@ -148,6 +149,10 @@ pub fn outliner(core: &Core, arg: &str) -> Value {
         // Shading groups stay in the Hypershade unless everything is asked for, as the reference's outliner leaves them out.
         if n.ty().is_a("objectSet") && (show_intermediate || (aztek_scene::deform_sets::deformer_of_set(g, id).is_none() && !n.ty().is_a(aztek_scene::shading::SG_TYPE))) {
             out.push(json!({"name": n.name(), "path": g.path(id), "type": n.ty().name, "icon": "set", "selected": sel.contains(&id), "visible": true, "intermediate": false, "children": []}));
+        } else if all_nodes && !n.ty().dag && !n.ty().is_a("objectSet") {
+            // DAG Objects Only off: every other node too (a skin's bind pose, materials, history, time1), as the
+            // reference lists them.
+            out.push(json!({"name": n.name(), "path": g.path(id), "type": n.ty().name, "icon": "dgNode", "selected": sel.contains(&id), "visible": true, "intermediate": false, "children": []}));
         }
     }
     Value::Array(out)

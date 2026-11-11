@@ -13,6 +13,7 @@ by hand.
 | `aztek-<version>-setup-x64.exe` | windows-2022 | `packaging/windows/build-installer.ps1` | 6.8 bundled | 3.12 bundled |
 | `aztek-windows-x86_64.zip` | windows-2022 | `build.ps1` | 6.8 bundled | 3.12 bundled |
 | `aztek-linux-x86_64.tar.gz` | ubuntu-24.04 | `build.sh` | system | system |
+| `aztek-<version>-x86_64.AppImage` | `rockylinux:8` container | `packaging/appimage/build-appimage.sh` | 6.8 bundled | 3.12 bundled |
 
 ## Rocky Linux
 
@@ -54,6 +55,21 @@ needs a driver:
   package with the NVIDIA driver on a real X server draws properly.
 
 Aztek runs through X11 only (`QT_QPA_PLATFORM=xcb`, XWayland on a Wayland session).
+
+## AppImage
+
+    chmod +x aztek-*-x86_64.AppImage
+    ./aztek-*-x86_64.AppImage
+
+For any other x86_64 Linux, and Ubuntu releases the `.deb` files aren't built for. One file with Qt, Python and its
+standard library, and the libraries a distribution may not have, inside; built on Rocky 8 so that its C library
+(glibc 2.28) is the newest it needs. What it takes from the system is what has to match the machine or every desktop
+has: the C library, GL and Vulkan, X11, fontconfig and freetype, glib and D-Bus (the list is in the script, after the
+AppImage project's excludelist). It needs FUSE to mount itself; without it, `--appimage-extract-and-run` unpacks and
+runs. Help > Check for Updates replaces the file with the new one.
+
+CI starts it unpacked in clean `ubuntu:24.04` and `ubuntu:rolling` containers (`verify-appimage`). A build or check
+that fails leaves that release without an AppImage rather than holding the release back.
 
 ## Ubuntu
 

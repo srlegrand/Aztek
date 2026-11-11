@@ -54,7 +54,8 @@ private:
     bool updating_ = false;
     QSet<QString> expanded_;
     QLineEdit* filter_;
-    bool dag_only_ = false;
+    // On, as the reference starts: off lists every node, not only the DAG and the sets.
+    bool dag_only_ = true;
     bool attrs_ = false;
     bool hide_cameras_ = false;
     bool show_icons_ = true;

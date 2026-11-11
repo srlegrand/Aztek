@@ -778,7 +778,7 @@ impl View {
     pub fn mouse(&mut self, core: &mut Core, kind: i32, button: i32, px: DVec2, mods: i32, buttons: i32) -> bool {
         self.iso_in(core);
         let gathered = gather(&mut core.s.graph);
-        let items = self.vp.filter_items(&core.s.graph, gathered);
+        let mut items = self.vp.filter_items(&core.s.graph, gathered);
         let alt = mods & ALT != 0;
         if !alt && self.hud_mouse(core, kind, button, px) {
             return true;
@@ -971,6 +971,21 @@ impl View {
                     if let Some(h) = hit {
                         self.vp.set_constraint(h);
                         return true;
+                    }
+                }
+                // Shift-drag on a handle makes something new and drags that, as the reference does: selected faces or
+                // edges are extruded, objects duplicated.
+                if button == 1 && mods & SHIFT != 0 && mods & CTRL == 0 && hit.is_some() && pivot.is_some() && matches!(self.vp.eff_tool(), Tool::Move | Tool::Rotate | Tool::Scale) && !self.vp.pivot_mode {
+                    let made = match components::mode(&core.s.graph) {
+                        ComponentMode::Face | ComponentMode::Edge => core.exec("polyExtrude", json!({})).is_ok(),
+                        ComponentMode::Object => core.exec("duplicate", json!({})).is_ok(),
+                        _ => false,
+                    };
+                    if made {
+                        let gathered = gather(&mut core.s.graph);
+                        items = self.vp.filter_items(&core.s.graph, gathered);
+                        self.vp.update_frame(&mut core.s);
+                        pivot = self.vp.manip_pivot(&mut core.s, &items).or(pivot);
                     }
                 }
                 let start_drag = match (button, hit, pivot) {

@@ -446,6 +446,20 @@ filters and icons. Layer editor V, P, T, R, colour, reorder. Script Editor tabs,
 source. File, Edit, Modify and Display menus; Preferences saved and `optionVar`; time units by name; playback speed and
 looping in real time.
 
+As of 11/11/2026:
+
+- Shift-drag on a move, rotate or scale handle makes something new and drags that: selected faces or edges are
+  extruded (`polyExtrude`), objects duplicated. The extrude or duplicate and the drag are two undo steps.
+- Shift + right-click with nothing selected: the polygon primitives of the Create menu and the Create Polygon Tool,
+  made as the menu's items make them. The items' compass positions are unchecked against the reference.
+- The UV Editor's Checker also shows on the selected meshes in the views (shaded, not wireframe), as well as behind
+  the UVs. One checker, eight squares to a UV tile; `checkerColor1`, `checkerColor2` and `checkerDensity` are accepted
+  and not applied.
+- Outliner Display > DAG Objects Only starts on. Off, every other node is listed after the DAG: a skin's bind pose,
+  skin clusters, materials, history nodes. Sets show either way.
+- `uiPref name value` from MEL and Python stores the value (it stored nothing before, so the settings the Preferences
+  pass through it, the drag readout among them, now take effect).
+
 Not yet in the interface: Topology symmetry (World X, Y, Z act in object space: `setSymmetry` has no world mode), Cut,
 curve Edit Point and Curve Point modes, UV and Vertex Face component modes in the marking menu,
 per-object display toggles are not saved with the scene,
