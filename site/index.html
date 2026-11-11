@@ -25,6 +25,7 @@
     <a href="#rendering">Rendering</a>
     <a href="#examples">Examples</a>
     <a href="#copy">Copy it</a>
+    <a href="#fix">Fix it</a>
     <a href="#licence">Licence</a>
     <a href="https://github.com/srlegrand/Aztek">GitHub</a>
   </nav>
@@ -327,6 +328,33 @@ cmds.setKeyframe(cube, at='ty', t=24, v=5)</code></pre>
       one <a href="https://github.com/srlegrand/Aztek/issues">public list</a>. Nothing is sent until you press Submit there.</p>
   </div>
   <img src="img/feedback.png" alt="The This doesn't feel right! window over the main window" loading="lazy">
+</section>
+
+<section class="fix" id="fix">
+  <h2>Fix it yourself</h2>
+  <p>If something is wrong and you can see how to fix it, fix it and send the change. Small fixes are as welcome as
+    large ones, and there is nothing to ask first.</p>
+  <ol>
+    <li><strong>Get the source and build it.</strong>
+<pre><code>git clone https://github.com/srlegrand/Aztek.git
+cd Aztek
+./build.sh --deps --run</code></pre></li>
+    <li><strong>Find the code.</strong> The Rust core is under <code>crates/</code>, the Qt interface under
+      <code>app/src</code>. Searching for a command's name, a menu label or an error message usually lands on the right
+      file. <a href="https://github.com/srlegrand/Aztek/blob/main/PARITY.md">PARITY.md</a> says how each area is meant
+      to behave.</li>
+    <li><strong>Make the change and check it.</strong> <code>./build.sh --run</code> rebuilds and starts Aztek;
+      <code>cargo test -p aztek_scene</code> runs a crate's tests.</li>
+    <li><strong>Send it.</strong> As a patch, with no fork needed:
+<pre><code>git add -A
+git diff --cached &gt; my-fix.patch</code></pre>
+      and attach the file to the <a href="https://github.com/srlegrand/Aztek/issues">issue</a> it fixes or to a new one.
+      Or <a href="https://github.com/srlegrand/Aztek/fork">fork the repository</a>, push a branch and open a pull
+      request.</li>
+  </ol>
+  <p class="small">One fix per patch, a line on what was wrong and what happens now. A change you send goes in under
+    MIT-0 like everything else. The full steps are in the
+    <a href="https://github.com/srlegrand/Aztek#fix-it-yourself">README</a>.</p>
 </section>
 
 <section class="works" id="works">

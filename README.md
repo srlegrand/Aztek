@@ -4,6 +4,7 @@
   <a href="https://github.com/srlegrand/Aztek/releases/latest"><img src="https://img.shields.io/badge/Download-Windows%20%7C%20Linux%20%7C%20macOS-white?style=for-the-badge" alt="Download"></a>
   <a href="https://github.com/srlegrand/Aztek/fork"><img src="https://img.shields.io/badge/Fork%20it%20on%20GitHub-white?style=for-the-badge&logo=github&logoColor=black" alt="Fork it on GitHub"></a>
   <a href="#copy-it-anywhere"><img src="https://img.shields.io/badge/Copy%20it%20anywhere-white?style=for-the-badge" alt="Copy it anywhere"></a>
+  <a href="#fix-it-yourself"><img src="https://img.shields.io/badge/Fix%20it%20yourself-white?style=for-the-badge" alt="Fix it yourself"></a>
   <a href="https://srlegrand.github.io/Aztek/"><img src="https://img.shields.io/badge/Website-white?style=for-the-badge" alt="Website"></a>
 </p>
 
@@ -67,6 +68,50 @@ Sending a report makes no network request from the app. "Open on GitHub" opens a
 in the description box) and shows the folder holding the attachments, under `feedback/` in the app's data location, so the zip can be dragged
 in. You need a GitHub account, and nothing is public until you press Submit on that page. The window shows exactly what the page will be
 filled in with. GitHub takes files up to 25 MB and images up to 10 MB.
+
+## Fix it yourself
+
+If something is wrong and you can see how to fix it, fix it and send the change. Small fixes are as welcome as large
+ones, and there is nothing to ask first.
+
+1. **Get the source and build it.** Details are under [Build](#build).
+
+       git clone https://github.com/srlegrand/Aztek.git
+       cd Aztek
+       ./build.sh --deps --run
+
+2. **Find the code.** The Rust core is under `crates/`: `aztek_scene` holds the nodes and commands, `aztek_geo` the mesh
+   operations, `aztek_host` the viewport and everything the interface asks of the core. The Qt interface is under
+   `app/src`. Searching for a command's name, a menu label or an error message usually lands on the right file.
+   [PARITY.md](PARITY.md) says how each area is meant to behave.
+
+3. **Make the change and check it.** `./build.sh --run` rebuilds and starts Aztek. Each crate keeps its tests in its
+   `tests/` folder; run the ones for the crate you touched, and add one beside them if the fix can be tested.
+
+       cargo test -p aztek_scene
+
+4. **Send it**, as a patch or as a pull request.
+
+   A patch needs no fork. Make one file holding everything you changed, new files included:
+
+       git add -A
+       git diff --cached > my-fix.patch
+
+   Attach `my-fix.patch` to the issue it fixes, or to a [new issue](https://github.com/srlegrand/Aztek/issues/new)
+   saying what it changes. If GitHub refuses the file, zip it first.
+
+   A pull request: [fork the repository](https://github.com/srlegrand/Aztek/fork), then
+
+       git checkout -b my-fix
+       git add -A
+       git commit -m "What the fix does"
+       git push https://github.com/<your name>/Aztek.git my-fix
+
+   and open the pull request GitHub offers for the branch.
+
+What helps it go in quickly: one fix per patch, a line on what was wrong and what happens now, and the issue's number
+if there is one. A change you send goes in under [MIT-0](LICENSE) like everything else here. And if you would rather
+keep the fix in your own copy, that is fine too: see [Copy it anywhere](#copy-it-anywhere).
 
 ## What's in it
 
