@@ -1235,6 +1235,8 @@ ViewportWidget* MainWindow::active_view() const {
 }
 
 void MainWindow::set_tool(const QString& tool) {
+    // Choosing a tool leaves Edit Pivot, as the reference does: W in pivot mode is the Move tool again, on the object.
+    if (pivot_mode_) set_pivot_mode(false);
     if (tool != tool_) last_tool_ = tool_;
     // G goes back to the last tool, other than the four everyone's a key away from.
     if (!repeating_ && !QStringList{"select", "move", "rotate", "scale"}.contains(tool)) {

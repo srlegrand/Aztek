@@ -1255,6 +1255,7 @@ Edit Pivot (issue 23):
 - Bake Pivot baked only a pivot orientation, so with the pivot only moved it did nothing. It bakes the position too:
   the translate goes to the pivot, the four pivot offsets go to zero, the points are countered and children stay
   where they are. `bakePivot -position` and `-orientation` choose; both are on by default.
+- Choosing a tool (W, E, R, Q, a tool button) leaves Edit Pivot, as the reference does.
 - Not done: in component mode Edit Pivot still moves the components rather than the manipulator. The pivot's
   orientation can't be turned in the view; `setPivot -orient` sets it.
 
