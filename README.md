@@ -109,6 +109,43 @@ ones, and there is nothing to ask first.
 
    and open the pull request GitHub offers for the branch.
 
+### With an LLM
+
+A coding assistant that can read the folder and run commands in it can do steps 2 and 3 with you. Clone and build
+first (step 1), start the assistant in the `Aztek` folder, and give it this, with the problem filled in:
+
+```text
+You are working in a clone of Aztek (https://github.com/srlegrand/Aztek), a 3D application
+with a Rust core under crates/ and a Qt interface in C++ under app/src.
+
+Read CLAUDE.md first: it holds the project's rules and layout. PARITY.md says how each area
+is meant to behave.
+
+The problem:
+<What you did, what happened, and what you expected instead. Paste the issue's text and
+its number if there is one.>
+
+Do this, in order:
+1. Find the code responsible and tell me what causes the problem before changing anything.
+2. Make the smallest change that fixes it, in the style of the code around it. Don't
+   refactor, rename or reformat what the fix doesn't need.
+3. If the fix can be tested, add a test in that crate's tests/ folder, and run the crate's
+   tests: cargo test -p <crate>.
+4. Build with ./build.sh (build.bat on Windows, ./build-macos.sh on macOS) and fix what
+   doesn't compile.
+5. If the change alters behaviour that PARITY.md describes, update PARITY.md.
+6. Don't commit or push, and add no credit or attribution lines anywhere.
+
+When you are done:
+- run: git add -A && git diff --cached > my-fix.patch
+- list the files you changed and why, in a few lines
+- give me the steps to check the fix by hand in the app
+- say plainly what you could not test or verify
+```
+
+Then build, start Aztek and check the fix yourself by the steps it gives: it can be wrong while sounding sure. Read the
+patch before sending it (step 4), and say in the issue what you checked.
+
 What helps it go in quickly: one fix per patch, a line on what was wrong and what happens now, and the issue's number
 if there is one. A change you send goes in under [MIT-0](LICENSE) like everything else here. And if you would rather
 keep the fix in your own copy, that is fine too: see [Copy it anywhere](#copy-it-anywhere).
