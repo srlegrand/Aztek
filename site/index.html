@@ -64,10 +64,37 @@
   <p>If something is wrong and you can see how to fix it, fix it and send the change. Small fixes are as welcome as
     large ones, and there is nothing to ask first.</p>
   <ol>
-    <li><strong>Get the source and build it.</strong>
-<pre><code>git clone https://github.com/srlegrand/Aztek.git
+    <li><strong>Get the tools, the source, and build it.</strong> You need <code>git</code>, and <code>gh</code>
+      (GitHub's command line tool) if you will send a pull request.
+      <div class="os-grid">
+        <div><h4>Linux</h4>
+<pre><code>sudo apt install git   # or dnf, pacman
+git clone https://github.com/srlegrand/Aztek.git
 cd Aztek
-./build.sh --deps --run</code></pre></li>
+./build.sh --deps --run</code></pre>
+          <p class="small">For <code>gh</code>, follow
+            <a href="https://github.com/cli/cli/blob/trunk/docs/install_linux.md">its Linux instructions</a>: the one
+            Debian and Ubuntu ship is too old to work with GitHub.</p></div>
+        <div><h4>macOS</h4>
+<pre><code>brew install git gh
+git clone https://github.com/srlegrand/Aztek.git
+cd Aztek
+./build-macos.sh --deps --run</code></pre>
+          <p class="small">With <a href="https://brew.sh">Homebrew</a>.</p></div>
+        <div><h4>Windows</h4>
+<pre><code>winget install --id Git.Git
+winget install --id GitHub.cli
+git clone https://github.com/srlegrand/Aztek.git
+cd Aztek
+.\build.bat -Run</code></pre>
+          <p class="small">From PowerShell, with Visual Studio 2022 and Qt as the
+            <a href="https://github.com/srlegrand/Aztek#build">README</a> says.</p></div>
+      </div>
+      Open a new terminal after installing. Then, once, sign <code>gh</code> in to your GitHub account
+      (<a href="https://github.com/signup">a free one</a> will do):
+<pre><code>gh auth login</code></pre>
+      Answer GitHub.com, HTTPS, Yes to authenticating Git, and "Login with a web browser": it shows a code, opens the
+      browser, and you paste the code there. A patch attached to an issue needs no <code>gh</code>, only the account.</li>
     <li><strong>Find the code.</strong> The Rust core is under <code>crates/</code>, the Qt interface under
       <code>app/src</code>. Searching for a command's name, a menu label or an error message usually lands on the right
       file. <a href="https://github.com/srlegrand/Aztek/blob/main/PARITY.md">PARITY.md</a> says how each area is meant
@@ -78,8 +105,13 @@ cd Aztek
 <pre><code>git add -A
 git diff --cached &gt; my-fix.patch</code></pre>
       and attach the file to the <a href="https://github.com/srlegrand/Aztek/issues">issue</a> it fixes or to a new one.
-      Or <a href="https://github.com/srlegrand/Aztek/fork">fork the repository</a>, push a branch and open a pull
-      request.</li>
+      Or as a pull request, with <code>gh</code> signed in: the first command makes your own copy of the repository on
+      GitHub, the last pushes your branch there and opens the pull request.
+<pre><code>gh repo fork --remote
+git checkout -b my-fix
+git add -A
+git commit -m "What the fix does"
+gh pr create --fill</code></pre></li>
   </ol>
   <h3>With an LLM</h3>
   <p>A coding assistant that can read the folder and run commands in it can find the code and make the change with

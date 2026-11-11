@@ -248,6 +248,10 @@ figcaption b { text-transform: uppercase; letter-spacing: 0.06em; color: var(--c
 .fix li pre { margin: 8px 0 0; }
 .fix li pre code { background: none; padding: 0; }
 .fix h3 { color: var(--navy); margin-top: 26px; }
+.os-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin: 10px 0 12px; }
+.os-grid h4 { margin: 0 0 6px; color: var(--navy); }
+.os-grid p { margin: 6px 0 0; }
+@media (max-width: 900px) { .os-grid { grid-template-columns: minmax(0, 1fr); } }
 .fix pre { white-space: pre-wrap; }
 
 .docs-links { max-width: var(--max); margin: 40px auto 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }

@@ -37,18 +37,50 @@ filled in with. GitHub takes files up to 25 MB and images up to 10 MB.
 If something is wrong and you can see how to fix it, fix it and send the change. Small fixes are as welcome as large
 ones, and there is nothing to ask first.
 
-1. **Get the source and build it.** Details are under [Build](#build).
+1. **Get the tools, the source, and build it.** You need `git`, and `gh` (GitHub's command line tool) if you will
+   send a pull request. What the build itself needs is under [Build](#build).
 
+   Linux:
+
+       sudo apt install git        # or: sudo dnf install git, sudo pacman -S git
        git clone https://github.com/srlegrand/Aztek.git
        cd Aztek
        ./build.sh --deps --run
+
+   For `gh`, follow [its Linux instructions](https://github.com/cli/cli/blob/trunk/docs/install_linux.md): the `gh`
+   that Debian and Ubuntu ship themselves is too old to work with GitHub (as of 11/2025, by its maintainers' note).
+
+   macOS, with [Homebrew](https://brew.sh):
+
+       brew install git gh
+       git clone https://github.com/srlegrand/Aztek.git
+       cd Aztek
+       ./build-macos.sh --deps --run
+
+   Windows, from PowerShell, with Visual Studio 2022 and Qt installed as [Build](#build) says:
+
+       winget install --id Git.Git
+       winget install --id GitHub.cli
+       git clone https://github.com/srlegrand/Aztek.git
+       cd Aztek
+       .\build.bat -Run
+
+   Open a new terminal after installing so `git` and `gh` are found. Then, once, sign `gh` in to your GitHub account
+   (a free one will do; make it at [github.com/signup](https://github.com/signup)):
+
+       gh auth login
+
+   Answer GitHub.com, HTTPS, Yes to authenticating Git, and "Login with a web browser": it shows a code, opens the
+   browser, and you paste the code there. `gh auth status` says whether it worked. A patch attached to an issue needs
+   no `gh`, only the account.
 
 2. **Find the code.** The Rust core is under `crates/`: `aztek_scene` holds the nodes and commands, `aztek_geo` the mesh
    operations, `aztek_host` the viewport and everything the interface asks of the core. The Qt interface is under
    `app/src`. Searching for a command's name, a menu label or an error message usually lands on the right file.
    [PARITY.md](PARITY.md) says how each area is meant to behave.
 
-3. **Make the change and check it.** `./build.sh --run` rebuilds and starts Aztek. Each crate keeps its tests in its
+3. **Make the change and check it.** `./build.sh --run` rebuilds and starts Aztek (`./build-macos.sh --run` on macOS,
+   `.\build.bat -Run` on Windows). Each crate keeps its tests in its
    `tests/` folder; run the ones for the crate you touched, and add one beside them if the fix can be tested.
 
        cargo test -p aztek_scene
@@ -63,14 +95,17 @@ ones, and there is nothing to ask first.
    Attach `my-fix.patch` to the issue it fixes, or to a [new issue](https://github.com/srlegrand/Aztek/issues/new)
    saying what it changes. If GitHub refuses the file, zip it first.
 
-   A pull request: [fork the repository](https://github.com/srlegrand/Aztek/fork), then
+   A pull request, with `gh` signed in. The first command makes your own copy of the repository on GitHub and points
+   this folder at it; the last pushes your branch there and opens the pull request:
 
+       gh repo fork --remote
        git checkout -b my-fix
        git add -A
        git commit -m "What the fix does"
-       git push https://github.com/<your name>/Aztek.git my-fix
+       gh pr create --fill
 
-   and open the pull request GitHub offers for the branch.
+   If git asks who you are at the commit, tell it once: `git config --global user.name "Your Name"` and
+   `git config --global user.email "you@example.com"`.
 
 ### With an LLM
 
