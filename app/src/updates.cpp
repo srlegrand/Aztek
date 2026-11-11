@@ -103,6 +103,9 @@ Kind this_install() {
 #else
     // An AppImage says where its file is; the program itself runs from a read-only mount of it.
     if (!qEnvironmentVariableIsEmpty("APPIMAGE")) return {"appimage", "x86_64.AppImage"};
+    // A Flatpak or a snap is read-only to the program in it, and is replaced from outside.
+    if (!qEnvironmentVariableIsEmpty("FLATPAK_ID")) return {"flatpak", "x86_64.flatpak"};
+    if (!qEnvironmentVariableIsEmpty("SNAP")) return {"snap", "amd64.snap"};
     if (QCoreApplication::applicationFilePath().startsWith("/usr/")) {
         QHash<QString, QString> os = os_release();
         QString id = os.value("ID"), like = os.value("ID_LIKE"), ver = os.value("VERSION_ID");
@@ -326,6 +329,12 @@ void found(QWidget* w, bool manual, const QJsonObject& rel, const std::function<
         how = "Aztek closes, swaps in the new Aztek.app and starts it again.";
     } else if (k.id == "deb" || k.id == "rpm") {
         how = "The package is installed with your password, then Aztek restarts.";
+    } else if (k.id == "flatpak") {
+        how = "This copy is a Flatpak: the new one downloads in your browser, to install over it with flatpak install --user and the file's name.";
+        install_label = "Download";
+    } else if (k.id == "snap") {
+        how = "This copy is a snap: the new one downloads in your browser, to install over it with sudo snap install --dangerous and the file's name.";
+        install_label = "Download";
     } else if (k.id == "appimage") {
         how = "The AppImage file is replaced with the new one, then Aztek restarts.";
     } else if (k.id == "tarball") {
@@ -369,7 +378,7 @@ void found(QWidget* w, bool manual, const QJsonObject& rel, const std::function<
     if (r != 1) return;
     if (install_label == "Open Releases Page") {
         QDesktopServices::openUrl(QUrl(rel["url"].toString().isEmpty() ? QString(kReleases) : rel["url"].toString()));
-    } else if (k.id == "windowsZip") {
+    } else if (k.id == "windowsZip" || k.id == "flatpak" || k.id == "snap") {
         QDesktopServices::openUrl(QUrl(asset["url"].toString()));
     } else {
         download_and_install(w, asset, k, may_quit);

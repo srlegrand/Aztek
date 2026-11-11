@@ -1,0 +1,46 @@
+# Flatpak of Aztek, made from the unpacked AppImage: the same program, Qt and Python CI has already started in clean
+# systems, put under /app. Built by packaging/flatpak/build-flatpak.sh, which unpacks the AppImage into ./AppDir
+# beside this file first. The runtime gives what the AppImage takes from a desktop: the C library, X11, fontconfig,
+# D-Bus and the graphics drivers.
+app-id: io.github.srlegrand.Aztek
+runtime: org.freedesktop.Platform
+runtime-version: "25.08"
+sdk: org.freedesktop.Sdk
+command: aztek
+rename-desktop-file: aztek.desktop
+rename-icon: aztek
+finish-args:
+  # The window: Aztek's Qt has the X11 platform plugin, so on Wayland it runs through XWayland.
+  - --share=ipc
+  - --socket=x11
+  # The viewport draws with Vulkan on the GPU.
+  - --device=dri
+  # Scenes, textures, references and plug-ins are wherever the user keeps them.
+  - --filesystem=host
+  # The update check, and nothing else.
+  - --share=network
+modules:
+  - name: aztek
+    buildsystem: simple
+    build-commands:
+      - mkdir -p /app/bin
+      - cp -a usr /app/usr
+      - install -Dm755 aztek.sh /app/bin/aztek
+      - install -Dm644 usr/share/applications/aztek.desktop /app/share/applications/aztek.desktop
+      - install -Dm644 usr/share/icons/hicolor/256x256/apps/aztek.png /app/share/icons/hicolor/256x256/apps/aztek.png
+      - install -Dm644 io.github.srlegrand.Aztek.metainfo.xml /app/share/metainfo/io.github.srlegrand.Aztek.metainfo.xml
+      # Here, in the runtime it will run in: every library found, the program starts, Python runs.
+      - |
+        for f in /app/usr/bin/aztek /app/usr/plugins/*/*.so; do
+          if LD_LIBRARY_PATH=/app/usr/lib ldd "$f" | grep "not found"; then echo "unresolved libraries in $f"; exit 1; fi
+        done
+      - QT_QPA_PLATFORM=offscreen /app/bin/aztek --help
+      - printf 'import sys, json, ctypes, ssl, sqlite3, zlib\nimport aztek.cmds as cmds\nprint(sys.version, cmds.polyCube())\n' > check.py
+      - HOME="$PWD/home" AZTEK_PREFS="$PWD/prefs" /app/bin/aztek --batch --script check.py
+    sources:
+      - type: dir
+        path: AppDir
+      - type: file
+        path: aztek.sh
+      - type: file
+        path: io.github.srlegrand.Aztek.metainfo.xml

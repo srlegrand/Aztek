@@ -241,7 +241,7 @@ target and status, including known differences; [docs/COMMANDS.md](docs/COMMANDS
 
 Website: [srlegrand.github.io/Aztek](https://srlegrand.github.io/Aztek/). Licence: [MIT-0](LICENSE).
 
-**Download** from the [latest release](https://github.com/srlegrand/Aztek/releases/latest): Windows installer or zip, Rocky Linux 9 and 8 `.rpm`, Ubuntu 24.04 and 22.04 `.deb`, an AppImage for any other Linux, Linux `.tar.gz`, and an early macOS build for Apple silicon. Install steps are under [Install](#install).
+**Download** from the [latest release](https://github.com/srlegrand/Aztek/releases/latest): Windows installer or zip, Rocky Linux 9 and 8 `.rpm`, Ubuntu 24.04 and 22.04 `.deb`, an AppImage for any other Linux, a Flatpak and a snap, Linux `.tar.gz`, and an early macOS build for Apple silicon. Install steps are under [Install](#install).
 
 | Modelling history | A flag in a breeze | A tower knocked down |
 | --- | --- | --- |
@@ -483,6 +483,8 @@ source is pointed at `git pull`. It goes through the proxy in `HTTPS_PROXY`, min
 | Rocky Linux 9 | `aztek-<version>-1.el9.x86_64.rpm` | `sudo dnf install epel-release`, then `sudo dnf install ./aztek-*.el9.x86_64.rpm` |
 | Ubuntu 22.04, 24.04 | `aztek_<version>-1_ubuntu22.04_amd64.deb`, `..._ubuntu24.04_...` | `sudo apt install ./aztek_*.deb` |
 | Any other Linux, x86_64 | `aztek-<version>-x86_64.AppImage` | `chmod +x aztek-*.AppImage`, then run it (Qt and Python are inside) |
+| Linux with Flatpak | `aztek-<version>-x86_64.flatpak` | `flatpak install --user ./aztek-*.flatpak`, then `flatpak run io.github.srlegrand.Aztek` |
+| Linux with snapd | `aztek_<version>_amd64.snap` | `sudo snap install --dangerous ./aztek_*.snap`, then `aztek` |
 | Windows 10 and 11 | `aztek-<version>-setup-x64.exe`, or the zip | Run it. It isn't signed, so SmartScreen asks first |
 | macOS 14+, Apple silicon (early) | `aztek-macos-arm64.zip` | `brew install python@3.12`, unzip, then right-click Aztek.app and Open the first time: it isn't notarized |
 

@@ -1,0 +1,73 @@
+# Snap of Aztek, made from the unpacked AppImage: the same program, Qt and Python CI has already started in clean
+# systems. packaging/snap/build-snap.sh unpacks the AppImage into ./AppDir beside the snap folder and sets the version.
+# Strictly confined: it sees the home folder and removable media, not the rest of the system.
+name: aztek
+title: Aztek
+summary: 3D modelling, rigging, animation, dynamics and rendering
+description: |
+  A 3D application for modelling, UVs, rigging, animation, dynamics and rendering, with the
+  industry-standard commands, hotkeys, menus and file format.
+license: MIT-0
+website: https://srlegrand.github.io/Aztek/
+source-code: https://github.com/srlegrand/Aztek
+issues: https://github.com/srlegrand/Aztek/issues
+icon: AppDir/usr/share/icons/hicolor/256x256/apps/aztek.png
+adopt-info: aztek
+base: core24
+grade: stable
+confinement: strict
+platforms:
+  amd64:
+
+apps:
+  aztek:
+    command: bin/aztek-snap
+    # The graphics drivers come from the mesa-2404 snap, through the gpu-2404 interface this extension sets up.
+    extensions: [gpu]
+    desktop: usr/share/applications/aztek.desktop
+    plugs:
+      - home
+      - removable-media
+      - network
+      - x11
+      - desktop
+      - desktop-legacy
+      - opengl
+
+parts:
+  aztek:
+    plugin: dump
+    source: AppDir
+    # What the AppImage takes from a desktop and the base snap does not have.
+    stage-packages:
+      - libx11-6
+      - libx11-xcb1
+      - libxcb1
+      - libxcb-glx0
+      - libxau6
+      - libxdmcp6
+      - libsm6
+      - libice6
+      - libfontconfig1
+      - libfreetype6
+      - libglib2.0-0t64
+      - libdbus-1-3
+      - libgl1
+      - libegl1
+      - libopengl0
+      - libvulkan1
+      - xkb-data
+      - fontconfig-config
+    override-pull: |
+      craftctl default
+      craftctl set version="$(cat "$CRAFT_PROJECT_DIR/version" 2>/dev/null || echo dev)"
+    override-build: |
+      craftctl default
+      # The snap's own name for the icon, where the desktop entry is read from.
+      sed -i 's|^Icon=.*|Icon=${SNAP}/usr/share/icons/hicolor/256x256/apps/aztek.png|' "$CRAFT_PART_INSTALL/usr/share/applications/aztek.desktop"
+      install -Dm755 "$CRAFT_PROJECT_DIR/aztek-snap" "$CRAFT_PART_INSTALL/bin/aztek-snap"
+    prime:
+      - -AppRun
+      - -aztek.desktop
+      - -aztek.png
+      - -.DirIcon

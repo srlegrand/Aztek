@@ -278,6 +278,88 @@ jobs:
           pkg/*.AppImage --appimage-extract >/dev/null
           AZTEK_BIN="$PWD/squashfs-root/AppRun" packaging/linux/smoke-test.sh
 
+  # Flatpak and snap: the AppImage that started in the clean systems, repacked for each. Neither can fail the run or
+  # hold a release back: one that does not build or start is left out of that release.
+  flatpak:
+    needs: [gate, verify-appimage]
+    if: always() && needs.verify-appimage.result == 'success'
+    continue-on-error: true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-25.08
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: aztek-appimage
+          path: pkg
+
+      - name: Unpack the AppImage
+        run: packaging/flatpak/unpack-appimage.sh pkg/*.AppImage packaging/flatpak/AppDir
+
+      # The manifest's own build steps start the program and its Python inside the runtime.
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: aztek-${{ needs.gate.outputs.version }}-x86_64.flatpak
+          manifest-path: packaging/flatpak/io.github.srlegrand.Aztek.yml
+          cache-key: flatpak-builder-${{ github.sha }}
+          upload-artifact: false
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aztek-flatpak
+          path: aztek-*.flatpak
+
+  snap:
+    needs: [gate, verify-appimage]
+    if: always() && needs.verify-appimage.result == 'success'
+    continue-on-error: true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: aztek-appimage
+          path: pkg
+
+      - name: Unpack the AppImage
+        run: |
+          packaging/flatpak/unpack-appimage.sh pkg/*.AppImage packaging/snap/AppDir
+          echo "${{ needs.gate.outputs.version }}" > packaging/snap/version
+
+      - uses: snapcore/action-build@v1
+        id: build
+        with:
+          path: packaging/snap
+
+      # Installed here as a user would install the file, then started: libraries, the program, Python.
+      - name: Install and start it
+        run: |
+          sudo snap install --dangerous "${{ steps.build.outputs.snap }}"
+          sudo snap install mesa-2404
+          sudo snap connect aztek:gpu-2404 mesa-2404:gpu-2404 || true
+          printf 'import sys, json, ctypes, ssl, sqlite3, zlib\nimport aztek.cmds as cmds\nprint(sys.version, cmds.polyCube())\n' > "$HOME/aztek-check.py"
+          QT_QPA_PLATFORM=offscreen snap run aztek --help
+          snap run aztek --batch --script "$HOME/aztek-check.py"
+
+      # The window too, where the runner lets a confined program reach its display. Told, not required.
+      - name: Start its window
+        continue-on-error: true
+        run: |
+          sudo apt-get update && sudo apt-get install -y xvfb xauth
+          timeout 180 xvfb-run -a -f "$HOME/aztek-xauth" -s "-screen 0 1280x800x24" snap run aztek --script "$HOME/aztek-check.py" --screenshot "$HOME/aztek-window.png"
+          test -s "$HOME/aztek-window.png"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aztek-snap
+          path: ${{ steps.build.outputs.snap }}
+
   windows:
     needs: gate
     if: needs.gate.outputs.go == 'true'
@@ -400,7 +482,7 @@ jobs:
 
   # Every push to main replaces the "latest" pre-release; a v* tag makes a versioned release.
   release:
-    needs: [gate, linux, ubuntu-2204, rocky, verify-rpm, verify-deb, verify-appimage, windows, macos]
+    needs: [gate, linux, ubuntu-2204, rocky, verify-rpm, verify-deb, verify-appimage, flatpak, snap, windows, macos]
     if: >-
       always() && needs.gate.outputs.go == 'true'
       && needs.linux.result == 'success' && needs.ubuntu-2204.result == 'success' && needs.rocky.result == 'success'
@@ -418,10 +500,11 @@ jobs:
         with:
           merge-multiple: true
 
-      # Only an AppImage that started in the clean systems is released.
+      # Only an AppImage that started in the clean systems is released. The Flatpak and the snap are made from it, and
+      # only once each has started: one that failed uploaded nothing.
       - name: Unverified AppImage
         if: needs.verify-appimage.result != 'success'
-        run: rm -f aztek-*.AppImage
+        run: rm -f aztek-*.AppImage aztek-*.flatpak aztek_*.snap
 
       - name: Release
         if: github.ref == 'refs/heads/main'

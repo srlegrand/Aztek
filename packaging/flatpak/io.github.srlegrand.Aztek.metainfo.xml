@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.srlegrand.Aztek</id>
+  <name>Aztek</name>
+  <summary>3D modelling, rigging, animation, dynamics and rendering</summary>
+  <metadata_license>MIT-0</metadata_license>
+  <project_license>MIT-0</project_license>
+  <developer id="io.github.srlegrand">
+    <name>Simon Legrand</name>
+  </developer>
+  <description>
+    <p>A 3D application for modelling, UVs, rigging, animation, dynamics and rendering, with the industry-standard commands, hotkeys, menus and file format.</p>
+  </description>
+  <launchable type="desktop-id">io.github.srlegrand.Aztek.desktop</launchable>
+  <url type="homepage">https://srlegrand.github.io/Aztek/</url>
+  <url type="bugtracker">https://github.com/srlegrand/Aztek/issues</url>
+  <url type="vcs-browser">https://github.com/srlegrand/Aztek</url>
+  <content_rating type="oars-1.1"/>
+</component>
