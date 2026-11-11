@@ -62,7 +62,9 @@
 <section class="fix" id="fix">
   <h2>Fix it yourself</h2>
   <p>If something is wrong and you can see how to fix it, fix it and send the change. Small fixes are as welcome as
-    large ones, and there is nothing to ask first.</p>
+    large ones, and there is nothing to ask first. Three ways, each unfolds:</p>
+  <details>
+  <summary>By hand: build it, change it, send a patch or a pull request</summary>
   <ol>
     <li><strong>Get the tools, the source, and build it.</strong> You need <code>git</code>, and <code>gh</code>
       (GitHub's command line tool) if you will send a pull request.
@@ -113,7 +115,9 @@ git add -A
 git commit -m "What the fix does"
 gh pr create --fill</code></pre></li>
   </ol>
-  <h3>With an LLM, nothing to install</h3>
+  </details>
+  <details>
+  <summary>With an LLM, nothing to install: the source zip and a chat</summary>
   <p>No git, no build: a chat service that takes a file and can give one back is enough.</p>
   <ol>
     <li><a class="btn" href="https://github.com/srlegrand/Aztek/archive/refs/heads/main.zip">Download the source (.zip, about 30 MB)</a></li>
@@ -153,7 +157,9 @@ in the app, and what you could not build, run or verify.</code></pre></li>
     <li>Say in the issue that the patch was made this way and has not been built or run: nobody has yet seen it work,
       so it gets checked before it goes in.</li>
   </ol>
-  <h3>With an LLM, in the built source</h3>
+  </details>
+  <details>
+  <summary>With an LLM, in the built source</summary>
   <p>A coding assistant that can read the folder and run commands in it can find the code and make the change with
     you, and build and test what it changes. Clone and build first, start the assistant in the <code>Aztek</code>
     folder, and give it this, with the problem filled in:</p>
@@ -185,6 +191,7 @@ When you are done:
 - say plainly what you could not test or verify</code></pre>
   <p>Then build, start Aztek and check the fix yourself by the steps it gives: it can be wrong while sounding sure.
     Read the patch before sending it, and say in the issue what you checked.</p>
+  </details>
   <p class="small">One fix per patch, a line on what was wrong and what happens now. A change you send goes in under
     MIT-0 like everything else. The full steps are in the
     <a href="https://github.com/srlegrand/Aztek#fix-it-yourself">README</a>.</p>

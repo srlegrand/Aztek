@@ -35,7 +35,10 @@ filled in with. GitHub takes files up to 25 MB and images up to 10 MB.
 ## Fix it yourself
 
 If something is wrong and you can see how to fix it, fix it and send the change. Small fixes are as welcome as large
-ones, and there is nothing to ask first.
+ones, and there is nothing to ask first. Three ways, each unfolds:
+
+<details>
+<summary><b>By hand: build it, change it, send a patch or a pull request</b></summary>
 
 1. **Get the tools, the source, and build it.** You need `git`, and `gh` (GitHub's command line tool) if you will
    send a pull request. What the build itself needs is under [Build](#build).
@@ -107,7 +110,11 @@ ones, and there is nothing to ask first.
    If git asks who you are at the commit, tell it once: `git config --global user.name "Your Name"` and
    `git config --global user.email "you@example.com"`.
 
-### With an LLM, nothing to install
+</details>
+
+<details>
+<summary><b>With an LLM, nothing to install: the source zip and a chat</b></summary>
+
 
 No git, no build: a chat service that takes a file and can give one back is enough.
 
@@ -150,10 +157,14 @@ No git, no build: a chat service that takes a file and can give one back is enou
 4. Say in the issue that the patch was made this way and has not been built or run: nobody has yet seen it work, so
    it gets checked before it goes in.
 
-### With an LLM, in the built source
+</details>
 
-A coding assistant that can read the folder and run commands in it can do steps 2 and 3 with you, and build and test
-what it changes. Clone and build first (step 1), start the assistant in the `Aztek` folder, and give it this, with the
+<details>
+<summary><b>With an LLM, in the built source</b></summary>
+
+
+A coding assistant that can read the folder and run commands in it can find the code and make the change with you, and build
+and test what it changes. Clone and build first (step 1 of By hand), start the assistant in the `Aztek` folder, and give it this, with the
 problem filled in:
 
 ```text
@@ -186,7 +197,9 @@ When you are done:
 ```
 
 Then build, start Aztek and check the fix yourself by the steps it gives: it can be wrong while sounding sure. Read the
-patch before sending it (step 4), and say in the issue what you checked.
+patch before sending it (step 4 of By hand), and say in the issue what you checked.
+
+</details>
 
 What helps it go in quickly: one fix per patch, a line on what was wrong and what happens now, and the issue's number
 if there is one. A change you send goes in under [MIT-0](LICENSE) like everything else here. And if you would rather
