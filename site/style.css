@@ -268,6 +268,17 @@ figcaption b { text-transform: uppercase; letter-spacing: 0.06em; color: var(--c
 .os-grid p { margin: 6px 0 0; }
 @media (max-width: 900px) { .os-grid { grid-template-columns: minmax(0, 1fr); } }
 .fix pre { white-space: pre-wrap; }
+.send { background: var(--white); border: 1px solid var(--rule); border-top: 5px solid #e07a0c; margin: 18px 0 10px; padding: 4px 18px 16px; }
+.send h3 { margin-top: 14px; }
+.send-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 12px 0 16px; }
+@media (max-width: 760px) { .send-grid { grid-template-columns: minmax(0, 1fr); } }
+.send-card { background: var(--paper); border: 1px solid var(--rule); padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 10px; }
+.send-card h4 { margin: 0; color: var(--navy); font-size: 18px; }
+.send-card p { margin: 0; }
+.send-card label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; font-weight: 600; color: var(--navy); }
+.send-card input[type="text"] { font: inherit; font-weight: 400; padding: 8px 10px; border: 1px solid var(--silver-2); background: var(--white); color: var(--text); min-width: 0; }
+.send-card input[type="text"]:focus { outline: 2px solid var(--cyan); outline-offset: 0; }
+.send-card button.btn { cursor: pointer; margin-top: auto; align-self: flex-start; }
 
 .docs-links { max-width: var(--max); margin: 40px auto 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .docs-links a {

@@ -106,7 +106,7 @@ cd Aztek
     <li><strong>Send it.</strong> As a patch, with no fork needed:
 <pre><code>git add -A
 git diff --cached &gt; my-fix.patch</code></pre>
-      and attach the file to the <a href="https://github.com/srlegrand/Aztek/issues">issue</a> it fixes or to a new one.
+      and send it with <a href="#send">Send the patch</a> below.
       Or as a pull request, with <code>gh</code> signed in: the first command makes your own copy of the repository on
       GitHub, the last pushes your branch there and opens the pull request.
 <pre><code>gh repo fork --remote
@@ -150,10 +150,8 @@ one code block.
 
 Then tell me, in a few lines: the files you changed and why, how to check the fix by hand
 in the app, and what you could not build, run or verify.</code></pre></li>
-    <li>Save what it gives back as <code>my-fix.patch</code> and attach it to the
-      <a href="https://github.com/srlegrand/Aztek/issues">issue</a> it fixes or to a
-      <a href="https://github.com/srlegrand/Aztek/issues/new">new one</a>. You need a GitHub account for that, nothing
-      else.</li>
+    <li>Save what it gives back as <code>my-fix.patch</code> and send it with
+      <a href="#send">Send the patch</a> below. You need a GitHub account for that, nothing else.</li>
     <li>Say in the issue that the patch was made this way and has not been built or run: nobody has yet seen it work,
       so it gets checked before it goes in.</li>
   </ol>
@@ -192,6 +190,46 @@ When you are done:
   <p>Then build, start Aztek and check the fix yourself by the steps it gives: it can be wrong while sounding sure.
     Read the patch before sending it, and say in the issue what you checked.</p>
   </details>
+  <div class="send" id="send">
+    <h3>Send your fix</h3>
+    <p>Two buttons, each opening a filled-in page on GitHub. A free
+      <a href="https://github.com/signup">GitHub account</a> is all either needs.</p>
+    <div class="send-grid">
+      <form class="send-card" id="send-patch" action="https://github.com/srlegrand/Aztek/issues/new" target="_blank" rel="noopener">
+        <h4>You have a patch file</h4>
+        <p class="small">No git needed. On the page that opens, drag <code>my-fix.patch</code> into the box named
+          The patch and press Submit. A pull request is opened from it and linked there a minute or two later.</p>
+        <input type="hidden" name="template" value="patch.yml">
+        <label>What it fixes
+          <input type="text" name="title" id="sp-title" maxlength="120" placeholder="Extrude keeps the selection"></label>
+        <label>Issue number, if there is one
+          <input type="text" name="fixes" id="sp-issue" inputmode="numeric" maxlength="8" placeholder="42"></label>
+        <button class="btn hot" type="submit">Send the patch</button>
+      </form>
+      <form class="send-card" id="send-pr" action="https://github.com/srlegrand/Aztek/compare" target="_blank" rel="noopener">
+        <h4>You pushed a branch to your fork</h4>
+        <p class="small">On the page that opens, read it over and press Create pull request.</p>
+        <label>Your GitHub user name
+          <input type="text" id="pr-user" maxlength="39" placeholder="yourname" autocapitalize="off" spellcheck="false"></label>
+        <label>Your branch
+          <input type="text" id="pr-branch" maxlength="120" value="my-fix" autocapitalize="off" spellcheck="false"></label>
+        <label>What it fixes
+          <input type="text" id="pr-title" maxlength="120" placeholder="Extrude keeps the selection"></label>
+        <label>Issue number, if there is one
+          <input type="text" id="pr-issue" inputmode="numeric" maxlength="8" placeholder="42"></label>
+        <button class="btn" type="submit">Open the pull request</button>
+      </form>
+    </div>
+    <p class="small">A patch file and a terminal, and you would rather open the pull request yourself? With
+      <code>gh</code> signed in:</p>
+<pre><code>gh repo fork srlegrand/Aztek --clone
+cd Aztek
+git checkout -b my-fix
+git apply ~/Downloads/my-fix.patch
+git add -A
+git commit -m "What the fix does"
+gh pr create --fill</code></pre>
+  </div>
   <p class="small">One fix per patch, a line on what was wrong and what happens now. A change you send goes in under
     MIT-0 like everything else. The full steps are in the
     <a href="https://github.com/srlegrand/Aztek#fix-it-yourself">README</a>.</p>
@@ -538,6 +576,33 @@ build.bat -Run                 # Windows</code></pre>
       if (list[0] && list[0].name) document.getElementById('build-line').textContent = 'Newest: ' + list[0].name + ', built ' + new Date(list[0].published_at).toISOString().slice(0, 10).split('-').reverse().join('/') + '. Built from every change to the main branch.';
     })
     .catch(function () { /* links stay on the releases page */ });
+})();
+
+(function () {
+  // Send your fix: each form opens a GitHub page filled in from its fields. Nothing is sent from this page.
+  var repo = 'https://github.com/srlegrand/Aztek';
+  function val(id) { return document.getElementById(id).value.trim(); }
+  function number(id) { var m = val(id).match(/\d+/); return m ? m[0] : ''; }
+  function query(o) {
+    return Object.keys(o).filter(function (k) { return o[k]; }).map(function (k) { return k + '=' + encodeURIComponent(o[k]); }).join('&');
+  }
+  var patch = document.getElementById('send-patch'), pr = document.getElementById('send-pr');
+  if (patch) patch.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var n = number('sp-issue');
+    window.open(repo + '/issues/new?' + query({ template: 'patch.yml', title: 'Patch: ' + val('sp-title'), fixes: n ? '#' + n : '' }), '_blank', 'noopener');
+  });
+  if (pr) pr.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var user = val('pr-user').replace(/^@/, ''), branch = val('pr-branch') || 'my-fix', n = number('pr-issue');
+    if (!/^[A-Za-z0-9-]+$/.test(user)) { document.getElementById('pr-user').focus(); return; }
+    var body = (n ? 'Fixes #' + n + '\n\n' : '') +
+      '**What was wrong and what happens now**\n\n\n' +
+      '**What I checked** (steps in the app, tests run, and what I could not check)\n\n\n' +
+      '**How it was made** (by hand, or with an LLM; built and run, or not)\n\n';
+    window.open(repo + '/compare/main...' + encodeURIComponent(user) + ':' + branch.split('/').map(encodeURIComponent).join('/') +
+      '?' + query({ quick_pull: '1', title: val('pr-title'), body: body }), '_blank', 'noopener');
+  });
 })();
 </script>
 </body>

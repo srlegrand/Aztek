@@ -1,0 +1,45 @@
+name: Send a patch
+description: A fix as a patch file. A pull request is opened from it.
+title: "Patch: "
+labels: ["patch"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you. A pull request is opened from the patch and linked here within a minute or two. If that can't be done, the patch is taken from this issue by hand.
+        This page is public, and what you send goes in under MIT-0 like everything else in Aztek.
+  - type: input
+    id: fixes
+    attributes:
+      label: Issue it fixes
+      description: The issue's number, if there is one.
+      placeholder: "#42"
+  - type: textarea
+    id: what
+    attributes:
+      label: What was wrong and what happens now
+      placeholder: Extruding a face dropped the selection. The new faces stay selected.
+    validations:
+      required: true
+  - type: textarea
+    id: patch
+    attributes:
+      label: The patch
+      description: Drag my-fix.patch into this box and wait for its link to appear, or paste the file's text. If GitHub refuses the file, zip it and drag the zip.
+    validations:
+      required: true
+  - type: dropdown
+    id: made
+    attributes:
+      label: How it was made
+      options:
+        - By hand, built and checked
+        - With an LLM, built and checked
+        - With an LLM from the source zip, not built or run
+    validations:
+      required: true
+  - type: textarea
+    id: checked
+    attributes:
+      label: What you checked
+      description: The steps you ran in the app, the tests you ran, and what you could not check.

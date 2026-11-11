@@ -95,8 +95,7 @@ ones, and there is nothing to ask first. Three ways. **Click one to unfold it:**
        git add -A
        git diff --cached > my-fix.patch
 
-   Attach `my-fix.patch` to the issue it fixes, or to a [new issue](https://github.com/srlegrand/Aztek/issues/new)
-   saying what it changes. If GitHub refuses the file, zip it first.
+   Send it with the **Send a patch** button under [Send your fix](#send-your-fix).
 
    A pull request, with `gh` signed in. The first command makes your own copy of the repository on GitHub and points
    this folder at it; the last pushes your branch there and opens the pull request:
@@ -151,11 +150,10 @@ No git, no build: a chat service that takes a file and can give one back is enou
    in the app, and what you could not build, run or verify.
    ```
 
-3. Save what it gives back as `my-fix.patch`, and attach it to the issue it fixes or to a
-   [new issue](https://github.com/srlegrand/Aztek/issues/new). You need a GitHub account for that, nothing else. If
-   GitHub refuses the file, zip it first.
-4. Say in the issue that the patch was made this way and has not been built or run: nobody has yet seen it work, so
-   it gets checked before it goes in.
+3. Save what it gives back as `my-fix.patch`, and send it with the **Send a patch** button under
+   [Send your fix](#send-your-fix). You need a GitHub account for that, nothing else.
+4. On that page, choose "With an LLM from the source zip, not built or run": nobody has yet seen it work, so it gets
+   checked before it goes in.
 
 </details>
 
@@ -200,6 +198,29 @@ Then build, start Aztek and check the fix yourself by the steps it gives: it can
 patch before sending it (step 4 of By hand), and say in the issue what you checked.
 
 </details>
+
+### Send your fix
+
+<p>
+  <a href="https://github.com/srlegrand/Aztek/issues/new?template=patch.yml&title=Patch%3A+"><img src="https://img.shields.io/badge/Send%20a%20patch-f08a1c?style=for-the-badge" alt="Send a patch"></a>
+  <a href="https://srlegrand.github.io/Aztek/#send"><img src="https://img.shields.io/badge/Open%20a%20pull%20request-1d5f9e?style=for-the-badge" alt="Open a pull request"></a>
+</p>
+
+- **Send a patch**: you have `my-fix.patch` and a GitHub account, nothing else. The button opens a form on GitHub with
+  its fields laid out. Say what it fixes, drag the patch file into the box named The patch, and press Submit. A pull
+  request is opened from the patch and linked on that page a minute or two later. If the patch doesn't apply, the page
+  says why; edit it with a corrected patch and it is tried again.
+- **Open a pull request**: you pushed a branch to your fork. The button goes to a short form on the website: give your
+  GitHub user name and branch, and it opens the pull request page on GitHub filled in. Press Create pull request there.
+- From a patch file to a pull request in a terminal, with `gh` signed in (step 1 of By hand):
+
+      gh repo fork srlegrand/Aztek --clone
+      cd Aztek
+      git checkout -b my-fix
+      git apply ~/Downloads/my-fix.patch
+      git add -A
+      git commit -m "What the fix does"
+      gh pr create --fill
 
 What helps it go in quickly: one fix per patch, a line on what was wrong and what happens now, and the issue's number
 if there is one. A change you send goes in under [MIT-0](LICENSE) like everything else here. And if you would rather
