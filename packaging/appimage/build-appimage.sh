@@ -91,6 +91,19 @@ cp "$APPDIR/usr/share/icons/hicolor/256x256/apps/aztek.png" "$APPDIR/aztek.png"
 ln -sf aztek.png "$APPDIR/.DirIcon"
 install -Dm644 "$SRC/LICENSE" "$APPDIR/usr/share/doc/aztek/LICENSE"
 
+# The program draws with Vulkan. An OpenGL library among what it needs itself means its link line has grown one, and it
+# would not start where that library is missing (libOpenGL.so.0 is not on every desktop).
+if readelf -d "$APPDIR/usr/bin/aztek" | grep -E 'NEEDED.*lib(OpenGL|GLX|GL|EGL|GLESv2)\.so'; then
+  echo "the program itself links an OpenGL library: see WrapOpenGL in CMakeLists.txt" >&2
+  exit 1
+fi
+# For the log: what the AppImage expects the system to have.
+echo "== taken from the system, not bundled:"
+for f in "$APPDIR/usr/bin/aztek" $(find "$APPDIR/usr/plugins" "$LIB" -name '*.so*' -type f); do
+  LD_LIBRARY_PATH="$LIB" ldd "$f" 2>/dev/null | awk -v own="$APPDIR" '/=> \// && index($3, own) != 1 {print $1}' || true
+done | sort -u | tr '\n' ' '
+echo
+
 # Nothing inside may be left looking outside for a library that was meant to come along.
 if LD_LIBRARY_PATH="$LIB" ldd "$APPDIR/usr/bin/aztek" | grep "not found"; then
   echo "unresolved libraries" >&2

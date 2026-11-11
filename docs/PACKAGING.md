@@ -71,6 +71,11 @@ runs. Help > Check for Updates replaces the file with the new one.
 CI starts it unpacked in clean `ubuntu:24.04` and `ubuntu:rolling` containers (`verify-appimage`). A build or check
 that fails leaves that release without an AppImage rather than holding the release back.
 
+The program itself must not need an OpenGL library. Qt's `Gui` target puts `libOpenGL` and `libGLX` on the link line
+of whatever links it, and with Qt's own kit the linker kept both in the program even with `--as-needed`, so it would
+not start in the clean containers, which have no `libOpenGL.so.0`. `CMakeLists.txt` takes them off the link line, and
+`build-appimage.sh` stops if the program needs one again. Its log lists what the AppImage takes from the system.
+
 ## Ubuntu
 
     sudo apt install ./aztek_*.deb

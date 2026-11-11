@@ -10,6 +10,14 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 find_package(Qt6 6.2 REQUIRED COMPONENTS Widgets)
+# Qt's Gui target tells whatever links it to link the system's OpenGL libraries as well (libOpenGL and libGLX, through
+# WrapOpenGL). Aztek draws with Vulkan and calls nothing in them, but with Qt's own kit the linker still wrote both
+# into the program, --as-needed or not: Qt's library uses OpenGL through libGL, so the linker counts libOpenGL as
+# wanted. The program then would not start on a system without libOpenGL.so.0, which a desktop need not have. Taken
+# off the link line here; Qt's libraries bring the OpenGL they need themselves.
+if(UNIX AND NOT APPLE AND TARGET WrapOpenGL::WrapOpenGL)
+  set_property(TARGET WrapOpenGL::WrapOpenGL PROPERTY INTERFACE_LINK_LIBRARIES "")
+endif()
 
 # Python for aztek.cmds and the maya.cmds shim: the interpreter cargo's pyo3 builds against, and its library.
 option(AZTEK_PYTHON "Embed Python" ON)
@@ -158,8 +166,7 @@ elseif(APPLE)
                         "-framework Security" "-framework SystemConfiguration" objc iconv dl pthread m)
 else()
   target_link_libraries(aztek PRIVATE dl pthread m)
-  # Qt's targets name libraries the program calls nothing in (libOpenGL); a linker that records them all makes the
-  # program refuse to start on a system without them.
+  # Only the libraries the program calls go into it.
   target_link_options(aztek PRIVATE "LINKER:--as-needed")
 endif()
 
