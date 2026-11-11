@@ -206,6 +206,36 @@ fn freeze_and_center_pivot_on_a_group_reach_its_children() {
 }
 
 #[test]
+fn set_pivot_turns_the_pivots_axes_about_a_world_axis_and_leaves_the_object() {
+    let mut s = Session::new();
+    let cube = cube100(&mut s, json!({}));
+    run(&mut s, "rotate", json!({"args": [cube], "by": [0, 20, 0]}));
+    let id = s.graph.find(&cube).unwrap().unwrap();
+    let start = xf::pivot_frame(&mut s.graph, id);
+    let before = world_points(&mut s, &cube);
+    let object = xf::frame(&mut s.graph, id, Space::Object);
+
+    // Twice 30 degrees about world Z, as two drags on a ring would.
+    for _ in 0..2 {
+        run(&mut s, "setPivot", json!({"args": [cube], "turnAxis": [0, 0, 1], "turnAngle": 30.0}));
+    }
+    let want = glam::DMat3::from_axis_angle(DVec3::Z, 60f64.to_radians()) * start;
+    let axes = xf::pivot_frame(&mut s.graph, id);
+    for c in 0..3 {
+        assert!((axes.col(c) - want.col(c)).length() < 1e-6);
+        assert!((xf::frame(&mut s.graph, id, Space::Object).col(c) - object.col(c)).length() < 1e-9);
+    }
+    same_points(&before, &world_points(&mut s, &cube));
+
+    assert!(s.undo());
+    assert!(s.undo());
+    let axes = xf::pivot_frame(&mut s.graph, id);
+    for c in 0..3 {
+        assert!((axes.col(c) - start.col(c)).length() < 1e-6);
+    }
+}
+
+#[test]
 fn bake_pivot_turns_the_object_onto_its_pivots_axes_without_moving_it() {
     let mut s = Session::new();
     let cube = cube100(&mut s, json!({}));

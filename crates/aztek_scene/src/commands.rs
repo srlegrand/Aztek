@@ -1862,8 +1862,9 @@ fn register_transform(c: &mut Commands<Session>) {
              pivot is the joint itself: position= moves the joint and orient= sets its jointOrient, leaving its children where \
              they are.",
             |s, a| {
-                if !a.has("position") && !a.has("orient") {
-                    fail!("setPivot: give position= or orient=");
+                let turn = a.vec3("turnAxis").map(vec3).filter(|v| *v != DVec3::ZERO).map(|ax| DMat3::from_axis_angle(ax.normalize(), a.float("turnAngle", 0.0).to_radians()));
+                if !a.has("position") && !a.has("orient") && turn.is_none() {
+                    fail!("setPivot: give position=, orient= or turnAxis=");
                 }
                 for id in transforms_of(s, a, "setPivot")? {
                     if is_joint(&s.graph, id) {
@@ -1874,6 +1875,10 @@ fn register_transform(c: &mut Commands<Session>) {
                     }
                     if let Some(o) = a.vec3("orient") {
                         set_vec(&mut s.graph, id, Transform::PIVOT_ORIENT, vec3(o))?;
+                    }
+                    if let Some(r) = turn {
+                        let axes = xf::pivot_frame(&mut s.graph, id);
+                        xf::set_world_pivot_frame(&mut s.graph, id, &(r * axes))?;
                     }
                 }
                 Ok(Value::Null)
@@ -1887,7 +1892,9 @@ fn register_transform(c: &mut Commands<Session>) {
             T::Vec3,
             Value::Null,
             "Pivot orientation relative to the object's axes, Euler XYZ degrees (pivotOrient); on a joint, its jointOrient.",
-        )),
+        ))
+        .flag(flag("turnAxis", "", T::Vec3, Value::Null, "World axis to turn the pivot's axes about, by turnAngle."))
+        .flag(flag("turnAngle", "", T::Float, Value::Null, "Degrees to turn about turnAxis.")),
     );
 
     c.register(

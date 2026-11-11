@@ -1256,8 +1256,12 @@ Edit Pivot (issue 23):
   the translate goes to the pivot, the four pivot offsets go to zero, the points are countered and children stay
   where they are. `bakePivot -position` and `-orientation` choose; both are on by default.
 - Choosing a tool (W, E, R, Q, a tool button) leaves Edit Pivot, as the reference does.
-- Not done: in component mode Edit Pivot still moves the components rather than the manipulator. The pivot's
-  orientation can't be turned in the view; `setPivot -orient` sets it.
+- The pivot turns in the view: in Edit Pivot on an object the manipulator has three rings outside its arrows, and a
+  drag on one turns the pivot's axes about that axis. The object stays. Step Snap and J apply. The tools' Axis
+  Orientation then goes to Object, which shows the pivot's axes (`pivotOrient`); the reference goes to its Custom
+  orientation. Edit Pivot shows the pivot's axes whatever the orientation chosen. `setPivot -turnAxis -turnAngle`
+  is the command; Bake Pivot turns the object onto the axes. Not on joints.
+- Not done: in component mode Edit Pivot still moves the components rather than the manipulator.
 
 Preserve UVs (issue 24): each face answered for its own corner of a moved point, and where the faces disagreed (a
 move out of their plane, or faces mapped at different scales) the UV point came apart. Corners that shared a UV take

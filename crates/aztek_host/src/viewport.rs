@@ -284,6 +284,9 @@ pub enum Tool {
     SnapTogether,
 }
 
+/// Radius of the Edit Pivot rings, in handle lengths: outside the arrows.
+const PIVOT_RING: f32 = 1.22;
+
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Handle {
     Axis(usize),
@@ -295,6 +298,8 @@ pub enum Handle {
     ViewRing,
     /// Rotate tool: the inside of the sphere turns freely.
     Trackball,
+    /// Edit Pivot: the ring that turns the pivot's axes about this one.
+    PivotRing(usize),
 }
 
 /// What a view shows and how, as the panel's Shading and Show menus set it.
@@ -438,6 +443,8 @@ pub struct Viewport {
     pub iso: aztek_scene::isolation::Set,
     /// D held (or Insert): the move manipulator moves pivots.
     pub pivot_mode: bool,
+    /// Edit Pivot on objects: the manipulator has the rings that turn the pivot.
+    pub pivot_rings: bool,
     pub cam: Camera,
     meshes: HashMap<NodeId, GpuMesh>,
     mats: MatTable,
@@ -518,6 +525,7 @@ impl Viewport {
             select_brush: None,
             iso: Default::default(),
             pivot_mode: false,
+            pivot_rings: false,
             show_grid: true,
             manip_scale: 1.0,
             smooth_cage: false,
@@ -2137,6 +2145,19 @@ impl Viewport {
     pub fn update_frame(&mut self, s: &mut Session) {
         let g = &mut s.graph;
         self.frame = DMat3::IDENTITY;
+        // An object's pivot has axes of its own (pivotOrient). Edit Pivot shows them whatever the orientation chosen.
+        let pivot_of = |g: &mut aztek_scene::graph::Graph| {
+            let lead = *g.selection().last()?;
+            (components::mode(g) == ComponentMode::Object && g.node(lead).is_some_and(|n| n.ty().is_a("transform") && !n.ty().is_a("joint"))).then_some(lead)
+        };
+        self.pivot_rings = false;
+        if self.pivot_mode && self.manipulates() {
+            if let Some(lead) = pivot_of(g) {
+                self.pivot_rings = true;
+                self.frame = aztek_scene::transform_ops::pivot_frame(g, lead);
+                return;
+            }
+        }
         if self.axis_mode == "world" {
             return;
         }
@@ -2158,7 +2179,12 @@ impl Viewport {
         g.evaluate();
         let mode = components::mode(g);
         match self.axis_mode.as_str() {
-            "object" => self.frame = ortho(&aztek_scene::rig::world(g, lead)),
+            "object" => {
+                self.frame = match pivot_of(g) {
+                    Some(lead) => aztek_scene::transform_ops::pivot_frame(g, lead),
+                    None => ortho(&aztek_scene::rig::world(g, lead)),
+                }
+            }
             "parent" => {
                 let p = g.parent(lead);
                 if p != NO_NODE {
@@ -2221,6 +2247,19 @@ impl Viewport {
                 let a1 = (k + 1) as f32 / n as f32 * std::f32::consts::TAU;
                 for r in [len * 0.2, len * 0.24] {
                     line(p + (right * a0.cos() + up * a0.sin()) * r, p + (right * a1.cos() + up * a1.sin()) * r, [255, 215, 60, 255]);
+                }
+            }
+            // Rings outside the arrows turn the pivot's axes.
+            if self.pivot_rings {
+                let n = 64;
+                for (i, ax) in axes.iter().enumerate() {
+                    let (u, w) = ax.any_orthonormal_pair();
+                    let c = tint(Handle::PivotRing(i), colors[i]);
+                    for k in 0..n {
+                        let a0 = k as f32 / n as f32 * std::f32::consts::TAU;
+                        let a1 = (k + 1) as f32 / n as f32 * std::f32::consts::TAU;
+                        line(p + (u * a0.cos() + w * a0.sin()) * len * PIVOT_RING, p + (u * a1.cos() + w * a1.sin()) * len * PIVOT_RING, c);
+                    }
                 }
             }
         }
@@ -2343,6 +2382,27 @@ impl Viewport {
         }
         if let Some((_, h)) = best {
             return Some(h);
+        }
+        if self.pivot_rings && !rotate {
+            let r = len * PIVOT_RING as f64;
+            let mut ring: Option<(f64, usize)> = None;
+            for i in 0..3 {
+                let (u, w) = self.frame.col(i).any_orthonormal_pair();
+                let d = (0..48)
+                    .filter_map(|k| {
+                        let a = k as f64 / 48.0 * std::f64::consts::TAU;
+                        let b = (k + 1) as f64 / 48.0 * std::f64::consts::TAU;
+                        let (pa, pb) = screen.project_segment(pivot + (u * a.cos() + w * a.sin()) * r, pivot + (u * b.cos() + w * b.sin()) * r)?;
+                        Some(seg_dist(px, pa, pb))
+                    })
+                    .fold(f64::MAX, f64::min);
+                if d < 8.0 * scale && ring.is_none_or(|b| d < b.0) {
+                    ring = Some((d, i));
+                }
+            }
+            if let Some((_, i)) = ring {
+                return Some(Handle::PivotRing(i));
+            }
         }
         if rotate {
             let view = self.cam.view();
@@ -2502,6 +2562,22 @@ impl Viewport {
         let view = self.cam.view();
         let right = DVec3::new(view.x_axis.x, view.y_axis.x, view.z_axis.x);
         let up = DVec3::new(view.x_axis.y, view.y_axis.y, view.z_axis.y);
+        if let Handle::PivotRing(i) = d.handle {
+            // The pivot's axes turn about this one by the angle swept on screen; the object stays.
+            let ax = self.frame.col(i);
+            let mut ang = ((px - c).to_angle() - (d.start - c).to_angle()).to_degrees();
+            if ang > 180.0 {
+                ang -= 360.0;
+            } else if ang < -180.0 {
+                ang += 360.0;
+            }
+            ang *= -(self.cam.eye() - d.pivot).dot(ax).signum();
+            let step = if self.step_rotate > 0.0 { self.step_rotate } else if self.discrete_hold { 15.0 } else { 0.0 };
+            if step > 0.0 {
+                ang = (ang / step).round() * step;
+            }
+            return Some(("setPivot".into(), serde_json::json!({ "args": targets, "turnAxis": ax.to_array(), "turnAngle": ang })));
+        }
         match self.eff_tool() {
             Tool::Move => {
                 let handle = match d.handle {

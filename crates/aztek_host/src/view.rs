@@ -1376,6 +1376,13 @@ impl View {
                         if let Some((cmd, call)) = self.last_drag.take() {
                             core.retract_preview();
                             let _ = core.exec(&cmd, call);
+                            // A pivot turned in the view is what the tools then follow: their axes go to Object, which
+                            // shows the pivot's. The reference goes to its Custom orientation here.
+                            if matches!(d.handle, Handle::PivotRing(_)) {
+                                for (kind, name) in [("manipMoveContext", "Move"), ("manipRotateContext", "Rotate"), ("manipScaleContext", "Scale")] {
+                                    let _ = core.exec_silent(kind, json!({"edit": true, "args": [name], "mode": 0}));
+                                }
+                            }
                         }
                     }
                     return true;

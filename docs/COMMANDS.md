@@ -18555,6 +18555,8 @@ Arguments: objects
 | --- | --- | --- |
 | `position` |  | World position, cm. |
 | `orient` |  | Pivot orientation relative to the object's axes, Euler XYZ degrees (pivotOrient); on a joint, its jointOrient. |
+| `turnAxis` |  | World axis to turn the pivot's axes about, by turnAngle. |
+| `turnAngle` |  | Degrees to turn about turnAxis. |
 
 ## setSymmetry
 
