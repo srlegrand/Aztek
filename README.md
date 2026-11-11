@@ -35,10 +35,10 @@ filled in with. GitHub takes files up to 25 MB and images up to 10 MB.
 ## Fix it yourself
 
 If something is wrong and you can see how to fix it, fix it and send the change. Small fixes are as welcome as large
-ones, and there is nothing to ask first. Three ways, each unfolds:
+ones, and there is nothing to ask first. Three ways. **Click one to unfold it:**
 
 <details>
-<summary><b>By hand: build it, change it, send a patch or a pull request</b></summary>
+<summary><h3>By hand: build it, change it, send a patch or a pull request</h3></summary>
 
 1. **Get the tools, the source, and build it.** You need `git`, and `gh` (GitHub's command line tool) if you will
    send a pull request. What the build itself needs is under [Build](#build).
@@ -113,7 +113,7 @@ ones, and there is nothing to ask first. Three ways, each unfolds:
 </details>
 
 <details>
-<summary><b>With an LLM, nothing to install: the source zip and a chat</b></summary>
+<summary><h3>With an LLM, nothing to install: the source zip and a chat</h3></summary>
 
 
 No git, no build: a chat service that takes a file and can give one back is enough.
@@ -160,7 +160,7 @@ No git, no build: a chat service that takes a file and can give one back is enou
 </details>
 
 <details>
-<summary><b>With an LLM, in the built source</b></summary>
+<summary><h3>With an LLM, in the built source</h3></summary>
 
 
 A coding assistant that can read the folder and run commands in it can find the code and make the change with you, and build

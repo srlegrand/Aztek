@@ -248,8 +248,19 @@ figcaption b { text-transform: uppercase; letter-spacing: 0.06em; color: var(--c
 .fix li pre { margin: 8px 0 0; }
 .fix li pre code { background: none; padding: 0; }
 .fix h3 { color: var(--navy); margin-top: 26px; }
-.fix details { background: var(--white); border: 1px solid var(--rule); border-left: 5px solid var(--navy); margin: 10px 0; padding: 0 18px; }
-.fix summary { cursor: pointer; padding: 13px 0; font-weight: 700; color: var(--navy); font-size: 18px; }
+.fix details { background: var(--white); border: 1px solid var(--rule); border-left: 5px solid #e07a0c; margin: 10px 0; padding: 0 18px; }
+.fix summary { cursor: pointer; padding: 13px 0; font-weight: 700; color: var(--navy); font-size: 20px; list-style: none; display: flex; align-items: center; gap: 14px; }
+.fix summary::-webkit-details-marker { display: none; }
+/* The fold's handle: an orange button, a plus that turns to a minus when open. */
+.fix summary::before {
+  content: "+"; flex: none; width: 38px; height: 38px; display: grid; place-items: center;
+  background: linear-gradient(#f7a13a, #e07a0c); border: 1px solid #b9620a; color: #1b1203;
+  font-size: 30px; font-weight: 800; line-height: 1;
+}
+.fix details[open] > summary::before { content: "\2212"; }
+.fix summary:hover::before { background: linear-gradient(#ffb357, #ee8a1c); }
+.fix summary::after { content: "Show"; margin-left: auto; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: #b9620a; }
+.fix details[open] > summary::after { content: "Hide"; }
 .fix details[open] { padding-bottom: 14px; }
 .fix details[open] summary { border-bottom: 1px solid var(--rule); margin-bottom: 14px; }
 .os-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin: 10px 0 12px; }
