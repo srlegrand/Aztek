@@ -265,6 +265,18 @@ QWidget* ToolSettings::build_transform_page() {
     preserve_children_ = check(form, "Preserve Children", "preserveChildPosition", checks_);
     preserve_uvs_ = check(form, "Preserve UVs", "preserveUV", checks_);
     keep_spacing_ = check(form, "Keep Spacing", "snapComponentsRelative", checks_);
+    update_triad_ = check(form, "Update Triad", "interactiveUpdate", checks_);
+    // What a Shift drag on a handle makes: kept as preferences, the same ones the Ctrl+Shift marking menu ticks.
+    auto shift_pref = [this, w, form](const QString& label, const QString& pref) {
+        auto* b = new QCheckBox(label, w);
+        connect(b, &QCheckBox::toggled, this, [this, pref](bool on) {
+            if (!loading_) exec_quiet("uiPref", QJsonObject{{"args", QJsonArray{pref, on}}});
+        });
+        form->addRow("", b);
+        return b;
+    };
+    shift_extrude_ = shift_pref("Shift Extrude", "shiftExtrude");
+    shift_duplicate_ = shift_pref("Shift Duplicate", "shiftDuplicate");
     negative_ = check(form, "Prevent Negative Scale", "preventNegativeScale", checks_);
     constraint_ = new QComboBox(w);
     constraint_->addItem("Off", "none");
@@ -370,6 +382,7 @@ void ToolSettings::refresh_transform() {
             for (const Orient& o : modes) axis_->addItem(o.label, o.mode);
             preserve_uvs_->setVisible(true);
             keep_spacing_->setVisible(tool_ == "move");
+            update_triad_->setVisible(tool_ == "move");
             negative_->setVisible(tool_ == "scale");
             use_manip_pivot_->setVisible(tool_ != "move");
         }
@@ -384,6 +397,10 @@ void ToolSettings::refresh_transform() {
             QJsonValue v = ctx_get(flag);
             // Prevent Negative Scale starts on.
             box->setChecked(v.isNull() ? flag == "preventNegativeScale" : (v.isBool() ? v.toBool() : v.toInt() != 0));
+        }
+        for (auto [box, pref] : {std::pair{shift_extrude_, "shiftExtrude"}, {shift_duplicate_, "shiftDuplicate"}}) {
+            const QJsonValue v = ask("uiPref", QJsonObject{{"args", QJsonArray{pref}}});
+            box->setChecked(v.isNull() || v.isUndefined() ? true : (v.isBool() ? v.toBool() : v.isString() ? v.toString() != "false" && v.toString() != "0" : v.toDouble() != 0));
         }
     }
     QJsonValue on = ask("softSelect", QJsonObject{{"query", true}, {"softSelectEnabled", true}});

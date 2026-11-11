@@ -1046,6 +1046,142 @@ void MainWindow::tool_marking_menu(QPoint global, const QString& hold) {
     if (!items.isEmpty()) MarkingMenu::show_at(global, items);
 }
 
+// Ctrl+Shift+right button. With something selected and Move, Rotate or Scale active, that tool's options: the ones the
+// Tool Settings window has, set through the same context flags and saved the same way, so each shows what the other
+// set. Otherwise the selection tools' menu.
+void MainWindow::tool_options_marking_menu(QPoint global) {
+    const bool xform = (tool_ == "move" || tool_ == "rotate" || tool_ == "scale") && !selection_names().isEmpty();
+    auto item = [](const QString& label, int dir, std::function<void()> fn) {
+        MarkItem m;
+        m.label = label;
+        m.dir = dir;
+        m.fn = std::move(fn);
+        return m;
+    };
+    auto box = [item](const QString& label, int dir, bool on, std::function<void()> fn) {
+        MarkItem m = item(label, dir, std::move(fn));
+        m.checkable = true;
+        m.checked = on;
+        return m;
+    };
+    auto menu = [](const QString& label, int dir, const QList<MarkItem>& sub) {
+        MarkItem m;
+        m.label = label;
+        m.dir = dir;
+        m.sub = sub;
+        return m;
+    };
+    auto ruled = [](MarkItem m) {
+        m.separator = true;
+        return m;
+    };
+
+    // Symmetry: the status line's setting.
+    auto sym = [](const char* flag) { return ask("symmetricModelling", QJsonObject{{"query", true}, {"queried", QJsonArray{flag}}}); };
+    int sym_at = 0;
+    if (sym("symmetry").toBool()) {
+        const QString about = sym("about").toString(), axis = sym("axis").toString();
+        const int k = axis == "z" ? 2 : axis == "y" ? 1 : 0;
+        sym_at = about == "topo" ? 7 : about == "world" ? 4 + k : 1 + k;
+    }
+    QList<MarkItem> symmetry;
+    const char* sym_names[] = {"Off", "Object X", "Object Y", "Object Z", "World X", "World Y", "World Z", "Topology"};
+    for (int i = 0; i < 8; ++i) {
+        symmetry.append(box(sym_names[i], -1, sym_at == i, [i] {
+            static const char* axis[] = {"", "x", "y", "z", "x", "y", "z"};
+            if (i == 7) exec("symmetricModelling", QJsonObject{{"edit", true}, {"topoSymmetry", true}});
+            else if (i == 0) exec("symmetricModelling", QJsonObject{{"edit", true}, {"symmetry", false}});
+            else exec("symmetricModelling", QJsonObject{{"edit", true}, {"symmetry", true}, {"about", i >= 4 ? "world" : "object"}, {"axis", axis[i]}});
+            Host::get()->poke();
+        }));
+    }
+
+    const bool soft_on = ask("softSelect", QJsonObject{{"query", true}, {"queried", QJsonArray{"softSelectEnabled"}}}).toInt() != 0;
+    const QList<MarkItem> select = {item("Select Tool", -1, [this] { set_tool("select"); }),
+                                    box("Soft Select", -1, soft_on, [soft_on] { exec("softSelect", QJsonObject{{"softSelectEnabled", soft_on ? 0 : 1}}); Host::get()->poke(); })};
+
+    const QList<MarkItem> sel_constraints = {item("Off", -1, [] { exec("polySelectConstraint", QJsonObject{{"disable", true}}); }),
+                                             item("Use Constraints...", -1, [this] { show_named_window("polySelectConstraint"); })};
+
+    const QString xc = ask("xformConstraint", QJsonObject{{"query", true}}).toString("none");
+    QList<MarkItem> xf_constraints;
+    for (auto [label, type] : {std::pair{"Off", "none"}, {"Edge", "edge"}, {"Surface", "surface"}}) {
+        const QString t = type;
+        xf_constraints.append(box(label, -1, xc == t, [t] { exec_quiet("xformConstraint", QJsonObject{{"type", t}}); Host::get()->poke(); }));
+    }
+
+    QList<MarkItem> items;
+    if (!xform) {
+        items = {menu("Symmetry", 0, symmetry), item("Lasso", 2, [this] { set_tool("lasso"); }), menu("Select", 4, select), item("Paint Select", 6, [this] { set_tool("paintSelect"); }),
+                 menu("Selection Constraints", -1, sel_constraints), menu("Transform Constraints", -1, xf_constraints)};
+        MarkingMenu::show_at(global, items);
+        return;
+    }
+
+    const QString kind = tool_ == "rotate" ? "manipRotateContext" : tool_ == "scale" ? "manipScaleContext" : "manipMoveContext";
+    const QString name = tool_ == "rotate" ? "Rotate" : tool_ == "scale" ? "Scale" : "Move";
+    auto get = [kind, name](const char* flag) { return ask(kind, QJsonObject{{"query", true}, {"queried", QJsonArray{flag}}, {"args", QJsonArray{name}}}); };
+    // As the Tool Settings window sets a flag: on the context, and kept for the next start.
+    auto set = [kind, name](const QString& flag, const QJsonValue& v) {
+        QSettings().setValue(QString("toolOptions/%1/%2").arg(name, flag), v.toVariant());
+        QJsonObject c{{"edit", true}, {"args", QJsonArray{name}}};
+        c[flag] = v;
+        exec_quiet(kind, c);
+    };
+    auto is_on = [get](const char* flag, bool fallback) {
+        const QJsonValue v = get(flag);
+        return v.isNull() || v.isUndefined() ? fallback : (v.isBool() ? v.toBool() : v.toInt() != 0);
+    };
+    auto flag_box = [box, set, is_on](const QString& label, int dir, const char* flag, bool fallback = false) {
+        const bool on = is_on(flag, fallback);
+        const QString f = flag;
+        return box(label, dir, on, [set, f, on] { set(f, !on); Host::get()->poke(); });
+    };
+    const int mode = get("mode").toInt(tool_ == "rotate" ? 0 : 2);
+    auto orient = [box, set, mode](const QString& label, int dir, int m) {
+        return box(label, dir, mode == m, [set, m] { set("mode", m); Host::get()->poke(); });
+    };
+    auto pref = [](const char* p) { return ask("uiPref", QJsonObject{{"args", QJsonArray{p}}}); };
+    auto pref_box = [box, pref](const QString& label, const char* p) {
+        const QJsonValue v = pref(p);
+        const bool on = v.isNull() || v.isUndefined() ? true : (v.isBool() ? v.toBool() : v.isString() ? v.toString() != "false" && v.toString() != "0" : v.toDouble() != 0);
+        const QString key = p;
+        return box(label, -1, on, [key, on] { exec_quiet("uiPref", QJsonObject{{"args", QJsonArray{key, !on}}}); Host::get()->poke(); });
+    };
+
+    // Step snap, as the Tool Settings' Step Snap list.
+    const bool snap = is_on("snap", false), relative = is_on("snapRelative", true);
+    auto step = [box, set](const QString& label, bool on, int m) {
+        return box(label, -1, on, [set, m] {
+            set("snapRelative", m != 2);
+            set("snap", m != 0);
+            Host::get()->poke();
+        });
+    };
+    const QList<MarkItem> snaps = {step("Off", !snap, 0), step("Relative", snap && relative, 1), step("Absolute", snap && !relative, 2)};
+
+    // The orientations the compass does not hold.
+    QList<MarkItem> axes;
+    if (tool_ == "rotate") {
+        axes = {orient("Gimbal", -1, 2), orient("Custom", -1, 3)};
+    } else {
+        axes = {orient("Parent", -1, 1), orient("Normal", -1, 3)};
+        if (tool_ == "move") axes += {orient("Along Rotation Axis", -1, 4), orient("Along Live Object Axis", -1, 5)};
+        axes.append(orient("Custom", -1, 6));
+    }
+
+    items = {menu("Symmetry", 0, symmetry), orient("Component", 1, 10), menu("Snap", 2, snaps), menu("Select", 4, select), menu("Axis", 5, axes),
+             orient("World", 6, tool_ == "rotate" ? 1 : 2), orient("Object", 7, 0)};
+    if (tool_ == "move") items.append(flag_box("Keep Spacing", 3, "snapComponentsRelative"));
+    items += {menu("Selection Constraints", -1, sel_constraints), menu("Transform Constraints", -1, xf_constraints),
+              ruled(pref_box("Shift Extrude", "shiftExtrude")), pref_box("Shift Duplicate", "shiftDuplicate"),
+              ruled(flag_box("Preserve UVs", -1, "preserveUV")), flag_box("Preserve Children", -1, "preserveChildPosition"), flag_box("Tweak Mode", -1, "tweakMode")};
+    if (tool_ == "move") items.append(flag_box("Update Triad", -1, "interactiveUpdate"));
+    if (tool_ == "scale") items.append(flag_box("Prevent Negative Scale", -1, "preventNegativeScale", true));
+    items.append(ruled(item(name + " Options", -1, [this] { show_tool_settings(); })));
+    MarkingMenu::show_at(global, items);
+}
+
 QList<MarkItem> MainWindow::hotbox_zone(int zone) {
     QList<MarkItem> items;
     auto lay = [this](int k) { return [this, k] { panels_->set_layout(k); }; };
@@ -1090,9 +1226,9 @@ void MainWindow::marking_menu(QPoint global, int mods) {
     QList<MarkItem> items;
     auto run = [](const QString& c, const QJsonObject& call = QJsonObject()) { return [c, call] { exec(c, call); }; };
     if ((mods & 1) && (mods & 2)) {
-        // Ctrl+Shift: primitives, as the reference's.
-        items = {{"Sphere", 0, run("polySphere")}, {"Cube", 2, run("polyCube")}, {"Cylinder", 4, run("polyCylinder")}, {"Plane", 6, run("polyPlane")},
-                 {"Cone", 1, run("polyCone")}, {"Torus", 3, run("polyTorus")}, {"Disc", 5, run("polyDisc")}, {"Pipe", 7, run("polyPipe")}};
+        // Ctrl+Shift: the tool's options, as the reference's.
+        tool_options_marking_menu(global);
+        return;
     } else if ((mods & 1) && selection_names().isEmpty()) {
         // Shift with nothing selected: the polygon primitives of the Create menu, made as its items make them
         // (Interactive Creation and the option boxes' saved settings apply).

@@ -477,6 +477,16 @@ As of 11/11/2026:
   extruded (`polyExtrude`), objects duplicated. The extrude or duplicate and the drag are two undo steps.
 - Shift + right-click with nothing selected: the polygon primitives of the Create menu and the Create Polygon Tool,
   made as the menu's items make them. The items' compass positions are unchecked against the reference.
+- Ctrl+Shift + right-click, laid out from screenshots of the reference's Move tool and Select tool menus. With
+  something selected and Move, Rotate or Scale active: Symmetry, Object, Component, World, Snap, Axis, Keep Spacing
+  (Move) and Select round the compass; Selection Constraints, Transform Constraints, Shift Extrude, Shift Duplicate,
+  Preserve UVs, Preserve Children, Tweak Mode, Update Triad (Move) and the tool's Options below. Otherwise: Symmetry,
+  Paint Select, Lasso, Select, and the two constraint menus. The items set the same context flags as Tool Settings,
+  which shows them (Shift Extrude, Shift Duplicate and Update Triad are new there). It replaces a primitives menu
+  that was on these keys. Not checked against the reference: what the submenus hold (Symmetry, Select, Snap, Axis and
+  both constraint menus are filled from Aztek's own settings), and the Rotate and Scale menus, built on the Move
+  tool's layout. Selection Constraints holds Off and the Use Constraints window, not the reference's list. Update
+  Triad and the transform constraint are stored but the tools do not act on them yet.
 - The UV Editor's Checker also shows on the selected meshes in the views (shaded, not wireframe), as well as behind
   the UVs. One checker, eight squares to a UV tile; `checkerColor1`, `checkerColor2` and `checkerDensity` are accepted
   and not applied.

@@ -13,6 +13,12 @@ struct MarkItem {
     std::function<void()> fn;
     bool enabled = true;
     bool checked = false;
+    // Shows a box, ticked when checked.
+    bool checkable = false;
+    // A rule above this item, in the list.
+    bool separator = false;
+    // A marking menu of its own, opened when the cursor reaches the item.
+    QList<MarkItem> sub = {};
 };
 
 class MarkingMenu : public QWidget {
@@ -31,6 +37,8 @@ private:
     MarkingMenu(QPoint global, const QList<MarkItem>& items);
     int item_at(QPoint local) const;
     void pick(int i);
+    void open_sub(int i);
+    QList<QRect> rules_;
     QList<MarkItem> items_;
     QList<QRect> rects_;
     QPoint center_;

@@ -91,6 +91,9 @@ private:
     QCheckBox* preserve_children_ = nullptr;
     QCheckBox* preserve_uvs_ = nullptr;
     QCheckBox* keep_spacing_ = nullptr;
+    QCheckBox* update_triad_ = nullptr;
+    QCheckBox* shift_extrude_ = nullptr;
+    QCheckBox* shift_duplicate_ = nullptr;
     QCheckBox* negative_ = nullptr;
     QCheckBox* use_manip_pivot_ = nullptr;
     QComboBox* constraint_ = nullptr;

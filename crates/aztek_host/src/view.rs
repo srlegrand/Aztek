@@ -978,9 +978,10 @@ impl View {
                 // Shift-drag on a handle makes something new and drags that, as the reference does: selected faces or
                 // edges are extruded, objects duplicated.
                 if button == 1 && mods & SHIFT != 0 && mods & CTRL == 0 && hit.is_some() && pivot.is_some() && matches!(self.vp.eff_tool(), Tool::Move | Tool::Rotate | Tool::Scale) && !self.vp.pivot_mode {
+                    // Each can be turned off (Shift Extrude and Shift Duplicate in the tool's options).
                     let made = match components::mode(&core.s.graph) {
-                        ComponentMode::Face | ComponentMode::Edge => core.exec("polyExtrude", json!({})).is_ok(),
-                        ComponentMode::Object => core.exec("duplicate", json!({})).is_ok(),
+                        ComponentMode::Face | ComponentMode::Edge if crate::ui_cmds::pref_bool("shiftExtrude", true) => core.exec("polyExtrude", json!({})).is_ok(),
+                        ComponentMode::Object if crate::ui_cmds::pref_bool("shiftDuplicate", true) => core.exec("duplicate", json!({})).is_ok(),
                         _ => false,
                     };
                     if made {
