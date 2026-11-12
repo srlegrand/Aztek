@@ -206,6 +206,9 @@ pub struct Gpu {
     /// One per swapchain image, for the post pass.
     pub framebuffers: Vec<vk::Framebuffer>,
     in_post: bool,
+    /// Scene passes of sample counts no longer in use. Kept until the view goes: pipelines made for them are still
+    /// about, and a handle freed could come back as another pass's.
+    retired_passes: Vec<vk::RenderPass>,
     pub pool: vk::CommandPool,
     pub cmd: vk::CommandBuffer,
     pub fence: vk::Fence,
@@ -227,56 +230,8 @@ impl Gpu {
             .find(|f| f.format == vk::Format::B8G8R8A8_UNORM || f.format == vk::Format::R8G8B8A8_UNORM)
             .unwrap_or(&formats[0])
             .format;
-        let samples = sample_count(&shared);
-        let multi = samples != vk::SampleCountFlags::TYPE_1;
-        // With several samples: draw into a multisampled image (0) with depth (1), resolved into the swapchain image (2).
-        let mut attachments = vec![
-            vk::AttachmentDescription::default()
-                .format(format)
-                .samples(samples)
-                .load_op(vk::AttachmentLoadOp::CLEAR)
-                .store_op(if multi { vk::AttachmentStoreOp::DONT_CARE } else { vk::AttachmentStoreOp::STORE })
-                .initial_layout(vk::ImageLayout::UNDEFINED)
-                .final_layout(if multi { vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL } else { vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL }),
-            vk::AttachmentDescription::default()
-                .format(DEPTH_FORMAT)
-                .samples(samples)
-                .load_op(vk::AttachmentLoadOp::CLEAR)
-                // Kept: the post pass reads the depth for ambient occlusion.
-                .store_op(vk::AttachmentStoreOp::STORE)
-                .initial_layout(vk::ImageLayout::UNDEFINED)
-                .final_layout(vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL),
-        ];
-        if multi {
-            attachments.push(
-                vk::AttachmentDescription::default()
-                    .format(format)
-                    .samples(vk::SampleCountFlags::TYPE_1)
-                    .load_op(vk::AttachmentLoadOp::DONT_CARE)
-                    .store_op(vk::AttachmentStoreOp::STORE)
-                    .initial_layout(vk::ImageLayout::UNDEFINED)
-                    .final_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL),
-            );
-        }
-        let color_ref = [vk::AttachmentReference::default().attachment(0).layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)];
-        let depth_ref = vk::AttachmentReference::default().attachment(1).layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-        let resolve_ref = [vk::AttachmentReference::default().attachment(2).layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)];
-        let mut sp = vk::SubpassDescription::default()
-            .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
-            .color_attachments(&color_ref)
-            .depth_stencil_attachment(&depth_ref);
-        if multi {
-            sp = sp.resolve_attachments(&resolve_ref);
-        }
-        let subpass = [sp];
-        let dep = [vk::SubpassDependency::default()
-            .src_subpass(vk::SUBPASS_EXTERNAL)
-            .dst_subpass(0)
-            .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS)
-            .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS)
-            .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE)];
-        let render_pass =
-            device.create_render_pass(&vk::RenderPassCreateInfo::default().attachments(&attachments).subpasses(&subpass).dependencies(&dep), None)?;
+        let samples = sample_count(&shared, wanted_samples());
+        let render_pass = scene_pass(&device, format, samples)?;
         // The post pass: one colour attachment, the window's image, written whole.
         let post_att = [vk::AttachmentDescription::default()
             .format(format)
@@ -346,6 +301,7 @@ impl Gpu {
             post_pass,
             framebuffers: Vec::new(),
             in_post: false,
+            retired_passes: Vec::new(),
             pool,
             cmd,
             fence,
@@ -721,6 +677,26 @@ impl Gpu {
         self.in_post = true;
     }
 
+    /// Changes the samples a pixel the view draws with: 1 is no anti-aliasing. The scene pass and its images are made
+    /// again; whatever holds pipelines for the scene pass makes those again. False when nothing changed (the count is
+    /// the one in use, or the device has no other to give).
+    pub fn set_samples(&mut self, want: u32) -> Res<bool> {
+        let samples = sample_count(&self.shared, want);
+        if samples == self.samples {
+            return Ok(false);
+        }
+        unsafe {
+            self.device.wait_for_fences(&[self.fence], true, u64::MAX)?;
+            self.device.queue_wait_idle(self.queue)?;
+            let pass = scene_pass(&self.device, self.format, samples)?;
+            self.retired_passes.push(std::mem::replace(&mut self.render_pass, pass));
+        }
+        self.samples = samples;
+        let e = self.extent;
+        self.recreate_swapchain(e.width, e.height)?;
+        Ok(true)
+    }
+
     /// Samples per pixel the view draws with, as a number.
     pub fn sample_number(&self) -> u32 {
         self.samples.as_raw()
@@ -826,6 +802,9 @@ impl Drop for Gpu {
             self.device.destroy_fence(self.fence, None);
             self.device.destroy_command_pool(self.pool, None);
             self.device.destroy_render_pass(self.render_pass, None);
+            for p in self.retired_passes.drain(..) {
+                self.device.destroy_render_pass(p, None);
+            }
             self.device.destroy_render_pass(self.post_pass, None);
             self.device.destroy_render_pass(self.ao_pass, None);
             self.shared.surface_fn.destroy_surface(self.surface, None);
@@ -840,11 +819,68 @@ pub fn color_range() -> vk::ImageSubresourceRange {
     vk::ImageSubresourceRange::default().aspect_mask(vk::ImageAspectFlags::COLOR).level_count(1).layer_count(1)
 }
 
-/// Samples per pixel for the viewport: 4, or what the device allows below that. AZTEK_MSAA=1, 2, 4 or 8 asks for another.
-fn sample_count(shared: &Shared) -> vk::SampleCountFlags {
+/// The pass the scene is drawn in, for a sample count: colour and depth at that count, resolved into the scene's image
+/// when it is more than one.
+unsafe fn scene_pass(device: &ash::Device, format: vk::Format, samples: vk::SampleCountFlags) -> Res<vk::RenderPass> {
+        let multi = samples != vk::SampleCountFlags::TYPE_1;
+        // With several samples: draw into a multisampled image (0) with depth (1), resolved into the swapchain image (2).
+        let mut attachments = vec![
+            vk::AttachmentDescription::default()
+                .format(format)
+                .samples(samples)
+                .load_op(vk::AttachmentLoadOp::CLEAR)
+                .store_op(if multi { vk::AttachmentStoreOp::DONT_CARE } else { vk::AttachmentStoreOp::STORE })
+                .initial_layout(vk::ImageLayout::UNDEFINED)
+                .final_layout(if multi { vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL } else { vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL }),
+            vk::AttachmentDescription::default()
+                .format(DEPTH_FORMAT)
+                .samples(samples)
+                .load_op(vk::AttachmentLoadOp::CLEAR)
+                // Kept: the post pass reads the depth for ambient occlusion.
+                .store_op(vk::AttachmentStoreOp::STORE)
+                .initial_layout(vk::ImageLayout::UNDEFINED)
+                .final_layout(vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL),
+        ];
+        if multi {
+            attachments.push(
+                vk::AttachmentDescription::default()
+                    .format(format)
+                    .samples(vk::SampleCountFlags::TYPE_1)
+                    .load_op(vk::AttachmentLoadOp::DONT_CARE)
+                    .store_op(vk::AttachmentStoreOp::STORE)
+                    .initial_layout(vk::ImageLayout::UNDEFINED)
+                    .final_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL),
+            );
+        }
+        let color_ref = [vk::AttachmentReference::default().attachment(0).layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)];
+        let depth_ref = vk::AttachmentReference::default().attachment(1).layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+        let resolve_ref = [vk::AttachmentReference::default().attachment(2).layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)];
+        let mut sp = vk::SubpassDescription::default()
+            .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
+            .color_attachments(&color_ref)
+            .depth_stencil_attachment(&depth_ref);
+        if multi {
+            sp = sp.resolve_attachments(&resolve_ref);
+        }
+        let subpass = [sp];
+        let dep = [vk::SubpassDependency::default()
+            .src_subpass(vk::SUBPASS_EXTERNAL)
+            .dst_subpass(0)
+            .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS)
+            .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS)
+            .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE)];
+        Ok(device.create_render_pass(&vk::RenderPassCreateInfo::default().attachments(&attachments).subpasses(&subpass).dependencies(&dep), None)?)
+}
+
+/// What the environment asks for: AZTEK_MSAA=1, 2, 4 or 8. Four without it.
+fn wanted_samples() -> u32 {
+    std::env::var("AZTEK_MSAA").ok().and_then(|v| v.parse().ok()).unwrap_or(4)
+}
+
+/// The sample count the device gives for the one asked for: that, or the next it allows below it.
+fn sample_count(shared: &Shared, want: u32) -> vk::SampleCountFlags {
     let limits = unsafe { shared.instance.get_physical_device_properties(shared.phys) }.limits;
     let allowed = limits.framebuffer_color_sample_counts & limits.framebuffer_depth_sample_counts;
-    let want: u32 = std::env::var("AZTEK_MSAA").ok().and_then(|v| v.parse().ok()).unwrap_or(4);
     for (n, flag) in [(8, vk::SampleCountFlags::TYPE_8), (4, vk::SampleCountFlags::TYPE_4), (2, vk::SampleCountFlags::TYPE_2)] {
         if want >= n && allowed.contains(flag) {
             return flag;

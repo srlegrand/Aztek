@@ -1391,8 +1391,9 @@ glTF (issue 26):
 ### Viewport: anti-aliasing shown, ambient occlusion (12/11/2026)
 
 - Anti-aliasing was on (4 samples a pixel, since 09/11/2026) with nothing in the interface saying so. A view's
-  Lighting > Anti-aliasing lists Off, 2, 4 and 8 samples, ticks the one in use, and takes a choice for the next start:
-  the sample count is fixed when a view is made. `AZTEK_MSAA` still overrides it.
+  Lighting > Anti-aliasing lists Off, 2, 4 and 8 samples, ticks the one in use, and kept the choice for the next
+  start only (changed 12/11/2026, see "Anti-aliasing changes at once" below). `AZTEK_MSAA` overrides the saved choice
+  at start.
 - Ambient occlusion: Lighting > Ambient Occlusion, with Radius (scene units) and Intensity under Ambient Occlusion
   Settings. Surfaces darken in creases and where they meet. Off by default; the choice is kept for new views. X-Ray
   turns it off.
@@ -1475,3 +1476,17 @@ writers have not been read here: the reader has only seen files this exporter wr
 offsets built by a test.
 
 FBX export: a joint chain asked for goes out whole (its child joints were left out unless a skin used them).
+
+
+### Anti-aliasing changes at once (12/11/2026)
+
+- Lighting > Anti-aliasing changes the samples a pixel in every view of the layout when chosen, and keeps the choice
+  for the next start. Before, the choice was only saved: picking Off did nothing until a restart, then left
+  anti-aliasing off.
+- A device that cannot give the count asked for gives the nearest lower one it has; the tick shows the count in use
+  and the Script Editor says so.
+- Checked on a software Vulkan device that has 1 and 4 samples only: Off and 4 Samples compared pixel for pixel
+  against a start with `AZTEK_MSAA=1` and `AZTEK_MSAA=4`, in one view and four, with ambient occlusion on, and after a
+  window resize. 2 and 8 samples have not been drawn here.
+- Tests: the unit-setting tests share one frame rate for the whole process and ran side by side; one could read the
+  rate another had just set (seen once in 60 runs). They now run one at a time.

@@ -82,6 +82,8 @@ pub struct View {
     pub r: Renderer,
     /// What turns the drawn scene into the window's picture.
     post: crate::post::Post,
+    /// Renderers of sample counts no longer in use: what was allocated against their layouts is still about.
+    retired: Vec<Renderer>,
     pub vp: Viewport,
     /// Physical pixels per logical one.
     pub dpr: f64,
@@ -161,6 +163,7 @@ impl View {
             gpu,
             r,
             post,
+            retired: Vec::new(),
             vp: Viewport::new(kind),
             dpr,
             nav: None,
@@ -197,6 +200,21 @@ impl View {
             needs_redraw: true,
             capture: None,
             want_capture: false,
+        }
+    }
+
+    /// Anti-aliasing on, off or at another strength, now: the view's pass, its pipelines and the post pass are made
+    /// again for the new count.
+    pub fn set_samples(&mut self, want: u32) {
+        match self.gpu.set_samples(want) {
+            Ok(true) => {
+                self.retired.push(std::mem::replace(&mut self.r, Renderer::new(&self.gpu)));
+                self.post.destroy(&self.gpu);
+                self.post = crate::post::Post::new(&self.gpu);
+                self.needs_redraw = true;
+            }
+            Ok(false) => {}
+            Err(e) => log::error!("viewport anti-aliasing: {e}"),
         }
     }
 
@@ -1929,6 +1947,7 @@ impl View {
             }
             "smoothCage" => self.vp.smooth_cage = v.as_bool().unwrap_or(false),
             "pivotMode" => self.vp.pivot_mode = v.as_bool().unwrap_or(false),
+            "samples" => self.set_samples(v.as_u64().unwrap_or(4).clamp(1, 8) as u32),
             "snap" => {
                 self.vp.snap = match v.as_str() {
                     Some("grid") => 1,

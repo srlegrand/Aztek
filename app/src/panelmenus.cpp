@@ -216,13 +216,25 @@ void ModelPanel::build_menus() {
     };
     ao_choice("Radius", "aoRadius", {{"0.5", 0.5}, {"1", 1.0}, {"2", 2.0}, {"4", 4.0}, {"8", 8.0}, {"16", 16.0}, {"32", 32.0}});
     ao_choice("Intensity", "aoIntensity", {{"0.5", 0.5}, {"1", 1.0}, {"1.5", 1.5}, {"2", 2.0}, {"3", 3.0}});
-    // Anti-aliasing is set when a view is made: the choice here is for the next start. The tick says what is in use.
+    // Anti-aliasing: samples a pixel, changed at once in every view and kept for the next start. The tick is what this
+    // view draws with, which is less than asked where the device has no more to give.
     QMenu* aa = lighting->addMenu("Anti-aliasing");
     auto* aa_group = new QActionGroup(aa);
     for (int n : {1, 2, 4, 8}) {
-        QAction* a = aa->addAction(n == 1 ? QString("Off") : QString("%1 Samples").arg(n), [n] {
+        QAction* a = aa->addAction(n == 1 ? QString("Off") : QString("%1 Samples").arg(n), [this, v, n] {
             QSettings().setValue("viewport/samples", n);
-            log(QString("// Anti-aliasing: %1 from the next start //").arg(n == 1 ? QString("off") : QString("%1 samples a pixel").arg(n)), 0);
+            QList<ViewportWidget*> views{v};
+            if (PanelLayout* pl = layout_of(this)) views = pl->views();
+            for (ViewportWidget* each : views) {
+                each->set("samples", QString::number(n));
+                each->update();
+            }
+            const int got = parse(v->get("disp")).toObject()["samples"].toInt();
+            if (got != n)
+                log(QString("// Warning: this graphics device gives %1 a pixel where %2 were asked for //")
+                        .arg(got == 1 ? QString("1 sample") : QString("%1 samples").arg(got))
+                        .arg(n),
+                    4);
         });
         a->setCheckable(true);
         a->setData(n);
@@ -230,14 +242,7 @@ void ModelPanel::build_menus() {
     }
     connect(aa, &QMenu::aboutToShow, aa, [v, aa] {
         const int now = parse(v->get("disp")).toObject()["samples"].toInt();
-        for (QAction* a : aa->actions()) {
-            a->setChecked(a->data().toInt() == now);
-            const int n = a->data().toInt();
-            QString label = n == 1 ? QString("Off") : QString("%1 Samples").arg(n);
-            if (n == now) label += " (in use)";
-            else if (n == QSettings().value("viewport/samples", 4).toInt()) label += " (from the next start)";
-            a->setText(label);
-        }
+        for (QAction* a : aa->actions()) a->setChecked(a->data().toInt() == now);
     });
     // A new view takes the occlusion last chosen.
     {

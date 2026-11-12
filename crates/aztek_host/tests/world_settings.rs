@@ -4,6 +4,14 @@
 use aztek_host::{take_ui_requests_for_tests as take_ui_requests, Core};
 use serde_json::{json, Value};
 
+/// The frame rate, the up axis and the preferences folder are the process's, as the application has one scene: tests
+/// that set them run one at a time, or one's new scene resets what another has just set.
+static ONE_AT_A_TIME: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn alone() -> std::sync::MutexGuard<'static, ()> {
+    ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 fn prefs_dir(name: &str) -> std::path::PathBuf {
     let d = std::env::temp_dir().join(format!("aztek_world_settings_{name}_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
@@ -43,6 +51,7 @@ fn panel_value(requests: &Value, key: &str) -> Option<f64> {
 
 #[test]
 fn z_up_turns_the_views_and_their_commands() {
+    let _alone = alone();
     let mut c = Core::new();
     c.mel("upAxis -ax z -rv;");
     assert_eq!(c.mel("upAxis -q -ax;"), json!("z"));
@@ -80,6 +89,7 @@ fn z_up_turns_the_views_and_their_commands() {
 
 #[test]
 fn the_view_camera_tumbles_about_world_up() {
+    let _alone = alone();
     use aztek_host::camera::{CamKind, Camera};
     use glam::DVec2;
     aztek_scene::world::set_up_z(true);
@@ -95,6 +105,7 @@ fn the_view_camera_tumbles_about_world_up() {
 
 #[test]
 fn the_grid_and_steps_are_in_the_linear_unit() {
+    let _alone = alone();
     let mut c = Core::new();
     c.mel("grid -s 12 -sp 5 -d 5;");
     let r = take_ui_requests();
@@ -113,6 +124,7 @@ fn the_grid_and_steps_are_in_the_linear_unit() {
 // The frame rate is the process's, so what changes it runs in one test, in turn.
 #[test]
 fn time_units_new_scene_units_and_saved_preferences() {
+    let _alone = alone();
     unit_changes_reach_jobs_and_drop_frame_is_its_own_unit();
     a_new_scene_starts_in_the_default_units();
     the_application_reads_and_keeps_its_preferences();
