@@ -270,3 +270,24 @@ Order of work:
 3. Harold's translator, node types, render settings and Render View move behind one plug-in, with a command-line
    renderer that reads a scene file of its own.
 4. The features with no code are written as plug-ins from the start.
+
+## Hypershade nodes
+
+What the reference's Create panel lists, and where Aztek stands (12/11/2026). "Shaded" is Harold shading it per sample;
+"type only" loads, saves and connects but renders as its value.
+
+| Group | Done (shaded) | Type only | Not made |
+|---|---|---|---|
+| Surface | anisotropic, blinn, lambert, layeredShader, phong, phongE, rampShader, standardSurface, surfaceShader | | hairTubeShader, oceanShader, shadingMap, useBackground, openPBRSurface |
+| Volumetric | | | envFog, fluidShape, lightFog, particleCloud, volumeFog, volumeShader |
+| Displacement | displacementShader | | |
+| 2D textures | bulge, checker, file, fractal, grid, mountain, noise, ramp, water | | cloth (name taken by the cloth simulation node), fluidTexture2D, mandelbrot, movie, ocean, psdFileTex, simplexNoise, substance |
+| 3D textures | brownian, cloud, crater, granite, leather, marble, rock, snow, solidFractal, stucco, volumeNoise, wood | | fluidTexture3D, mandelbrot3D |
+| Env textures | | | envBall, envChrome, envCube, envSky, envSphere |
+| Other textures | layeredTexture | | |
+| Utilities | blendColors, bump2d, bump3d, clamp, condition, contrast, gammaCorrect, hsvToRgb, luminance, multiplyDivide, place2dTexture, place3dTexture, plusMinusAverage, remapValue, reverse, rgbToHsv, samplerInfo (facing ratio), setRange | the matrix, quaternion and float utilities | arrayMapper, colorCorrect, colorComposite, colorCondition, colorLogic, colorMask, colorMath, curveInfo, doubleShadingSwitch, floatComposite, floatCorrect, floatMask, heightField, lightInfo, particleSamplerInfo, premultiply, projection, quadShadingSwitch, remapColor, remapHsv, singleShadingSwitch, smear, stencil, surfaceInfo, surfaceLuminance, tripleShadingSwitch, unpremultiply, uvChooser, vectorProduct in shading |
+| Glow | | | opticalFX |
+
+Next, in order: projection and stencil (2D textures in space), the env textures, remapColor, remapHsv and the colour
+utilities, the shading switches, useBackground and shadingMap, then the volumetrics. Rename the cloth simulation's
+node type so the cloth texture can be registered.

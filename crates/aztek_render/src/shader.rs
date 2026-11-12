@@ -295,6 +295,10 @@ pub enum Node {
     SamplerInfo(Sampler),
     /// aiUtility and the like: a constant colour, or a debug view.
     Utility { mode: i64, color: Input },
+    /// A procedural pattern over UV: bulge, cloth, fractal, grid, mountain, water.
+    Tex2d { kind: Box<crate::procedural::Tex2d>, place: Place2d, uv: Option<Input>, balance: crate::procedural::Balance },
+    /// A procedural pattern through space, placed by a matrix from the world (or the object, when local).
+    Tex3d { kind: Box<crate::procedural::Tex3d>, to_texture: glam::Mat4, local: bool, balance: crate::procedural::Balance },
     /// Three scalars into a colour: channels connected one by one.
     Combine(Input, Input, Input),
     /// Ambient occlusion and curvature need rays: their result is filled by the integrator, here a stand-in.
@@ -603,6 +607,15 @@ impl Network {
             }
             Node::HsvToRgb(i) => hsv_to_rgb(s(*i)).extend(1.0),
             Node::RgbToHsv(i) => rgb_to_hsv(s(*i)).extend(1.0),
+            Node::Tex2d { kind, place, uv, balance } => match place.apply(self.uv_of(uv, ctx, tex, depth), false) {
+                Some(q) => balance.apply(kind.eval(q)),
+                None => balance.default_color.extend(0.0),
+            },
+            Node::Tex3d { kind, to_texture, local, balance } => {
+                let p = crate::procedural::texture_point(to_texture, ctx.p, ctx.p_obj, *local);
+                let n = to_texture.transform_vector3(ctx.n).normalize_or_zero();
+                balance.apply(kind.eval(p, n))
+            }
             Node::SamplerInfo(k) => match k {
                 Sampler::FacingRatio => Vec3::splat(ctx.n.dot(ctx.wo).abs()).extend(1.0),
                 Sampler::Uv => Vec4::new(ctx.uv.x, ctx.uv.y, 0.0, 1.0),

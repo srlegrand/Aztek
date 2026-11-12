@@ -1,5 +1,6 @@
 // Model panels: a native child window the Rust renderer draws into, with the reference's panel menus and icon bar above it.
 #pragma once
+#include <functional>
 #include <QHash>
 #include <QWidget>
 
@@ -71,6 +72,9 @@ private:
     void build_menus();
     QMenuBar* menus_;
     QToolBar* bar_;
+    // Anti-aliasing from the toolbar: on or off, and a button to keep in step.
+    std::function<void(bool)> aa_apply_;
+    std::function<void(QAction*)> aa_register_;
     ViewportWidget* view_;
     QStackedLayout* stack_ = nullptr;
     QHash<QString, QWidget*> others_;

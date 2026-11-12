@@ -223,7 +223,7 @@ fn material(doc: &mut Doc, s: &mut Session, sg: NodeId, out_dir: &Path, embed: b
     let alpha = (1.0 - d.transparency).clamp(0.0, 1.0);
     let mut pbr = Map::new();
     let mut base = [d.color[0], d.color[1], d.color[2], alpha];
-    if let Some(t) = &d.color_map {
+    if let Some(t) = d.color_map.as_ref().filter(|t| t.baked.is_none()) {
         if let Some(index) = texture(doc, t, out_dir, embed) {
             // The texture is the colour; the factor multiplies it.
             base = [1.0, 1.0, 1.0, alpha];

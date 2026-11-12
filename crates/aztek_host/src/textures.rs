@@ -194,6 +194,31 @@ impl TextureCache {
         Some(loaded)
     }
 
+    /// A network's picture as a texture, made on first use. A newer picture of the same output replaces the older.
+    pub fn get_picture(&mut self, gpu: &Gpu, pic: &aztek_scene::harold::swatch::Picture) -> Option<Loaded> {
+        let key = (pic.key.clone(), true);
+        if let Some(e) = self.entries.get(&key) {
+            return Some(Loaded { set: e.set, has_alpha: e.has_alpha, size: e.size });
+        }
+        let stem = pic.key.rsplit_once(':').map(|x| format!("{}:", x.0)).unwrap_or_default();
+        let old: Vec<(String, bool)> = self.entries.keys().filter(|k| k.0.starts_with("swatch:") && k.0.starts_with(&stem)).cloned().collect();
+        if !old.is_empty() {
+            unsafe {
+                let _ = gpu.device.device_wait_idle();
+            }
+        }
+        for k in old {
+            if let Some(e) = self.entries.remove(&k) {
+                self.destroy(gpu, e);
+            }
+        }
+        let decoded = Decoded { width: pic.width, height: pic.height, rgba: pic.rgba.clone(), has_alpha: false };
+        let entry = self.upload(gpu, &decoded, true, None)?;
+        let loaded = Loaded { set: entry.set, has_alpha: entry.has_alpha, size: entry.size };
+        self.entries.insert(key, entry);
+        Some(loaded)
+    }
+
     /// Says something once in the script history, however often it holds.
     pub fn warn(&mut self, text: String) {
         if self.warned.insert(text.clone()) {

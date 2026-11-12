@@ -663,8 +663,12 @@ impl Viewport {
         let mut found = Vec::new();
         crate::textures::with_cache(gpu, |c| {
             for (sg, m) in &self.mats.materials {
-                let color = m.color_map.as_ref().and_then(|t| t.resolved.as_ref().and_then(|p| c.get(gpu, p, t.srgb)).map(|l| (t.file, l)));
-                let alpha = m.alpha_map.as_ref().and_then(|t| t.resolved.as_ref().and_then(|p| c.get(gpu, p, t.srgb)).map(|l| (t.file, l)));
+                let mut load = |t: &shading::TextureRef| match &t.baked {
+                    Some(pic) => c.get_picture(gpu, pic),
+                    None => t.resolved.as_ref().and_then(|p| c.get(gpu, p, t.srgb)),
+                };
+                let color = m.color_map.as_ref().and_then(|t| load(t).map(|l| (t.file, l)));
+                let alpha = m.alpha_map.as_ref().and_then(|t| load(t).map(|l| (t.file, l)));
                 self.mats.sets.insert(*sg, MatSets { color: color.map(|x| x.1.set), alpha: alpha.map(|x| x.1.set), alpha_has_alpha: alpha.is_some_and(|x| x.1.has_alpha) });
                 found.extend(color);
                 found.extend(alpha);

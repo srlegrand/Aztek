@@ -8,6 +8,7 @@ pub mod lights;
 pub mod materials;
 pub mod network;
 pub mod settings;
+pub mod swatch;
 
 use std::collections::HashMap;
 use std::sync::Arc;

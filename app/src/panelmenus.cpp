@@ -7,6 +7,7 @@
 #include "nodeeditor.h"
 #include "panels.h"
 
+#include <QPointer>
 #include <QAction>
 #include <QActionGroup>
 #include <QInputDialog>
@@ -220,26 +221,38 @@ void ModelPanel::build_menus() {
     // view draws with, which is less than asked where the device has no more to give.
     QMenu* aa = lighting->addMenu("Anti-aliasing");
     auto* aa_group = new QActionGroup(aa);
-    for (int n : {1, 2, 4, 8}) {
-        QAction* a = aa->addAction(n == 1 ? QString("Off") : QString("%1 Samples").arg(n), [this, v, n] {
-            QSettings().setValue("viewport/samples", n);
-            QList<ViewportWidget*> views{v};
-            if (PanelLayout* pl = layout_of(this)) views = pl->views();
-            for (ViewportWidget* each : views) {
-                each->set("samples", QString::number(n));
-                each->update();
+    // Every view's toolbar button, so they all show what the views draw with.
+    static QList<QPointer<QAction>> aa_buttons;
+    auto apply_samples = [this, v](int n) {
+        QSettings st;
+        st.setValue("viewport/samples", n);
+        if (n > 1) st.setValue("viewport/samplesOn", n);
+        QList<ViewportWidget*> views{v};
+        if (PanelLayout* pl = layout_of(this)) views = pl->views();
+        for (ViewportWidget* each : views) {
+            each->set("samples", QString::number(n));
+            each->update();
+        }
+        const int got = parse(v->get("disp")).toObject()["samples"].toInt();
+        if (got != n)
+            log(QString("// Warning: this graphics device gives %1 a pixel where %2 were asked for //")
+                    .arg(got == 1 ? QString("1 sample") : QString("%1 samples").arg(got))
+                    .arg(n),
+                4);
+        for (const QPointer<QAction>& b : aa_buttons)
+            if (b) {
+                QSignalBlocker block(b);
+                b->setChecked(got > 1);
             }
-            const int got = parse(v->get("disp")).toObject()["samples"].toInt();
-            if (got != n)
-                log(QString("// Warning: this graphics device gives %1 a pixel where %2 were asked for //")
-                        .arg(got == 1 ? QString("1 sample") : QString("%1 samples").arg(got))
-                        .arg(n),
-                    4);
-        });
+    };
+    for (int n : {1, 2, 4, 8}) {
+        QAction* a = aa->addAction(n == 1 ? QString("Off") : QString("%1 Samples").arg(n), [apply_samples, n] { apply_samples(n); });
         a->setCheckable(true);
         a->setData(n);
         aa_group->addAction(a);
     }
+    aa_apply_ = [apply_samples](bool on) { apply_samples(on ? qMax(2, QSettings().value("viewport/samplesOn", 4).toInt()) : 1); };
+    aa_register_ = [](QAction* b) { aa_buttons.append(b); };
     connect(aa, &QMenu::aboutToShow, aa, [v, aa] {
         const int now = parse(v->get("disp")).toObject()["samples"].toInt();
         for (QAction* a : aa->actions()) a->setChecked(a->data().toInt() == now);
@@ -382,6 +395,13 @@ void ModelPanel::build_menus() {
     connect(all_lights, &QAction::triggered, this, [v](bool on) { v->set("disp", QString("{\"displayLights\":\"%1\"}").arg(on ? "all" : "default")); });
     connect(lighting, &QMenu::aboutToShow, all_lights, [v, all_lights] { all_lights->setChecked(parse(v->get("disp")).toObject()["displayLights"].toString() == "all"); });
     bar_flag("shadows", "Shadows", "shadows");
+    // Anti-aliasing, as the reference's toolbar has it: on at the count last chosen, or off.
+    QAction* aa_button = bar_->addAction(icon("antiAlias"), "Multisample Anti-aliasing");
+    aa_button->setCheckable(true);
+    // What the view starts with: the environment's count, else the saved one. The view itself is not made yet.
+    aa_button->setChecked((qEnvironmentVariableIsEmpty("AZTEK_MSAA") ? QSettings().value("viewport/samples", 4).toInt() : qEnvironmentVariableIntValue("AZTEK_MSAA")) > 1);
+    aa_register_(aa_button);
+    connect(aa_button, &QAction::triggered, this, [this](bool on) { aa_apply_(on); });
     QAction* wos2 = bar_->addAction(icon("wireOnShaded"), "Wireframe on Shaded");
     wos2->setCheckable(true);
     connect(wos2, &QAction::toggled, wos, &QAction::setChecked);

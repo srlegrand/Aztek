@@ -1510,3 +1510,33 @@ FBX export: a joint chain asked for goes out whole (its child joints were left o
 - Saved Move, Rotate and Scale options with a switch or a number were refused at the next start on Linux, where the
   settings file keeps them as text.
 
+
+### Hypershade: ports, placement, rendered swatches; anti-aliased lines (12/11/2026)
+
+- A node made in the Hypershade shows its attributes, outputs first, so it can be wired at once. Every node has a
+  port each side of its title standing for all its inputs and all its outputs: a wire dragged from one asks which
+  attribute, and dropped on a node asks which of that node's. Before, a node with no connections had no ports.
+- Making a 2D texture makes its `place2dTexture` and connects `outUV` to `uvCoord` (and the filter size where the
+  texture has one); a `file` keeps its full set of connections. Making a 3D texture makes a `place3dTexture` and
+  connects `worldInverseMatrix[0]` to `placementMatrix`. The same from the Attribute Editor's map button.
+- New node types, with the attribute names, short names and defaults of the reference's node pages (2025, read
+  12/11/2026): `bulge`, `fractal`, `grid`, `mountain`, `water`; `brownian`, `cloud`, `crater`, `granite`, `leather`,
+  `marble`, `rock`, `snow`, `solidFractal`, `stucco`, `volumeNoise`, `wood`; `place3dTexture`, `samplerInfo`,
+  `gammaCorrect`, `contrast`, `bump3d`. `ramp` is classed as a 2D texture, as the reference classes it. Harold
+  shades all of them.
+- Differences: the reference's noise is not published, so each pattern has the same character and answers the same
+  attributes without matching point for point. Their colour attributes are read as plain values, not as textures.
+  `crater` and `stucco` do not give their `outNormal`. `water`'s reflection box and `volumeNoise`'s implode and
+  falloff are not done. `samplerInfo` gives its facing ratio whichever output is read. `place3dTexture` is not drawn
+  in the views.
+- Not registered: the reference's `cloth` texture, because Aztek's cloth simulation node already has that name. Not
+  made yet: see the node list in PLAN.md.
+- The Material Viewer and the Browser's swatches are rendered by Harold (`haroldSwatch`): a material on a ball,
+  a texture flat. They were drawn from the attribute's single value, so a mapped colour showed black.
+- The views draw a material whose colour comes from a network that is not one image file with that network worked
+  out into a 256 pixel picture over the UV square, and with the picture's mean colour where textures are off. Both
+  were black. A 3D texture's picture is a slice through it, not what a render shows on the object.
+- Anti-aliasing covers lines: with it on, wireframes, curves, the grid and manipulators are drawn with smoothed
+  lines where the graphics device has them (rectangular lines otherwise). A device was free to step its lines under
+  multisampling. The view's toolbar has a button for anti-aliasing beside the one for shadows.
+- Checked on a software Vulkan device only.

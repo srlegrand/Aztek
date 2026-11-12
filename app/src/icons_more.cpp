@@ -91,6 +91,19 @@ bool draw_more(const QString& name, QPainter& p) {
         p.drawEllipse(QPointF(16, 16), 11, 11);
         return true;
     }
+    if (name == "antiAlias") {
+        // An edge twice: stepped below, smooth above.
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(225, 225, 225));
+        QPolygonF smooth;
+        smooth << QPointF(4, 15) << QPointF(28, 4) << QPointF(28, 15);
+        p.drawPolygon(smooth);
+        p.setRenderHint(QPainter::Antialiasing, false);
+        p.setBrush(QColor(150, 150, 150));
+        for (int k = 0; k < 4; ++k) p.drawRect(QRectF(4 + k * 6, 26 - k * 3, 24 - k * 6, 3));
+        p.setRenderHint(QPainter::Antialiasing, true);
+        return true;
+    }
     if (name == "shadows") {
         p.setPen(Qt::NoPen);
         p.setBrush(QColor(40, 40, 40, 200));

@@ -156,6 +156,24 @@ QPixmap image_tile(const QString& path, int size) {
     return out;
 }
 
+// A node as Harold renders it: a material on a ball, a texture flat. Kept until the node or what feeds it changes.
+QImage harold_swatch(const QString& name, int size) {
+    struct Kept { QString signature; QImage image; };
+    static QHash<QString, Kept> cache;
+    const QString key = name + "@" + QString::number(size);
+    const QString sig = ask("haroldSwatch", QJsonObject{{"args", QJsonArray{name}}, {"signature", true}}).toString();
+    if (sig.isEmpty()) return {};
+    auto it = cache.find(key);
+    if (it != cache.end() && it->signature == sig) return it->image;
+    const QJsonObject made = ask("haroldSwatch", QJsonObject{{"args", QJsonArray{name}}, {"size", size}}).toObject();
+    QImage img(made["file"].toString());
+    if (img.isNull()) return {};
+    img = img.convertToFormat(QImage::Format_ARGB32);
+    if (cache.size() > 400) cache.clear();
+    cache.insert(key, Kept{sig, img});
+    return img;
+}
+
 // The Material Viewer: the selected material on a ball, redrawn when it changes.
 class MaterialViewer : public QWidget {
 public:
@@ -177,7 +195,10 @@ protected:
         }
         const int side = qMin(width(), height());
         const qreal dpr = devicePixelRatioF();
-        QImage img = ball(look_of(name_, type_), int(side * dpr));
+        // Harold's picture of it; the drawn ball stands in when there is none.
+        QImage img = harold_swatch(name_, qMin(512, int(side * dpr)));
+        if (img.isNull()) img = ball(look_of(name_, type_), int(side * dpr));
+        else img = img.scaled(int(side * dpr), int(side * dpr), Qt::KeepAspectRatio, Qt::SmoothTransformation);
         img.setDevicePixelRatio(dpr);
         p.drawImage(QPointF((width() - side) / 2.0, (height() - side) / 2.0), img);
     }
@@ -367,7 +388,8 @@ private:
     // A node from the Create panel or menu: made, put in the graph, selected. A surface material gets its shading group,
     // as the reference gives it one.
     void make(const RenderNodeKind& k) {
-        QString node = make_render_node(k);
+        QStringList placement;
+        QString node = make_render_node(k, &placement);
         if (node.isEmpty()) return;
         QStringList show{node};
         if (k.flag == "asShader" && surface_shader(k.type)) {
@@ -377,7 +399,11 @@ private:
                 show << sg;
             }
         }
-        if (NodeEditor* ed = editor()) ed->add_nodes(show);
+        // A node made here shows its attributes, so there is something to wire from the start.
+        if (NodeEditor* ed = editor()) {
+            ed->add_nodes(placement, 2);
+            ed->add_nodes(show, 3);
+        }
         exec("select", one(node));
     }
 
@@ -463,7 +489,10 @@ private:
                 if (!want.isEmpty() && !name.contains(want, Qt::CaseInsensitive) && !type.contains(want, Qt::CaseInsensitive)) continue;
                 QIcon ic;
                 const QString image = o["image"].toString();
-                if (title == "Materials") {
+                const QImage rendered = title == "Materials" || title == "Textures" ? harold_swatch(name, 64) : QImage();
+                if (!rendered.isNull()) {
+                    ic = QIcon(QPixmap::fromImage(rendered));
+                } else if (title == "Materials") {
                     ic = QIcon(QPixmap::fromImage(ball(look_of(name, type), 64)));
                 } else if (!image.isEmpty() && !image_tile(image, 64).isNull()) {
                     ic = QIcon(image_tile(image, 64));
@@ -482,7 +511,7 @@ private:
                 it->setData(Qt::UserRole, type);
                 if (selected.contains(name)) {
                     it->setSelected(true);
-                    if (title == "Materials" && shown_name.isEmpty()) {
+                    if ((title == "Materials" || title == "Textures" || title == "Utilities") && shown_name.isEmpty()) {
                         shown_name = name;
                         shown_type = type;
                     }

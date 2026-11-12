@@ -3,7 +3,7 @@
 Generated from the command registry by `cargo run -p aztek_host --example gen_commands`; do not edit by hand.
 Commands take the reference's flags, long or short, in MEL and in Python (`aztek.cmds` or `maya.cmds`).
 
-1125 commands.
+1126 commands.
 
 ## AL_usdmaya_LayerCreateLayer
 
@@ -7010,6 +7010,18 @@ Arguments: CVs (the selection when none)
 | `replaceOriginal` | `rpo` | Change the curve itself (on by default). |
 | `name` | `n` | Name of a new curve. |
 | `object` | `o` | Make an object (accepted for existing scripts). |
+
+## haroldSwatch
+
+A shading node as a small picture rendered by Harold: a material on a ball, a texture or utility flat over the UV square. Writes a .ppm file and returns its path, size and the node's signature; -signature alone gives the signature, which changes when the node or anything connected into it does.
+
+Arguments: node
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `size` | `s` | Pixels a side; 128 without it. |
+| `file` | `f` | Where to write the picture; a temporary file without it. |
+| `signature` | `sig` | Only the signature. |
 
 ## headsUpDisplay
 

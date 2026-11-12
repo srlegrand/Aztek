@@ -311,7 +311,7 @@ pub fn classification(type_name: &str) -> Option<&'static str> {
         "file" => Some("texture/2d"),
         "place2dTexture" | "bump2d" => Some("utility/general"),
         "materialInfo" => Some("utility/shading"),
-        _ => crate::harold_nodes::classification(type_name),
+        _ => crate::harold_nodes::classification(type_name).or_else(|| crate::texture_nodes::classification(type_name)),
     }
 }
 
@@ -330,7 +330,7 @@ pub fn takes_textures(t: &NodeType) -> bool {
 }
 
 pub fn is_texture_type(t: &NodeType) -> bool {
-    t.name == "file" || crate::harold_nodes::classification(&t.name) == Some("texture/2d")
+    t.name == "file" || t.name == "ramp" || crate::harold_nodes::classification(&t.name) == Some("texture/2d") || crate::texture_nodes::is_texture(&t.name)
 }
 
 pub fn register_types() {
@@ -1080,6 +1080,9 @@ pub fn project_dir(s: &mut Session) -> Option<String> {
 /// A file texture as the viewport samples it, its placement read through the file node's connected plugs.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TextureRef {
+    /// A network worked out into a picture, when the colour does not come straight from one image file. `resolved`
+    /// is then the picture's key, not a path.
+    pub baked: Option<std::sync::Arc<crate::harold::swatch::Picture>>,
     pub file: NodeId,
     pub written: String,
     pub resolved: Option<String>,
@@ -1234,6 +1237,7 @@ fn texture_ref(g: &mut Graph, file: NodeId, scene: Option<&str>, project: Option
     let two = |g: &mut Graph, a: &str, d: f32| value_v(g, file, a).map_or([d, d], |x| [x.x as f32, x.y as f32]);
     let flag = |g: &mut Graph, a: &str, d: bool| value_f(g, file, a).map_or(d, |x| x != 0.0);
     TextureRef {
+        baked: None,
         file,
         resolved: resolve_texture(&written, scene, project).map(|p| p.display().to_string()),
         written,
@@ -1252,6 +1256,50 @@ fn texture_ref(g: &mut Graph, file: NodeId, scene: Option<&str>, project: Option
         invert: flag(g, "invert", false),
         alpha_is_luminance: flag(g, "alphaIsLuminance", false),
     }
+}
+
+/// What feeds an attribute as the views draw it: the image file connected straight into it, with its placement, or
+/// the network connected into it worked out into a picture over the UV square.
+fn map_feeding(g: &mut Graph, id: NodeId, attr: &str, scene: Option<&str>, project: Option<&str>) -> Option<TextureRef> {
+    let i = g.node(id)?.ty().attr_index(attr)? as i32;
+    let whole = g.source(&PlugRef::new(id, i));
+    let any = whole.or_else(|| (0..3).find_map(|k| g.source(&PlugRef::component(id, i, k))))?;
+    if g.node(any.node).is_some_and(|n| n.ty().name == "file") {
+        return Some(texture_ref(g, any.node, scene, project));
+    }
+    // One channel of a node into one channel of the colour: the node's colour is still the closest picture of it.
+    let src = match whole {
+        Some(s) => s,
+        None => {
+            let t = g.node(any.node)?.type_arc().clone();
+            let out = ["outColor", "output", "outValue"].iter().find_map(|a| t.attr_index(a)).map_or(any.attr, |a| a as i32);
+            PlugRef::new(any.node, out)
+        }
+    };
+    let Some(pic) = crate::harold::swatch::flat_cached(g, &src, 256, scene, project) else {
+        // Nothing the renderer shades: an image file further up, as before.
+        return file_feeding(g, id, attr).map(|f| texture_ref(g, f, scene, project));
+    };
+    Some(TextureRef {
+        resolved: Some(pic.key.clone()),
+        baked: Some(pic),
+        file: NO_NODE,
+        written: String::new(),
+        srgb: true,
+        coverage: [1.0, 1.0],
+        translate_frame: [0.0, 0.0],
+        rotate_frame: 0.0,
+        repeat: [1.0, 1.0],
+        offset: [0.0, 0.0],
+        rotate_uv: 0.0,
+        wrap: [true, true],
+        mirror: [false, false],
+        default_color: [0.5; 3],
+        gain: [1.0; 3],
+        color_offset: [0.0; 3],
+        invert: false,
+        alpha_is_luminance: true,
+    })
 }
 
 /// How one shading group draws. None when its surface shader is nothing Aztek knows: the shape draws as lambert1 would.
@@ -1281,8 +1329,13 @@ pub fn draw_material(g: &mut Graph, sg: NodeId, scene: Option<&str>, project: Op
             transparency = transparency.max(DVec3::splat(0.6 * trans));
         }
     }
-    let color_map = file_feeding(g, material, color_attr).map(|f| texture_ref(g, f, scene, project));
-    let alpha_map = file_feeding(g, material, trans_attr).map(|f| texture_ref(g, f, scene, project));
+    let color_map = map_feeding(g, material, color_attr, scene, project);
+    let alpha_map = map_feeding(g, material, trans_attr, scene, project);
+    // Without textures shown, a mapped colour is seen as the map's mean: the attribute alone is one sample of it.
+    if let Some(pic) = color_map.as_ref().and_then(|t| t.baked.as_ref()) {
+        let weight = if t.name == "standardSurface" || t.name == "aiStandardSurface" { value_f(g, material, "base").unwrap_or(1.0) } else { 1.0 };
+        color = DVec3::new(pic.mean[0] as f64, pic.mean[1] as f64, pic.mean[2] as f64) * weight;
+    }
     let specular = draw_specular(g, material, &t.name);
     Some(DrawMaterial {
         specular,

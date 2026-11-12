@@ -14,7 +14,7 @@ namespace az {
 struct NodeBox {
     QString name, type;
     QPointF pos;
-    int mode = 2; // 1 no attributes, 2 connected ones, 3 all.
+    int mode = 2; // 1 no attributes, 2 connected ones, 3 all. Every mode keeps the two ports on the title.
     QStringList attrs;
     QStringList connected;
     QStringList inputs, outputs;
@@ -27,7 +27,8 @@ public:
     void graph_selection(int depth);
     void add_selected();
     // Puts the named nodes in the graph, as -addNode does.
-    void add_nodes(const QStringList& names);
+    // `mode` is how much of each shows (1, 2 or 3); 0 leaves it as the editor would have it.
+    void add_nodes(const QStringList& names, int mode = 0);
     void clear_graph();
     void refresh();
 protected:
@@ -53,6 +54,7 @@ private:
     QSet<QString> sel_;
     QSet<int> sel_edges_;
     QHash<QString, QPointF> placed_;
+    QHash<QString, int> asked_modes_;
     QPointF pan_{20, 20};
     double zoom_ = 1.0;
     enum class Mode { None, Pan, Zoom, Move, Marquee, Wire } mode_ = Mode::None;

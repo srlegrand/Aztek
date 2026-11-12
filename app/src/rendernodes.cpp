@@ -147,15 +147,32 @@ const QList<RenderNodeGroup>& render_node_catalog() {
     return cat;
 }
 
-QString make_render_node(const RenderNodeKind& kind) {
+QString make_render_node(const RenderNodeKind& kind, QStringList* with) {
     QJsonObject call{{"args", QJsonArray{kind.type}}};
     call[kind.flag] = true;
     QString node = exec("shadingNode", call).toString();
     if (node.isEmpty()) return node;
-    // A file texture comes with its placement, wired as the reference wires it.
+    // A texture comes with its placement, wired as the reference wires it: a 2D one with where it sits in UV space, a
+    // 3D one with where it sits in the scene.
+    const QString group = group_of(kind.type);
     if (kind.type == "file") {
         QString place = exec("shadingNode", QJsonObject{{"args", QJsonArray{"place2dTexture"}}, {"asUtility", true}}).toString();
         if (!place.isEmpty()) exec("defaultNavigation", QJsonObject{{"connectToExisting", true}, {"source", place}, {"destination", node}});
+        if (with && !place.isEmpty()) *with << place;
+    } else if (group == "texture/2d" && !harold(kind.type) && kind.type != "layeredTexture") {
+        QString place = exec("shadingNode", QJsonObject{{"args", QJsonArray{"place2dTexture"}}, {"asUtility", true}}).toString();
+        if (!place.isEmpty()) {
+            exec("connectAttr", QJsonObject{{"args", QJsonArray{place + ".outUV", node + ".uvCoord"}}});
+            if (ask("attributeQuery", QJsonObject{{"args", QJsonArray{"uvFilterSize"}}, {"node", node}, {"exists", true}}).toBool())
+                exec("connectAttr", QJsonObject{{"args", QJsonArray{place + ".outUvFilterSize", node + ".uvFilterSize"}}});
+            if (with) *with << place;
+        }
+    } else if (group == "texture/3d" && !harold(kind.type)) {
+        QString place = exec("shadingNode", QJsonObject{{"args", QJsonArray{"place3dTexture"}}, {"asUtility", true}}).toString();
+        if (!place.isEmpty()) {
+            exec("connectAttr", QJsonObject{{"args", QJsonArray{place + ".worldInverseMatrix[0]", node + ".placementMatrix"}}});
+            if (with) *with << place;
+        }
     }
     return node;
 }

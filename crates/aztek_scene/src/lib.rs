@@ -105,6 +105,7 @@ pub mod rig_extra;
 pub mod system_cmds;
 pub mod transform;
 pub mod transform_ops;
+pub mod texture_nodes;
 pub mod utility_nodes;
 pub mod uv_misc;
 pub mod uv_ops;

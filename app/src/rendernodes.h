@@ -29,7 +29,7 @@ QString render_node_label(const QString& type);
 // A small picture for a node type: a ball for shaders, a checker for textures, a bulb for lights, a block for the rest.
 QIcon render_node_icon(const QString& type, int size);
 // Makes the node, with what the reference makes beside it (a file texture's placement). Returns its name.
-QString make_render_node(const RenderNodeKind& kind);
+QString make_render_node(const RenderNodeKind& kind, QStringList* with = nullptr);
 // Create Render Node: choose a node, which is made and connected into the plug. Returns the node, or nothing.
 QString create_render_node(QWidget* parent, const QString& plug);
 

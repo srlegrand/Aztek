@@ -499,7 +499,7 @@ pub fn shading(core: &mut Core) -> Value {
             let sg = aztek_scene::shading::group_of_material(g, id, false).ok().flatten();
             let drawn = sg.and_then(|s| aztek_scene::shading::draw_material(g, s, scene.as_deref(), project.as_deref()));
             let color = drawn.as_ref().map(|d| d.color);
-            let map = drawn.as_ref().and_then(|d| d.color_map.as_ref()).and_then(|m| m.resolved.clone());
+            let map = drawn.as_ref().and_then(|d| d.color_map.as_ref()).filter(|m| m.baked.is_none()).and_then(|m| m.resolved.clone());
             materials.push(json!({"name": name, "type": t.name, "group": sg.map(|s| g.path(s)), "color": color, "image": map}));
         } else if aztek_scene::shading::is_texture_type(&t) {
             let p = g.plug(&format!("{name}.fileTextureName"));
@@ -541,7 +541,7 @@ pub fn uv_texture(core: &mut Core) -> Value {
         let Some(m) = components::as_mesh(g, id) else { continue };
         for sg in aztek_scene::shading::groups_of(g, m) {
             let Some(d) = aztek_scene::shading::draw_material(g, sg, scene.as_deref(), project.as_deref()) else { continue };
-            if let Some(t) = d.color_map {
+            if let Some(t) = d.color_map.filter(|t| t.baked.is_none()) {
                 if let Some(path) = t.resolved {
                     return json!({"path": path, "repeat": t.repeat, "offset": t.offset});
                 }

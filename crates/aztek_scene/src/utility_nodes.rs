@@ -517,7 +517,7 @@ fn base_table() -> Vec<Spec> {
                 let o = v(d, "color1") * t + v(d, "color2") * (1.0 - t);
                 set(d, "output", o);
             }),
-        Spec("ramp", "utility/color", "A colour along V or U, from entries each with a position and a colour.",
+        Spec("ramp", "texture/2d", "A colour along V or U, from entries each with a position and a colour.",
             vec![
                 en("type", "t", 0, &["V Ramp", "U Ramp", "Diagonal Ramp", "Radial Ramp", "Circular Ramp", "Box Ramp", "UV Ramp", "Four Corner Ramp", "Tartan Ramp"]),
                 en("interpolation", "in", 1, &["None", "Linear", "Exponential Up", "Exponential Down", "Smooth", "Bump", "Spike"]),

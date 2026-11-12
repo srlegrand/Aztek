@@ -28,6 +28,9 @@ pub struct Shared {
     pub allocator: Arc<Mutex<Allocator>>,
     pub device_name: String,
     pub features: vk::PhysicalDeviceFeatures,
+    /// Lines the device can draw as rectangles, and with smoothed edges: how wireframes, curves and manipulators are
+    /// anti-aliased. Without either a line is drawn the device's own way, which multisampling may leave stepped.
+    pub line_modes: (bool, bool),
     /// Textures, kept with the device so every view draws the same uploads.
     pub textures: Mutex<Option<crate::textures::TextureCache>>,
 }
@@ -126,11 +129,22 @@ impl Shared {
             .fill_mode_non_solid(feats.fill_mode_non_solid != 0);
         let prio = [1.0];
         let qinfo = [vk::DeviceQueueCreateInfo::default().queue_family_index(queue_family).queue_priorities(&prio)];
-        let device = instance.create_device(
-            phys,
-            &vk::DeviceCreateInfo::default().queue_create_infos(&qinfo).enabled_extension_names(&dev_exts).enabled_features(&enabled),
-            None,
-        )?;
+        // Line rasterization: asked for by name, since a device is free to step its lines under multisampling.
+        let mut line_modes = (false, false);
+        if dev_exts_avail.iter().any(|e| e == "VK_EXT_line_rasterization") {
+            let mut lines = vk::PhysicalDeviceLineRasterizationFeaturesKHR::default();
+            let mut f2 = vk::PhysicalDeviceFeatures2::default().push_next(&mut lines);
+            instance.get_physical_device_features2(phys, &mut f2);
+            line_modes = (lines.rectangular_lines != 0, lines.smooth_lines != 0);
+        }
+        let mut line_feats = vk::PhysicalDeviceLineRasterizationFeaturesKHR::default().rectangular_lines(line_modes.0).smooth_lines(line_modes.1);
+        let mut info = vk::DeviceCreateInfo::default().queue_create_infos(&qinfo).enabled_features(&enabled);
+        if line_modes.0 || line_modes.1 {
+            dev_exts.push(c"VK_EXT_line_rasterization".as_ptr());
+            info = info.push_next(&mut line_feats);
+        }
+        let info = info.enabled_extension_names(&dev_exts);
+        let device = instance.create_device(phys, &info, None)?;
         let queue = device.get_device_queue(queue_family, 0);
         let allocator = Allocator::new(&AllocatorCreateDesc {
             instance: instance.clone(),
@@ -155,6 +169,7 @@ impl Shared {
                 wide_lines: enabled.wide_lines,
                 ..Default::default()
             },
+            line_modes,
             textures: Mutex::new(None),
         }))
     }

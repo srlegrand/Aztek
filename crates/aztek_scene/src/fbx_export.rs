@@ -237,7 +237,7 @@ fn material(doc: &mut Doc, sess: &mut Session, sg: NodeId) -> Option<i64> {
             Rec::new("Properties70", vec![]).with(props),
         ]),
     );
-    if let Some(t) = d.color_map.as_ref() {
+    if let Some(t) = d.color_map.as_ref().filter(|t| t.baked.is_none()) {
         let file = t.resolved.clone().unwrap_or_else(|| t.written.clone());
         if !file.is_empty() {
             let tex_name = leaf(g, t.file);

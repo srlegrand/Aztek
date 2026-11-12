@@ -10,6 +10,7 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QWheelEvent>
+#include <algorithm>
 #include <cmath>
 
 namespace az {
@@ -52,9 +53,12 @@ void NodeEditor::add_selected() {
     refresh();
 }
 
-void NodeEditor::add_nodes(const QStringList& names) {
-    for (const QString& n : names)
-        if (!n.isEmpty() && !roots_.contains(n)) roots_ << n;
+void NodeEditor::add_nodes(const QStringList& names, int mode) {
+    for (const QString& n : names) {
+        if (n.isEmpty()) continue;
+        if (mode > 0) asked_modes_[n] = mode;
+        if (!roots_.contains(n)) roots_ << n;
+    }
     refresh();
 }
 
@@ -88,7 +92,12 @@ void NodeEditor::load(const QJsonObject& data) {
             if (ao["input"].toBool()) b.inputs << an;
             if (ao["output"].toBool()) b.outputs << an;
         }
-        b.mode = modes.value(b.name, 2);
+        // What a node gives first, then what it takes, as the reference lists them.
+        std::stable_sort(b.attrs.begin(), b.attrs.end(), [&b](const QString& x, const QString& y) {
+            const bool ox = b.outputs.contains(x) && !b.inputs.contains(x), oy = b.outputs.contains(y) && !b.inputs.contains(y);
+            return ox && !oy;
+        });
+        b.mode = asked_modes_.contains(b.name) ? asked_modes_.take(b.name) : modes.value(b.name, 2);
         b.pos = placed_.value(b.name, QPointF(1e9, 0));
         nodes_.append(b);
     }
@@ -197,6 +206,12 @@ void NodeEditor::paintEvent(QPaintEvent*) {
         p.setFont(title);
         p.drawText(head.adjusted(6 * zoom_, 0, -4, 0), Qt::AlignVCenter | Qt::AlignLeft, QFontMetrics(title).elidedText(n.name, Qt::ElideMiddle, int(head.width() - 10 * zoom_)));
         p.setFont(row);
+        // The two ports on the title stand for every input and every output: a wire from one asks which.
+        for (bool out : {false, true}) {
+            p.setPen(QPen(QColor(25, 25, 25), 1));
+            p.setBrush(QColor(200, 200, 200));
+            p.drawEllipse(port_pos(n, QString(), out), 4.0 * zoom_, 4.0 * zoom_);
+        }
         QStringList s = shown_attrs(n);
         for (int i = 0; i < s.size(); ++i) {
             double y = r.top() + (kHeader + i * kRow) * zoom_;
@@ -249,6 +264,18 @@ void NodeEditor::mousePressEvent(QMouseEvent* e) {
                     wire_to_ = at;
                     return;
                 }
+    }
+    for (int k = nodes_.size() - 1; k >= 0; --k) {
+        const NodeBox& n = nodes_[k];
+        for (bool out : {true, false})
+            if ((port_pos(n, QString(), out) - at).manhattanLength() < 10) {
+                mode_ = Mode::Wire;
+                wire_node_ = n.name;
+                wire_attr_.clear();
+                wire_from_output_ = out;
+                wire_to_ = at;
+                return;
+            }
     }
     for (int k = nodes_.size() - 1; k >= 0; --k) {
         const NodeBox& n = nodes_[k];
@@ -331,9 +358,25 @@ void NodeEditor::mouseReleaseEvent(QMouseEvent* e) {
             QStringList list = shown_attrs(n);
             for (const QString& a : list)
                 if ((port_pos(n, a, !wire_from_output_) - at).manhattanLength() < 12) hit = a;
-            // Dropped on a box: let the user pick an attribute.
-            if (hit.isEmpty() && box_rect(n).contains(at)) {
+            const bool on_box = box_rect(n).adjusted(-8, 0, 8, 0).contains(at);
+            if (hit.isEmpty() && !on_box) continue;
+            // From a title's port: which of the node's attributes the wire carries.
+            if (wire_attr_.isEmpty()) {
+                const NodeBox* from = nullptr;
+                for (const NodeBox& x : nodes_)
+                    if (x.name == wire_node_) from = &x;
+                if (!from) break;
                 QMenu m(this);
+                m.addSection(wire_node_);
+                for (const QString& a : (wire_from_output_ ? from->outputs : from->inputs)) m.addAction(a);
+                QAction* c = m.exec(mapToGlobal(at.toPoint()));
+                if (!c) break;
+                wire_attr_ = c->text();
+            }
+            // Dropped on a box: let the user pick an attribute.
+            if (hit.isEmpty()) {
+                QMenu m(this);
+                m.addSection(n.name);
                 for (const QString& a : (wire_from_output_ ? n.inputs : n.outputs)) m.addAction(a);
                 if (QAction* c = m.exec(mapToGlobal(at.toPoint()))) hit = c->text();
             }

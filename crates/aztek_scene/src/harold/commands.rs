@@ -15,6 +15,29 @@ use crate::session::Session;
 
 type Cmd = CommandDef<Session>;
 
+fn swatch_cmd(s: &mut Session, a: &Args) -> CmdResult {
+    let Some(name) = a.pos_str(0) else { fail!("haroldSwatch: name a node") };
+    let Some(id) = s.graph.find(name).ok().flatten() else { fail!("haroldSwatch: no node {name}") };
+    let sig = format!("{:x}", super::swatch::signature(&mut s.graph, id));
+    if a.bool("signature") {
+        return Ok(json!(sig));
+    }
+    let size = a.int("size", 128).clamp(8, 1024) as u32;
+    let project = crate::shading::project_dir(s);
+    let scene = s.scene_path.clone();
+    let Some(pic) = super::swatch::of_node(&mut s.graph, id, size, scene.as_deref(), project.as_deref()) else { fail!("haroldSwatch: {name} has nothing to show") };
+    let file = match a.get("file").and_then(Value::as_str) {
+        Some(f) => PathBuf::from(f),
+        None => std::env::temp_dir().join(format!("aztek_swatch_{}_{}_{size}.ppm", std::process::id(), name.replace(['|', ':', '/'], "_"))),
+    };
+    let mut bytes = format!("P6\n{} {}\n255\n", pic.width, pic.height).into_bytes();
+    bytes.extend(pic.rgba.chunks(4).flat_map(|c| [c[0], c[1], c[2]]));
+    if let Err(e) = std::fs::write(&file, bytes) {
+        fail!("haroldSwatch: {}: {e}", file.display());
+    }
+    Ok(json!({"file": file.to_string_lossy(), "width": pic.width, "height": pic.height, "signature": sig, "mean": pic.mean}))
+}
+
 /// A kept image in the render view.
 #[derive(Clone)]
 pub struct Snapshot {
@@ -400,6 +423,14 @@ pub fn register(c: &mut Commands<Session>) {
             .flag(f("height", "h", ArgType::Int, "Image height."))
             .flag(f("region", "reg", ArgType::List, "x0 y0 x1 y1, pixels from the top left."))
     };
+    c.register(
+        Cmd::new("haroldSwatch", "A shading node as a small picture rendered by Harold: a material on a ball, a texture or utility flat over the UV square. Writes a .ppm file and returns its path, size and the node's signature; -signature alone gives the signature, which changes when the node or anything connected into it does.", swatch_cmd)
+            .positional("node")
+            .flag(f("size", "s", ArgType::Int, "Pixels a side; 128 without it."))
+            .flag(f("file", "f", ArgType::String, "Where to write the picture; a temporary file without it."))
+            .flag(f("signature", "sig", ArgType::Bool, "Only the signature."))
+            .undoable(false),
+    );
     for (name, doc) in [("hrender", "Renders with Harold: the current frame, a sequence (-seq), every frame the settings name (-batch), or interactively (-ipr start)."), ("arnoldRender", "hrender under the name other scripts use.")] {
         c.register(
             common(Cmd::new(name, doc, hrender).positional("camera"))

@@ -16,6 +16,7 @@ pub mod path;
 pub mod scene;
 pub mod shade;
 pub mod film;
+pub mod procedural;
 pub mod render;
 pub mod denoise;
 pub mod output;

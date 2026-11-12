@@ -6,6 +6,7 @@ use std::collections::HashMap;
 
 use aztek_render::shader::{Blend, Compare, Input, MathOp, Network, Node, NormalMod, Out, Place2d, Ramp, RampInterp, Sampler, SumOp};
 use aztek_render::texture::{ColorSpace, TextureKey};
+use aztek_render::procedural::{Balance, Tex2d, Tex3d};
 use glam::{Vec2, Vec3, Vec4};
 
 use crate::graph::Graph;
@@ -359,6 +360,93 @@ impl NetBuilder<'_> {
             "hsvToRgb" => Node::HsvToRgb(self.input(id, "inHsv")),
             "rgbToHsv" => Node::RgbToHsv(self.input(id, "inRgb")),
             "samplerInfo" => Node::SamplerInfo(Sampler::FacingRatio),
+            t if crate::texture_nodes::classification(t) == Some("texture/2d") => {
+                let place = self.place_from_input(id);
+                let uv = self.uv_input(id);
+                let balance = self.balance(id);
+                let g = &mut *self.g;
+                let n = |g: &mut Graph, a: &str| get_f(g, id, a, 0.0) as f32;
+                let col = |g: &mut Graph, a: &str| get_v(g, id, a, Vec3::ZERO);
+                let two = |g: &mut Graph, a: &str| {
+                    let v = get_v(g, id, a, Vec3::ZERO);
+                    Vec2::new(v.x, v.y)
+                };
+                let kind = match t {
+                    "bulge" => Tex2d::Bulge { u_width: n(g, "uWidth"), v_width: n(g, "vWidth") },
+                    "cloth" => Tex2d::Cloth { gap: col(g, "gapColor"), u_color: col(g, "uColor"), v_color: col(g, "vColor"), u_width: n(g, "uWidth"), v_width: n(g, "vWidth"), u_wave: n(g, "uWave"), v_wave: n(g, "vWave"), randomness: n(g, "randomness"), width_spread: n(g, "widthSpread"), bright_spread: n(g, "brightSpread") },
+                    "fractal" => Tex2d::Fractal { amplitude: n(g, "amplitude"), threshold: n(g, "threshold"), ratio: n(g, "ratio"), frequency_ratio: n(g, "frequencyRatio"), level_min: n(g, "levelMin"), level_max: n(g, "levelMax"), bias: n(g, "bias"), inflection: get_b(g, id, "inflection", false), time: if get_b(g, id, "animated", false) { n(g, "time") } else { 0.0 } },
+                    "grid" => Tex2d::Grid { line: col(g, "lineColor"), filler: col(g, "fillerColor"), u_width: n(g, "uWidth"), v_width: n(g, "vWidth"), contrast: n(g, "contrast") },
+                    "mountain" => Tex2d::Mountain { snow: col(g, "snowColor"), rock: col(g, "rockColor"), amplitude: n(g, "amplitude"), snow_roughness: n(g, "snowRoughness"), rock_roughness: n(g, "rockRoughness"), boundary: n(g, "boundary"), snow_altitude: n(g, "snowAltitude"), snow_dropoff: n(g, "snowDropoff"), snow_slope: n(g, "snowSlope"), depth_max: n(g, "depthMax") },
+                    _ => Tex2d::Water {
+                        waves: n(g, "numberOfWaves").max(0.0) as u32,
+                        wave_time: n(g, "waveTime"),
+                        wave_velocity: n(g, "waveVelocity"),
+                        wave_amplitude: n(g, "waveAmplitude"),
+                        wave_frequency: n(g, "waveFrequency"),
+                        sub_wave_frequency: n(g, "subWaveFrequency"),
+                        smoothness: n(g, "smoothness"),
+                        wind: two(g, "windUV"),
+                        ripple_time: n(g, "rippleTime"),
+                        ripple_frequency: n(g, "rippleFrequency"),
+                        ripple_amplitude: n(g, "rippleAmplitude"),
+                        drop_size: n(g, "dropSize"),
+                        ripple_origin: two(g, "rippleOrigin"),
+                        group_velocity: n(g, "groupVelocity"),
+                        phase_velocity: n(g, "phaseVelocity"),
+                        spread_start: n(g, "spreadStart"),
+                        spread_rate: n(g, "spreadRate"),
+                    },
+                };
+                Node::Tex2d { kind: Box::new(kind), place, uv, balance }
+            }
+            t if crate::texture_nodes::classification(t) == Some("texture/3d") => {
+                let balance = self.balance(id);
+                let g = &mut *self.g;
+                let to_texture = match get(g, id, "placementMatrix") {
+                    Some(PlugValue::Matrix(m)) => m.as_mat4(),
+                    _ => glam::Mat4::IDENTITY,
+                };
+                let local = get_b(g, id, "local", false);
+                let n = |g: &mut Graph, a: &str| get_f(g, id, a, 0.0) as f32;
+                let col = |g: &mut Graph, a: &str| get_v(g, id, a, Vec3::ZERO);
+                let two = |g: &mut Graph, a: &str| {
+                    let v = get_v(g, id, a, Vec3::ZERO);
+                    Vec2::new(v.x, v.y)
+                };
+                let flag = |g: &mut Graph, a: &str| get_b(g, id, a, false);
+                let kind = match t {
+                    "brownian" => Tex3d::Brownian { lacunarity: n(g, "lacunarity"), increment: n(g, "increment"), octaves: n(g, "octaves"), weight: col(g, "weight3d") },
+                    "cloud" => Tex3d::Cloud { color1: col(g, "color1"), color2: col(g, "color2"), contrast: n(g, "contrast"), amplitude: n(g, "amplitude"), depth: two(g, "depth"), ripples: col(g, "ripples"), soft_edges: flag(g, "softEdges"), edge_thresh: n(g, "edgeThresh"), center_thresh: n(g, "centerThresh"), transp_range: n(g, "transpRange"), ratio: n(g, "ratio") },
+                    "crater" => Tex3d::Crater { shaker: n(g, "shaker"), channel1: col(g, "channel1"), channel2: col(g, "channel2"), channel3: col(g, "channel3"), melt: n(g, "melt"), balance: n(g, "balance"), frequency: n(g, "frequency") },
+                    "granite" => Tex3d::Granite { color1: col(g, "color1"), color2: col(g, "color2"), color3: col(g, "color3"), filler: col(g, "fillerColor"), cell_size: n(g, "cellSize"), density: n(g, "density"), mix_ratio: n(g, "mixRatio"), spottyness: n(g, "spottyness"), randomness: n(g, "randomness"), threshold: n(g, "threshold"), creases: flag(g, "creases") },
+                    "leather" => Tex3d::Leather { cell: col(g, "cellColor"), crease: col(g, "creaseColor"), cell_size: n(g, "cellSize"), density: n(g, "density"), spottyness: n(g, "spottyness"), randomness: n(g, "randomness"), threshold: n(g, "threshold"), creases: flag(g, "creases") },
+                    "marble" => Tex3d::Marble { filler: col(g, "fillerColor"), vein: col(g, "veinColor"), vein_width: n(g, "veinWidth"), diffusion: n(g, "diffusion"), contrast: n(g, "contrast"), amplitude: n(g, "amplitude"), ratio: n(g, "ratio"), ripples: col(g, "ripples"), depth: two(g, "depth") },
+                    "rock" => Tex3d::Rock { color1: col(g, "color1"), color2: col(g, "color2"), grain_size: n(g, "grainSize"), diffusion: n(g, "diffusion"), mix_ratio: n(g, "mixRatio") },
+                    "snow" => Tex3d::Snow { snow: col(g, "snowColor"), surface: col(g, "surfaceColor"), threshold: n(g, "threshold"), depth_decay: n(g, "depthDecay"), thickness: n(g, "thickness") },
+                    "solidFractal" => Tex3d::SolidFractal { threshold: n(g, "threshold"), amplitude: n(g, "amplitude"), ratio: n(g, "ratio"), frequency_ratio: n(g, "frequencyRatio"), ripples: col(g, "ripples"), depth: two(g, "depth"), bias: n(g, "bias"), inflection: flag(g, "inflection"), time: if flag(g, "animated") { n(g, "time") } else { 0.0 } },
+                    "stucco" => Tex3d::Stucco { shaker: n(g, "shaker"), channel1: col(g, "channel1"), channel2: col(g, "channel2") },
+                    "volumeNoise" => Tex3d::VolumeNoise {
+                        threshold: n(g, "threshold"),
+                        amplitude: n(g, "amplitude"),
+                        ratio: n(g, "ratio"),
+                        frequency_ratio: n(g, "frequencyRatio"),
+                        depth_max: n(g, "depthMax"),
+                        inflection: flag(g, "inflection"),
+                        time: n(g, "time"),
+                        frequency: n(g, "frequency"),
+                        scale: col(g, "scale"),
+                        origin: col(g, "origin"),
+                        noise_type: n(g, "noiseType") as i64,
+                        density: n(g, "density"),
+                        spottyness: n(g, "spottyness"),
+                        size_rand: n(g, "sizeRand"),
+                        randomness: n(g, "randomness"),
+                        num_waves: n(g, "numWaves").max(1.0) as u32,
+                    },
+                    _ => Tex3d::Wood { filler: col(g, "fillerColor"), vein: col(g, "veinColor"), vein_spread: n(g, "veinSpread"), layer_size: n(g, "layerSize"), randomness: n(g, "randomness"), age: n(g, "age"), grain: col(g, "grainColor"), grain_contrast: n(g, "grainContrast"), grain_spacing: n(g, "grainSpacing"), center: two(g, "center"), amplitude: Vec2::new(n(g, "amplitudeX"), n(g, "amplitudeY")), ratio: n(g, "ratio"), ripples: col(g, "ripples"), depth: two(g, "depth") },
+                };
+                Node::Tex3d { kind: Box::new(kind), to_texture, local, balance }
+            }
             "aiAmbientOcclusion" => Node::Traced { kind: 0, white: self.input(id, "white"), black: self.input(id, "black"), samples: self.num(id, "samples", 3.0).max(1.0) as u32, distance: self.num(id, "farClip", 100.0) },
             "aiCurvature" => Node::Traced { kind: 1, white: Input::c(1.0), black: Input::c(0.0), samples: self.num(id, "samples", 3.0).max(1.0) as u32, distance: self.num(id, "radius", 0.1) },
             "aiUtility" | "aiFlat" | "surfaceShader" => Node::Constant(get_v(self.g, id, if ty == "surfaceShader" { "outColor" } else { "color" }, Vec3::ONE).extend(1.0)),
@@ -383,6 +471,20 @@ impl NetBuilder<'_> {
         };
         self.net.nodes[slot as usize] = node;
         Some(slot)
+    }
+
+    /// A texture's colour balance attributes.
+    fn balance(&mut self, id: NodeId) -> Balance {
+        let g = &mut *self.g;
+        Balance {
+            default_color: get_v(g, id, "defaultColor", Vec3::splat(0.5)),
+            color_gain: get_v(g, id, "colorGain", Vec3::ONE),
+            color_offset: get_v(g, id, "colorOffset", Vec3::ZERO),
+            alpha_gain: get_f(g, id, "alphaGain", 1.0) as f32,
+            alpha_offset: get_f(g, id, "alphaOffset", 0.0) as f32,
+            alpha_is_luminance: get_b(g, id, "alphaIsLuminance", false),
+            invert: get_b(g, id, "invert", false),
+        }
     }
 
     /// A procedural texture's placement, from the place2dTexture feeding its uvCoord.
@@ -448,6 +550,7 @@ impl NetBuilder<'_> {
                     NormalMod::Map { map, strength: self.num(n, "bumpDepth", 1.0), flip_r: false, flip_g: false, swap: false, tangent: interp == 1, signed: false }
                 }
             }
+            "bump3d" => NormalMod::Bump { height: self.input(n, "bumpValue"), depth: self.num(n, "bumpDepth", 1.0) },
             "aiBump2d" => NormalMod::Bump { height: self.input(n, "bumpMap"), depth: self.num(n, "bumpHeight", 1.0) },
             "aiNormalMap" => {
                 let map = self.input(n, "input");
@@ -466,7 +569,7 @@ impl NetBuilder<'_> {
 fn is_shading(ty: &str) -> bool {
     matches!(
         ty,
-        "file" | "aiImage" | "place2dTexture" | "checker" | "ramp" | "noise" | "layeredTexture" | "multiplyDivide" | "plusMinusAverage" | "blendColors" | "remapValue" | "reverse" | "clamp" | "luminance" | "gammaCorrect" | "setRange" | "condition" | "contrast" | "hsvToRgb" | "rgbToHsv" | "samplerInfo" | "aiAmbientOcclusion" | "aiCurvature" | "aiUtility" | "aiFlat" | "surfaceShader" | "standardSurface" | "aiStandardSurface" | "lambert" | "blinn" | "phong" | "phongE" | "anisotropic" | "projection" | "fractal" | "cloth" | "grid" | "bulge" | "stucco" | "leather" | "marble" | "wood" | "granite" | "rock" | "crater" | "solidFractal" | "volumeNoise" | "mountain" | "water" | "envSphere" | "envBall"
+        "file" | "aiImage" | "place2dTexture" | "checker" | "ramp" | "noise" | "layeredTexture" | "multiplyDivide" | "plusMinusAverage" | "blendColors" | "remapValue" | "reverse" | "clamp" | "luminance" | "gammaCorrect" | "setRange" | "condition" | "contrast" | "hsvToRgb" | "rgbToHsv" | "samplerInfo" | "aiAmbientOcclusion" | "aiCurvature" | "aiUtility" | "aiFlat" | "surfaceShader" | "standardSurface" | "aiStandardSurface" | "lambert" | "blinn" | "phong" | "phongE" | "anisotropic" | "projection" | "fractal" | "cloth" | "grid" | "bulge" | "stucco" | "leather" | "marble" | "wood" | "granite" | "rock" | "crater" | "solidFractal" | "volumeNoise" | "mountain" | "water" | "envSphere" | "envBall" | "brownian" | "cloud" | "snow"
     )
 }
 
