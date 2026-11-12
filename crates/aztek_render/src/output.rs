@@ -70,7 +70,15 @@ pub fn write_ldr(path: &Path, w: u32, h: u32, px: &[Vec4], fmt: Format) -> Resul
     match fmt {
         Format::Jpeg => {
             let rgb: Vec<u8> = bytes.chunks(4).flat_map(|c| [c[0], c[1], c[2]]).collect();
-            image::save_buffer_with_format(path, &rgb, w, h, image::ColorType::Rgb8, image::ImageFormat::Jpeg).map_err(|e| e.to_string())
+            // AW_JPEG_Q_FACTOR, as the reference names it: 1 to 100.
+            match std::env::var("AW_JPEG_Q_FACTOR").ok().and_then(|v| v.trim().parse::<u8>().ok()).filter(|q| (1..=100).contains(q)) {
+                Some(quality) => {
+                    let file = std::fs::File::create(path).map_err(|e| e.to_string())?;
+                    let mut out = std::io::BufWriter::new(file);
+                    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, quality).encode(&rgb, w, h, image::ExtendedColorType::Rgb8).map_err(|e| e.to_string())
+                }
+                None => image::save_buffer_with_format(path, &rgb, w, h, image::ColorType::Rgb8, image::ImageFormat::Jpeg).map_err(|e| e.to_string()),
+            }
         }
         Format::Png => image::save_buffer_with_format(path, &bytes, w, h, image::ColorType::Rgba8, image::ImageFormat::Png).map_err(|e| e.to_string()),
         Format::Tiff => image::save_buffer_with_format(path, &bytes, w, h, image::ColorType::Rgba8, image::ImageFormat::Tiff).map_err(|e| e.to_string()),

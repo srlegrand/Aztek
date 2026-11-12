@@ -189,7 +189,17 @@ void ToolSettings::restore_options() {
         s.beginGroup("toolOptions/" + name);
         for (const QString& flag : s.childKeys()) {
             QJsonObject c{{"edit", true}, {"args", QJsonArray{name}}};
-            c[flag] = QJsonValue::fromVariant(s.value(flag));
+            // A settings file keeps everything as text: a switch or a number comes back as its word.
+            const QVariant saved = s.value(flag);
+            QJsonValue value = QJsonValue::fromVariant(saved);
+            if (saved.userType() == QMetaType::QString) {
+                const QString text = saved.toString();
+                bool number = false;
+                const double d = text.toDouble(&number);
+                if (text == "true" || text == "false") value = text == "true";
+                else if (number) value = d;
+            }
+            c[flag] = value;
             exec_quiet(kind, c);
         }
         s.endGroup();

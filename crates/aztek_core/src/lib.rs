@@ -1,5 +1,6 @@
 //! Aztek's foundation: paths, the workspace, layered prefs and the main-thread queue.
 
+pub mod env;
 pub mod main_queue;
 pub mod paths;
 pub mod prefs;

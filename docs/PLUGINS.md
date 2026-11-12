@@ -49,7 +49,8 @@ The layout is the reference's: `scripts`, `plug-ins`, `modules`, and a version's
 
 - `scripts` on the MEL and Python paths, `userSetup.mel` and `userSetup.py` run at start (can be turned off).
 - `plug-ins` and `modules` as above.
-- `Maya.env` or `Aztek.env`: path variables are added to, other variables are set if not already set.
+- `Aztek.env` or `Maya.env`: one file is read, the first found. Path variables are added to, other variables are set if
+  not already set. The rules and every variable are in [ENVIRONMENT.md](ENVIRONMENT.md).
 - `prefs/userPrefs.mel`: its optionVars, as defaults. A value saved in Aztek wins.
 - `prefs/shelves`: imported on request (Import Its Shelves).
 

@@ -484,6 +484,19 @@ fn preset_dir(ty: &str) -> PathBuf {
     aztek_core::paths::user_config_dir().join("presets").join("attrPresets").join(ty)
 }
 
+/// Where a type's presets are read from: Aztek's own folder, where they are saved, then each folder of the preset
+/// path, which names the folder above `attrPresets`.
+fn preset_dirs(ty: &str) -> Vec<PathBuf> {
+    let mut out = vec![preset_dir(ty)];
+    out.extend(aztek_core::env::list("MAYA_PRESET_PATH").into_iter().map(|d| d.join("attrPresets").join(ty)));
+    out
+}
+
+/// A preset's file: the first of the folders that has it.
+fn preset_file(ty: &str, name: &str) -> PathBuf {
+    preset_dirs(ty).into_iter().map(|d| d.join(format!("{name}.json"))).find(|p| p.is_file()).unwrap_or_else(|| preset_dir(ty).join(format!("{name}.json")))
+}
+
 fn valid_preset_name(n: &str) -> bool {
     !n.is_empty() && n.chars().all(|c| c.is_alphanumeric() || c == '_')
 }
@@ -504,13 +517,18 @@ fn node_preset(s: &mut Session, a: &Args) -> CmdResult {
     let type_of = |g: &Graph, n: &str| -> CmdResult<String> { Ok(g.node(find(g, n, "nodePreset")?).unwrap().ty().name.to_string()) };
     if let Some(n) = a.get("list").and_then(Value::as_str) {
         let ty = type_of(g, n)?;
-        let mut out: Vec<String> = std::fs::read_dir(preset_dir(&ty)).map(|d| d.flatten().filter_map(|e| e.path().file_stem().map(|x| x.to_string_lossy().to_string())).collect()).unwrap_or_default();
+        let mut out: Vec<String> = Vec::new();
+        for dir in preset_dirs(&ty) {
+            let Ok(rd) = std::fs::read_dir(dir) else { continue };
+            out.extend(rd.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "json")).filter_map(|p| p.file_stem().map(|x| x.to_string_lossy().to_string())));
+        }
         out.sort();
+        out.dedup();
         return Ok(json!(out));
     }
     let file = |ty: &str, name: &str| preset_dir(ty).join(format!("{name}.json"));
     if let Some((n, name)) = preset_pair(a, "exists") {
-        return Ok(json!(file(&type_of(g, &n)?, &name).exists()));
+        return Ok(json!(preset_file(&type_of(g, &n)?, &name).exists()));
     }
     if let Some((n, name)) = preset_pair(a, "delete") {
         return Ok(json!(std::fs::remove_file(file(&type_of(g, &n)?, &name)).is_ok()));
@@ -541,7 +559,7 @@ fn node_preset(s: &mut Session, a: &Args) -> CmdResult {
     if let Some((n, name)) = preset_pair(a, "load") {
         let id = find(g, &n, "nodePreset")?;
         let ty = g.node(id).unwrap().ty().clone();
-        let Ok(text) = std::fs::read_to_string(file(&ty.name, &name)) else { fail!("nodePreset: {} has no preset {name}", ty.name) };
+        let Ok(text) = std::fs::read_to_string(preset_file(&ty.name, &name)) else { fail!("nodePreset: {} has no preset {name}", ty.name) };
         let Ok(Value::Object(values)) = serde_json::from_str::<Value>(&text) else { fail!("nodePreset: {name} can't be read") };
         for (k, v) in values {
             let Some(i) = ty.attr_index(&k) else { continue };
@@ -767,12 +785,12 @@ pub fn register(c: &mut Commands<Session>) {
         Cmd::new("nodePreset", "Save and load a node's settings by name: -sv node name, -ld node name, -ls node, -del node name, -ex node name, -ivn name; -atr limits what is saved. Less than the reference: multis and hidden attributes are left out, files are JSON, -ctm does nothing.", node_preset)
             .flag(f("attributes", "atr", S, "Attributes to save, separated by spaces."))
             .flag(f("custom", "ctm", S, "Accepted for existing scripts; has no effect."))
-            .flag(f("delete", "delete", L, "Node and preset."))
-            .flag(f("exists", "ex", L, "Node and preset."))
+            .flag(f("delete", "delete", L, "Node and preset.").multi(2))
+            .flag(f("exists", "ex", L, "Node and preset.").multi(2))
             .flag(f("isValidName", "ivn", S, "A name to check."))
             .flag(f("list", "ls", S, "The node."))
-            .flag(f("load", "ld", L, "Node and preset."))
-            .flag(f("save", "sv", L, "Node and preset."))
+            .flag(f("load", "ld", L, "Node and preset.").multi(2))
+            .flag(f("save", "sv", L, "Node and preset.").multi(2))
             .undoable(false),
     );
     c.register(

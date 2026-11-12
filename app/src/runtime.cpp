@@ -1,5 +1,6 @@
 // Named actions (the reference's runtime commands), the hotkey table that runs them and the Hotkey Editor. A hotkey runs a named
 // action or MEL; bindings the user changes are saved in the settings over the defaults.
+#include "envvars.h"
 #include "mainwindow.h"
 #include "uveditor.h"
 #include "grapheditor.h"
@@ -447,7 +448,12 @@ QList<HotkeyBinding> MainWindow::default_hotkeys() const {
         {"=", 0, "ManipBigger", ""}, {"+", 0, "ManipBigger", ""}, {"-", 0, "ManipSmaller", ""},
     };
     QList<HotkeyBinding> out;
-    for (const D& x : d) out.append(HotkeyBinding{x.key, (x.mods & C) != 0, (x.mods & S) != 0, (x.mods & A) != 0, x.press, x.release});
+    // MAYA_DISABLE_BACKSPACE_DELETE: Backspace no longer deletes the selection.
+    const bool no_backspace = az::env_on("MAYA_DISABLE_BACKSPACE_DELETE");
+    for (const D& x : d) {
+        if (no_backspace && QString(x.key) == "Backspace" && QString(x.press) == "DeleteSelection") continue;
+        out.append(HotkeyBinding{x.key, (x.mods & C) != 0, (x.mods & S) != 0, (x.mods & A) != 0, x.press, x.release});
+    }
     return out;
 }
 

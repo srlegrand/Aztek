@@ -1490,3 +1490,23 @@ FBX export: a joint chain asked for goes out whole (its child joints were left o
   window resize. 2 and 8 samples have not been drawn here.
 - Tests: the unit-setting tests share one frame rate for the whole process and ran side by side; one could read the
   rate another had just set (seen once in 60 runs). They now run one at a time.
+
+### Environment variables (12/11/2026)
+
+- The reference's environment pages for 2026 and its start-up give 122 variables. Each is in `docs/ENVIRONMENT.md`
+  with whether Aztek reads it; the file is written from `crates/aztek_core/src/env.rs` and a test fails when the two differ.
+- Names: a variable spelled `MAYA_X` is read as `AZTEK_X` first, then `MAYA_X`; lists of folders use both.
+- Newly read: `MAYA_ENV_DIR`, `MAYA_CMD_FILE_OUTPUT` (with the `cmdFileOutput` command), `MAYA_PROJECT`,
+  `MAYA_PROJECTS_DIR`, `MAYA_SHELF_PATH`, `MAYA_PRESET_PATH`, `XBMLANGPATH` (shelf buttons and the image flags of
+  interface commands, `xbmLangPathList`), `MAYA_SCRIPT_EDITOR_STDOUT`, `MAYA_DISABLE_BACKSPACE_DELETE`,
+  `MAYA_SKIP_USERSETUP_PY`, `AW_JPEG_Q_FACTOR`. `MAYA_LOCATION` and `MAYA_APP_DIR` are set inside a session.
+- The environment file: one file is read where two to four were; the user folder, the home folder and the
+  application's place cannot be set from it.
+- Differences: the file's folders for the path lists are added after the system's, where the reference's page says
+  the file replaces some of them (not checked against the application); `MAYA_PRESET_PATH` finds Aztek's `.json`
+  presets only; shelves from `MAYA_SHELF_PATH` are not written back; without `MAYA_PROJECT` the project is still the
+  folder Aztek was started in, not `projects/default` in the user folder.
+- `nodePreset -save`, `-load`, `-exists` and `-delete` take their node and preset in MEL; they took one word.
+- Saved Move, Rotate and Scale options with a switch or a number were refused at the next start on Linux, where the
+  settings file keeps them as text.
+

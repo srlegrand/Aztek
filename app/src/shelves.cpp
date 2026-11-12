@@ -1,4 +1,5 @@
 #include "shelves.h"
+#include "envvars.h"
 #include "host.h"
 #include "icons.h"
 
@@ -248,6 +249,16 @@ ShelfBar::ShelfBar(std::function<void(const QString&, const QString&)> run, QWid
         s.setValue("shelves/hasRendering", true);
         if (!there && d.isArray() && !d.array().isEmpty()) save();
     }
+    // The shelf path's shelves: shown after the saved ones, read again at each start and never saved.
+    for (const QJsonValue& file : ask("aztekEnvironment", QJsonObject{{"shelfFiles", true}}).toArray()) {
+        QJsonObject shelf;
+        if (!read_mel(file.toString(), &shelf)) continue;
+        bool there = false;
+        for (const QJsonValue& have : std::as_const(shelves_)) there = there || have.toObject()["name"] == shelf["name"];
+        if (there) continue;
+        shelf["shared"] = file.toString();
+        shelves_.append(shelf);
+    }
     rebuild();
     tabs_->setCurrentIndex(s.value("shelves/current", 0).toInt());
     connect(tabs_, &QTabWidget::currentChanged, this, [](int i) { QSettings().setValue("shelves/current", i); });
@@ -286,7 +297,10 @@ void ShelfBar::resizeEvent(QResizeEvent* e) {
 }
 
 void ShelfBar::save() const {
-    QSettings().setValue("shelves/json", QJsonDocument(shelves_).toJson(QJsonDocument::Compact));
+    QJsonArray own;
+    for (const QJsonValue& shelf : shelves_)
+        if (!shelf.toObject().contains("shared")) own.append(shelf);
+    QSettings().setValue("shelves/json", QJsonDocument(own).toJson(QJsonDocument::Compact));
 }
 
 void ShelfBar::rebuild() {
@@ -308,7 +322,8 @@ void ShelfBar::rebuild() {
             b->index = i;
             b->setProperty("shelfItem", i);
             QString label = it["label"].toString(), name = it["icon"].toString();
-            b->setIcon(az::icon(name.isEmpty() ? label : name));
+            const QString image = az::find_image(name);
+            b->setIcon(image.isEmpty() ? az::icon(name.isEmpty() ? label : name) : QIcon(image));
             b->setIconSize(QSize(32, 32));
             b->setAutoRaise(true);
             b->setToolTip(label + "\n" + it["command"].toString());
@@ -579,11 +594,22 @@ void ShelfBar::open_editor() {
 }
 
 void ShelfBar::import_mel(const QString& path) {
-    QFile f(path);
-    if (!f.open(QIODevice::ReadOnly)) {
+    QJsonObject shelf;
+    if (!read_mel(path, &shelf)) {
         log("// Error: can't read " + path + " //", 2);
         return;
     }
+    shelves_.append(shelf);
+    save();
+    rebuild();
+    tabs_->setCurrentIndex(tabs_->count() - 1);
+    log(QString("// Loaded shelf %1: %2 buttons //").arg(shelf["name"].toString()).arg(shelf["items"].toArray().size()));
+}
+
+// A shelf_*.mel file as a shelf: its shelfButton statements' label, command, language and image.
+bool ShelfBar::read_mel(const QString& path, QJsonObject* shelf) {
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly)) return false;
     QString src = QString::fromUtf8(f.readAll());
     QJsonArray items;
     // Each shelfButton runs to its closing semicolon outside quotes.
@@ -606,17 +632,18 @@ void ShelfBar::import_mel(const QString& path) {
         };
         QString label = flag("label"), cmd = flag("command"), lang = flag("sourceType");
         if (label.isEmpty()) label = flag("imageOverlayLabel");
+        // The button's picture, when it is a file on the icon path: the reference's own pictures are not there.
+        QString image = flag("image1");
+        if (image.isEmpty()) image = flag("image");
+        if (az::find_image(image).isEmpty()) image.clear();
         if (!cmd.isEmpty())
-            items.append(QJsonObject{{"label", label}, {"icon", ""}, {"command", cmd}, {"language", lang == "python" ? "python" : "mel"}});
+            items.append(QJsonObject{{"label", label}, {"icon", image}, {"command", cmd}, {"language", lang == "python" ? "python" : "mel"}});
         at = end;
     }
     QString name = QFileInfo(path).baseName();
     if (name.startsWith("shelf_")) name = name.mid(6);
-    shelves_.append(QJsonObject{{"name", name}, {"items", items}});
-    save();
-    rebuild();
-    tabs_->setCurrentIndex(tabs_->count() - 1);
-    log(QString("// Loaded shelf %1: %2 buttons //").arg(name).arg(items.size()));
+    *shelf = QJsonObject{{"name", name}, {"items", items}};
+    return true;
 }
 
 } // namespace az

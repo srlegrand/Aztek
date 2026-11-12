@@ -3,7 +3,7 @@
 Generated from the command registry by `cargo run -p aztek_host --example gen_commands`; do not edit by hand.
 Commands take the reference's flags, long or short, in MEL and in Python (`aztek.cmds` or `maya.cmds`).
 
-1122 commands.
+1125 commands.
 
 ## AL_usdmaya_LayerCreateLayer
 
@@ -2089,6 +2089,18 @@ The Attribute Editor's Type menu: the light's shape becomes another type under t
 
 Arguments: the light, then the type
 
+## aztekEnvironment
+
+The environment variables Aztek knows of: -q lists each with whether it is read and its value in force; -value name gives one, Aztek's own spelling first; -list name gives a list of folders; -icon name finds an icon on XBMLANGPATH; -shelfFiles gives the shelf files on MAYA_SHELF_PATH.
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `query` | `q` | Every variable: name, group, whether it is read, a note, and its value. |
+| `value` | `v` | The value in force of this variable. |
+| `list` | `l` | The folders of this variable, in order. |
+| `icon` | `i` | The file of this icon, or an empty string. |
+| `shelfFiles` | `sf` | The shelf_*.mel files on the shelf path. |
+
 ## aztekIlluminatesByDefault
 
 The Attribute Editor's Illuminates by Default: whether a light is in defaultLightSet; -set puts it in or out.
@@ -3266,6 +3278,18 @@ Arguments: meshes or vertices (the selection when none)
 | Flag | Short | Description |
 | --- | --- | --- |
 | `name` | `n` | Name of the cluster; its handle takes the name plus Handle. |
+
+## cmdFileOutput
+
+Writes the Script Editor's lines to a file as well: -open file gives a descriptor, -close descriptor and -closeAll stop, -status descriptor is 0 while the file is open.
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `open` | `o` | Open this file and write every line to it from now on. The descriptor, or -1. |
+| `close` | `c` | Close the file with this descriptor. |
+| `closeAll` | `ca` | Close them all. |
+| `status` | `s` | 0 while the file with this descriptor is open. |
+| `query` | `q` | Query. |
 
 ## collider
 
@@ -22295,6 +22319,10 @@ Arguments: what to deform, and any target last (the selection when none); the de
 | `dropoffDistance` | `dds` | How far they reach from the handle. |
 | `scale` | `sc` | Multiplies the depth (1). |
 | `x` | `x` | Lines run across X rather than Z. |
+
+## xbmLangPathList
+
+The folders icons are looked for in.
 
 ## xform
 

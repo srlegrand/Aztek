@@ -1,3 +1,4 @@
+#include "envvars.h"
 #include "scriptui.h"
 #include "aztek.h"
 #include "host.h"
@@ -831,8 +832,8 @@ void ScriptUi::apply_menu_item(Item* it, const QJsonObject& props) {
         a->setShortcut(QKeySequence(key + props["keyEquivalent"].toString().toUpper()));
     }
     if (props.contains("image")) {
-        QString p = props["image"].toString();
-        if (QFile::exists(p)) a->setIcon(QIcon(p));
+        QString p = az::find_image(props["image"].toString());
+        if (!p.isEmpty()) a->setIcon(QIcon(p));
     }
 }
 
@@ -1690,8 +1691,8 @@ void ScriptUi::build_group(Item* it, const QJsonObject& props) {
             connect(b, &QPushButton::clicked, this, [this, path](bool) { fire(path, QJsonObject(), QJsonArray{"buttonCommand"}, QJsonArray()); });
             if (as_bool(props["symbolButtonDisplay"])) {
                 auto* sb = new QToolButton(box);
-                QString image = props["image"].toString();
-                if (QFile::exists(image)) sb->setIcon(QIcon(image));
+                QString image = az::find_image(props["image"].toString());
+                if (!image.isEmpty()) sb->setIcon(QIcon(image));
                 g->addWidget(sb, 0, col++);
                 it->parts["symbol"] = sb;
                 connect(sb, &QToolButton::clicked, this, [this, path](bool) { fire(path, QJsonObject(), QJsonArray{"symbolButtonCommand"}, QJsonArray()); });
@@ -1873,8 +1874,8 @@ void ScriptUi::apply_control(Item* it, const QJsonObject& props) {
     if (k == "toolButton") {
         auto* b = static_cast<QToolButton*>(w);
         QSignalBlocker block(b);
-        QString image = it->prop("image1").toString();
-        if (!image.isEmpty() && QFile::exists(image)) {
+        QString image = az::find_image(it->prop("image1").toString());
+        if (!image.isEmpty()) {
             b->setIcon(QIcon(image));
             b->setIconSize(QSize(32, 32));
             b->setToolButtonStyle(Qt::ToolButtonIconOnly);
@@ -1928,8 +1929,8 @@ void ScriptUi::apply_control(Item* it, const QJsonObject& props) {
     if (k == "iconTextButton" || k == "symbolButton" || k == "shelfButton" || k == "iconTextCheckBox" || k == "symbolCheckBox" || k == "iconTextRadioButton") {
         auto* b = qobject_cast<QToolButton*>(w);
         if (b) {
-            QString image = props.contains("image") ? props["image"].toString() : props.contains("image1") ? props["image1"].toString() : QString();
-            if (!image.isEmpty() && QFile::exists(image)) {
+            QString image = az::find_image(props.contains("image") ? props["image"].toString() : props.contains("image1") ? props["image1"].toString() : QString());
+            if (!image.isEmpty()) {
                 b->setIcon(QIcon(image));
                 b->setIconSize(QSize(32, 32));
             }

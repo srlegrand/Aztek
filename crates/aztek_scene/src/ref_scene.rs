@@ -1519,7 +1519,7 @@ pub fn register(c: &mut Commands<Session>) {
                 s.option_vars.insert("__workspace".into(), json!(d));
                 return Ok(json!(d));
             }
-            let root = s.option_vars.get("__workspace").and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| std::env::current_dir().map(|d| d.display().to_string()).unwrap_or_default());
+            let root = s.option_vars.get("__workspace").and_then(Value::as_str).map(str::to_string).or_else(|| aztek_core::env::get("MAYA_PROJECT")).unwrap_or_else(|| std::env::current_dir().map(|d| d.display().to_string()).unwrap_or_default());
             let with_slash = if root.ends_with('/') { root.clone() } else { format!("{root}/") };
             Ok(if asked(a, "rootDirectory") || asked(a, "directory") { json!(with_slash) } else { json!(root.trim_end_matches('/')) })
         })

@@ -112,6 +112,8 @@ impl Core {
         // The features kept as plug-ins: there from the start unless turned off.
         crate::builtin_plugins::load_defaults(&mut c.s);
         crate::user_folder::register_commands(&mut c.s);
+        crate::environment::register_commands(&mut c.s);
+        crate::environment::startup();
         aztek_scene::unit_tables::tag_commands(&mut c.s.commands);
         c
     }
@@ -135,6 +137,7 @@ impl Core {
             crate::script_jobs::set_last_error(bare);
         }
         crate::batch::echo(&text, kind);
+        crate::environment::line(&text);
         self.log.push(LogLine { text, kind });
     }
 
@@ -179,6 +182,9 @@ impl Core {
         // The user folder first: its folders go on the script, plug-in and module paths, and the optionVars its
         // preferences hold stand in for the ones Aztek hasn't saved itself.
         let folder = crate::user_folder::apply(&crate::user_folder::load_choice());
+        for w in &folder.warnings {
+            self.push(format!("// Warning: {w} //"), LineKind::Warning);
+        }
         let mut saved = crate::ui_cmds::saved_option_vars();
         if let Some(prefs) = &folder.prefs {
             for (k, v) in crate::user_folder::saved_option_vars(prefs) {
@@ -219,6 +225,9 @@ impl Core {
         if let Some(mel) = dirs.iter().map(|d| d.join("userSetup.mel")).find(|p| p.is_file()) {
             let quoted = mel.to_string_lossy().replace('\\', "/").replace('"', "\\\"");
             self.mel(&format!("source \"{quoted}\";"));
+        }
+        if aztek_core::env::on("MAYA_SKIP_USERSETUP_PY") {
+            return Vec::new();
         }
         dirs.iter().map(|d| d.join("userSetup.py")).filter(|p| p.is_file()).collect()
     }

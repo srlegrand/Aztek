@@ -57,8 +57,33 @@ pub struct Applied {
     pub modules: Vec<PathBuf>,
     pub prefs: Option<PathBuf>,
     pub found: Vec<Module>,
+    /// The environment file read, if one was.
+    pub env_file: Option<PathBuf>,
+    /// What the environment file asked for and did not get.
+    pub warnings: Vec<String>,
     /// What each path variable was given, to take back when the choice changes.
     added: Vec<(String, PathBuf)>,
+}
+
+/// `MAYA_APP_DIR` as it was given from outside, and what a session set it to: scripts read it for the user folder in
+/// use, while the first start reads what the system said to find the reference's folder.
+static APP_DIR: Mutex<(Option<std::ffi::OsString>, Option<std::ffi::OsString>)> = Mutex::new((None, None));
+
+fn given_app_dir() -> Option<std::ffi::OsString> {
+    let now = std::env::var_os("MAYA_APP_DIR");
+    let kept = APP_DIR.lock().unwrap();
+    if kept.1.is_some() && now == kept.1 {
+        kept.0.clone()
+    } else {
+        now
+    }
+}
+
+fn set_app_dir(root: &Path) {
+    let given = given_app_dir();
+    let ours = root.as_os_str().to_os_string();
+    std::env::set_var("MAYA_APP_DIR", &ours);
+    *APP_DIR.lock().unwrap() = (given, Some(ours));
 }
 
 static APPLIED: Mutex<Option<Applied>> = Mutex::new(None);
@@ -87,7 +112,7 @@ pub fn own_folder() -> PathBuf {
 /// Where the reference keeps its user folder on this system, if one is there: `MAYA_APP_DIR`, or its default place.
 pub fn detect_reference_folder() -> Option<PathBuf> {
     let mut places = Vec::new();
-    if let Some(d) = std::env::var_os("MAYA_APP_DIR").filter(|d| !d.is_empty()) {
+    if let Some(d) = given_app_dir().filter(|d| !d.is_empty()) {
         places.push(PathBuf::from(d));
     }
     if cfg!(windows) {
@@ -225,10 +250,25 @@ fn expand(text: &str) -> String {
 
 const PATH_VARS: &[&str] = &["MAYA_SCRIPT_PATH", "MAYA_PLUG_IN_PATH", "MAYA_MODULE_PATH", "AZTEK_SCRIPT_PATH", "AZTEK_PLUG_IN_PATH", "AZTEK_MODULE_PATH", "PYTHONPATH", "XBMLANGPATH", "PATH", "MAYA_SHELF_PATH", "MAYA_PRESET_PATH"];
 
+/// What an environment file cannot set: the user folder and the home folder, as in the reference, and where the
+/// application is.
+const NOT_FROM_FILE: &[&str] = &["MAYA_APP_DIR", "AZTEK_APP_DIR", "MAYA_LOCATION", "AZTEK_LOCATION", "HOME", "USERPROFILE"];
+
+/// The environment file to read: `Aztek.env` or `Maya.env` in the folder `AZTEK_ENV_DIR` or `MAYA_ENV_DIR` names, or
+/// the first found in the version's folder and then the user folder. One file, as the reference reads one.
+fn env_file(bases: &[PathBuf]) -> Option<PathBuf> {
+    let dirs = match aztek_core::env::get("MAYA_ENV_DIR") {
+        Some(d) => vec![PathBuf::from(expand(&d))],
+        None => bases.to_vec(),
+    };
+    dirs.iter().flat_map(|d| ["Aztek.env", "Maya.env"].map(|n| d.join(n))).find(|p| p.is_file())
+}
+
 /// The folder's environment file: `NAME = value` lines, `#` and `//` comments. A variable the process already has
 /// is left as it is, except the path lists, which the file's folders are added to.
 fn read_env_file(a: &mut Applied, file: &Path) {
     let Ok(text) = std::fs::read_to_string(file) else { return };
+    a.env_file = Some(file.to_path_buf());
     for line in text.lines() {
         let line = line.trim();
         if line.is_empty() || line.starts_with('#') || line.starts_with("//") {
@@ -237,6 +277,10 @@ fn read_env_file(a: &mut Applied, file: &Path) {
         let Some((name, value)) = line.split_once('=') else { continue };
         let (name, value) = (name.trim(), expand(value.trim().trim_matches('"')));
         if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+            continue;
+        }
+        if NOT_FROM_FILE.contains(&name) {
+            a.warnings.push(format!("{}: {name} cannot be set in an environment file", file.display()));
             continue;
         }
         if PATH_VARS.contains(&name) {
@@ -393,10 +437,12 @@ pub fn apply(c: &Choice) -> Applied {
     withdraw();
     let mut a = layout(c);
     let bases: Vec<PathBuf> = if a.version.is_empty() { vec![a.root.clone()] } else { vec![a.root.join(&a.version), a.root.clone()] };
-    for b in &bases {
-        for name in ["Aztek.env", "Maya.env"] {
-            read_env_file(&mut a, &b.join(name));
-        }
+    set_app_dir(&a.root);
+    if let Some(file) = env_file(&bases) {
+        read_env_file(&mut a, &file);
+    }
+    if let Some(icons) = a.prefs.as_ref().map(|p| p.join("icons")).filter(|p| p.is_dir()) {
+        add_to(&mut a, "XBMLANGPATH", &icons);
     }
     for d in a.scripts.clone() {
         add_to(&mut a, "AZTEK_SCRIPT_PATH", &d);
@@ -634,6 +680,8 @@ fn describe(c: &Choice, a: &Applied) -> Value {
         "modules": list(&a.modules),
         "prefs": a.prefs.as_ref().map(|p| p.to_string_lossy().into_owned()),
         "shelves": shelf_files,
+        "envFile": a.env_file.as_ref().map(|p| p.to_string_lossy().into_owned()),
+        "warnings": a.warnings,
         "found": a.found.iter().map(|m| json!({"name": m.name, "version": m.version, "path": m.path.to_string_lossy(), "definition": m.definition.to_string_lossy()})).collect::<Vec<_>>(),
     })
 }
@@ -712,7 +760,10 @@ fn internal_var(_s: &mut Session, a: &Args) -> CmdResult {
     } else if on("userPresetsDir") {
         base.join("presets")
     } else if on("userWorkspaceDir") {
-        ap.root.join("projects")
+        match aztek_core::env::get("MAYA_PROJECTS_DIR") {
+            Some(d) => PathBuf::from(expand(&d)),
+            None => ap.root.join("projects"),
+        }
     } else if on("userTmpDir") {
         std::env::temp_dir()
     } else if on("mayaInstallDir") {

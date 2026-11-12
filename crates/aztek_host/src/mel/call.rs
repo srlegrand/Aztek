@@ -139,6 +139,7 @@ fn query_takes_value(cmd: &str, flag: &str) -> bool {
             | ("keyframe", "attribute" | "time" | "index")
             | ("keyTangent", "attribute" | "time")
             | ("hotkey", "keyShortcut")
+            | ("cmdFileOutput", "status")
     )
 }
 
