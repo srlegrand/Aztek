@@ -442,7 +442,9 @@ fn model(doc: &mut Doc, sess: &mut Session, id: NodeId, parent: i64, top: bool) 
         }
     }
     for c in children {
-        if is_transform(&sess.graph, c) && (has_mesh_below(&sess.graph, c) || doc.needed.contains(&c)) {
+        // What leads to a mesh, the joints skins use, and a skeleton's own joints: a chain asked for goes out whole.
+        let bone = sess.graph.node(c).is_some_and(|n| n.ty().is_a("joint"));
+        if is_transform(&sess.graph, c) && (has_mesh_below(&sess.graph, c) || doc.needed.contains(&c) || bone) {
             model(doc, sess, c, mid, false);
         }
     }

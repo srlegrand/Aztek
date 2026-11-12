@@ -1444,3 +1444,34 @@ when Aztek's folder does not exist, leaving Aztek's folder as it is when it does
 it is asked again. Not asked with `--script`, `--screenshot` or `--batch`, or when no such folder is there.
 The optionVars in the folder's `userPrefs.mel` are read before the question, so on that first start they come in
 at the next one.
+
+### FBX and glTF import; the two plug-ins read and write (12/11/2026)
+
+File > Import lists FBX and glTF, and File > Export lists them, while their plug-ins are loaded, as the reference
+lists a translator's formats. The plug-ins are now `fbx` and `gltf` (they were `fbxExport` and `gltfExport`, names
+that still find them): each brings its import and its export commands.
+
+FBX import (`importFbx path`, `FBXImport -f path`):
+
+- Binary FBX, versions with 32-bit and 64-bit offsets, arrays plain or deflated.
+- Read: the model hierarchy; each node's place from its translation, rotation in its order, scale, pre and post
+  rotation, pivots and offsets, folded into one translation, rotation and scale; meshes as polygons with their UV
+  sets (by corner or by point, direct or indexed) and geometric offset; limb nodes as joints; materials' colour and
+  opacity (phong as a blinn, others as a lambert) on the faces that wear them.
+- The file's unit comes in as centimetres. A file whose up axis is not the scene's changes basis: no node is added.
+- Not read: ASCII FBX (it says so), skin weights, animation, blend shapes, textures, normals (the mesh's own are
+  used), cameras and lights (their nodes come in as transforms).
+
+glTF import (`importGltf path`): `.gltf` with its buffers inside or beside it, and `.glb`. The node hierarchy,
+triangle meshes with their first UV set, materials as standard surfaces (base colour, metalness, roughness), nodes a
+skin names as joints. Metres come in as centimetres and Y up becomes the scene's up. Not read: skin weights,
+animation, textures, cameras, lights, morph targets, sparse accessors, lines and points.
+
+One undo takes a whole import back. What was made at the top is left selected.
+
+Checked by writing a scene out and reading it back in each format: hierarchy, places, every corner's position and
+UV, materials by face, joints and their pose, and the change of basis into a Z-up scene. FBX files from other
+writers have not been read here: the reader has only seen files this exporter wrote, and packed arrays and 64-bit
+offsets built by a test.
+
+FBX export: a joint chain asked for goes out whole (its child joints were left out unless a skin used them).

@@ -9,9 +9,10 @@ A compiled plug-in built for the reference can't load: it links the reference's 
 
 ## Plug-ins that come with Aztek
 
-Some features are plug-ins that are part of the program: `fbxExport` (FBX export) and `gltfExport` (glTF export). They
-load at start, are listed in the Plug-in Manager under "Aztek (built in)", and can be unloaded or kept from loading
-there. `loadPlugin fbxExport`, `unloadPlugin fbxExport` and `pluginInfo -q -loaded fbxExport` work as for any other.
+Some features are plug-ins that are part of the program: `fbx` (FBX import and export) and `gltf` (glTF import and
+export). They load at start, are listed in the Plug-in Manager under "Aztek (built in)", and can be unloaded or kept
+from loading there. `loadPlugin fbx`, `unloadPlugin fbx` and `pluginInfo -q -loaded fbx` work as for any other. File >
+Import and File > Export list a format while its plug-in is loaded.
 
 ## The Plug-in Manager
 

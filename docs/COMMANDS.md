@@ -3,7 +3,7 @@
 Generated from the command registry by `cargo run -p aztek_host --example gen_commands`; do not edit by hand.
 Commands take the reference's flags, long or short, in MEL and in Python (`aztek.cmds` or `maya.cmds`).
 
-1119 commands.
+1122 commands.
 
 ## AL_usdmaya_LayerCreateLayer
 
@@ -240,6 +240,14 @@ Export to FBX as scripts written for the reference ask: FBXExport -f "path" writ
 | --- | --- | --- |
 | `file` | `f` | The file to write. |
 | `selected` | `s` | Only the selection. |
+
+## FBXImport
+
+Import an FBX file as scripts written for the reference ask: FBXImport -f "path".
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `file` | `f` | The file to read. |
 
 ## FourViewLayout
 
@@ -7908,6 +7916,18 @@ Arguments: name
 | `width` | `w` |  |
 | `query` | `q` |  |
 | `edit` | `e` |  |
+
+## importFbx
+
+Import a binary FBX file: its model hierarchy, meshes as polygons with their UV sets, limb nodes as joints, and materials' colours with the faces that wear them. Lengths come in as centimetres and the file's up axis becomes the scene's. ASCII FBX, skin weights, animation, textures, cameras and lights are not read. Returns the top nodes made.
+
+Arguments: path
+
+## importGltf
+
+Import a glTF 2.0 file (.gltf or .glb): its node hierarchy, triangle meshes with their first UV set, and materials as standard surfaces. Lengths come in as centimetres and the file's Y up becomes the scene's up axis. Skin weights, animation, textures, cameras and lights are not read. Returns the top nodes made.
+
+Arguments: path
 
 ## importObj
 

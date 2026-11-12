@@ -110,7 +110,10 @@ pub mod uv_misc;
 pub mod uv_ops;
 pub mod uv_sets;
 pub mod fbx_export;
+pub mod fbx_import;
 pub mod gltf_export;
+pub mod gltf_import;
+pub mod import_build;
 
 pub use error::{GraphError, Result};
 pub use graph::{Change, DeferMeshes, DrivenEdit, Graph, SelectMode};

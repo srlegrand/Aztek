@@ -21,29 +21,40 @@ pub const FOLDER: &str = "Aztek (built in)";
 
 pub const BUILTINS: &[Builtin] = &[
     Builtin {
-        name: "fbxExport",
-        doc: "FBX export: File > Export with a .fbx name, exportFbx and FBXExport.",
-        commands: aztek_scene::fbx_export::COMMANDS,
-        register: |s| aztek_scene::fbx_export::register(&mut s.commands),
+        name: "fbx",
+        doc: "FBX import and export: File > Import and File > Export with a .fbx name, importFbx, exportFbx, FBXImport and FBXExport.",
+        commands: &["exportFbx", "FBXExport", "importFbx", "FBXImport"],
+        register: |s| {
+            aztek_scene::fbx_export::register(&mut s.commands);
+            aztek_scene::fbx_import::register(&mut s.commands);
+        },
     },
     Builtin {
-        name: "gltfExport",
-        doc: "glTF 2.0 export: File > Export with a .glb or .gltf name, and exportGltf.",
-        commands: aztek_scene::gltf_export::COMMANDS,
-        register: |s| aztek_scene::gltf_export::register(&mut s.commands),
+        name: "gltf",
+        doc: "glTF 2.0 import and export: File > Import and File > Export with a .glb or .gltf name, importGltf and exportGltf.",
+        commands: &["exportGltf", "importGltf"],
+        register: |s| {
+            aztek_scene::gltf_export::register(&mut s.commands);
+            aztek_scene::gltf_import::register(&mut s.commands);
+        },
     },
 ];
+
+/// The names the two went by when they only exported.
+const OLD_NAMES: &[(&str, &str)] = &[("fbxExport", "fbx"), ("gltfExport", "gltf")];
 
 thread_local! {
     static LOADED: RefCell<Vec<&'static str>> = const { RefCell::new(Vec::new()) };
 }
 
 pub fn find(name: &str) -> Option<&'static Builtin> {
+    let name = OLD_NAMES.iter().find(|o| o.0 == name).map_or(name, |o| o.1);
     BUILTINS.iter().find(|b| b.name == name)
 }
 
 pub fn is_loaded(name: &str) -> bool {
-    LOADED.with(|l| l.borrow().contains(&name))
+    let Some(b) = find(name) else { return false };
+    LOADED.with(|l| l.borrow().contains(&b.name))
 }
 
 pub fn loaded() -> Vec<String> {
@@ -79,12 +90,14 @@ fn off_list() -> Vec<String> {
 }
 
 pub fn autoload(name: &str) -> bool {
-    !off_list().iter().any(|n| n == name)
+    let name = find(name).map_or(name, |b| b.name);
+    !off_list().iter().any(|n| find(n).map_or(n.as_str(), |b| b.name) == name)
 }
 
 pub fn set_autoload(name: &str, on: bool) -> std::io::Result<()> {
+    let name = find(name).map_or(name, |b| b.name);
     let mut off = off_list();
-    off.retain(|n| n != name);
+    off.retain(|n| find(n).map_or(n.as_str(), |b| b.name) != name);
     if !on {
         off.push(name.to_string());
     }
@@ -94,9 +107,8 @@ pub fn set_autoload(name: &str, on: bool) -> std::io::Result<()> {
 
 /// At start: every one that has not been turned off.
 pub fn load_defaults(s: &mut Session) {
-    let off = off_list();
     for b in BUILTINS {
-        if !off.iter().any(|n| n == b.name) {
+        if autoload(b.name) {
             load(s, b);
         }
     }
@@ -104,9 +116,8 @@ pub fn load_defaults(s: &mut Session) {
 
 /// The Plug-in Manager's rows for them.
 pub fn rows() -> Vec<Value> {
-    let off = off_list();
     BUILTINS
         .iter()
-        .map(|b| json!({"name": b.name, "file": b.name, "path": b.name, "folder": FOLDER, "kind": "aztek", "loaded": is_loaded(b.name), "autoload": !off.iter().any(|n| n == b.name), "note": b.doc}))
+        .map(|b| json!({"name": b.name, "file": b.name, "path": b.name, "folder": FOLDER, "kind": "aztek", "loaded": is_loaded(b.name), "autoload": autoload(b.name), "note": b.doc}))
         .collect()
 }

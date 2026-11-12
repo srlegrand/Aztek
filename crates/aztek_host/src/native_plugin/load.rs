@@ -465,7 +465,7 @@ fn plugin_info(s: &mut Session, a: &Args) -> CmdResult {
     let Some(name) = a.positional.first().and_then(Value::as_str) else { return Err(CommandError::new("pluginInfo: name a plug-in")) };
     let key = key_of(name);
     if let Some(b) = crate::builtin_plugins::find(name) {
-        let is_loaded = crate::builtin_plugins::is_loaded(name);
+        let is_loaded = crate::builtin_plugins::is_loaded(b.name);
         return Ok(if on("loaded") {
             json!(is_loaded)
         } else if on("registered") {

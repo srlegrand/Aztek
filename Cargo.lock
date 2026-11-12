@@ -161,6 +161,7 @@ dependencies = [
  "glam 0.29.3",
  "log",
  "manifold-rust",
+ "miniz_oxide 0.8.9",
  "rand_mt",
  "rayon",
  "serde_json",

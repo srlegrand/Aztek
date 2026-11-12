@@ -20,6 +20,7 @@ thiserror.workspace = true
 log.workspace = true
 sysinfo.workspace = true
 manifold-rust = { version = "0.19.2", features = ["parallel"] }
+miniz_oxide = "0.8"
 
 [dev-dependencies]
 rand_mt = "4"

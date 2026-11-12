@@ -305,22 +305,26 @@ fn a_bound_mesh_goes_out_with_its_joints_clusters_and_bind_pose() {
 }
 
 #[test]
-fn the_exporters_are_plug_ins_that_load_at_start_and_unload() {
+fn the_formats_are_plug_ins_that_load_at_start_and_unload() {
     let mut c = Core::new();
-    assert_eq!(c.mel("pluginInfo -q -loaded fbxExport"), json!(true));
-    assert_eq!(c.mel("pluginInfo -q -loaded gltfExport"), json!(true));
+    assert_eq!(c.mel("pluginInfo -q -loaded fbx"), json!(true));
+    assert_eq!(c.mel("pluginInfo -q -loaded gltf"), json!(true));
     let listed = c.mel("pluginInfo -q -listPlugins");
-    assert!(listed.as_array().unwrap().contains(&json!("fbxExport")) && listed.as_array().unwrap().contains(&json!("gltfExport")), "{listed}");
-    assert_eq!(c.mel("pluginInfo -q -command fbxExport"), json!(["exportFbx", "FBXExport"]));
-    assert_eq!(c.mel("pluginInfo -q -vendor fbxExport"), json!("Aztek"));
-
-    // Unloaded, its commands are gone; loaded again, they are back.
-    c.mel("polyCube -n box;");
-    c.mel("unloadPlugin fbxExport;");
-    assert_eq!(c.mel("pluginInfo -q -loaded fbxExport"), json!(false));
-    assert!(c.mel_checked("exportFbx \"/tmp/never.fbx\" box;").is_err());
-    assert!(c.mel_checked("exportGltf \"/nonexistent-folder/never.glb\" box;").unwrap_err().contains("can't write"), "the other plug-in is untouched");
-    assert_eq!(c.mel("loadPlugin fbxExport"), json!(["fbxExport"]));
+    assert!(listed.as_array().unwrap().contains(&json!("fbx")) && listed.as_array().unwrap().contains(&json!("gltf")), "{listed}");
+    assert_eq!(c.mel("pluginInfo -q -command fbx"), json!(["exportFbx", "FBXExport", "importFbx", "FBXImport"]));
+    assert_eq!(c.mel("pluginInfo -q -vendor fbx"), json!("Aztek"));
+    // The names they had when they only exported still find them.
     assert_eq!(c.mel("pluginInfo -q -loaded fbxExport"), json!(true));
+
+    // Unloaded, its commands are gone, reading and writing; loaded again, they are back.
+    c.mel("polyCube -n box;");
+    c.mel("unloadPlugin fbx;");
+    assert_eq!(c.mel("pluginInfo -q -loaded fbx"), json!(false));
+    assert!(c.mel_checked("exportFbx \"/tmp/never.fbx\" box;").is_err());
+    assert!(c.mel_checked("importFbx \"/tmp/never.fbx\";").is_err());
+    assert!(c.mel_checked("exportGltf \"/nonexistent-folder/never.glb\" box;").unwrap_err().contains("can't write"), "the other plug-in is untouched");
+    assert_eq!(c.mel("loadPlugin fbx"), json!(["fbx"]));
+    assert_eq!(c.mel("pluginInfo -q -loaded fbx"), json!(true));
     assert!(c.mel_checked("select -cl; exportFbx \"/tmp/never.fbx\";").unwrap_err().contains("nothing selected"));
+    assert!(c.mel_checked("importFbx \"/nonexistent-folder/never.fbx\";").unwrap_err().contains("can't read"));
 }

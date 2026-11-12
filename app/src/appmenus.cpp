@@ -52,6 +52,13 @@
 namespace az {
 
 namespace {
+// Whether a plug-in is loaded: the file formats plug-ins bring are offered only while they are.
+bool plugin_loaded(const QString& name) {
+    return ask("pluginInfo", QJsonObject{{"args", QJsonArray{name}}, {"query", true}, {"loaded", true}}).toBool();
+}
+} // namespace
+
+namespace {
 
 QJsonObject args(const QJsonArray& a) {
     QJsonObject o;
@@ -160,8 +167,29 @@ QMenu* MainWindow::file_menu() {
     m->addAction("Optimize Scene Size", [] { exec("cleanUpScene"); });
     m->addSeparator();
     auto do_import = [] {
-        QString f = QFileDialog::getOpenFileName(nullptr, "Import", QString(), QString("Scenes and meshes (*.ma *.mb *.obj *.ply *.stl *.usd *.usda *.usdc *.usdz);;ASCII scenes (*.ma);;Binary scenes (*.mb);;%1;;Meshes (*.obj *.ply *.stl)").arg(kUsdFilter));
+        // The formats plug-ins read are offered while their plug-ins are loaded, as the reference lists a translator's.
+        const bool fbx = plugin_loaded("fbx"), gltf = plugin_loaded("gltf");
+        QString every = "*.ma *.mb *.obj *.ply *.stl *.usd *.usda *.usdc *.usdz";
+        QString extra;
+        if (fbx) {
+            every += " *.fbx";
+            extra += ";;FBX (*.fbx)";
+        }
+        if (gltf) {
+            every += " *.glb *.gltf";
+            extra += ";;glTF 2.0 (*.glb *.gltf)";
+        }
+        QString f = QFileDialog::getOpenFileName(nullptr, "Import", QString(), QString("Scenes and meshes (%1);;ASCII scenes (*.ma);;Binary scenes (*.mb);;%2%3;;Meshes (*.obj *.ply *.stl)").arg(every, kUsdFilter, extra));
         if (f.isEmpty()) return;
+        const bool is_fbx = f.endsWith(".fbx", Qt::CaseInsensitive);
+        if (is_fbx || f.endsWith(".glb", Qt::CaseInsensitive) || f.endsWith(".gltf", Qt::CaseInsensitive)) {
+            if (!plugin_loaded(is_fbx ? "fbx" : "gltf")) {
+                log(QString("// Error: %1 files are read by the %2 plug-in, which is not loaded. Load it in Windows > Settings/Preferences > Plug-in Manager. //").arg(is_fbx ? "FBX" : "glTF", is_fbx ? "fbx" : "gltf"), 2);
+                return;
+            }
+            exec(is_fbx ? "importFbx" : "importGltf", args(QJsonArray{f}));
+            return;
+        }
         if (is_usd_file(f)) {
             usd_import(f);
             return;
@@ -182,23 +210,24 @@ QMenu* MainWindow::file_menu() {
     m->addAction("Reference Editor", this, &MainWindow::show_reference_editor);
     m->addSeparator();
     auto do_export = [](bool all) {
-        QString f = QFileDialog::getSaveFileName(nullptr, all ? "Export All" : "Export Selection", "export.ma", QString("ASCII scenes (*.ma);;%1;;FBX (*.fbx);;glTF 2.0 (*.glb *.gltf);;OBJ (*.obj);;PLY (*.ply);;STL (*.stl)").arg(kUsdFilter));
+        QString f = QFileDialog::getSaveFileName(nullptr, all ? "Export All" : "Export Selection", "export.ma",
+                                                 QString("ASCII scenes (*.ma);;%1%2%3;;OBJ (*.obj);;PLY (*.ply);;STL (*.stl)").arg(kUsdFilter, plugin_loaded("fbx") ? ";;FBX (*.fbx)" : "", plugin_loaded("gltf") ? ";;glTF 2.0 (*.glb *.gltf)" : ""));
         if (f.isEmpty()) return;
         // The exporters are plug-ins: one that has been unloaded says so rather than failing on an unknown command.
         auto plugin_ready = [](const QString& plugin, const QString& what) {
-            if (ask("pluginInfo", QJsonObject{{"args", QJsonArray{plugin}}, {"query", true}, {"loaded", true}}).toBool()) return true;
-            log(QString("// Error: %1 export is the %2 plug-in, which is not loaded. Load it in Windows > Settings/Preferences > Plug-in Manager. //").arg(what, plugin), 5);
+            if (plugin_loaded(plugin)) return true;
+            log(QString("// Error: %1 files are written by the %2 plug-in, which is not loaded. Load it in Windows > Settings/Preferences > Plug-in Manager. //").arg(what, plugin), 2);
             return false;
         };
         if (f.endsWith(".fbx", Qt::CaseInsensitive)) {
-            if (!plugin_ready("fbxExport", "FBX")) return;
+            if (!plugin_ready("fbx", "FBX")) return;
             QJsonObject call{{"args", QJsonArray{f}}};
             if (all) call["all"] = true;
             const QJsonObject r = exec("exportFbx", call).toObject();
             for (const QJsonValue& n : r["notes"].toArray()) log("// Warning: " + n.toString() + " //", 4);
             return;
         }
-        if ((f.endsWith(".glb", Qt::CaseInsensitive) || f.endsWith(".gltf", Qt::CaseInsensitive)) && !plugin_ready("gltfExport", "glTF")) return;
+        if ((f.endsWith(".glb", Qt::CaseInsensitive) || f.endsWith(".gltf", Qt::CaseInsensitive)) && !plugin_ready("gltf", "glTF")) return;
         if (f.endsWith(".glb", Qt::CaseInsensitive) || f.endsWith(".gltf", Qt::CaseInsensitive)) {
             // Its own command: the hierarchy, materials and textures go with the meshes.
             QJsonObject call{{"args", QJsonArray{f}}};

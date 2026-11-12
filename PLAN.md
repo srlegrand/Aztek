@@ -214,5 +214,59 @@ Bicurious in their own order; this plan doesn't reorder them. macOS: CI builds a
 
 ## Not planned
 
-Out of scope unless Simon says otherwise: XGen and hair grooming, MASH, Paint Effects, the reference's fluids (Bicurious
-covers liquids and smoke), MotionMaker, the reference's help chatbot and its cloud service button.
+Out of scope unless Simon says otherwise: Paint Effects, the reference's fluids (Bicurious covers liquids and smoke),
+MotionMaker, the reference's help chatbot and its cloud service button. Hair grooming (XJEN) and MASH were here until
+12/11/2026: they are in "Plug-ins that ship" below.
+
+## Plug-ins that ship (started 12/11/2026)
+
+The aim: every plug-in the reference ships loaded has its counterpart here, as a plug-in that loads at start and can
+be unloaded, and the ones that can be are written against the plug-in kit (`devkit`), so that shipping them proves the
+kit. Status below is from a search of the code by name on 12/11/2026, not an audit of how complete each feature is.
+
+Three states:
+
+- plug-in: registered when its plug-in loads, gone when it unloads.
+- core: the feature is there, registered by the core. To move behind a plug-in.
+- none: no code found.
+
+| The reference's plug-in | What it is | Here | State |
+|---|---|---|---|
+| fbxmaya | FBX import and export | `fbx` | plug-in (compiled in; no animation, no skin weights on import) |
+| (no counterpart) | glTF import and export | `gltf` | plug-in (compiled in) |
+| objExport | OBJ export | importObj, exportObj | core |
+| AbcExport, AbcImport, gpuCache | Alembic | | none |
+| mayaUsdPlugin | USD | aztek_usd | core |
+| OpenEXRLoader, tiffFloatReader | image readers | image loading | core |
+| svgFileTranslator | SVG import | | none |
+| OneClick | send to other applications | | none, and nothing to send to |
+| mtoa | the renderer | Harold | core (the renderer is its own crate; its translator, nodes and windows are the core's) |
+| renderSetup | render layers and overrides | | not checked |
+| lookdevKit, shaderFXPlugin | shading utility nodes, viewport shaders | | not checked |
+| LookdevX | MaterialX and USD shading | | none |
+| Substance | Substance materials | | none. The format and its engine are their owner's: a reader would have to be theirs |
+| xgenToolkit | grooming and instancing | XJEN | none |
+| MASH | motion graphics | | none |
+| bifrostGraph, bifrostvisplugin | procedural graphs | | none |
+| modelingToolkit | Quad Draw, Multi-Cut | Quad Draw, Multi-Cut | core |
+| Unfold3D | UV unfold and optimise | unfold | core |
+| polyBoolean | booleans | booleans | core |
+| sweep | sweep mesh | sweep mesh | core |
+| Type | 3D type | text | not checked |
+| meshReorder | vertex reordering | mesh reorder | core |
+| gnQuadFill | quad fill | | not checked |
+| mayaHIK | HumanIK | HIK | core |
+| ik2Bsolver, ikSpringSolver | IK solvers | | none by those names |
+| matrixNodes, quatNodes | utility nodes | matrix and quaternion nodes | core |
+| bluePencil | drawing in the view | | none |
+
+Order of work:
+
+1. The kit grows the base classes the plug-ins need: a file translator first, then locators, tool contexts and IK
+   solvers. Today it has MPxCommand, MPxNode, MPxDeformerNode and MPxGeometryFilter.
+2. One feature of each kind moves out of the core into a compiled plug-in written against the kit: OBJ as a
+   translator, the matrix nodes as nodes. A scene that uses a plug-in's nodes asks for the plug-in, as the
+   reference's scenes do with `requires`.
+3. Harold's translator, node types, render settings and Render View move behind one plug-in, with a command-line
+   renderer that reads a scene file of its own.
+4. The features with no code are written as plug-ins from the start.
