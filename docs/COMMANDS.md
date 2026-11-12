@@ -3,7 +3,7 @@
 Generated from the command registry by `cargo run -p aztek_host --example gen_commands`; do not edit by hand.
 Commands take the reference's flags, long or short, in MEL and in Python (`aztek.cmds` or `maya.cmds`).
 
-1128 commands.
+1233 commands.
 
 ## AL_usdmaya_LayerCreateLayer
 
@@ -232,6 +232,10 @@ The EP curve tool: click to place edit points, Enter to finish.
 
 The edit membership tool: which points a deformer holds.
 
+## FBXClose
+
+Let go of the file FBXRead read.
+
 ## FBXExport
 
 Export to FBX as scripts written for the reference ask: FBXExport -f "path" writes everything, with -s the selection.
@@ -241,13 +245,1079 @@ Export to FBX as scripts written for the reference ask: FBXExport -f "path" writ
 | `file` | `f` | The file to write. |
 | `selected` | `s` | Only the selection. |
 
+## FBXExportAnimation
+
+Animation. -v value sets it, -q gives it. Starts as true.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportAnimationOnly
+
+Animation only. -v value sets it, -q gives it. Starts as false.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportApplyConstantKeyReducer
+
+Constant Key Reducer. -v value sets it, -q gives it. Starts as false.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportAudio
+
+Audio. -v value sets it, -q gives it. Starts as true.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportAutoUnits
+
+Automatic units. -v value sets it, -q gives it. Starts as true.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportAxisConversionMethod
+
+How a change of up axis is made. -v value sets it, -q gives it. Starts as "convertAnimation".
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportBakeComplexAnimation
+
+Bake Animation. -v value sets it, -q gives it. Starts as false.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportBakeComplexEnd
+
+Bake end. -v value sets it, -q gives it. Starts as 120.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportBakeComplexStart
+
+Bake start. -v value sets it, -q gives it. Starts as 1.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportBakeComplexStep
+
+Bake step. -v value sets it, -q gives it. Starts as 1.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportBakeResampleAnimation
+
+Resample All. -v value sets it, -q gives it. Starts as false.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportCacheFile
+
+Geometry cache file(s). -v value sets it, -q gives it. Starts as false.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportCameras
+
+Cameras. -v value sets it, -q gives it. Starts as true.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportColladaFrameRate
+
+Collada: frame rate. -v value sets it, -q gives it. Starts as 24.0.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportColladaSingleMatrix
+
+Collada: single matrix. -v value sets it, -q gives it. Starts as true.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportColladaTriangulate
+
+Collada: triangulate. -v value sets it, -q gives it. Starts as true.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportConstraints
+
+Constraints. -v value sets it, -q gives it. Starts as false.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportConvertNurbsSurfaceTo
+
+Convert NURBS surface to. -v value sets it, -q gives it. Starts as "nurbs".
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportConvertUnitString
+
+File units converted to; the scene's unit unless set. -v value sets it, -q gives it. Starts as "".
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportCurveFilters
+
+Curve filters. -v value sets it, -q gives it. Starts as false.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportDxfDeformation
+
+DXF: deformation. -v value sets it, -q gives it. Starts as true.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportDxfTriangulate
+
+DXF: triangulate. -v value sets it, -q gives it. Starts as true.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportEmbeddedTextures
+
+Embed Media: the texture files go inside the FBX file. -v value sets it, -q gives it. Starts as false.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportFileVersion
+
+The FBX version written. -v value sets it, -q gives it. Starts as "FBX202000".
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportGenerateLog
+
+Generate log data. -v value sets it, -q gives it. Starts as true.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportHardEdges
+
+Split per-vertex Normals. -v value sets it, -q gives it. Starts as false.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportInAscii
+
+ASCII rather than binary. -v value sets it, -q gives it. Starts as false.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportIncludeChildren
+
+Include Children. -v value sets it, -q gives it. Starts as true.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportInputConnections
+
+Input Connections. -v value sets it, -q gives it. Starts as true.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportInstances
+
+Preserve Instances. -v value sets it, -q gives it. Starts as false.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportLights
+
+Lights. -v value sets it, -q gives it. Starts as true.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportNullsAsLocators
+
+Convert to Null Objects. -v value sets it, -q gives it. Starts as false.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportQuaternion
+
+Quaternion interpolation mode. -v value sets it, -q gives it. Starts as "resample".
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportQuickSelectSetAsCache
+
+The set exported as a geometry cache. -v value sets it, -q gives it. Starts as "".
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportReferencedAssetsContent
+
+Referenced Asset Content. -v value sets it, -q gives it. Starts as true.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportRemoveSingleKey
+
+Remove single key. -v value sets it, -q gives it. Starts as false.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportScaleFactor
+
+The scale factor. -v value sets it, -q gives it. Starts as 1.0.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportSelectionSets
+
+Selection Sets. -v value sets it, -q gives it. Starts as false.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportShapes
+
+Blend Shapes. -v value sets it, -q gives it. Starts as true.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportShowUI
+
+Show the warnings manager. -v value sets it, -q gives it. Starts as true.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportSkeletonDefinitions
+
+Skeleton definitions. -v value sets it, -q gives it. Starts as false.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportSkins
+
+Skins. -v value sets it, -q gives it. Starts as true.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportSmoothMesh
+
+Smooth Mesh. -v value sets it, -q gives it. Starts as true.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportSmoothingGroups
+
+Smoothing Groups. -v value sets it, -q gives it. Starts as false.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportSplitAnimationIntoTakes
+
+Takes to write: -v name start end adds one, -c clears them, -q lists them.
+
+Arguments: start end
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `clear` | `c` | Clear the takes. |
+| `query` | `q` | Give the value. |
+
+## FBXExportTangents
+
+Tangents and Binormals. -v value sets it, -q gives it. Starts as false.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportTriangulate
+
+Triangulate. -v value sets it, -q gives it. Starts as false.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportUpAxis
+
+The file's up axis; the scene's unless set. -v value sets it, -q gives it. Starts as "".
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExportUseSceneName
+
+Use scene name for the take. -v value sets it, -q gives it. Starts as false.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXExtPlugin
+
+FBX extension plug-ins: -l lists them. None are installed.
+
+Arguments: plugin
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `list` | `l` | List them. |
+| `state` | `state` | on or off. |
+| `opts` | `opts` | Options. |
+| `query` | `q` | Give the value. |
+
+## FBXGetTakeComment
+
+A take's comment, by index from 1.
+
+Arguments: index
+
+## FBXGetTakeCount
+
+How many takes the file FBXRead read has.
+
+## FBXGetTakeIndex
+
+The index, from 1, of the first take with this name.
+
+Arguments: name
+
+## FBXGetTakeLocalTimeSpan
+
+A take's start and stop, in frames at the scene's rate, by index from 1.
+
+Arguments: index
+
+## FBXGetTakeName
+
+The name of a take of the file FBXRead read, by index from 1.
+
+Arguments: index
+
+## FBXGetTakeReferenceTimeSpan
+
+A take's start and stop, in frames at the scene's rate, by index from 1.
+
+Arguments: index
+
 ## FBXImport
 
-Import an FBX file as scripts written for the reference ask: FBXImport -f "path".
+Import an FBX file by the FBXImport settings: FBXImport -f "path" [-t take].
 
 | Flag | Short | Description |
 | --- | --- | --- |
 | `file` | `f` | The file to read. |
+| `take` | `t` | The take: 0 none, -1 the last. |
+
+## FBXImportAnimation
+
+Animation. -v value sets it, -q gives it. Starts as true.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportAudio
+
+Audio. -v value sets it, -q gives it. Starts as true.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportAutoUnits
+
+Automatic units: the file's unit is converted to the scene's. -v value sets it, -q gives it. Starts as true.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportAxisConversionEnable
+
+Axis conversion: a file with another up axis turns its top nodes. -v value sets it, -q gives it. Starts as true.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportCacheFile
+
+Geometry Cache File(s). -v value sets it, -q gives it. Starts as true.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportCameras
+
+Cameras. -v value sets it, -q gives it. Starts as true.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportConstraints
+
+Constraints. -v value sets it, -q gives it. Starts as true.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportConvertDeformingNullsToJoint
+
+Deforming Elements to Joints: a null a skin is bound to comes in as a joint. -v value sets it, -q gives it. Starts as true.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportConvertUnitString
+
+File Units converted to; the scene's unit unless set. -v value sets it, -q gives it. Starts as "".
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportDxfObjectDerivation
+
+DXF: object derivation. -v value sets it, -q gives it. Starts as "layer".
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportDxfReferenceNode
+
+DXF: reference node. -v value sets it, -q gives it. Starts as false.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportDxfWeldVertice
+
+DXF: weld vertices. -v value sets it, -q gives it. Starts as true.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportFillTimeline
+
+Fill Timeline with the take's range. -v value sets it, -q gives it. Starts as false.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportForcedFileAxis
+
+Read the file as if it said this up axis. -v value sets it, -q gives it. Starts as "disabled".
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportGenerateLog
+
+Generate log data. -v value sets it, -q gives it. Starts as true.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportHardEdges
+
+Combine per-vertex Normals. -v value sets it, -q gives it. Starts as false.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportLights
+
+Lights. -v value sets it, -q gives it. Starts as true.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportMergeAnimationLayers
+
+Bake Animation Layers. -v value sets it, -q gives it. Starts as true.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportMergeBackNullPivots
+
+Update Pivots from Nulls: pre and post rotation go to joint orient and rotate axis on every node, not only on joints. -v value sets it, -q gives it. Starts as false.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportMode
+
+File Content: add (Add), merge (Add and update animation), exmerge (Update animation). -v value sets it, -q gives it. Starts as "merge".
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportOpticalMarkers
+
+Optical Markers. -v value sets it, -q gives it. Starts as false.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportPreNormalizeWeights
+
+Pre-Normalize Weights: each point's weights add up to one. -v value sets it, -q gives it. Starts as true.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportProtectDrivenKeys
+
+Protect Driven Keys. -v value sets it, -q gives it. Starts as false.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportQuaternion
+
+Quaternion Interpolation Mode. -v value sets it, -q gives it. Starts as "resample".
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportRemoveBadPolysFromMesh
+
+Test meshes and remove bad polygons. -v value sets it, -q gives it. Starts as true.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportResamplingRateSource
+
+The key rate when resampling. -v value sets it, -q gives it. Starts as "Scene".
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportScaleFactor
+
+The scale applied to the file's lengths when FBXImportScaleFactorEnable is on. -v value sets it, -q gives it. Starts as 1.0.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportScaleFactorEnable
+
+Use FBXImportScaleFactor rather than the file's unit. -v value sets it, -q gives it. Starts as false.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportSetLockedAttribute
+
+Channels locked in the file stay locked. -v value sets it, -q gives it. Starts as false.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportSetMayaFrameRate
+
+Take the file's frame rate. -v value sets it, -q gives it. Starts as false.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportSetTake
+
+The take FBXImport reads: -ti index, 1 the first, -1 the last, 0 none.
+
+Arguments: index
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `takeIndex` | `ti` | The take. |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportShapes
+
+Blend Shapes. -v value sets it, -q gives it. Starts as true.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportShowUI
+
+Show the warnings manager. -v value sets it, -q gives it. Starts as true.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportSkeletonType
+
+Skeleton Definitions. -v value sets it, -q gives it. Starts as "none".
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportSkins
+
+Skins: skin clusters with the file's weights and bind matrices. -v value sets it, -q gives it. Starts as true.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportSmoothingGroups
+
+Smoothing Groups: edges come in hard or soft as the file's smoothing says. -v value sets it, -q gives it. Starts as true.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportUnlockNormals
+
+Unlock Normals: the file's normals are not kept; the mesh works its own out. -v value sets it, -q gives it. Starts as false.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXImportUpAxis
+
+The up axis the file is converted to; the scene's unless set. -v value sets it, -q gives it. Starts as "".
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXLoadExportPresetFile
+
+Load an export preset file: -f path.
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `file` | `f` | The preset file. |
+
+## FBXLoadImportPresetFile
+
+Load an import preset file: -f path.
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `file` | `f` | The preset file. |
+
+## FBXLoadMBExportPresetFile
+
+The MotionBuilder export preset: constraints and skeleton definitions on.
+
+## FBXLoadMBImportPresetFile
+
+The MotionBuilder import preset: constraints and skeleton definitions on.
+
+## FBXPopSettings
+
+Bring back the settings FBXPushSettings kept.
+
+## FBXPushSettings
+
+Keep every import and export setting, for FBXPopSettings to bring back.
+
+## FBXRead
+
+Read a file's takes without importing it: -f path. The take commands then ask about it.
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `file` | `f` | The file. |
+
+## FBXResamplingRate
+
+The rate keys are made at when animation is resampled. -v value sets it, -q gives it. Starts as 24.0.
+
+Arguments: value
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `value` | `v` | The value. |
+| `query` | `q` | Give the value. |
+
+## FBXResetExport
+
+Every export setting back to the Autodesk Media & Entertainment preset.
+
+## FBXResetImport
+
+Every import setting back to the Autodesk Media & Entertainment preset.
 
 ## FourViewLayout
 
@@ -7978,7 +9048,7 @@ Arguments: name
 
 ## importFbx
 
-Import a binary FBX file: its model hierarchy, meshes as polygons with their UV sets, limb nodes as joints, and materials' colours with the faces that wear them. Lengths come in as centimetres and the file's up axis becomes the scene's. ASCII FBX, skin weights, animation, textures, cameras and lights are not read. Returns the top nodes made.
+Import a binary FBX file as the reference's FBX plug-in does, by the FBXImport settings: the model hierarchy with each node's channels (pre rotation as a joint's orient), meshes as polygons with UV sets, colour sets, normals and hard edges, limb nodes as joints, lambert and phong materials with their file textures (place2dTexture each, normal maps through a bump2d), skins with the file's weights and bind matrices, and the bind pose. The file's axes and unit turn and scale its top nodes. Textures are looked for where the file says, beside it and in its .fbm folder; textures inside the file are written to the .fbm folder. Not read: ASCII FBX, animation, blend shapes, cameras and lights (their nodes come in as transforms). Returns the top nodes made.
 
 Arguments: path
 

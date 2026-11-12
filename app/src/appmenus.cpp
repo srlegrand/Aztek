@@ -6,6 +6,7 @@
 #include "colorchooser.h"
 #include "editors.h"
 #include "host.h"
+#include "fbxui.h"
 #include "usdui.h"
 #include "icons.h"
 #include "markingmenu.h"
@@ -187,7 +188,13 @@ QMenu* MainWindow::file_menu() {
                 log(QString("// Error: %1 files are read by the %2 plug-in, which is not loaded. Load it in Windows > Settings/Preferences > Plug-in Manager. //").arg(is_fbx ? "FBX" : "glTF", is_fbx ? "fbx" : "gltf"), 2);
                 return;
             }
-            exec(is_fbx ? "importFbx" : "importGltf", args(QJsonArray{f}));
+            if (is_fbx) {
+                // By the FBX Import settings, as the reference's plug-in reads them.
+                fbx_apply_saved();
+                exec("FBXImport", QJsonObject{{"file", f}});
+            } else {
+                exec("importGltf", args(QJsonArray{f}));
+            }
             return;
         }
         if (is_usd_file(f)) {
@@ -201,7 +208,7 @@ QMenu* MainWindow::file_menu() {
         QString c = f.endsWith(".ply", Qt::CaseInsensitive) ? "importPly" : f.endsWith(".stl", Qt::CaseInsensitive) ? "importStl" : "importObj";
         exec(c, args(QJsonArray{f}));
     };
-    m->addAction(new OptionRow("Import...", QString(), do_import, [this] { usd_import_options(this); }, m));
+    m->addAction(new OptionRow("Import...", QString(), do_import, [this] { import_options(this); }, m));
     m->addSeparator();
     {
         auto* row = new OptionRow("Create Reference...", "Ctrl+R", [this] { create_reference_dialog(false); }, [this] { create_reference_dialog(true); }, m);
@@ -221,9 +228,9 @@ QMenu* MainWindow::file_menu() {
         };
         if (f.endsWith(".fbx", Qt::CaseInsensitive)) {
             if (!plugin_ready("fbx", "FBX")) return;
-            QJsonObject call{{"args", QJsonArray{f}}};
-            if (all) call["all"] = true;
-            const QJsonObject r = exec("exportFbx", call).toObject();
+            // By the FBX Export settings.
+            fbx_apply_saved();
+            const QJsonObject r = exec("FBXExport", QJsonObject{{"file", f}, {"selected", !all}}).toObject();
             for (const QJsonValue& n : r["notes"].toArray()) log("// Warning: " + n.toString() + " //", 4);
             return;
         }
@@ -265,8 +272,8 @@ QMenu* MainWindow::file_menu() {
             exec("select", a.isEmpty() ? QJsonObject{{"clear", true}} : args(a));
         }
     };
-    m->addAction(new OptionRow("Export All...", QString(), [do_export] { do_export(true); }, [this] { usd_export_options(this); }, m));
-    m->addAction(new OptionRow("Export Selection...", QString(), [do_export] { do_export(false); }, [this] { usd_export_options(this); }, m));
+    m->addAction(new OptionRow("Export All...", QString(), [do_export] { do_export(true); }, [this] { export_options(this); }, m));
+    m->addAction(new OptionRow("Export Selection...", QString(), [do_export] { do_export(false); }, [this] { export_options(this); }, m));
     m->addSeparator();
     QMenu* project = m->addMenu("Project");
     project->addAction("Project Window...", [this] {

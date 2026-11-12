@@ -13,6 +13,21 @@ pub struct Builtin {
     /// The commands it registers, which unloading takes away.
     pub commands: &'static [&'static str],
     pub register: fn(&mut Session),
+    /// Commands it registers besides, listed where they are made.
+    pub more: fn() -> Vec<&'static str>,
+}
+
+fn none() -> Vec<&'static str> {
+    Vec::new()
+}
+
+impl Builtin {
+    /// Every command it registers.
+    pub fn all_commands(&self) -> Vec<&'static str> {
+        let mut v = self.commands.to_vec();
+        v.extend((self.more)());
+        v
+    }
 }
 
 pub const VENDOR: &str = "Aztek";
@@ -22,16 +37,17 @@ pub const FOLDER: &str = "Aztek (built in)";
 pub const BUILTINS: &[Builtin] = &[
     // The reference keeps these nodes in plug-ins of these names, and tools load them by name before they make the
     // nodes. Aztek's are part of the core: the names are here so that loading them succeeds.
-    Builtin { name: "matrixNodes", doc: "The matrix utility nodes: decomposeMatrix, composeMatrix, multMatrix, inverseMatrix, wtAddMatrix and the rest. Part of Aztek's core; listed so that tools which load matrixNodes find it.", commands: &[], register: |_| {} },
-    Builtin { name: "quatNodes", doc: "The quaternion utility nodes: quatAdd, quatConjugate, quatInvert, quatNegate, quatNormalize, quatProd, quatSlerp, quatSub, quatToEuler and eulerToQuat. Part of Aztek's core; listed so that tools which load quatNodes find it.", commands: &[], register: |_| {} },
+    Builtin { name: "matrixNodes", doc: "The matrix utility nodes: decomposeMatrix, composeMatrix, multMatrix, inverseMatrix, wtAddMatrix and the rest. Part of Aztek's core; listed so that tools which load matrixNodes find it.", commands: &[], register: |_| {}, more: none },
+    Builtin { name: "quatNodes", doc: "The quaternion utility nodes: quatAdd, quatConjugate, quatInvert, quatNegate, quatNormalize, quatProd, quatSlerp, quatSub, quatToEuler and eulerToQuat. Part of Aztek's core; listed so that tools which load quatNodes find it.", commands: &[], register: |_| {}, more: none },
     Builtin {
         name: "fbx",
-        doc: "FBX import and export: File > Import and File > Export with a .fbx name, importFbx, exportFbx, FBXImport and FBXExport.",
+        doc: "FBX import and export: File > Import and File > Export with a .fbx name, file -import/-export -type \"FBX\", importFbx, exportFbx, FBXImport, FBXExport and the FBXImport and FBXExport settings commands.",
         commands: &["exportFbx", "FBXExport", "importFbx", "FBXImport"],
         register: |s| {
             aztek_scene::fbx_export::register(&mut s.commands);
             aztek_scene::fbx_import::register(&mut s.commands);
         },
+        more: aztek_scene::fbx_options::command_names,
     },
     Builtin {
         name: "gltf",
@@ -41,6 +57,7 @@ pub const BUILTINS: &[Builtin] = &[
             aztek_scene::gltf_export::register(&mut s.commands);
             aztek_scene::gltf_import::register(&mut s.commands);
         },
+        more: none,
     },
 ];
 
@@ -74,7 +91,7 @@ pub fn load(s: &mut Session, b: &'static Builtin) {
 }
 
 pub fn unload(s: &mut Session, b: &'static Builtin) {
-    for c in b.commands {
+    for c in b.all_commands() {
         s.commands.unregister(c);
     }
     LOADED.with(|l| l.borrow_mut().retain(|n| *n != b.name));

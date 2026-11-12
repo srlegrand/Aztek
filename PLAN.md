@@ -232,7 +232,7 @@ Three states:
 
 | The reference's plug-in | What it is | Here | State |
 |---|---|---|---|
-| fbxmaya | FBX import and export | `fbx` | plug-in (compiled in; no animation, no skin weights on import) |
+| fbxmaya | FBX import and export | `fbx` | plug-in (compiled in; skins, textures and the `FBX*` settings; no animation, blend shapes, cameras or lights) |
 | (no counterpart) | glTF import and export | `gltf` | plug-in (compiled in) |
 | objExport | OBJ export | importObj, exportObj | core |
 | AbcExport, AbcImport, gpuCache | Alembic | | none |

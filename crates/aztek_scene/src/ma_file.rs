@@ -5086,6 +5086,9 @@ fn file_command(s: &mut Session, a: &Args) -> CmdResult {
         }
         return Ok(file_query(s, a, path_arg.as_deref()));
     }
+    if let Some(r) = fbx_file(s, a, path_arg.as_deref(), type_flag.as_deref()) {
+        return r;
+    }
     if let Some(r) = usd_file(s, a, path_arg.as_deref(), type_flag.as_deref()) {
         return r;
     }
@@ -5167,6 +5170,35 @@ fn file_command(s: &mut Session, a: &Args) -> CmdResult {
     }
     // -type or -options alone only set what the next save uses.
     Ok(Value::Null)
+}
+
+/// FBX files go to the FBX plug-in's commands, as the reference's file command hands them to its translator: the
+/// types FBX (reading) and "FBX export" (writing), or a .fbx name with no type. The plug-in's settings apply, not
+/// -options. Without the plug-in the type is not known.
+fn fbx_file(s: &mut Session, a: &Args, path: Option<&str>, ty: Option<&str>) -> Option<CmdResult> {
+    let path = path?;
+    let moving = ["import", "open", "exportAll", "exportSelected"].iter().find(|f| a.bool(f))?;
+    let named = matches!(ty, Some(t) if t.eq_ignore_ascii_case("FBX") || t.eq_ignore_ascii_case("FBX export"));
+    if !named && !(ty.is_none() && extension(path) == "fbx") {
+        return None;
+    }
+    let loaded = s.commands.find("FBXImport").is_some();
+    if !loaded {
+        let t = ty.unwrap_or("FBX");
+        return Some(Err(aztek_ops::CommandError::new(format!("file: unknown file type {t}: the fbx plug-in is not loaded"))));
+    }
+    Some(match *moving {
+        "open" => {
+            if !a.bool("force") && s.is_modified() {
+                return Some(Err(aztek_ops::CommandError::new("file: Unsaved changes.")));
+            }
+            let _ = s.run("newScene", json!({}));
+            s.scene_path = None;
+            s.run("FBXImport", json!({"file": path})).map(|_| json!(path))
+        }
+        "import" => s.run("FBXImport", json!({"file": path})).map(|_| json!(path)),
+        sel => s.run("FBXExport", json!({"file": path, "selected": sel == "exportSelected"})).map(|_| json!(path)),
+    })
 }
 
 /// USD files go to the USD crate's command, when it is installed.

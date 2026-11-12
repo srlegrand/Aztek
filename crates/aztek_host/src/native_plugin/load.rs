@@ -477,7 +477,7 @@ fn plugin_info(s: &mut Session, a: &Args) -> CmdResult {
         } else if on("path") || on("name") {
             json!(b.name)
         } else if on("command") {
-            json!(if is_loaded { b.commands.to_vec() } else { Vec::new() })
+            json!(if is_loaded { b.all_commands() } else { Vec::new() })
         } else if on("dependNode") {
             json!(Vec::<String>::new())
         } else {

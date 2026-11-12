@@ -112,6 +112,7 @@ pub mod uv_ops;
 pub mod uv_sets;
 pub mod fbx_export;
 pub mod fbx_import;
+pub mod fbx_options;
 pub mod gltf_export;
 pub mod gltf_import;
 pub mod import_build;

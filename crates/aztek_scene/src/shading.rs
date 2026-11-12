@@ -411,7 +411,7 @@ pub fn is_default_node(name: &str) -> bool {
     matches!(name, DEFAULT_MATERIAL | INITIAL_SG | INITIAL_INFO) || crate::harold_nodes::is_default_node(name)
 }
 
-fn plug_named(g: &Graph, id: NodeId, attr: &str) -> Option<PlugRef> {
+pub(crate) fn plug_named(g: &Graph, id: NodeId, attr: &str) -> Option<PlugRef> {
     g.node(id)?.ty().attr_index(attr).map(|i| PlugRef::new(id, i as i32))
 }
 
@@ -1182,7 +1182,7 @@ fn f3(v: DVec3) -> [f32; 3] {
     v.as_vec3().to_array()
 }
 
-fn value_v(g: &mut Graph, id: NodeId, attr: &str) -> Option<DVec3> {
+pub(crate) fn value_v(g: &mut Graph, id: NodeId, attr: &str) -> Option<DVec3> {
     let p = plug_named(g, id, attr)?;
     match g.value(&p).ok()? {
         PlugValue::Vec3(x) => Some(x),

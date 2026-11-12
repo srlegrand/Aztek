@@ -143,6 +143,7 @@ pub fn import(s: &mut Session, path: &str) -> CmdResult {
                 shiny: true,
                 pbr: Some((pbr["metallicFactor"].as_f64().unwrap_or(1.0), pbr["roughnessFactor"].as_f64().unwrap_or(1.0))),
                 transparency: if m["alphaMode"].as_str() == Some("BLEND") { 1.0 - c.get(3).copied().unwrap_or(1.0) } else { 0.0 },
+                ..Default::default()
             }
         })
         .collect();
@@ -225,6 +226,8 @@ pub fn import(s: &mut Session, path: &str) -> CmdResult {
             joint: joints[k],
             matrix: to_scene(matrix),
             mesh: n["mesh"].as_u64().and_then(|m| mesh_of(m as usize, &mut notes)),
+            parts: None,
+            existing: None,
         });
     }
     if nodes.is_empty() {

@@ -973,6 +973,54 @@ fn bind(s: &mut Session, a: &Args, names: &[String]) -> CmdResult {
     Ok(json!([g.path(sk)]))
 }
 
+/// A skin a file brought: its influences, their bind pre-matrices, the geometry's world matrix at bind and each point's
+/// weights, as they are. The bind pose takes `pose`'s channels for the joints it names (a joint's channels at bind), the
+/// joints' present channels otherwise. Returns the skinCluster.
+#[allow(clippy::too_many_arguments)]
+pub fn bind_imported(g: &mut Graph, object: NodeId, joints: &[NodeId], bind_pre: Vec<DMat4>, geom: DMat4, weights: Vec<Vec<(u32, f64)>>, normalize: bool, pose: &[(NodeId, Value)]) -> CmdResult<NodeId> {
+    let Some(mesh) = components::as_mesh(g, object) else { fail!("skinCluster: not a mesh") };
+    if skin_of(g, mesh).is_some() {
+        fail!("skinCluster: {} is already skinned", components::display_path(g, mesh));
+    }
+    let max_inf = weights.iter().map(Vec::len).max().unwrap_or(1).max(1) as i64;
+    let mut weights = weights;
+    if normalize {
+        for w in weights.iter_mut() {
+            let sum: f64 = w.iter().map(|x| x.1).sum();
+            if sum > 1e-12 && (sum - 1.0).abs() > 1e-9 {
+                w.iter_mut().for_each(|x| x.1 /= sum);
+            }
+        }
+    }
+    let data = SkinBind { bind_pre, geom, weights, locks: vec![false; joints.len()], raw_edit: false };
+    let t = types::find(SKIN_TYPE).unwrap();
+    let (base, src) = crate::history::upstream(g, mesh)?;
+    let src = crate::deform_sets::orig_source(g, mesh, src)?;
+    let sk = g.create_node(&t, "skinCluster1", NO_NODE, true)?;
+    set_bind(g, sk, data)?;
+    g.set_value(plug(sk, SK_MAX_INF), PlugValue::Int(max_inf))?;
+    g.set_value(plug(sk, SK_NORMALIZE), PlugValue::Int(1))?;
+    for (i, &j) in joints.iter().enumerate() {
+        g.connect(&plug(j, Transform::WORLD_MATRIX), &PlugRef::element(sk, SK_MATRIX as i32, i as i32), false)?;
+    }
+    g.disconnect(&base);
+    g.connect(&src, &plug(sk, SK_IN), false)?;
+    g.connect(&plug(sk, SK_OUT), &base, false)?;
+    let mut members: Vec<NodeId> = pose.iter().map(|p| p.0).filter(|&j| is_joint(g, j)).collect();
+    for &j in joints {
+        if is_joint(g, j) && !members.contains(&j) {
+            members.push(j);
+        }
+    }
+    if !members.is_empty() && !members.iter().all(|&j| bind_pose_of(g, j).is_some()) {
+        let n = pose_node(g, "bindPose1", &members, true)?;
+        let data: Vec<Value> = members.iter().map(|&j| pose.iter().find(|p| p.0 == j).map(|p| p.1.clone()).unwrap_or_else(|| local_of(g, j))).collect();
+        crate::rig::set_json(g, n, 1, json!(data))?;
+    }
+    lock_bound_transform(g, mesh, true)?;
+    Ok(sk)
+}
+
 /// Works a skinCluster's weights out again with a bind method, keeping its influences and bind matrices.
 pub fn rebind_weights(g: &mut Graph, sk: NodeId, method: i64, max_inf: usize, dropoff: f64) -> CmdResult<()> {
     let Some(mut bind) = bind_of(g, sk).map(|b| (*b).clone()) else { fail!("{}: no bind data", g.path(sk)) };

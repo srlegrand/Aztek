@@ -237,7 +237,7 @@ The tools we build our work on shouldn't belong to whoever bought them last. Too
 A 3D application for modelling, UVs, rigging, animation, dynamics and rendering, with the industry-standard commands, hotkeys, menus and file format. Rust core (scene graph, commands,
 geometry, Vulkan viewport), Qt Widgets shell in C++, a MEL interpreter, and embedded Python with `aztek.cmds`,
 compatibility modules so existing scripts import unchanged, and the Python API (2.0, and 1.0 as `maya.OpenMaya`). Reads and writes `.ma` files and reads `.mb` files. [PARITY.md](PARITY.md) has the behaviour
-target and status, including known differences; [docs/COMMANDS.md](docs/COMMANDS.md) lists all 1128 commands;
+target and status, including known differences; [docs/COMMANDS.md](docs/COMMANDS.md) lists all 1233 commands;
 [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) lists the environment variables and which are read.
 
 Website: [srlegrand.github.io/Aztek](https://srlegrand.github.io/Aztek/). Licence: [MIT-0](LICENSE).
@@ -324,7 +324,7 @@ Every extra copy makes the project harder to lose.
 
   ![Two rigs and a row of materials rendered with Harold](docs/harold.png)
 - **UV sets and glTF:** several UV sets to a mesh, each with its own seams, kept in `.ma` files; the UV Set Editor
-  and a UV set list in the UV Editor. File > Import reads FBX (binary) and glTF 2.0: hierarchy, meshes, UVs, materials, joints. File > Export writes FBX (binary 7.4: hierarchy, polygons, UV sets, materials, skins) and glTF 2.0 (`.glb` or `.gltf`): hierarchy, meshes, normals,
+  and a UV set list in the UV Editor. File > Import reads FBX (binary) as the reference's FBX plug-in does: hierarchy, joints with their orients, meshes with UVs, colour sets and hard edges, lambert and phong materials with file textures and normal maps, skins with their weights and bind pose, under the `FBXImport*` settings and the FBX Import Options; and glTF 2.0: hierarchy, meshes, UVs, materials, joints. File > Export writes FBX (binary 7.4: hierarchy, joints with their orients, polygons, UV sets, materials with colour, transparency and normal maps, skins, under the `FBXExport*` settings) and glTF 2.0 (`.glb` or `.gltf`): hierarchy, meshes, normals,
   UV sets, vertex colours, materials, colour textures and skins (joints, weights, bind matrices). The file is Y up; a
   Z-up scene is converted with no node added, or kept Z up (`exportGltf -upAxis z`). Animation is not written yet.
 - **Materials and textures:** a physically based standard surface, and lambert, blinn, phong, phongE and surfaceShader with file textures and place2dTexture, assigned to objects or faces; Textured mode (6), anti-aliasing and ambient occlusion in the viewport; the Hypershade (Browser, Create panel, node graph, Material Viewer, Property Editor); a map button on every colour and number a texture can drive; the image behind the UV Editor.

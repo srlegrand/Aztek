@@ -288,12 +288,12 @@ fn a_bound_mesh_goes_out_with_its_joints_clusters_and_bind_pose() {
         for (i, x) in idx.iter().zip(w) {
             total[*i as usize] += x;
         }
-        // Where the joint stood at the bind, and the mesh seen from there: together they are the mesh's place then.
+        // Where the joint and the mesh stood at the bind, in the world, as the format's own library writes them.
         let (transform, link) = (cl.kid("Transform").doubles(), cl.kid("TransformLink").doubles());
         let joint = doc.kid("Connections").kids.iter().find(|k| k.i(2) == cl.i(0)).map(|k| k.i(1)).unwrap();
         let bind_y = if joint == shoulder.i(0) { 0.0 } else if joint == elbow.i(0) { 4.0 } else { 8.0 };
         assert!((link[13] - bind_y).abs() < 1e-9, "the joint's bind height: {link:?}");
-        assert!((transform[13] + link[13] - 4.0).abs() < 1e-9, "the mesh sat 4 up: {transform:?}");
+        assert!((transform[13] - 4.0).abs() < 1e-9, "the mesh sat 4 up: {transform:?}");
     }
     assert!(total.iter().all(|t| (t - 1.0).abs() < 1e-9), "every point's weights sum to one");
 
@@ -311,7 +311,13 @@ fn the_formats_are_plug_ins_that_load_at_start_and_unload() {
     assert_eq!(c.mel("pluginInfo -q -loaded gltf"), json!(true));
     let listed = c.mel("pluginInfo -q -listPlugins");
     assert!(listed.as_array().unwrap().contains(&json!("fbx")) && listed.as_array().unwrap().contains(&json!("gltf")), "{listed}");
-    assert_eq!(c.mel("pluginInfo -q -command fbx"), json!(["exportFbx", "FBXExport", "importFbx", "FBXImport"]));
+    // The commands, then the settings commands the reference's plug-in has (FBXImportSkins, FBXExportUpAxis, ...).
+    let cmds = c.mel("pluginInfo -q -command fbx");
+    let cmds = cmds.as_array().unwrap();
+    assert_eq!(cmds[..4], [json!("exportFbx"), json!("FBXExport"), json!("importFbx"), json!("FBXImport")]);
+    for name in ["FBXImportSkins", "FBXImportMode", "FBXExportUpAxis", "FBXResetImport", "FBXPushSettings"] {
+        assert!(cmds.contains(&json!(name)), "{name}");
+    }
     assert_eq!(c.mel("pluginInfo -q -vendor fbx"), json!("Aztek"));
     // The names they had when they only exported still find them.
     assert_eq!(c.mel("pluginInfo -q -loaded fbxExport"), json!(true));
@@ -322,6 +328,8 @@ fn the_formats_are_plug_ins_that_load_at_start_and_unload() {
     assert_eq!(c.mel("pluginInfo -q -loaded fbx"), json!(false));
     assert!(c.mel_checked("exportFbx \"/tmp/never.fbx\" box;").is_err());
     assert!(c.mel_checked("importFbx \"/tmp/never.fbx\";").is_err());
+    assert!(c.mel_checked("FBXImportSkins -q;").is_err(), "the settings go with the plug-in");
+    assert!(c.mel_checked("file -import -type \"FBX\" \"/tmp/never.fbx\";").unwrap_err().contains("unknown file type"));
     assert!(c.mel_checked("exportGltf \"/nonexistent-folder/never.glb\" box;").unwrap_err().contains("can't write"), "the other plug-in is untouched");
     assert_eq!(c.mel("loadPlugin fbx"), json!(["fbx"]));
     assert_eq!(c.mel("pluginInfo -q -loaded fbx"), json!(true));

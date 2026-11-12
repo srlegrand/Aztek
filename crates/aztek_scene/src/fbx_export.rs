@@ -186,6 +186,12 @@ struct Doc {
     needed: std::collections::HashSet<NodeId>,
     notes: Vec<String>,
     meshes: usize,
+    /// The turn and scale of the file's axes and unit, on the top nodes and every world matrix.
+    k: DMat4,
+    skins_on: bool,
+    embed: bool,
+    /// File nodes already written as textures.
+    texture_of: HashMap<NodeId, i64>,
 }
 
 impl Doc {
@@ -202,7 +208,81 @@ impl Doc {
     }
 }
 
-/// A shading group's material: its colour, glow, transparency, and the image on its colour.
+/// A file node as a texture (with its media), fed into a material's property. One file node is one texture.
+fn texture(doc: &mut Doc, g: &mut Graph, file_node: NodeId, path: &str, offset: [f64; 2], repeat: [f64; 2], material: i64, property: &'static str) {
+    if path.is_empty() {
+        return;
+    }
+    let tex = match doc.texture_of.get(&file_node) {
+        Some(t) => *t,
+        None => {
+            let tex_name = leaf(g, file_node);
+            let relative = Path::new(path).file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
+            let (tex, video) = (doc.id(), doc.id());
+            let mut vrec = Rec::new("Video", vec![Prop::L(video), named(&tex_name, "Video"), s("Clip")]).with(vec![
+                Rec::new("Type", vec![s("Clip")]),
+                Rec::new("Properties70", vec![]).with(vec![p70("Path", "KString", "XRefUrl", "", vec![s(path)])]),
+                Rec::new("UseMipMap", vec![Prop::I(0)]),
+                Rec::new("Filename", vec![s(path)]),
+                Rec::new("RelativeFilename", vec![s(&relative)]),
+            ]);
+            if doc.embed {
+                match std::fs::read(path) {
+                    Ok(bytes) => vrec.push(Rec::new("Content", vec![Prop::Raw(bytes)])),
+                    Err(_) => doc.notes.push(format!("{path}: can't be read, so it is not embedded")),
+                }
+            }
+            doc.add("Video", vrec);
+            doc.add(
+                "Texture",
+                Rec::new("Texture", vec![Prop::L(tex), named(&tex_name, "Texture"), s("")]).with(vec![
+                    Rec::new("Type", vec![s("TextureVideoClip")]),
+                    Rec::new("Version", vec![Prop::I(202)]),
+                    Rec::new("TextureName", vec![named(&tex_name, "Texture")]),
+                    Rec::new("Properties70", vec![]).with(vec![
+                        vec3("Translation", "Vector", "", DVec3::new(offset[0], offset[1], 0.0)),
+                        vec3("Scaling", "Vector", "", DVec3::new(repeat[0], repeat[1], 1.0)),
+                        p70("UVSet", "KString", "", "", vec![s("default")]),
+                        p70("UseMaterial", "bool", "", "", vec![Prop::I(1)]),
+                    ]),
+                    Rec::new("Media", vec![named(&tex_name, "Video")]),
+                    Rec::new("FileName", vec![s(path)]),
+                    Rec::new("RelativeFilename", vec![s(&relative)]),
+                    Rec::new("ModelUVTranslation", vec![Prop::D(0.0), Prop::D(0.0)]),
+                    Rec::new("ModelUVScaling", vec![Prop::D(1.0), Prop::D(1.0)]),
+                ]),
+            );
+            doc.link(video, tex);
+            doc.texture_of.insert(file_node, tex);
+            tex
+        }
+    };
+    doc.links.push(("OP", tex, material, Some(property)));
+}
+
+/// The file node behind a material's normalCamera, through its bump2d: the node, its path, and whether it is a tangent
+/// space normal map (else a height, with its depth).
+fn bump_of(g: &mut Graph, material: NodeId, scene: Option<&str>, project: Option<&str>) -> Option<(NodeId, String, bool, f64)> {
+    let dst = crate::shading::plug_named(g, material, "normalCamera")?;
+    let bump = g.source(&dst)?.node;
+    if g.node(bump).map(|n| n.ty().name.clone()).as_deref() != Some("bump2d") {
+        return None;
+    }
+    let value = crate::shading::plug_named(g, bump, "bumpValue")?;
+    let file = g.source(&value)?.node;
+    if g.node(file).map(|n| n.ty().name.clone()).as_deref() != Some("file") {
+        return None;
+    }
+    let interp = crate::shading::value_f(g, bump, "bumpInterp").unwrap_or(0.0);
+    let depth = crate::shading::value_f(g, bump, "bumpDepth").unwrap_or(1.0);
+    let name_plug = crate::shading::plug_named(g, file, "fileTextureName")?;
+    let written = g.value(&name_plug).ok()?.as_str().to_string();
+    let resolved = crate::shading::resolve_texture(&written, scene, project).map(|p| aztek_core::paths::to_utf8(&p)).unwrap_or(written);
+    Some((file, resolved, interp >= 0.5, depth))
+}
+
+/// A shading group's material: lambert, or phong for the materials with a highlight, as the reference writes them, with
+/// its colour, glow, transparency and highlight, and the images on its colour, transparency and normals.
 fn material(doc: &mut Doc, sess: &mut Session, sg: NodeId) -> Option<i64> {
     if let Some(i) = doc.material_of.get(&sg) {
         return Some(*i);
@@ -211,21 +291,29 @@ fn material(doc: &mut Doc, sess: &mut Session, sg: NodeId) -> Option<i64> {
     let g = &mut sess.graph;
     let d = crate::shading::draw_material(g, sg, scene.as_deref(), project.as_deref())?;
     let name = leaf(g, d.material);
+    let ty = g.node(d.material).map(|n| n.ty().name.clone()).unwrap_or_default();
     let shiny = d.specular.is_some();
     let c = |v: [f32; 3]| DVec3::new(v[0] as f64, v[1] as f64, v[2] as f64);
     let mut props = vec![
         vec3("DiffuseColor", "Color", "A", c(d.color)),
         p70("DiffuseFactor", "Number", "", "A", vec![Prop::D(d.diffuse as f64)]),
         vec3("AmbientColor", "Color", "A", c(d.ambient)),
+        p70("AmbientFactor", "Number", "", "A", vec![Prop::D(1.0)]),
         vec3("EmissiveColor", "Color", "A", c(d.incandescence)),
         p70("EmissiveFactor", "Number", "", "A", vec![Prop::D(1.0)]),
         vec3("TransparentColor", "Color", "A", DVec3::splat(d.transparency as f64)),
         p70("TransparencyFactor", "Number", "", "A", vec![Prop::D(1.0)]),
         p70("Opacity", "Number", "", "A", vec![Prop::D(1.0 - d.transparency as f64)]),
     ];
-    if shiny {
-        props.push(vec3("SpecularColor", "Color", "A", DVec3::splat(0.5)));
-        props.push(p70("Shininess", "Number", "", "A", vec![Prop::D(20.0)]));
+    if let Some(sp) = &d.specular {
+        props.push(vec3("SpecularColor", "Color", "A", c(sp.color)));
+        props.push(p70("SpecularFactor", "Number", "", "A", vec![Prop::D(1.0)]));
+        let power = if ty == "phong" { sp.shininess as f64 } else { 20.0 };
+        props.push(p70("ShininessExponent", "Number", "", "A", vec![Prop::D(power)]));
+        props.push(p70("Shininess", "Number", "", "A", vec![Prop::D(power)]));
+        if let Some(r) = crate::shading::value_f(g, d.material, "reflectivity") {
+            props.push(p70("ReflectionFactor", "Number", "", "A", vec![Prop::D(r)]));
+        }
     }
     let id = doc.id();
     doc.add(
@@ -237,37 +325,23 @@ fn material(doc: &mut Doc, sess: &mut Session, sg: NodeId) -> Option<i64> {
             Rec::new("Properties70", vec![]).with(props),
         ]),
     );
-    if let Some(t) = d.color_map.as_ref().filter(|t| t.baked.is_none()) {
-        let file = t.resolved.clone().unwrap_or_else(|| t.written.clone());
-        if !file.is_empty() {
-            let tex_name = leaf(g, t.file);
-            let relative = Path::new(&file).file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
-            let (tex, video) = (doc.id(), doc.id());
-            doc.add(
-                "Video",
-                Rec::new("Video", vec![Prop::L(video), named(&tex_name, "Video"), s("Clip")]).with(vec![
-                    Rec::new("Type", vec![s("Clip")]),
-                    Rec::new("Properties70", vec![]).with(vec![p70("Path", "KString", "XRefUrl", "", vec![s(&file)])]),
-                    Rec::new("UseMipMap", vec![Prop::I(0)]),
-                    Rec::new("Filename", vec![s(&file)]),
-                    Rec::new("RelativeFilename", vec![s(&relative)]),
-                ]),
-            );
-            doc.add(
-                "Texture",
-                Rec::new("Texture", vec![Prop::L(tex), named(&tex_name, "Texture"), s("")]).with(vec![
-                    Rec::new("Type", vec![s("TextureVideoClip")]),
-                    Rec::new("Version", vec![Prop::I(202)]),
-                    Rec::new("TextureName", vec![named(&tex_name, "Texture")]),
-                    Rec::new("Media", vec![named(&tex_name, "Video")]),
-                    Rec::new("FileName", vec![s(&file)]),
-                    Rec::new("RelativeFilename", vec![s(&relative)]),
-                    Rec::new("ModelUVTranslation", vec![Prop::D(t.offset[0] as f64), Prop::D(t.offset[1] as f64)]),
-                    Rec::new("ModelUVScaling", vec![Prop::D(t.repeat[0] as f64), Prop::D(t.repeat[1] as f64)]),
-                ]),
-            );
-            doc.link(video, tex);
-            doc.links.push(("OP", tex, id, Some("DiffuseColor")));
+    let f2 = |v: [f32; 2]| [v[0] as f64, v[1] as f64];
+    for (map, property) in [(&d.color_map, "DiffuseColor"), (&d.alpha_map, "TransparentColor")] {
+        if let Some(t) = map.as_ref().filter(|t| t.baked.is_none()) {
+            let file = t.resolved.clone().unwrap_or_else(|| t.written.clone());
+            texture(doc, g, t.file, &file, f2(t.offset), f2(t.repeat), id, property);
+        }
+    }
+    if let Some((file, path, normal, depth)) = bump_of(g, d.material, scene.as_deref(), project.as_deref()) {
+        if normal {
+            texture(doc, g, file, &path, [0.0, 0.0], [1.0, 1.0], id, "NormalMap");
+        } else {
+            texture(doc, g, file, &path, [0.0, 0.0], [1.0, 1.0], id, "Bump");
+            if let Some(Rec { kids, .. }) = doc.objects.iter_mut().rev().find(|r| r.name == "Material" && r.props.first() == Some(&Prop::L(id))) {
+                if let Some(p) = kids.iter_mut().find(|k| k.name == "Properties70") {
+                    p.push(p70("BumpFactor", "Number", "", "A", vec![Prop::D(depth)]));
+                }
+            }
         }
     }
     doc.material_of.insert(sg, id);
@@ -282,13 +356,13 @@ fn geometry(doc: &mut Doc, sess: &mut Session, shape: NodeId, model: i64) -> Opt
         return None;
     }
     // A bound mesh goes out in its bind pose: the clusters move it from there.
-    let skin = crate::skin::skin_of(&sess.graph, shape).and_then(|sk| {
+    let skin = crate::skin::skin_of(&sess.graph, shape).filter(|_| doc.skins_on).and_then(|sk| {
         let bind = crate::skin::bind_of(&sess.graph, sk)?;
         let input = sess.graph.value(&crate::plug::PlugRef::new(sk, crate::skin::SK_IN as i32)).ok()?;
         let cage = input.as_mesh()?.clone();
         (cage.num_points() == m.num_points() && bind.weights.len() == m.num_points() as usize).then(|| (sk, (*cage).clone()))
     });
-    if crate::skin::skin_of(&sess.graph, shape).is_some() && skin.is_none() {
+    if doc.skins_on && crate::skin::skin_of(&sess.graph, shape).is_some() && skin.is_none() {
         doc.notes.push(format!("{}: something after its skin changes its points, so it is written as it stands, without weights", sess.graph.path(shape)));
     }
     if let Some((_, cage)) = &skin {
@@ -395,29 +469,83 @@ fn geometry(doc: &mut Doc, sess: &mut Session, shape: NodeId, model: i64) -> Opt
 /// A transform as a model, with what is under it. The top of what is exported takes its place in the world.
 fn model(doc: &mut Doc, sess: &mut Session, id: NodeId, parent: i64, top: bool) {
     let n = sess.graph.node(id).unwrap();
-    let m: DMat4 = n.matrix(if top { Transform::WORLD_MATRIX } else { Transform::MATRIX });
+    let local: DMat4 = n.matrix(Transform::MATRIX);
     let joint = n.ty().is_a("joint");
+    // A top node with a parent in the scene takes its place in the world.
+    let folded = top && sess.graph.parent(id) != NO_NODE;
+    let m = if folded { n.matrix(Transform::WORLD_MATRIX) } else { local };
     let children: Vec<NodeId> = sess.graph.children(id).to_vec();
     let shapes: Vec<NodeId> = children.iter().copied().filter(|&c| visible_shape(&sess.graph, c)).collect();
-    let (scale, rotation, translation) = m.to_scale_rotation_translation();
-    let euler = crate::transform::matrix_to_euler(&DMat3::from_quat(rotation), crate::transform::RotateOrder::Xyz);
-    let degrees = DVec3::new(euler.x.to_degrees(), euler.y.to_degrees(), euler.z.to_degrees());
-    let rebuilt = DMat4::from_scale_rotation_translation(scale, rotation, translation);
-    if (0..4).any(|c| (rebuilt.col(c) - m.col(c)).length() > 1e-6 * (1.0 + m.col(c).length())) {
-        doc.notes.push(format!("{}: its shear is not written", sess.graph.path(id)));
-    }
     let kind = if joint { "LimbNode" } else if shapes.is_empty() { "Null" } else { "Mesh" };
     let name = leaf(&sess.graph, id);
+    let deg = |v: DVec3| DVec3::new(v.x.to_degrees(), v.y.to_degrees(), v.z.to_degrees());
+    // The node's own channels, as the reference writes them: joint orient as pre rotation, rotate axis as post rotation.
+    let g = &mut sess.graph;
+    let ch = |g: &mut Graph, a: &str, rest: f64| crate::shading::value_v(g, id, a).unwrap_or(DVec3::splat(rest));
+    let mut parts = crate::import_build::Parts {
+        translate: ch(g, "translate", 0.0),
+        rotate: ch(g, "rotate", 0.0),
+        rotate_order: crate::shading::value_f(g, id, "rotateOrder").unwrap_or(0.0) as i64,
+        joint_orient: if joint { ch(g, "jointOrient", 0.0) } else { DVec3::ZERO },
+        rotate_axis: ch(g, "rotateAxis", 0.0),
+        rotate_pivot: ch(g, "rotatePivot", 0.0),
+        rotate_pivot_translate: ch(g, "rotatePivotTranslate", 0.0),
+        scale_pivot: ch(g, "scalePivot", 0.0),
+        scale_pivot_translate: ch(g, "scalePivotTranslate", 0.0),
+        scale: ch(g, "scale", 1.0),
+        segment_scale_compensate: joint.then(|| crate::shading::value_f(g, id, "segmentScaleCompensate").unwrap_or(1.0) != 0.0),
+    };
+    let built = crate::fbx_import::parts_matrix(&parts, joint);
+    let close = |a: &DMat4, b: &DMat4| (0..4).all(|c| (a.col(c) - b.col(c)).length() <= 1e-6 * (1.0 + b.col(c).length()));
+    let mut by_parts = !folded && close(&built, &local);
+    if by_parts && top && doc.k != DMat4::IDENTITY {
+        match crate::fbx_import::convert_top(&parts, joint, doc.k) {
+            Some(p) => parts = p,
+            None => by_parts = false,
+        }
+    }
+    let mut props = Vec::new();
+    if by_parts {
+        let fbx_order = [0, 2, 4, 1, 3, 5][parts.rotate_order.clamp(0, 5) as usize];
+        let ra = crate::transform::euler_to_matrix(parts.rotate_axis, crate::transform::RotateOrder::Xyz);
+        let post = crate::transform::matrix_to_euler(&DMat3::from_mat4(ra.inverse()), crate::transform::RotateOrder::Xyz);
+        props.push(p70("RotationActive", "bool", "", "", vec![Prop::I(1)]));
+        if fbx_order != 0 {
+            props.push(p70("RotationOrder", "enum", "", "", vec![Prop::I(fbx_order)]));
+        }
+        props.push(p70("InheritType", "enum", "", "", vec![Prop::I(if parts.segment_scale_compensate == Some(true) { 2 } else { 1 })]));
+        for (prop, v) in [("RotationOffset", parts.rotate_pivot_translate), ("RotationPivot", parts.rotate_pivot), ("ScalingOffset", parts.scale_pivot_translate), ("ScalingPivot", parts.scale_pivot)] {
+            if v.length() > 1e-12 {
+                props.push(vec3(prop, "Vector3D", "", v));
+            }
+        }
+        if parts.joint_orient.length() > 1e-12 {
+            props.push(vec3("PreRotation", "Vector3D", "", deg(parts.joint_orient)));
+        }
+        if post.length() > 1e-12 {
+            props.push(vec3("PostRotation", "Vector3D", "", deg(post)));
+        }
+        props.push(vec3("Lcl Translation", "Lcl Translation", "A", parts.translate));
+        props.push(vec3("Lcl Rotation", "Lcl Rotation", "A", deg(parts.rotate)));
+        props.push(vec3("Lcl Scaling", "Lcl Scaling", "A", parts.scale));
+    } else {
+        let m = if top { doc.k * m } else { m };
+        let (scale, rotation, translation) = m.to_scale_rotation_translation();
+        let euler = crate::transform::matrix_to_euler(&DMat3::from_quat(rotation), crate::transform::RotateOrder::Xyz);
+        let rebuilt = DMat4::from_scale_rotation_translation(scale, rotation, translation);
+        if !close(&rebuilt, &m) {
+            doc.notes.push(format!("{}: its shear is not written", sess.graph.path(id)));
+        }
+        props.push(vec3("Lcl Translation", "Lcl Translation", "A", translation));
+        props.push(vec3("Lcl Rotation", "Lcl Rotation", "A", deg(euler)));
+        props.push(vec3("Lcl Scaling", "Lcl Scaling", "A", scale));
+    }
     let mid = doc.id();
     doc.add(
         "Model",
         Rec::new("Model", vec![Prop::L(mid), named(&name, "Model"), s(kind)]).with(vec![
             Rec::new("Version", vec![Prop::I(232)]),
-            Rec::new("Properties70", vec![]).with(vec![
-                vec3("Lcl Translation", "Lcl Translation", "A", translation),
-                vec3("Lcl Rotation", "Lcl Rotation", "A", degrees),
-                vec3("Lcl Scaling", "Lcl Scaling", "A", scale),
-            ]),
+            Rec::new("Properties70", vec![]).with(props),
             Rec::new("Shading", vec![s("Y")]),
             Rec::new("Culling", vec![s("CullingOff")]),
         ]),
@@ -467,8 +595,9 @@ fn skins(doc: &mut Doc, g: &Graph) {
                 .with(vec![Rec::new("Version", vec![Prop::I(101)]), Rec::new("Link_DeformAcuracy", vec![Prop::D(50.0)])]),
         );
         doc.link(skin, geo);
+        let geom = doc.k * bind.geom;
         if !pose.iter().any(|p| p.0 == mesh_model) {
-            pose.push((mesh_model, bind.geom));
+            pose.push((mesh_model, geom));
         }
         for (element, joint) in influences {
             let (mut points, mut weights) = (Vec::new(), Vec::new());
@@ -480,7 +609,7 @@ fn skins(doc: &mut Doc, g: &Graph) {
             }
             let pre = bind.bind_pre.get(element as usize).copied().unwrap_or(DMat4::IDENTITY);
             // Where the joint stood at the bind, and the mesh seen from there.
-            let link = pre.inverse();
+            let link = doc.k * pre.inverse();
             let joint_model = doc.model_of[&joint];
             let cluster = doc.id();
             let mut rec = Rec::new("Deformer", vec![Prop::L(cluster), named(&leaf(g, joint), "SubDeformer"), s("Cluster")])
@@ -490,7 +619,8 @@ fn skins(doc: &mut Doc, g: &Graph) {
                 rec.push(Rec::new("Indexes", vec![Prop::Ints(points)]));
                 rec.push(Rec::new("Weights", vec![Prop::Doubles(weights)]));
             }
-            rec.push(matrix("Transform", &(pre * bind.geom)));
+            // The mesh's and the joint's world matrices at the bind, as the format's own library writes them.
+            rec.push(matrix("Transform", &geom));
             rec.push(matrix("TransformLink", &link));
             doc.add("Deformer", rec);
             doc.link(cluster, skin);
@@ -538,7 +668,26 @@ pub fn build(sess: &mut Session, objects: &[NodeId]) -> Result<(Vec<Rec>, Value)
         }
         true
     });
-    let mut doc = Doc { needed: skeletons(&sess.graph, &tops), ..Default::default() };
+    // The file's axes and unit, by the FBXExport settings: the top nodes are turned and scaled into them.
+    let scene_z = crate::world::up_z();
+    let up_z = match crate::fbx_options::word("FBXExportUpAxis").as_str() {
+        "z" => true,
+        "y" => false,
+        _ => scene_z,
+    };
+    // Automatic: the scene's working unit.
+    let unit_cm = if crate::fbx_options::on("FBXExportAutoUnits") { aztek_ops::units::cm_per_unit() } else { crate::fbx_options::unit_cm(&crate::fbx_options::word("FBXExportConvertUnitString")).unwrap_or(1.0) };
+    let scale = crate::fbx_options::number("FBXExportScaleFactor");
+    let scale = if scale > 0.0 { scale } else { 1.0 };
+    let turn = crate::fbx_import::axis_change(scene_z, up_z);
+    let k = DMat4::from_mat3(turn * (scale / unit_cm));
+    let mut doc = Doc {
+        needed: skeletons(&sess.graph, &tops),
+        k,
+        skins_on: crate::fbx_options::on("FBXExportSkins"),
+        embed: crate::fbx_options::on("FBXExportEmbeddedTextures"),
+        ..Default::default()
+    };
     let mut skeleton_tops: Vec<NodeId> = doc.needed.iter().copied().filter(|&j| sess.graph.parent(j) == NO_NODE).collect();
     skeleton_tops.sort_unstable();
     for t in skeleton_tops {
@@ -556,7 +705,6 @@ pub fn build(sess: &mut Session, objects: &[NodeId]) -> Result<(Vec<Rec>, Value)
     }
     skins(&mut doc, &sess.graph);
 
-    let up_z = crate::world::up_z();
     let int = |name: &str, v: i32| p70(name, "int", "Integer", "", vec![Prop::I(v)]);
     let settings = Rec::new("GlobalSettings", vec![]).with(vec![
         Rec::new("Version", vec![Prop::I(1000)]),
@@ -570,9 +718,9 @@ pub fn build(sess: &mut Session, objects: &[NodeId]) -> Result<(Vec<Rec>, Value)
             int("CoordAxisSign", 1),
             int("OriginalUpAxis", if up_z { 2 } else { 1 }),
             int("OriginalUpAxisSign", 1),
-            // Centimetres.
-            p70("UnitScaleFactor", "double", "Number", "", vec![Prop::D(1.0)]),
-            p70("OriginalUnitScaleFactor", "double", "Number", "", vec![Prop::D(1.0)]),
+            // Centimetres, or the unit asked for.
+            p70("UnitScaleFactor", "double", "Number", "", vec![Prop::D(unit_cm)]),
+            p70("OriginalUnitScaleFactor", "double", "Number", "", vec![Prop::D(unit_cm)]),
         ]),
     ]);
     let mut kinds: Vec<(&str, i32)> = doc.counts.iter().map(|(k, v)| (*k, *v)).collect();
@@ -623,6 +771,9 @@ pub fn build(sess: &mut Session, objects: &[NodeId]) -> Result<(Vec<Rec>, Value)
 }
 
 pub fn export(sess: &mut Session, path: &str, objects: &[NodeId]) -> CmdResult {
+    if crate::fbx_options::on("FBXExportInAscii") {
+        fail!("exportFbx: ASCII FBX files are not written: turn FBXExportInAscii off");
+    }
     let (top, mut report) = match build(sess, objects) {
         Ok(x) => x,
         Err(e) => fail!("exportFbx: {e}"),

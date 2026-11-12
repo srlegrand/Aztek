@@ -1575,3 +1575,88 @@ What was added for it:
   first, now compares as the reference's does (it compared as a bool, so `MS::kSuccess == status` was false on
   success). Hosts give curves to plug-ins through new table entries; an older host has none and the kit says so.
 - A compiled plug-in's deformer can go on a curve: its points are the curve's CVs.
+
+### FBX as the reference's FBX plug-in: textures, shaders, joints, skins and its settings (12/11/2026)
+
+Checked against the reference's FBX documentation (the FBX Import and Export MEL command pages, the General FBX MEL
+commands, and the FBX Import and FBX Export options pages) and two files from Unreal Engine 5.6 (`SK_Greyhound.FBX`,
+FBX 7300, and `SK_Louis.FBX`, FBX 7700): 76 limb nodes, one mesh of 38695 points, nine lambert materials, ten
+textures, one skin of 77 clusters and a bind pose of 80 nodes.
+
+Import (`FBXImport -f path`, `file -import -type "FBX" path`, `file -open` of a .fbx, `importFbx path`, File > Import):
+
+- Nodes keep their channels as the reference's plug-in sets them: translate, rotate in its rotate order, scale,
+  pivots and their offsets; a joint's pre rotation is its `jointOrient` and its post rotation its `rotateAxis`; a
+  transform's pre rotation is folded into its rotation (the same matrix). `segmentScaleCompensate` follows the
+  node's inherit type. Pre and post rotation count only when the node's `RotationActive` says so.
+- Properties an object leaves out are read from the file's property templates (Definitions), as the format means.
+- Axes and units are converted on the top nodes only, as the reference does it: a Z-up file in a Y-up scene gets its
+  top nodes turned (the Unreal files' top node comes in at rotate X -90) and a file in metres has its top nodes scaled
+  by 100. Points, joints and weights below are as in the file. `FBXImportAxisConversionEnable`,
+  `FBXImportForcedFileAxis`, `FBXImportUpAxis`, `FBXImportScaleFactorEnable` and `FBXImportScaleFactor` are honoured.
+- Names are the file's, unique among siblings only: `|SK_Greyhound|SK_Greyhound` as in the reference (they became
+  `SK_Greyhound1` before).
+- Meshes: UV sets (by corner, point, face or one for all; direct or indexed), colour sets (`colorSet1` when the file
+  names none), normals. Hard edges come from the file's smoothing (by face groups or by edge) when
+  `FBXImportSmoothingGroups` is on, else from where its normals differ. Normals are kept (locked) on meshes that are not
+  skinned unless `FBXImportUnlockNormals`; a skinned mesh's are unlocked, as the reference's page says of deformed
+  geometry.
+- Materials: lambert, or phong for the phong shading model (they came in as blinn). color, diffuse, transparency
+  (TransparentColor by TransparencyFactor, else 1 - Opacity), ambientColor, incandescence; on phong also
+  specularColor, cosinePower, reflectivity, reflectedColor. Shading groups are `<material>SG`.
+- Textures: a `file` node named after the file's texture, with its own `place2dTexture` wired as the reference wires
+  one (repeat, offset, rotate and wrap from the texture), into color, transparency, ambient, incandescence, diffuse
+  and, on phong, specular colour, cosine power and reflection. A normal map goes through a `bump2d` set to Tangent
+  Space Normals (`bumpInterp` 1); a bump map through a `bump2d` with its depth. A texture several materials use is
+  one file node. Layered textures are not read (a warning says so).
+- Where textures are looked for: the path in the file, its relative path from the FBX file's folder, the
+  `<name>.fbm` folder beside the FBX file, then the FBX file's folder; the file's path is kept when none is there.
+  Textures inside the file (Embed Media) are written to the `.fbm` folder first.
+- Skins (`FBXImportSkins`): a skinCluster with the file's influences in cluster order, weights as stored (normalized
+  when `FBXImportPreNormalizeWeights`), bind pre-matrices from each cluster's link matrix and the geometry matrix from
+  its transform matrix, and a `bindPose1` dagPose holding the joints' channels at the file's bind pose. A null a skin
+  is bound to comes in as a joint (`FBXImportConvertDeformingNullsToJoint`).
+- `FBXImportMode`: `add` makes everything; `merge` (Add and update animation, the preset's choice) leaves nodes the
+  scene already has by the same path alone and adds the rest; `exmerge` (Update animation) adds nothing, as animation
+  is not read.
+- `FBXImportCameras` and `FBXImportLights` off leave those nodes out.
+- Not read: ASCII FBX, animation and takes into the scene (`FBXRead`/`FBXGetTake*` list a file's takes), blend
+  shapes, constraints, cameras and lights as such (their nodes are transforms), geometry caches, audio.
+
+Settings: every `FBXImport*` and `FBXExport*` command on the reference's command pages, each `-v value` to set and
+`-q` to ask, starting at the Autodesk Media & Entertainment preset; `FBXResetImport`, `FBXResetExport`,
+`FBXPushSettings`, `FBXPopSettings`, `FBXLoadMBImportPresetFile`, `FBXLoadMBExportPresetFile`,
+`FBXExportSplitAnimationIntoTakes`, `FBXResamplingRate`, `FBXRead`, `FBXClose`, `FBXGetTakeCount`,
+`FBXGetTakeName`, `FBXGetTakeIndex`, `FBXGetTakeComment`, `FBXGetTakeLocalTimeSpan`,
+`FBXGetTakeReferenceTimeSpan`, `FBXExtPlugin`. Known differences:
+
+- The preset's values for the options the documentation gives no default for are chosen from the dialog's layout,
+  not checked against the reference.
+- A few settings the dialogs have and the command pages don't list are named on the same pattern:
+  `FBXImportAnimation`, `FBXImportOpticalMarkers`, `FBXImportAudio`, `FBXImportPreNormalizeWeights`,
+  `FBXImportAutoUnits`, `FBXImportShowUI`, `FBXImportRemoveBadPolysFromMesh`, `FBXExportAnimation`,
+  `FBXExportAudio`, `FBXExportAutoUnits`, `FBXExportShowUI`, `FBXExportIncludeChildren`, `FBXExportSelectionSets`,
+  `FBXExportNullsAsLocators`, `FBXExportConvertNurbsSurfaceTo`, `FBXExportCurveFilters`, `FBXExportRemoveSingleKey`.
+- Preset files (`FBXLoadImportPresetFile`, `FBXLoadExportPresetFile`) are not read; a warning says so.
+- Take time spans are given in frames at the scene's rate.
+
+Export, by the settings: joints go out with `jointOrient` as pre rotation, `rotateAxis` as post rotation, their
+rotate order and inherit type (nodes whose matrix the channels don't make, sheared ones say, are folded as before);
+materials as lambert or phong with the material's own highlight; colour, transparency and normal or bump textures;
+cluster transform matrices as the mesh's world matrix at bind (the format's library's meaning; they were the mesh as
+seen from the joint). Honoured: `FBXExportSkins`, `FBXExportEmbeddedTextures` (the images go inside the file),
+`FBXExportUpAxis` (the top nodes are turned), `FBXExportAutoUnits`/`FBXExportConvertUnitString` and
+`FBXExportScaleFactor` (the top nodes are scaled, the file says its unit), `FBXExportInAscii` (refused: ASCII is not
+written). The others are kept and answer queries but change nothing yet.
+
+Windows: File > Import's and the two exports' option boxes ask for the file type, then open FBX Import Options or FBX
+Export Options with the reference's sections (Presets, Include, Geometry, Animation and its extra options, Deformed
+Models, Constraints, Cameras/Lights/Audio, Connections, Advanced Options with Units, Axis Conversion, UI, FBX File
+Format). Each control runs its setting command; what was set is remembered for the next session. File > Import and
+Export of a .fbx use `FBXImport` and `FBXExport`, so the settings apply.
+
+Checked: both Unreal files import with 77 joints, one skinCluster of 77 influences whose every point's weights sum to
+one (point 13247 carries the 0.156 the file's cluster gives it), the bind pose, nine materials with ten file nodes and four
+normal maps; turning a neck joint moves the mesh. A scene written out and read back keeps joint orients, rotate
+orders, rotate axes, weights, the bent mesh, the phong with its colour and normal map, and finds the textures moved
+into the .fbm folder. Not seen: the reference itself importing these files side by side.
