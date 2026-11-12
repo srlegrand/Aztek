@@ -317,6 +317,11 @@ pub struct Display {
     pub flat: bool,
     pub bounding_box: bool,
     pub xray: bool,
+    /// Surfaces darken where others are close: creases, contacts, the insides of things.
+    pub ambient_occlusion: bool,
+    /// How far that reaches, in scene units, and how strong it is.
+    pub ao_radius: f64,
+    pub ao_intensity: f64,
     pub xray_joints: bool,
     pub xray_active: bool,
     pub backface: bool,
@@ -361,6 +366,9 @@ impl Default for Display {
             flat: false,
             bounding_box: false,
             xray: false,
+            ambient_occlusion: false,
+            ao_radius: 2.0,
+            ao_intensity: 1.5,
             xray_joints: false,
             xray_active: false,
             backface: false,

@@ -4,6 +4,7 @@
 #include "mainwindow.h"
 
 #include <QApplication>
+#include <QSettings>
 #include <cstring>
 #include <QIcon>
 #include <QSplashScreen>
@@ -81,6 +82,11 @@ int main(int argc, char** argv) {
     QApplication::setWindowIcon(QIcon(":/aztek-icon.png"));
     QGuiApplication::setDesktopFileName("aztek");
     apply_style(app);
+    // The views' samples a pixel, as chosen in a view's Lighting > Anti-aliasing. The environment's own value wins.
+    if (qEnvironmentVariableIsEmpty("AZTEK_MSAA")) {
+        const int samples = QSettings().value("viewport/samples", 4).toInt();
+        if (samples == 1 || samples == 2 || samples == 4 || samples == 8) qputenv("AZTEK_MSAA", QByteArray::number(samples));
+    }
 
     QCommandLineParser args;
     args.setApplicationDescription("Aztek");

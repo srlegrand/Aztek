@@ -188,8 +188,24 @@ pub struct Gpu {
     pub msaa_image: vk::Image,
     pub msaa_view: vk::ImageView,
     pub msaa_alloc: Option<Allocation>,
+    /// The pass the scene is drawn in: into `scene_image` (through `msaa_image` when multisampled), with depth kept.
     pub render_pass: vk::RenderPass,
+    /// What the scene pass leaves: the view's colour at one sample a pixel, read by the post pass.
+    pub scene_image: vk::Image,
+    pub scene_view: vk::ImageView,
+    pub scene_alloc: Option<Allocation>,
+    pub scene_framebuffer: vk::Framebuffer,
+    /// How open each pixel is to the light around it, worked out from the scene's depth before the picture is put together.
+    pub ao_pass: vk::RenderPass,
+    pub ao_image: vk::Image,
+    pub ao_view: vk::ImageView,
+    pub ao_alloc: Option<Allocation>,
+    pub ao_framebuffer: vk::Framebuffer,
+    /// The pass that puts the scene on the window, through the post effects.
+    pub post_pass: vk::RenderPass,
+    /// One per swapchain image, for the post pass.
     pub framebuffers: Vec<vk::Framebuffer>,
+    in_post: bool,
     pub pool: vk::CommandPool,
     pub cmd: vk::CommandBuffer,
     pub fence: vk::Fence,
@@ -221,14 +237,15 @@ impl Gpu {
                 .load_op(vk::AttachmentLoadOp::CLEAR)
                 .store_op(if multi { vk::AttachmentStoreOp::DONT_CARE } else { vk::AttachmentStoreOp::STORE })
                 .initial_layout(vk::ImageLayout::UNDEFINED)
-                .final_layout(if multi { vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL } else { vk::ImageLayout::PRESENT_SRC_KHR }),
+                .final_layout(if multi { vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL } else { vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL }),
             vk::AttachmentDescription::default()
                 .format(DEPTH_FORMAT)
                 .samples(samples)
                 .load_op(vk::AttachmentLoadOp::CLEAR)
-                .store_op(vk::AttachmentStoreOp::DONT_CARE)
+                // Kept: the post pass reads the depth for ambient occlusion.
+                .store_op(vk::AttachmentStoreOp::STORE)
                 .initial_layout(vk::ImageLayout::UNDEFINED)
-                .final_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL),
+                .final_layout(vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL),
         ];
         if multi {
             attachments.push(
@@ -238,7 +255,7 @@ impl Gpu {
                     .load_op(vk::AttachmentLoadOp::DONT_CARE)
                     .store_op(vk::AttachmentStoreOp::STORE)
                     .initial_layout(vk::ImageLayout::UNDEFINED)
-                    .final_layout(vk::ImageLayout::PRESENT_SRC_KHR),
+                    .final_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL),
             );
         }
         let color_ref = [vk::AttachmentReference::default().attachment(0).layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)];
@@ -260,6 +277,34 @@ impl Gpu {
             .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE)];
         let render_pass =
             device.create_render_pass(&vk::RenderPassCreateInfo::default().attachments(&attachments).subpasses(&subpass).dependencies(&dep), None)?;
+        // The post pass: one colour attachment, the window's image, written whole.
+        let post_att = [vk::AttachmentDescription::default()
+            .format(format)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .load_op(vk::AttachmentLoadOp::DONT_CARE)
+            .store_op(vk::AttachmentStoreOp::STORE)
+            .initial_layout(vk::ImageLayout::UNDEFINED)
+            .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)];
+        let post_ref = [vk::AttachmentReference::default().attachment(0).layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)];
+        let post_sub = [vk::SubpassDescription::default().pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS).color_attachments(&post_ref)];
+        // It reads what the scene pass wrote.
+        let post_dep = [vk::SubpassDependency::default()
+            .src_subpass(vk::SUBPASS_EXTERNAL)
+            .dst_subpass(0)
+            .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT | vk::PipelineStageFlags::LATE_FRAGMENT_TESTS)
+            .dst_stage_mask(vk::PipelineStageFlags::FRAGMENT_SHADER | vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+            .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE)
+            .dst_access_mask(vk::AccessFlags::SHADER_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE)];
+        let post_pass = device.create_render_pass(&vk::RenderPassCreateInfo::default().attachments(&post_att).subpasses(&post_sub).dependencies(&post_dep), None)?;
+        // The occlusion pass: one value a pixel, read by the post pass.
+        let ao_att = [vk::AttachmentDescription::default()
+            .format(AO_FORMAT)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .load_op(vk::AttachmentLoadOp::DONT_CARE)
+            .store_op(vk::AttachmentStoreOp::STORE)
+            .initial_layout(vk::ImageLayout::UNDEFINED)
+            .final_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)];
+        let ao_pass = device.create_render_pass(&vk::RenderPassCreateInfo::default().attachments(&ao_att).subpasses(&post_sub).dependencies(&post_dep), None)?;
         let pool = device.create_command_pool(
             &vk::CommandPoolCreateInfo::default().queue_family_index(shared.queue_family).flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER),
             None,
@@ -289,7 +334,18 @@ impl Gpu {
             msaa_view: vk::ImageView::null(),
             msaa_alloc: None,
             render_pass,
+            scene_image: vk::Image::null(),
+            scene_view: vk::ImageView::null(),
+            scene_alloc: None,
+            scene_framebuffer: vk::Framebuffer::null(),
+            ao_pass,
+            ao_image: vk::Image::null(),
+            ao_view: vk::ImageView::null(),
+            ao_alloc: None,
+            ao_framebuffer: vk::Framebuffer::null(),
+            post_pass,
             framebuffers: Vec::new(),
+            in_post: false,
             pool,
             cmd,
             fence,
@@ -307,6 +363,30 @@ impl Gpu {
                 self.device.destroy_framebuffer(f, None);
             }
             self.framebuffers.clear();
+            if self.scene_framebuffer != vk::Framebuffer::null() {
+                self.device.destroy_framebuffer(self.scene_framebuffer, None);
+                self.scene_framebuffer = vk::Framebuffer::null();
+            }
+            if self.ao_framebuffer != vk::Framebuffer::null() {
+                self.device.destroy_framebuffer(self.ao_framebuffer, None);
+                self.ao_framebuffer = vk::Framebuffer::null();
+            }
+            if self.ao_view != vk::ImageView::null() {
+                self.device.destroy_image_view(self.ao_view, None);
+                self.device.destroy_image(self.ao_image, None);
+                if let Some(a) = self.ao_alloc.take() {
+                    let _ = self.shared.allocator.lock().unwrap().free(a);
+                }
+                self.ao_view = vk::ImageView::null();
+            }
+            if self.scene_view != vk::ImageView::null() {
+                self.device.destroy_image_view(self.scene_view, None);
+                self.device.destroy_image(self.scene_image, None);
+                if let Some(a) = self.scene_alloc.take() {
+                    let _ = self.shared.allocator.lock().unwrap().free(a);
+                }
+                self.scene_view = vk::ImageView::null();
+            }
             for &v in &self.views {
                 self.device.destroy_image_view(v, None);
             }
@@ -402,7 +482,7 @@ impl Gpu {
                     .mip_levels(1)
                     .array_layers(1)
                     .samples(self.samples)
-                    .usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT),
+                    .usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT | vk::ImageUsageFlags::SAMPLED),
                 None,
             )?;
             let req = self.device.get_image_memory_requirements(self.depth_image);
@@ -451,15 +531,71 @@ impl Gpu {
                     None,
                 )?;
             }
+            // The scene's colour at one sample a pixel: what the scene pass resolves into and the post pass reads.
+            self.scene_image = self.device.create_image(
+                &vk::ImageCreateInfo::default()
+                    .image_type(vk::ImageType::TYPE_2D)
+                    .format(self.format)
+                    .extent(vk::Extent3D { width: extent.width, height: extent.height, depth: 1 })
+                    .mip_levels(1)
+                    .array_layers(1)
+                    .samples(vk::SampleCountFlags::TYPE_1)
+                    .usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::SAMPLED),
+                None,
+            )?;
+            let req = self.device.get_image_memory_requirements(self.scene_image);
+            let alloc = self.shared.allocator.lock().unwrap().allocate(&AllocationCreateDesc {
+                name: "scene colour",
+                requirements: req,
+                location: MemoryLocation::GpuOnly,
+                linear: false,
+                allocation_scheme: AllocationScheme::GpuAllocatorManaged,
+            })?;
+            self.device.bind_image_memory(self.scene_image, alloc.memory(), alloc.offset())?;
+            self.scene_alloc = Some(alloc);
+            self.scene_view = self.device.create_image_view(
+                &vk::ImageViewCreateInfo::default().image(self.scene_image).view_type(vk::ImageViewType::TYPE_2D).format(self.format).subresource_range(color_range()),
+                None,
+            )?;
+            let att: Vec<vk::ImageView> = if multi { vec![self.msaa_view, self.depth_view, self.scene_view] } else { vec![self.scene_view, self.depth_view] };
+            self.scene_framebuffer = self.device.create_framebuffer(
+                &vk::FramebufferCreateInfo::default().render_pass(self.render_pass).attachments(&att).width(extent.width).height(extent.height).layers(1),
+                None,
+            )?;
+            self.ao_image = self.device.create_image(
+                &vk::ImageCreateInfo::default()
+                    .image_type(vk::ImageType::TYPE_2D)
+                    .format(AO_FORMAT)
+                    .extent(vk::Extent3D { width: extent.width, height: extent.height, depth: 1 })
+                    .mip_levels(1)
+                    .array_layers(1)
+                    .samples(vk::SampleCountFlags::TYPE_1)
+                    .usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::SAMPLED),
+                None,
+            )?;
+            let req = self.device.get_image_memory_requirements(self.ao_image);
+            let alloc = self.shared.allocator.lock().unwrap().allocate(&AllocationCreateDesc {
+                name: "occlusion",
+                requirements: req,
+                location: MemoryLocation::GpuOnly,
+                linear: false,
+                allocation_scheme: AllocationScheme::GpuAllocatorManaged,
+            })?;
+            self.device.bind_image_memory(self.ao_image, alloc.memory(), alloc.offset())?;
+            self.ao_alloc = Some(alloc);
+            self.ao_view = self.device.create_image_view(
+                &vk::ImageViewCreateInfo::default().image(self.ao_image).view_type(vk::ImageViewType::TYPE_2D).format(AO_FORMAT).subresource_range(color_range()),
+                None,
+            )?;
+            let ao_att = [self.ao_view];
+            self.ao_framebuffer = self.device.create_framebuffer(
+                &vk::FramebufferCreateInfo::default().render_pass(self.ao_pass).attachments(&ao_att).width(extent.width).height(extent.height).layers(1),
+                None,
+            )?;
             for &v in &self.views {
-                let att: Vec<vk::ImageView> = if multi { vec![self.msaa_view, self.depth_view, v] } else { vec![v, self.depth_view] };
+                let att = [v];
                 self.framebuffers.push(self.device.create_framebuffer(
-                    &vk::FramebufferCreateInfo::default()
-                        .render_pass(self.render_pass)
-                        .attachments(&att)
-                        .width(extent.width)
-                        .height(extent.height)
-                        .layers(1),
+                    &vk::FramebufferCreateInfo::default().render_pass(self.post_pass).attachments(&att).width(extent.width).height(extent.height).layers(1),
                     None,
                 )?);
             }
@@ -539,17 +675,60 @@ impl Gpu {
                 self.cmd,
                 &vk::RenderPassBeginInfo::default()
                     .render_pass(self.render_pass)
-                    .framebuffer(self.framebuffers[index as usize])
+                    .framebuffer(self.scene_framebuffer)
                     .render_area(vk::Rect2D { offset: vk::Offset2D::default(), extent: self.extent })
                     .clear_values(clears),
                 vk::SubpassContents::INLINE,
             );
+            self.in_post = false;
             Some(index)
         }
     }
 
+    /// Ends the scene pass and begins the one that works out the occlusion from its depth.
+    pub fn begin_occlusion(&mut self) {
+        unsafe {
+            self.device.cmd_end_render_pass(self.cmd);
+            self.device.cmd_begin_render_pass(
+                self.cmd,
+                &vk::RenderPassBeginInfo::default()
+                    .render_pass(self.ao_pass)
+                    .framebuffer(self.ao_framebuffer)
+                    .render_area(vk::Rect2D { offset: vk::Offset2D::default(), extent: self.extent }),
+                vk::SubpassContents::INLINE,
+            );
+            self.device.cmd_set_viewport(self.cmd, 0, &[vk::Viewport { x: 0.0, y: 0.0, width: self.extent.width as f32, height: self.extent.height as f32, min_depth: 0.0, max_depth: 1.0 }]);
+            self.device.cmd_set_scissor(self.cmd, 0, &[vk::Rect2D { offset: vk::Offset2D::default(), extent: self.extent }]);
+        }
+    }
+
+    /// Ends the occlusion pass and begins the one that puts the picture on the window: it is drawn between this and
+    /// `end_frame`.
+    pub fn begin_post(&mut self, index: u32) {
+        unsafe {
+            self.device.cmd_end_render_pass(self.cmd);
+            self.device.cmd_begin_render_pass(
+                self.cmd,
+                &vk::RenderPassBeginInfo::default()
+                    .render_pass(self.post_pass)
+                    .framebuffer(self.framebuffers[index as usize])
+                    .render_area(vk::Rect2D { offset: vk::Offset2D::default(), extent: self.extent }),
+                vk::SubpassContents::INLINE,
+            );
+            self.device.cmd_set_viewport(self.cmd, 0, &[vk::Viewport { x: 0.0, y: 0.0, width: self.extent.width as f32, height: self.extent.height as f32, min_depth: 0.0, max_depth: 1.0 }]);
+            self.device.cmd_set_scissor(self.cmd, 0, &[vk::Rect2D { offset: vk::Offset2D::default(), extent: self.extent }]);
+        }
+        self.in_post = true;
+    }
+
+    /// Samples per pixel the view draws with, as a number.
+    pub fn sample_number(&self) -> u32 {
+        self.samples.as_raw()
+    }
+
     /// Ends the pass, submits and presents. False when the swapchain needs remaking.
     pub fn end_frame(&mut self, index: u32) -> bool {
+        debug_assert!(self.in_post, "the post pass puts the frame on the window");
         unsafe {
             self.device.cmd_end_render_pass(self.cmd);
             if self.device.end_command_buffer(self.cmd).is_err() {
@@ -647,10 +826,15 @@ impl Drop for Gpu {
             self.device.destroy_fence(self.fence, None);
             self.device.destroy_command_pool(self.pool, None);
             self.device.destroy_render_pass(self.render_pass, None);
+            self.device.destroy_render_pass(self.post_pass, None);
+            self.device.destroy_render_pass(self.ao_pass, None);
             self.shared.surface_fn.destroy_surface(self.surface, None);
         }
     }
 }
+
+/// One number a pixel: how open it is.
+pub const AO_FORMAT: vk::Format = vk::Format::R8_UNORM;
 
 pub fn color_range() -> vk::ImageSubresourceRange {
     vk::ImageSubresourceRange::default().aspect_mask(vk::ImageAspectFlags::COLOR).level_count(1).layer_count(1)

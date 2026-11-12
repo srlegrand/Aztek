@@ -80,6 +80,8 @@ struct HudPart {
 pub struct View {
     pub gpu: Gpu,
     pub r: Renderer,
+    /// What turns the drawn scene into the window's picture.
+    post: crate::post::Post,
     pub vp: Viewport,
     /// Physical pixels per logical one.
     pub dpr: f64,
@@ -141,12 +143,24 @@ pub struct View {
     pub want_capture: bool,
 }
 
+impl Drop for View {
+    fn drop(&mut self) {
+        // Nothing of the post pass's is in use once the queue is idle.
+        unsafe {
+            let _ = self.gpu.device.queue_wait_idle(self.gpu.queue);
+        }
+        self.post.destroy(&self.gpu);
+    }
+}
+
 impl View {
     pub fn new(gpu: Gpu, kind: CamKind, dpr: f64) -> View {
         let r = Renderer::new(&gpu);
+        let post = crate::post::Post::new(&gpu);
         View {
             gpu,
             r,
+            post,
             vp: Viewport::new(kind),
             dpr,
             nav: None,
@@ -211,6 +225,8 @@ impl View {
             self.needs_redraw = true;
             return;
         };
+        // The last frame is done with them: the post pass reads this size's images.
+        self.post.bind_images(&self.gpu);
         self.read_camera(core);
         self.iso_in(core);
         let gathered = gather(&mut core.s.graph);
@@ -246,6 +262,14 @@ impl View {
         }
         self.overlay(core, &items);
         prof.mark("  overlay");
+        // The scene is drawn: it goes to the window through the post effects.
+        let d = &self.vp.disp;
+        let settings = crate::post::PostSettings { ambient_occlusion: d.ambient_occlusion && !d.xray, ao_radius: d.ao_radius as f32, ao_intensity: d.ao_intensity as f32 };
+        let (proj, ortho) = (self.vp.cam.proj(self.vp.aspect()).as_mat4(), self.vp.cam.ortho());
+        self.gpu.begin_occlusion();
+        self.post.draw_occlusion(&self.gpu, proj, ortho, &settings);
+        self.gpu.begin_post(index);
+        self.post.draw(&self.gpu, proj, ortho, &settings);
         let ok = self.gpu.end_frame(index);
         prof.mark("  submit");
         if self.want_capture {
@@ -1753,6 +1777,9 @@ impl View {
                             "lights" => d.lights = b,
                             "twoSided" => d.two_sided = b,
                             "shadows" => d.shadows = b,
+                            "ambientOcclusion" => d.ambient_occlusion = b,
+                            "aoRadius" => d.ao_radius = x.as_f64().unwrap_or(2.0).clamp(0.01, 1000.0),
+                            "aoIntensity" => d.ao_intensity = x.as_f64().unwrap_or(1.5).clamp(0.0, 8.0),
                             "polygons" => d.polygons = b,
                             "surfaces" => d.surfaces = b,
                             "curves" => d.curves = b,
@@ -1938,7 +1965,7 @@ impl View {
             "isolated" => json!(self.vp.iso.active()),
             "disp" => {
                 let d = &self.vp.disp;
-                json!({"polygons": d.polygons, "surfaces": d.surfaces, "curves": d.curves, "joints": d.joints, "ikHandles": d.ik_handles, "deformers": d.deformers, "locators": d.locators, "cameras": d.cameras, "lights": d.lights, "displayLights": d.light_mode.name(), "twoSided": d.two_sided, "shadows": d.shadows, "manipulators": d.manipulators, "flat": d.flat, "textured": d.textured, "defaultMaterial": d.default_material, "boundingBox": d.bounding_box, "xray": d.xray, "xrayJoints": d.xray_joints, "xrayActive": d.xray_active, "backface": d.backface, "filmGate": d.film_gate, "resGate": d.res_gate, "safeAction": d.safe_action, "highlight": d.highlight, "grid": self.show_grid, "wireframe": self.vp.wireframe, "wireOnShaded": self.vp.wire_on_shaded})
+                json!({"polygons": d.polygons, "surfaces": d.surfaces, "curves": d.curves, "joints": d.joints, "ikHandles": d.ik_handles, "deformers": d.deformers, "locators": d.locators, "cameras": d.cameras, "lights": d.lights, "displayLights": d.light_mode.name(), "twoSided": d.two_sided, "shadows": d.shadows, "ambientOcclusion": d.ambient_occlusion, "aoRadius": d.ao_radius, "aoIntensity": d.ao_intensity, "samples": self.gpu.sample_number(), "manipulators": d.manipulators, "flat": d.flat, "textured": d.textured, "defaultMaterial": d.default_material, "boundingBox": d.bounding_box, "xray": d.xray, "xrayJoints": d.xray_joints, "xrayActive": d.xray_active, "backface": d.backface, "filmGate": d.film_gate, "resGate": d.res_gate, "safeAction": d.safe_action, "highlight": d.highlight, "grid": self.show_grid, "wireframe": self.vp.wireframe, "wireOnShaded": self.vp.wire_on_shaded})
             }
             _ => Value::Null,
         }

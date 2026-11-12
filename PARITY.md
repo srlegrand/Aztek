@@ -1387,3 +1387,24 @@ glTF (issue 26):
   stands, with a warning.
 - Not written: animation, blend shapes, cameras, lights. Not checked: the files have not been opened in another
   application from here.
+
+### Viewport: anti-aliasing shown, ambient occlusion (12/11/2026)
+
+- Anti-aliasing was on (4 samples a pixel, since 09/11/2026) with nothing in the interface saying so. A view's
+  Lighting > Anti-aliasing lists Off, 2, 4 and 8 samples, ticks the one in use, and takes a choice for the next start:
+  the sample count is fixed when a view is made. `AZTEK_MSAA` still overrides it.
+- Ambient occlusion: Lighting > Ambient Occlusion, with Radius (scene units) and Intensity under Ambient Occlusion
+  Settings. Surfaces darken in creases and where they meet. Off by default; the choice is kept for new views. X-Ray
+  turns it off.
+- How it is made: the scene is drawn into an image of its own, with its depth kept. A second pass reads the depth and
+  works out, for each pixel, how much of what is within the radius stands in front of the surface (16 samples on a
+  spiral, the surface's normal from the depth). The last pass smooths that over the pixels of the same surface and
+  multiplies the picture by it, onto the window. Something farther in front than the radius (a manipulator, another
+  object) casts nothing.
+- Limits: it is worked out from one depth sample a pixel, so its edges are not anti-aliased; it darkens everything a
+  pixel shows, lights' direct light included, where a renderer would darken only the light from around; lines and
+  the grid sit in the same picture and are darkened with it; on screen the radius is held to 64 pixels, so close up
+  it reaches less far than asked.
+- Not done, of what a real-time view of a physically based scene wants: image-based light from the sky dome,
+  specular reflections of it, soft shadows from area lights, the standard surface's full model (the view draws its
+  base colour and one highlight), tone mapping, depth of field, motion blur, fog, sorted transparency.

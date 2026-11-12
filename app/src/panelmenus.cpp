@@ -16,6 +16,7 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QSettings>
+#include <cmath>
 #include <QStackedLayout>
 #include <QToolBar>
 
@@ -188,7 +189,71 @@ void ModelPanel::build_menus() {
     lighting->addSeparator();
     flag_item(lighting, v, "Two Sided Lighting", "twoSided", *flags);
     flag_item(lighting, v, "Shadows", "shadows", *flags);
-    connect(lighting, &QMenu::aboutToShow, this, [v, light_items, sync_flags] {
+    // Ambient occlusion: this view's switch, with its reach and strength under it. The choice is kept for new views.
+    QAction* ao = lighting->addAction("Ambient Occlusion");
+    ao->setCheckable(true);
+    connect(ao, &QAction::toggled, this, [v](bool on) {
+        v->set("disp", QString("{\"ambientOcclusion\":%1}").arg(on ? "true" : "false"));
+        QSettings().setValue("viewport/ambientOcclusion", on);
+    });
+    QMenu* ao_menu = lighting->addMenu("Ambient Occlusion Settings");
+    auto ao_choice = [v, ao_menu](const QString& title, const QString& key, const QList<QPair<QString, double>>& values) {
+        QMenu* m = ao_menu->addMenu(title);
+        auto* group = new QActionGroup(m);
+        for (const auto& item : values) {
+            QAction* a = m->addAction(item.first, [v, key, value = item.second] {
+                v->set("disp", QString("{\"%1\":%2}").arg(key).arg(value));
+                QSettings().setValue("viewport/" + key, value);
+            });
+            a->setCheckable(true);
+            a->setData(item.second);
+            group->addAction(a);
+        }
+        connect(m, &QMenu::aboutToShow, m, [v, m, key] {
+            const double now = parse(v->get("disp")).toObject()[key].toDouble();
+            for (QAction* a : m->actions()) a->setChecked(std::abs(a->data().toDouble() - now) < 1e-6);
+        });
+    };
+    ao_choice("Radius", "aoRadius", {{"0.5", 0.5}, {"1", 1.0}, {"2", 2.0}, {"4", 4.0}, {"8", 8.0}, {"16", 16.0}, {"32", 32.0}});
+    ao_choice("Intensity", "aoIntensity", {{"0.5", 0.5}, {"1", 1.0}, {"1.5", 1.5}, {"2", 2.0}, {"3", 3.0}});
+    // Anti-aliasing is set when a view is made: the choice here is for the next start. The tick says what is in use.
+    QMenu* aa = lighting->addMenu("Anti-aliasing");
+    auto* aa_group = new QActionGroup(aa);
+    for (int n : {1, 2, 4, 8}) {
+        QAction* a = aa->addAction(n == 1 ? QString("Off") : QString("%1 Samples").arg(n), [n] {
+            QSettings().setValue("viewport/samples", n);
+            log(QString("// Anti-aliasing: %1 from the next start //").arg(n == 1 ? QString("off") : QString("%1 samples a pixel").arg(n)), 0);
+        });
+        a->setCheckable(true);
+        a->setData(n);
+        aa_group->addAction(a);
+    }
+    connect(aa, &QMenu::aboutToShow, aa, [v, aa] {
+        const int now = parse(v->get("disp")).toObject()["samples"].toInt();
+        for (QAction* a : aa->actions()) {
+            a->setChecked(a->data().toInt() == now);
+            const int n = a->data().toInt();
+            QString label = n == 1 ? QString("Off") : QString("%1 Samples").arg(n);
+            if (n == now) label += " (in use)";
+            else if (n == QSettings().value("viewport/samples", 4).toInt()) label += " (from the next start)";
+            a->setText(label);
+        }
+    });
+    // A new view takes the occlusion last chosen.
+    {
+        QSettings st;
+        ao->blockSignals(true);
+        ao->setChecked(st.value("viewport/ambientOcclusion", false).toBool());
+        ao->blockSignals(false);
+        v->set("disp", QString("{\"ambientOcclusion\":%1,\"aoRadius\":%2,\"aoIntensity\":%3}")
+                           .arg(ao->isChecked() ? "true" : "false")
+                           .arg(st.value("viewport/aoRadius", 2.0).toDouble())
+                           .arg(st.value("viewport/aoIntensity", 1.5).toDouble()));
+    }
+    connect(lighting, &QMenu::aboutToShow, this, [v, light_items, sync_flags, ao] {
+        ao->blockSignals(true);
+        ao->setChecked(parse(v->get("disp")).toObject()["ambientOcclusion"].toBool());
+        ao->blockSignals(false);
         sync_flags();
         QAction* a = light_items->value(parse(v->get("disp")).toObject()["displayLights"].toString());
         if (a) a->setChecked(true);
