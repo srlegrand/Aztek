@@ -1434,3 +1434,13 @@ listed under "Aztek (built in)", and answer to `loadPlugin`, `unloadPlugin` and 
   the kit has commands, nodes and deformers (MPxCommand, MPxNode, MPxDeformerNode, MPxGeometryFilter) and no file
   translator class yet.
 - Harold is not one yet: its node types, commands, render settings and Render View are still registered by the core.
+
+### The user folder is asked about at the first start (12/11/2026)
+
+With the reference's user folder found and no choice saved, the first start asks how to use it, before the plug-ins
+marked to load and the userSetup scripts run: copy it into Aztek's own folder, use it where it is (read only), or
+take nothing. The version and whether its userSetup scripts run are chosen there too. The copy is offered first
+when Aztek's folder does not exist, leaving Aztek's folder as it is when it does. Putting it off saves nothing, so
+it is asked again. Not asked with `--script`, `--screenshot` or `--batch`, or when no such folder is there.
+The optionVars in the folder's `userPrefs.mel` are read before the question, so on that first start they come in
+at the next one.

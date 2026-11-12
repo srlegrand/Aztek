@@ -621,6 +621,9 @@ fn describe(c: &Choice, a: &Applied) -> Value {
         "version": c.version,
         "userSetup": c.user_setup,
         "ownFolder": own_folder().to_string_lossy(),
+        // Whether Aztek's own folder is there yet, and whether a choice has been made: the first start asks.
+        "ownExists": own_folder().is_dir(),
+        "chosen": choice_file().is_file(),
         "detected": detected.as_ref().map(|p| p.to_string_lossy().into_owned()),
         "detectedVersions": detected.as_ref().map(|p| versions(p)).unwrap_or_default(),
         "root": a.root.to_string_lossy(),

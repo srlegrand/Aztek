@@ -38,6 +38,12 @@ Preferences > User Folder chooses where scripts, plug-ins, modules and saved pre
 - A folder of the reference's, used where it is. Aztek reads it and never writes to it.
 - A custom folder with the same layout.
 
+At the first start with a folder of the reference's on the machine and no choice made yet, Aztek asks which of these
+to do, before any of the folder's scripts run: copy it into Aztek's own folder, use it where it is, or take nothing
+from it. With no folder of Aztek's yet the copy is the one offered first; with one there, leaving it as it is.
+"Ask Me Next Time" saves nothing. The question is not asked when a script or a screenshot drives the start, in batch,
+or when no such folder is found.
+
 The layout is the reference's: `scripts`, `plug-ins`, `modules`, and a version's folder (`2025`) with the same again plus `prefs`. From the chosen folder Aztek takes:
 
 - `scripts` on the MEL and Python paths, `userSetup.mel` and `userSetup.py` run at start (can be turned off).

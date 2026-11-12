@@ -1,4 +1,5 @@
 // Aztek: Qt shell over the Rust host library.
+#include "userfolder.h"
 #include "aztek.h"
 #include "host.h"
 #include "mainwindow.h"
@@ -116,6 +117,9 @@ int main(int argc, char** argv) {
         splash->finish(&w);
         splash->deleteLater();
     }
+    // The first start with the reference's user folder there: how to use it is asked before anything of it runs. Not
+    // when a script or a screenshot drives the run.
+    if (!args.isSet(script) && !args.isSet(shot)) az::ask_user_folder_at_first_start(&w);
     // The plug-ins marked to load at start and the user folder's userSetup scripts, with the window there for the
     // menus and shelves they add.
     aztek_startup_scripts();

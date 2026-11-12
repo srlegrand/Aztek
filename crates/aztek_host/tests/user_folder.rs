@@ -73,10 +73,14 @@ fn an_existing_folder_is_linked_copied_and_its_plug_ins_told_apart() {
     assert_eq!(q["detected"], json!(theirs.to_string_lossy()));
     assert_eq!(q["detectedVersions"], json!(["2025", "2024"]));
     assert_eq!(c.mel("internalVar -userAppDir;"), json!(format!("{}/", slash(&own))));
+    // What the first start asks by: no choice made yet, and whether Aztek's own folder is there.
+    assert_eq!(q["chosen"], json!(false), "{q}");
+    assert_eq!(q["ownExists"], json!(own.is_dir()));
 
     // Linked: the newest version is taken, its folders are on the paths, its module is found.
     let q = c.mel(&format!("aztekUserFolder -mode \"link\" -folder \"{}\";", slash(&theirs)));
     assert_eq!(q["usedVersion"], json!("2025"), "{q}");
+    assert_eq!(q["chosen"], json!(true), "a choice made is not asked again");
     assert_eq!(q["found"][0]["name"], json!("ufTool"), "{q}");
     assert_eq!(q["found"].as_array().unwrap().len(), 1, "a module for another platform is left out: {q}");
     assert_eq!(q["shelves"].as_array().unwrap().len(), 1);
