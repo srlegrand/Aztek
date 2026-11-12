@@ -109,6 +109,7 @@ pub mod utility_nodes;
 pub mod uv_misc;
 pub mod uv_ops;
 pub mod uv_sets;
+pub mod fbx_export;
 pub mod gltf_export;
 
 pub use error::{GraphError, Result};

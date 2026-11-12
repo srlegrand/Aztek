@@ -1065,10 +1065,11 @@ print(cmds.pluginInfo("broken", q=True, loaded=True), cmds.loadPlugin("noSuch", 
 "#
         ),
         &[
-            "False []",
+            // The plug-ins that come with Aztek are loaded from the start.
+            "False ['fbxExport', 'gltfExport']",
             "Plug-in \"testPlugin\" was not found on the plug-in path.",
             "['testPlugin']",
-            "True ['testPlugin'] Testers 1.2 True",
+            "True ['fbxExport', 'gltfExport', 'testPlugin'] Testers 1.2 True",
             "['asksCmd', 'boomCmd', 'innerCmd', 'makeLoc', 'modCmd', 'plainCmd'] ['chatty', 'doubler']",
             "['testPlugin'] True",
             "cannot start",

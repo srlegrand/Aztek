@@ -1408,3 +1408,29 @@ glTF (issue 26):
 - Not done, of what a real-time view of a physically based scene wants: image-based light from the sky dome,
   specular reflections of it, soft shadows from area lights, the standard surface's full model (the view draws its
   base colour and one highlight), tone mapping, depth of field, motion blur, fog, sorted transparency.
+
+### FBX export, and features as plug-ins (12/11/2026)
+
+FBX export: File > Export All or Export Selection with a .fbx name, `exportFbx path [objects] [-all]`, and `FBXExport
+-f path [-s]` for scripts written for the reference.
+
+- The file is binary FBX 7.4, written from the format's public descriptions. No library of its vendor's is used.
+- Written: the hierarchy; meshes as polygons (quads stay quads) with a normal a corner, every UV set and a material
+  a face; materials with colour, ambient, glow and transparency, and the colour texture by path; skins as limb nodes,
+  a cluster a joint with its points and weights, and the bind pose, the mesh in its bind pose.
+- Centimetres, and the scene's up axis in the file's settings: nothing is turned or scaled.
+- A node's pivots and a joint's orientation are folded into its translation, rotation and scale. Shear is dropped,
+  with a warning.
+- Not written: animation, blend shapes, cameras, lights, vertex colours, smoothing groups, FBX import.
+- Not checked: the files have been read back by a reader written for the test, which shows they are well formed and
+  hold what they should. They have not been opened in another application. The footer and file id are the fixed
+  bytes other writers of the format use, taken from memory of them.
+
+Plug-ins that come with Aztek: `fbxExport` and `gltfExport` are the first two. Each registers its commands when it
+loads and takes them away when it unloads; they load at start unless unticked in the Plug-in Manager, where they are
+listed under "Aztek (built in)", and answer to `loadPlugin`, `unloadPlugin` and `pluginInfo` by name.
+
+- They are compiled into the program, not files on the plug-in path, and are not written against the plug-in kit:
+  the kit has commands, nodes and deformers (MPxCommand, MPxNode, MPxDeformerNode, MPxGeometryFilter) and no file
+  translator class yet.
+- Harold is not one yet: its node types, commands, render settings and Render View are still registered by the core.

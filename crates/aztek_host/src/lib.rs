@@ -7,6 +7,7 @@
 pub mod dyn_draw;
 pub mod axis_orient;
 mod batch;
+pub mod builtin_plugins;
 pub mod camera;
 mod core;
 pub mod ctx_cmds;

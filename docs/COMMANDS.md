@@ -3,7 +3,7 @@
 Generated from the command registry by `cargo run -p aztek_host --example gen_commands`; do not edit by hand.
 Commands take the reference's flags, long or short, in MEL and in Python (`aztek.cmds` or `maya.cmds`).
 
-1117 commands.
+1119 commands.
 
 ## AL_usdmaya_LayerCreateLayer
 
@@ -231,6 +231,15 @@ The EP curve tool: click to place edit points, Enter to finish.
 ## EditMembershipTool
 
 The edit membership tool: which points a deformer holds.
+
+## FBXExport
+
+Export to FBX as scripts written for the reference ask: FBXExport -f "path" writes everything, with -s the selection.
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `file` | `f` | The file to write. |
+| `selected` | `s` | Only the selection. |
 
 ## FourViewLayout
 
@@ -5550,6 +5559,16 @@ The selection and what is connected to it: -d steps (1), -et DG, EG or SG. EG an
 | --- | --- | --- |
 | `depth` | `d` | Steps away from the selection. |
 | `expansionType` | `et` | DG, EG or SG. |
+
+## exportFbx
+
+Export to FBX (binary, 7.4): the objects named, or the selection, with what is under them. Hierarchy, meshes as polygons with normals, UV sets and materials, colour textures by path, and skins (joints, clusters, bind pose), in centimetres with the scene's up axis. Animation, blend shapes, cameras and lights are not written. -all exports every top-level object.
+
+Arguments: path objects...
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `all` | `all` | Every top-level object, not the selection. |
 
 ## exportGltf
 

@@ -138,7 +138,8 @@ fn list_plugins(s: &mut Session) -> Value {
     }
     let auto = autoload_list();
     let same = |a: &str, b: &Path| !a.is_empty() && (Path::new(a) == b || std::fs::canonicalize(a).ok() == std::fs::canonicalize(b).ok());
-    let mut out = Vec::new();
+    // The ones that come with Aztek first.
+    let mut out = crate::builtin_plugins::rows();
     let mut seen: Vec<PathBuf> = Vec::new();
     let row = |path: &Path, folder: &Path, loaded: &[(String, String)]| {
         let kind = kind_of(path);
@@ -372,6 +373,12 @@ fn load_plugin(s: &mut Session, a: &Args) -> CmdResult {
     for v in &a.positional {
         let Some(name) = v.as_str() else { continue };
         let key = key_of(name);
+        // One that comes with Aztek.
+        if let Some(b) = crate::builtin_plugins::find(name) {
+            crate::builtin_plugins::load(s, b);
+            out.push(json!(b.name));
+            continue;
+        }
         if plugin_named(&key).is_some() {
             out.push(json!(key));
             continue;
@@ -404,7 +411,9 @@ fn unload_plugin(s: &mut Session, a: &Args) -> CmdResult {
     for v in &a.positional {
         let Some(name) = v.as_str() else { continue };
         let key = key_of(name);
-        if plugin_named(&key).is_some() {
+        if let Some(b) = crate::builtin_plugins::find(name) {
+            crate::builtin_plugins::unload(s, b);
+        } else if plugin_named(&key).is_some() {
             unload_native(s, &key, force).map_err(CommandError::new)?;
         } else if python_started() {
             python_call(s, "unload_plugin", Some(name), &a.flags)?;
@@ -419,6 +428,13 @@ fn plugin_info(s: &mut Session, a: &Args) -> CmdResult {
     let on = |k: &str| a.bool(k);
     if a.get("autoload").is_some() {
         let Some(name) = a.positional.first().and_then(Value::as_str) else { return Err(CommandError::new("pluginInfo: name a plug-in")) };
+        if crate::builtin_plugins::find(name).is_some() {
+            if on("query") {
+                return Ok(json!(crate::builtin_plugins::autoload(name)));
+            }
+            crate::builtin_plugins::set_autoload(name, on("autoload")).map_err(|e| CommandError::new(format!("pluginInfo: {e}")))?;
+            return Ok(Value::Null);
+        }
         // By its file: the one loaded under that name, or the one that name finds on the path.
         let key = key_of(name);
         let rows = list_plugins(s);
@@ -437,6 +453,7 @@ fn plugin_info(s: &mut Session, a: &Args) -> CmdResult {
     }
     if on("listPlugins") {
         let mut names = loaded_names();
+        names.extend(crate::builtin_plugins::loaded());
         if python_started() {
             if let Value::Array(l) = python_call(s, "plugin_info", None, &a.flags)? {
                 names.extend(l.into_iter().filter_map(|x| x.as_str().map(str::to_string)));
@@ -447,6 +464,26 @@ fn plugin_info(s: &mut Session, a: &Args) -> CmdResult {
     }
     let Some(name) = a.positional.first().and_then(Value::as_str) else { return Err(CommandError::new("pluginInfo: name a plug-in")) };
     let key = key_of(name);
+    if let Some(b) = crate::builtin_plugins::find(name) {
+        let is_loaded = crate::builtin_plugins::is_loaded(name);
+        return Ok(if on("loaded") {
+            json!(is_loaded)
+        } else if on("registered") {
+            json!(true)
+        } else if on("version") {
+            json!(env!("CARGO_PKG_VERSION"))
+        } else if on("vendor") {
+            json!(crate::builtin_plugins::VENDOR)
+        } else if on("path") || on("name") {
+            json!(b.name)
+        } else if on("command") {
+            json!(if is_loaded { b.commands.to_vec() } else { Vec::new() })
+        } else if on("dependNode") {
+            json!(Vec::<String>::new())
+        } else {
+            return Err(CommandError::new("pluginInfo: nothing asked"));
+        });
+    }
     let Some(p) = plugin_named(&key) else {
         if python_started() {
             return python_call(s, "plugin_info", Some(name), &a.flags);

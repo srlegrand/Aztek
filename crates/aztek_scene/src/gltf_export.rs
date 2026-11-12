@@ -367,20 +367,20 @@ fn mesh(doc: &mut Doc, s: &mut Session, shape: NodeId, out_dir: &Path, embed: bo
 }
 
 /// A node's own name, without the path above it or its namespace.
-fn leaf(g: &Graph, id: NodeId) -> String {
+pub(crate) fn leaf(g: &Graph, id: NodeId) -> String {
     let path = g.path(id);
     path.rsplit('|').next().unwrap_or(&path).to_string()
 }
 
-fn is_transform(g: &Graph, id: NodeId) -> bool {
+pub(crate) fn is_transform(g: &Graph, id: NodeId) -> bool {
     g.node(id).is_some_and(|n| n.ty().is_a("transform"))
 }
 
-fn visible_shape(g: &Graph, id: NodeId) -> bool {
+pub(crate) fn visible_shape(g: &Graph, id: NodeId) -> bool {
     g.node(id).is_some_and(|n| n.ty().is_a("mesh") && !n.bool(crate::transform::DagNode::INTERMEDIATE_OBJECT))
 }
 
-fn has_mesh_below(g: &Graph, id: NodeId) -> bool {
+pub(crate) fn has_mesh_below(g: &Graph, id: NodeId) -> bool {
     g.children(id).iter().copied().any(|c| visible_shape(g, c) || (is_transform(g, c) && has_mesh_below(g, c)))
 }
 
@@ -449,7 +449,7 @@ fn node(doc: &mut Doc, s: &mut Session, id: NodeId, top: bool, out_dir: &Path, e
 }
 
 /// The joints the skins under these objects use, each with everything above it.
-fn skeletons(g: &Graph, tops: &[NodeId]) -> HashSet<NodeId> {
+pub(crate) fn skeletons(g: &Graph, tops: &[NodeId]) -> HashSet<NodeId> {
     let mut needed = HashSet::new();
     let mut stack: Vec<NodeId> = tops.to_vec();
     while let Some(id) = stack.pop() {
@@ -616,6 +616,9 @@ pub fn export(s: &mut Session, path: &str, objects: &[NodeId], up_z: bool) -> Cm
     }
     Ok(json!({"path": path, "nodes": counts.0, "meshes": counts.1, "materials": doc.materials.len(), "textures": doc.textures.len(), "skins": doc.skins.len(), "notes": doc.notes}))
 }
+
+/// The commands the glTF plug-in brings.
+pub const COMMANDS: &[&str] = &["exportGltf"];
 
 pub fn register(c: &mut Commands<Session>) {
     c.register(

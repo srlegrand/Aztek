@@ -7,6 +7,12 @@ Aztek loads two kinds of plug-in:
 
 A compiled plug-in built for the reference can't load: it links the reference's own libraries, which Aztek does not have. The Plug-in Manager lists such a file as "Compiled for Maya" and leaves it alone. With its source, it can be rebuilt for Aztek, usually with no change to the code.
 
+## Plug-ins that come with Aztek
+
+Some features are plug-ins that are part of the program: `fbxExport` (FBX export) and `gltfExport` (glTF export). They
+load at start, are listed in the Plug-in Manager under "Aztek (built in)", and can be unloaded or kept from loading
+there. `loadPlugin fbxExport`, `unloadPlugin fbxExport` and `pluginInfo -q -loaded fbxExport` work as for any other.
+
 ## The Plug-in Manager
 
 Windows > Settings/Preferences > Plug-in Manager lists every plug-in found, grouped by folder.

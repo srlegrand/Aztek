@@ -132,7 +132,6 @@ impl Session {
         crate::booleans::register(&mut s.commands);
         crate::anim::register(&mut s.commands);
         crate::uv_ops::register(&mut s.commands);
-        crate::gltf_export::register(&mut s.commands);
         crate::rig::register(&mut s.commands);
         crate::constraint::register(&mut s.commands);
         crate::ik::register(&mut s.commands);

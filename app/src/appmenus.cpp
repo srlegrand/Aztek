@@ -182,8 +182,23 @@ QMenu* MainWindow::file_menu() {
     m->addAction("Reference Editor", this, &MainWindow::show_reference_editor);
     m->addSeparator();
     auto do_export = [](bool all) {
-        QString f = QFileDialog::getSaveFileName(nullptr, all ? "Export All" : "Export Selection", "export.ma", QString("ASCII scenes (*.ma);;%1;;glTF 2.0 (*.glb *.gltf);;OBJ (*.obj);;PLY (*.ply);;STL (*.stl)").arg(kUsdFilter));
+        QString f = QFileDialog::getSaveFileName(nullptr, all ? "Export All" : "Export Selection", "export.ma", QString("ASCII scenes (*.ma);;%1;;FBX (*.fbx);;glTF 2.0 (*.glb *.gltf);;OBJ (*.obj);;PLY (*.ply);;STL (*.stl)").arg(kUsdFilter));
         if (f.isEmpty()) return;
+        // The exporters are plug-ins: one that has been unloaded says so rather than failing on an unknown command.
+        auto plugin_ready = [](const QString& plugin, const QString& what) {
+            if (ask("pluginInfo", QJsonObject{{"args", QJsonArray{plugin}}, {"query", true}, {"loaded", true}}).toBool()) return true;
+            log(QString("// Error: %1 export is the %2 plug-in, which is not loaded. Load it in Windows > Settings/Preferences > Plug-in Manager. //").arg(what, plugin), 5);
+            return false;
+        };
+        if (f.endsWith(".fbx", Qt::CaseInsensitive)) {
+            if (!plugin_ready("fbxExport", "FBX")) return;
+            QJsonObject call{{"args", QJsonArray{f}}};
+            if (all) call["all"] = true;
+            const QJsonObject r = exec("exportFbx", call).toObject();
+            for (const QJsonValue& n : r["notes"].toArray()) log("// Warning: " + n.toString() + " //", 4);
+            return;
+        }
+        if ((f.endsWith(".glb", Qt::CaseInsensitive) || f.endsWith(".gltf", Qt::CaseInsensitive)) && !plugin_ready("gltfExport", "glTF")) return;
         if (f.endsWith(".glb", Qt::CaseInsensitive) || f.endsWith(".gltf", Qt::CaseInsensitive)) {
             // Its own command: the hierarchy, materials and textures go with the meshes.
             QJsonObject call{{"args", QJsonArray{f}}};
