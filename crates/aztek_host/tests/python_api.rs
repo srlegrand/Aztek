@@ -1066,10 +1066,10 @@ print(cmds.pluginInfo("broken", q=True, loaded=True), cmds.loadPlugin("noSuch", 
         ),
         &[
             // The plug-ins that come with Aztek are loaded from the start.
-            "False ['fbx', 'gltf']",
+            "False ['fbx', 'gltf', 'matrixNodes', 'quatNodes']",
             "Plug-in \"testPlugin\" was not found on the plug-in path.",
             "['testPlugin']",
-            "True ['fbx', 'gltf', 'testPlugin'] Testers 1.2 True",
+            "True ['fbx', 'gltf', 'matrixNodes', 'quatNodes', 'testPlugin'] Testers 1.2 True",
             "['asksCmd', 'boomCmd', 'innerCmd', 'makeLoc', 'modCmd', 'plainCmd'] ['chatty', 'doubler']",
             "['testPlugin'] True",
             "cannot start",

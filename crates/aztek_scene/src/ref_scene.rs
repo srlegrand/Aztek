@@ -990,7 +990,7 @@ fn option_var(s: &mut Session, a: &Args) -> CmdResult {
 fn about(_s: &mut Session, a: &Args) -> CmdResult {
     let (win, linux, mac) = (cfg!(windows), cfg!(target_os = "linux"), cfg!(target_os = "macos"));
     Ok(if a.bool("version") {
-        json!("2025")
+        json!(aztek_core::REFERENCE_VERSION)
     } else if a.bool("apiVersion") {
         json!(20250000)
     } else if a.bool("operatingSystem") {

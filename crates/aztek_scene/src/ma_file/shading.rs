@@ -259,7 +259,8 @@ impl Writer<'_> {
             return true;
         }
         if ty == SG_TYPE {
-            let lines = self.attr_lines(id, |_, a| a.name != "renderableOnlySet");
+            // isHistoricallyInteresting is written as 0 above, as the reference writes every shading group.
+            let lines = self.attr_lines(id, |_, a| a.name != "renderableOnlySet" && a.name != "isHistoricallyInteresting");
             let _ = write!(self.out, "createNode shadingEngine -n {};\n\tsetAttr \".ihi\" 0;\n\tsetAttr \".ro\" yes;\n{lines}", quoted(&self.s.graph.path(id)));
             let p = self.s.graph.path(id);
             self.shading.push(format!("connectAttr {} \":renderPartition.st\" -na;", quoted(&format!("{p}.pa"))));

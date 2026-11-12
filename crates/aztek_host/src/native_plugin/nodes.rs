@@ -294,7 +294,21 @@ impl NodeBehavior for NativeNode {
     fn compute(&mut self, ctx: &EvalContext, d: &mut NodeData) {
         let e = self.entry.clone();
         let (inp, out) = if e.deformer { (d.ty().attr_index("inputPolymesh"), d.ty().attr_index("output")) } else { (None, None) };
-        let input = inp.and_then(|i| d.mesh(i).cloned());
+        let mut input = inp.and_then(|i| d.mesh(i).cloned());
+        // A curve to deform: its CVs go to the plug-in as the points of a mesh with no faces, and come back as the
+        // curve's CVs.
+        let curve_attrs = if e.deformer { d.ty().attr_index("inputCurve").zip(d.ty().attr_index("outputCurve")) } else { None };
+        let curve_in = match (input.is_none(), curve_attrs) {
+            (true, Some((ci, _))) => match d.value(ci) {
+                PlugValue::Data(Some(data)) => data.as_any().downcast_ref::<aztek_scene::curves::CurveData>().filter(|c| c.0.is_valid()).map(|c| c.0.clone()),
+                _ => None,
+            },
+            _ => None,
+        };
+        let carrier = curve_in.as_ref().map(|c| Arc::new(aztek_geo::Mesh::from_polygons(&c.cvs, &[], &[])));
+        if let Some(m) = &carrier {
+            input = Some(m.clone());
+        }
         let pass = |d: &mut NodeData| {
             if let Some(o) = out {
                 d.set_output(o, PlugValue::Mesh(input.clone()));
@@ -321,7 +335,7 @@ impl NodeBehavior for NativeNode {
             _ => Some(GLOBAL.lock().unwrap_or_else(|x| x.into_inner())),
         };
         let outputs = e.outputs.get().cloned().unwrap_or_default();
-        let mut block = Block { data: d, time: ctx.time, node: self.id, pending: BTreeMap::new(), strings: Vec::new() };
+        let mut block = Block { data: d, time: ctx.time, node: self.id, pending: BTreeMap::new(), strings: Vec::new(), stand_in: inp.zip(carrier.clone()) };
         let mut crashed = None;
         'outs: for out_attr in outputs {
             let mut els: Vec<i32> = if block.d().ty().attrs[out_attr].is_array() { block.ids(out_attr) } else { Vec::new() };
@@ -347,6 +361,19 @@ impl NodeBehavior for NativeNode {
         }
         block.flush();
         drop(block);
+        if let (Some(start), Some((_, co)), Some(o)) = (&curve_in, curve_attrs, out) {
+            let moved = match d.value(o) {
+                PlugValue::Mesh(Some(m)) if m.positions().len() >= start.cvs.len() => {
+                    let mut c = start.clone();
+                    for (k, p) in c.cvs.iter_mut().enumerate() {
+                        *p = m.positions()[k];
+                    }
+                    c
+                }
+                _ => start.clone(),
+            };
+            d.set_output(co, aztek_scene::curves::to_value(moved));
+        }
         if let Some(why) = crashed {
             if !e.crashed.swap(true, Ordering::Relaxed) {
                 defer(
@@ -426,6 +453,8 @@ pub(crate) struct Block {
     /// Array elements written, merged into the node's when the compute is done.
     pending: BTreeMap<usize, BTreeMap<i32, PlugValue>>,
     strings: Vec<CString>,
+    /// A mesh standing in for an input's value during this compute: a curve's CVs as the points to deform.
+    stand_in: Option<(usize, aztek_scene::plug::MeshPtr)>,
 }
 
 impl Block {
@@ -439,6 +468,11 @@ impl Block {
         (a >= 0 && (a as usize) < self.d().ty().attrs.len()).then_some(a as usize)
     }
     fn read(&self, a: usize, el: i32) -> PlugValue {
+        if let Some((at, m)) = &self.stand_in {
+            if *at == a && el < 0 {
+                return PlugValue::Mesh(Some(m.clone()));
+            }
+        }
         if el >= 0 {
             if let Some(v) = self.pending.get(&a).and_then(|m| m.get(&el)) {
                 return v.clone();
@@ -590,6 +624,25 @@ pub(crate) unsafe extern "C" fn block_set_mesh(b: *mut Block, attr: i32, el: i32
     let Some(b) = b.as_mut() else { return };
     let Some(a) = b.attr(attr) else { return };
     b.write(a, el, PlugValue::Mesh(mesh_ref(m).cloned()));
+}
+
+/// A curve input as a handle the plug-in releases; null when nothing valid is connected.
+pub(crate) unsafe extern "C" fn block_curve(b: *mut Block, attr: i32, el: i32) -> *mut c_void {
+    let Some(b) = b.as_ref() else { return std::ptr::null_mut() };
+    match b.attr(attr).map(|a| b.read(a, el)) {
+        Some(PlugValue::Data(Some(d))) => match d.as_any().downcast_ref::<aztek_scene::curves::CurveData>() {
+            Some(c) if c.0.is_valid() => super::table::curve_handle(c.0.clone()),
+            _ => std::ptr::null_mut(),
+        },
+        _ => std::ptr::null_mut(),
+    }
+}
+
+pub(crate) unsafe extern "C" fn block_set_curve(b: *mut Block, attr: i32, el: i32, c: *const c_void) {
+    let Some(b) = b.as_mut() else { return };
+    let Some(a) = b.attr(attr) else { return };
+    let data = super::table::curve_ref(c).map(|c| Arc::new(aztek_scene::curves::CurveData(c.clone())) as aztek_scene::plug::DataPtr);
+    b.write(a, el, PlugValue::Data(data));
 }
 
 pub(crate) unsafe extern "C" fn block_weights(b: *mut Block, n: *mut usize) -> *const f64 {

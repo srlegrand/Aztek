@@ -3,7 +3,7 @@
 Generated from the command registry by `cargo run -p aztek_host --example gen_commands`; do not edit by hand.
 Commands take the reference's flags, long or short, in MEL and in Python (`aztek.cmds` or `maya.cmds`).
 
-1126 commands.
+1128 commands.
 
 ## AL_usdmaya_LayerCreateLayer
 
@@ -601,6 +601,14 @@ Arguments: objects
 | `alignY` | `y` | Min, Mid or Max. |
 | `alignZ` | `z` | Min, Mid or Max. |
 | `alignToLead` | `atl` | To the last object rather than the whole set. |
+
+## allNodeTypes
+
+Every node type there is, by name. -ia is taken: Aztek has no abstract types to add.
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `includeAbstract` | `ia` | Taken; there are no abstract types. |
 
 ## ambientLight
 
@@ -4919,6 +4927,21 @@ Arguments: the light, to edit or query
 | `decayRate` | `d` | decayRate |
 | `softShadow` | `ss` | castSoftShadows |
 | `discRadius` | `drs` | lightRadius |
+
+## dirmap
+
+Folders mapped to other folders, for scenes moved between machines: -m from to adds a mapping, -um from removes one, -cd path gives the path with its mapping applied (or as it is), -gmd from the folder one maps to, -gam all of them, -en turns mapping on or off.
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `query` | `q` | Query mode. |
+| `edit` | `e` | Edit mode. |
+| `convertDirectory` | `cd` | A path, with its mapping applied. |
+| `enable` | `en` | Mapping on or off. |
+| `getAllMappings` | `gam` | Every mapping: from, to, from, to. |
+| `getMappedDirectory` | `gmd` | What a folder maps to. |
+| `mapDirectory` | `m` | From and to. |
+| `unmapDirectory` | `um` | Remove this folder's mapping. |
 
 ## disable
 

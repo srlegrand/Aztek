@@ -68,6 +68,7 @@ MQuaternion MVector::rotateTo(const MVector& to) const { return MQuaternion(*thi
 std::ostream& operator<<(std::ostream& os, const MVector& v) { return os << "[" << v.x << ", " << v.y << ", " << v.z << "]"; }
 
 MFloatVector::MFloatVector(const MFloatPoint& p) : x(p.x), y(p.y), z(p.z) {}
+MFloatVector::MFloatVector(const MPoint& p) : x((float)p.x), y((float)p.y), z((float)p.z) {}
 MFloatVector MFloatVector::operator*(const MFloatMatrix& m) const {
     return MFloatVector(x * m[0][0] + y * m[1][0] + z * m[2][0], x * m[0][1] + y * m[1][1] + z * m[2][1], x * m[0][2] + y * m[1][2] + z * m[2][2]);
 }
@@ -595,6 +596,15 @@ MStatus MTransformationMatrix::getRotation(double out[3], RotationOrder& order) 
 MStatus MTransformationMatrix::setRotation(const double r[3], RotationOrder order) {
     if (order <= kInvalid || order >= kLast) return MS::kInvalidParameter;
     r_ = MEulerRotation(r[0], r[1], r[2], (MEulerRotation::RotationOrder)(order - 1));
+    return MS::kSuccess;
+}
+MStatus MTransformationMatrix::setRotationQuaternion(double x, double y, double z, double w, MSpace::Space) {
+    rotateTo(MQuaternion(x, y, z, w));
+    return MS::kSuccess;
+}
+MStatus MTransformationMatrix::getRotationQuaternion(double& x, double& y, double& z, double& w, MSpace::Space) const {
+    MQuaternion q = rotation();
+    x = q.x; y = q.y; z = q.z; w = q.w;
     return MS::kSuccess;
 }
 MTransformationMatrix& MTransformationMatrix::rotateTo(const MQuaternion& q) {

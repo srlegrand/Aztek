@@ -1008,8 +1008,11 @@ fn apply_settings(g: &mut Graph, c: NodeId, a: &Args) -> CmdResult<()> {
         }
     }
     if a.has("worldUpType") {
-        let name = a.string("worldUpType", "vector");
-        let Some(i) = WORLD_UP_NAMES.iter().position(|x| *x == name) else { fail!("worldUpType: {name} is not one of {}", WORLD_UP_NAMES.join(", ")) };
+        // By name, or by its number as the node's attribute counts them: scripts pass either.
+        let given = a.get("worldUpType").cloned().unwrap_or(Value::Null);
+        let name = given.as_str().map(str::to_string).unwrap_or_else(|| given.to_string());
+        let by_number = given.as_i64().or_else(|| name.parse::<i64>().ok()).filter(|i| (0..WORLD_UP_NAMES.len() as i64).contains(i)).map(|i| i as usize);
+        let Some(i) = by_number.or_else(|| WORLD_UP_NAMES.iter().position(|x| x.eq_ignore_ascii_case(&name))) else { fail!("worldUpType: {name} is not one of {}", WORLD_UP_NAMES.join(", ")) };
         g.set_value(plug(c, WORLD_UP_TYPE), PlugValue::Int(i as i64))?;
     }
     if a.has("worldUpObject") {
@@ -1282,7 +1285,7 @@ pub fn register(c: &mut Commands<Session>) {
             .flag(f("aimVector", "aim", ArgType::Vec3, "The local axis that points at the target."))
             .flag(f("upVector", "u", ArgType::Vec3, "The local axis that points up."))
             .flag(f("worldUpVector", "wu", ArgType::Vec3, "The world direction up means."))
-            .flag(f("worldUpType", "wut", ArgType::String, "scene, object, objectrotation, vector or none."))
+            .flag(f("worldUpType", "wut", ArgType::Any, "scene, object, objectrotation, vector or none."))
             .flag(f("worldUpObject", "wuo", ArgType::String, "The object for worldUpType object and objectrotation."))
             .flag(f("interpType", "int", ArgType::Any, "How rotations blend: noflip, average, shortest, longest, cache, or 0 to 4."))
             .flag(f("skipTranslate", "st", ArgType::Any, "Translate axes to leave alone: x, y, z or none. May be used more than once.").multi(1))

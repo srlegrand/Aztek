@@ -210,6 +210,8 @@ public:
     MObject createPoint(const MString& longName, const MString& shortName, MStatus* status = 0);
     MObject createColor(const MString& longName, const MString& shortName, MStatus* status = 0);
     MObject createAddr(const MString& longName, const MString& shortName, void* defaultValue = 0, MStatus* status = 0);
+    // One of the two or three numbers of an attribute made as a pair, a triple, a point or a colour.
+    MObject child(unsigned int index, MStatus* status = 0) const;
     MFnNumericData::Type unitType(MStatus* status = 0) const;
     MFnNumericData::Type numericType(MStatus* status = 0) const;
     MStatus setDefault(bool v);
@@ -609,6 +611,8 @@ public:
     MString& asString() const;
     MObject asMesh() const;
     MObject asMeshTransformed() const;
+    MObject asNurbsCurve() const;
+    MObject asNurbsCurveTransformed() const;
     MObject data() const;
     MStatus setData(const MObject& data);
     double asGenericDouble() const;

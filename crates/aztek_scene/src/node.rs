@@ -161,6 +161,26 @@ fn is_implicit_message(a: &AttrDef) -> bool {
     a.name == "message" && a.doc == IMPLICIT_MESSAGE_DOC
 }
 
+/// What marks the attributes below as given to a type, not declared by it.
+const EVERY_NODE: &str = "__everyNode";
+
+/// The attributes every node of the reference has besides its message, which scripts set on any node they make:
+/// caching, frozen, isHistoricallyInteresting, nodeState and binMembership. They are kept and saved; Aztek's
+/// evaluation does not act on them, except where a type declares a nodeState of its own.
+fn every_node_attrs() -> Vec<AttrDef> {
+    let held = flags::INPUT | flags::STORABLE | flags::HIDDEN;
+    let mk = |name: &str, short: &str, ty: crate::plug::PlugType, v: PlugValue, doc: &str| AttrDef { name: name.into(), short_name: short.into(), ty, default_value: v, flags: held, doc: doc.into(), category: EVERY_NODE.into(), ..Default::default() };
+    let mut state = mk("nodeState", "nds", crate::plug::PlugType::Enum, PlugValue::Int(0), "Kept for scripts and scene files.");
+    state.enum_names = ["Normal", "HasNoEffect", "Blocking", "Waiting-Normal", "Waiting-HasNoEffect", "Waiting-Blocking"].iter().map(|s| s.to_string()).collect();
+    vec![
+        mk("caching", "cch", crate::plug::PlugType::Bool, PlugValue::Bool(false), "Kept for scripts and scene files."),
+        mk("frozen", "fzn", crate::plug::PlugType::Bool, PlugValue::Bool(false), "Kept for scripts and scene files."),
+        mk("isHistoricallyInteresting", "ihi", crate::plug::PlugType::Int, PlugValue::Int(2), "How much of history lists and the Channel Box show the node: 0 none, 1 outputs only, 2 everything. Kept for scripts and scene files."),
+        state,
+        mk("binMembership", "bnm", crate::plug::PlugType::String, PlugValue::String(String::new()), "Kept for scripts and scene files."),
+    ]
+}
+
 pub mod types {
     use super::*;
 
@@ -189,8 +209,9 @@ pub mod types {
             .as_ref()
             .map(|b| b.attrs.clone())
             .unwrap_or_default();
-        // The base's message stays last: it isn't counted in the attr indices a type's own attrs follow on from.
-        if ty.attrs.last().is_some_and(is_implicit_message) {
+        // The base's message and the attributes every node is given stay last: they aren't counted in the attr
+        // indices a type's own attrs follow on from.
+        while ty.attrs.last().is_some_and(|a| is_implicit_message(a) || a.category == EVERY_NODE) {
             ty.attrs.pop();
         }
         let base_count = ty.attrs.len();
@@ -201,7 +222,17 @@ pub mod types {
                 _ => ty.attrs.push(own),
             }
         }
-        // Every node in the reference has a message plug, whatever its type declares.
+        // Every node in the reference has these and a message plug, whatever its type declares. The message stays
+        // last when it is the one given here.
+        let given_message = ty.attrs.last().is_some_and(is_implicit_message).then(|| ty.attrs.pop()).flatten();
+        for a in every_node_attrs() {
+            if !ty.attrs.iter().any(|x| x.name == a.name || x.short_name == a.short_name) {
+                ty.attrs.push(a);
+            }
+        }
+        if let Some(m) = given_message {
+            ty.attrs.push(m);
+        }
         if !ty.attrs.iter().any(|a| a.name == "message") {
             ty.attrs.push(message_attr());
         }

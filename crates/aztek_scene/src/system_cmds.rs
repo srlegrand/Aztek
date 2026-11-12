@@ -976,6 +976,70 @@ pub fn register(c: &mut Commands<Session>) {
         .undoable(false),
     );
     c.register(
+        Cmd::new("allNodeTypes", "Every node type there is, by name. -ia is taken: Aztek has no abstract types to add.", |_s, _a| {
+            let mut names: Vec<String> = crate::node::types::all().iter().map(|t| t.name.clone()).collect();
+            names.sort();
+            Ok(json!(names))
+        })
+        .flag(f("includeAbstract", "ia", B, "Taken; there are no abstract types."))
+        .undoable(false),
+    );
+    c.register(
+        q_flags(Cmd::new(
+            "dirmap",
+            "Folders mapped to other folders, for scenes moved between machines: -m from to adds a mapping, -um from removes one, -cd path gives the path with its mapping applied (or as it is), -gmd from the folder one maps to, -gam all of them, -en turns mapping on or off.",
+            |s, a| {
+                let mut maps: Vec<(String, String)> = s.option_vars.get("__dirmap").and_then(Value::as_array).map(|v| v.iter().filter_map(|p| Some((p.get(0)?.as_str()?.to_string(), p.get(1)?.as_str()?.to_string()))).collect()).unwrap_or_default();
+                let enabled = s.option_vars.get("__dirmapEnabled").and_then(Value::as_bool).unwrap_or(false);
+                let texts = |v: Option<&Value>| -> Vec<String> {
+                    match v {
+                        Some(Value::Array(x)) => x.iter().filter_map(|x| x.as_str().map(str::to_string)).collect(),
+                        Some(Value::String(x)) => vec![x.clone()],
+                        _ => Vec::new(),
+                    }
+                };
+                if let Some(path) = a.get("convertDirectory").and_then(Value::as_str) {
+                    if enabled {
+                        // The longest mapped folder the path is under wins.
+                        if let Some((from, to)) = maps.iter().filter(|(from, _)| path.starts_with(from.as_str())).max_by_key(|(from, _)| from.len()) {
+                            return Ok(json!(format!("{to}{}", &path[from.len()..])));
+                        }
+                    }
+                    return Ok(json!(path));
+                }
+                if let Some(from) = a.get("getMappedDirectory").and_then(Value::as_str) {
+                    return Ok(json!(maps.iter().find(|m| m.0 == from).map(|m| m.1.clone()).unwrap_or_default()));
+                }
+                if a.bool("getAllMappings") {
+                    return Ok(json!(maps.iter().flat_map(|m| [m.0.clone(), m.1.clone()]).collect::<Vec<_>>()));
+                }
+                if a.bool("query") {
+                    return Ok(json!(enabled));
+                }
+                let pair = texts(a.get("mapDirectory"));
+                if pair.len() == 2 {
+                    maps.retain(|m| m.0 != pair[0]);
+                    maps.push((pair[0].clone(), pair[1].clone()));
+                }
+                if let Some(from) = a.get("unmapDirectory").and_then(Value::as_str) {
+                    maps.retain(|m| m.0 != from);
+                }
+                if a.has("enable") {
+                    s.option_vars.insert("__dirmapEnabled".into(), json!(a.bool("enable")));
+                }
+                s.option_vars.insert("__dirmap".into(), json!(maps.iter().map(|m| json!([m.0, m.1])).collect::<Vec<_>>()));
+                Ok(Value::Null)
+            },
+        ))
+        .flag(f("convertDirectory", "cd", S, "A path, with its mapping applied."))
+        .flag(f("enable", "en", B, "Mapping on or off."))
+        .flag(f("getAllMappings", "gam", B, "Every mapping: from, to, from, to."))
+        .flag(f("getMappedDirectory", "gmd", S, "What a folder maps to."))
+        .flag(f("mapDirectory", "m", L, "From and to.").multi(2))
+        .flag(f("unmapDirectory", "um", S, "Remove this folder's mapping."))
+        .undoable(false),
+    );
+    c.register(
         Cmd::new("listNodeTypes", "Node types of a classification: listNodeTypes \"utility/general\", -ex leaves one out.", |_s, a| list_node_types(a))
             .positional("classification")
             .flag(f("exclude", "ex", S, "A classification to leave out."))

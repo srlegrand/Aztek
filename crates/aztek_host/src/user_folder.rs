@@ -368,17 +368,29 @@ fn read_mod_file(a: &mut Applied, file: &Path, version: &str) {
             continue;
         }
         let of: Vec<&Block> = blocks.iter().filter(|b| b.name == name).collect();
-        let pick = of.iter().find(|b| b.for_version.as_deref() == Some(version) && !version.is_empty()).or_else(|| of.iter().find(|b| b.for_version.is_none())).or(of.first());
+        // The block for the chosen version of the reference; else the one for the version Aztek answers as; else one
+        // for any version; else the newest that is not newer than that; else the first.
+        let year = |b: &&&Block| b.for_version.as_deref().and_then(|v| v.parse::<u32>().ok());
+        let ours: u32 = aztek_core::REFERENCE_VERSION.parse().unwrap_or(0);
+        let pick = of
+            .iter()
+            .find(|b| b.for_version.as_deref() == Some(version) && !version.is_empty())
+            .or_else(|| of.iter().find(|b| b.for_version.as_deref() == Some(aztek_core::REFERENCE_VERSION)))
+            .or_else(|| of.iter().find(|b| b.for_version.is_none()))
+            .or_else(|| of.iter().filter(|b| year(b).is_some_and(|y| y <= ours)).max_by_key(|b| year(b)))
+            .or(of.first());
         let Some(b) = pick else { continue };
         let root = aztek_core::paths::normalize(&b.path);
-        let (mut scripts, mut plugins) = (root.join("scripts"), root.join("plug-ins"));
+        let (mut scripts, mut plugins, mut icons) = (root.join("scripts"), root.join("plug-ins"), root.join("icons"));
         for line in &b.lines {
             if let Some((key, value)) = line.split_once(':').filter(|(k, v)| !k.contains('=') && !k.contains('+') && !v.starts_with('=')) {
                 let key = key.trim().trim_start_matches("[r]").trim();
-                let dir = root.join(expand(value.trim()));
+                // A folder may be given from a block's folder that is not there: the path is worked out as written.
+                let dir = aztek_core::paths::normalize(&root.join(expand(value.trim())));
                 match key {
                     "scripts" => scripts = dir,
                     "plug-ins" => plugins = dir,
+                    "icons" => icons = dir,
                     _ => {}
                 }
                 continue;
@@ -415,7 +427,6 @@ fn read_mod_file(a: &mut Applied, file: &Path, version: &str) {
         if plugins.is_dir() {
             add_to(a, "AZTEK_PLUG_IN_PATH", &plugins);
         }
-        let icons = root.join("icons");
         if icons.is_dir() {
             add_to(a, "XBMLANGPATH", &icons);
         }

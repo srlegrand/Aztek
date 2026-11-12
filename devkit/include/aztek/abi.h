@@ -18,6 +18,7 @@ extern "C" {
 
 typedef struct AzBlock AzBlock;
 typedef struct AzMesh AzMesh;
+typedef struct AzCurve AzCurve;
 
 // What compute, doIt and the others return.
 enum { AZ_OK = 0, AZ_UNKNOWN_PARAMETER = 1, AZ_FAILURE = 2, AZ_CRASHED = 3 };
@@ -140,6 +141,20 @@ typedef struct AzHost {
     // POSIX crash guard: while entered on this thread, a fatal signal calls jump(buf, signal). Any thread.
     void* (*guard_enter)(AzJump jump, void* buf);
     void (*guard_leave)(void* previous);
+
+    // Curves a compute reads and writes: a handle, released with curve_release. Any thread. A table whose size ends
+    // before these has none of them.
+    AzCurve* (*block_curve)(AzBlock* block, int attr, int element);
+    void (*curve_release)(AzCurve* curve);
+    void (*curve_info)(const AzCurve* curve, int* degree, int* form, size_t* cv_count, size_t* knot_count, double* domain);
+    void (*curve_cvs)(const AzCurve* curve, double* xyz);
+    void (*curve_eval)(const AzCurve* curve, double param, double* point, double* tangent);
+    double (*curve_length)(const AzCurve* curve);
+    double (*curve_param_at_length)(const AzCurve* curve, double length);
+    double (*curve_length_at_param)(const AzCurve* curve, double param);
+    double (*curve_closest_param)(const AzCurve* curve, const double* point);
+    AzCurve* (*curve_with_cvs)(const AzCurve* curve, const double* xyz, size_t cv_count);
+    void (*block_set_curve)(AzBlock* block, int attr, int element, const AzCurve* curve);
 } AzHost;
 
 // What every plug-in exports. Written by the kit's entry source, not by hand.

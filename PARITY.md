@@ -1540,3 +1540,38 @@ FBX export: a joint chain asked for goes out whole (its child joints were left o
   lines where the graphics device has them (rectangular lines otherwise). A device was free to step its lines under
   multisampling. The view's toolbar has a button for anti-aliasing beside the one for shadows.
 - Checked on a software Vulkan device only.
+
+### What mGear needs (12/11/2026)
+
+Found installing mGear 5 (its GitHub release folder, as a module) in a test user folder. All of mGear's Python
+imports; its biped guide template imports and draws (197 transforms, 775 curves); `mgear_solvers` compiles against
+Aztek's plug-in kit unchanged and loads, and its nodes compute (checked: `mgear_mulMatrix`, `mgear_curveCns`,
+`mgear_percentageToU`). Building the rig from the guide stops at an API gap not yet fixed (`MPlug.isChild` and the
+other `is` members are methods here and properties in the reference). Its windows need PySide6 built against the Qt
+Aztek runs on; without one, mGear's interface does not open. mGear's own shipped binaries are built for the
+reference and do not load; `mgear_solvers` has to be built from its source with the kit.
+
+What was added for it:
+
+- Module files: when no block is for the version chosen, the block for the version Aztek answers as (2025) is used,
+  then any block without a version, then the newest older one. A block's `scripts:`, `plug-ins:` and `icons:` folders
+  may go outside it (`../../..`).
+- `maya.OpenMayaUI` (`MQtUtil.mainWindow`, `findControl`, `findLayout`, `findWindow`, `findMenuItem`, `fullName`,
+  `getParent`, `dpiScale`; `M3dView` sizes; `MExternalDropCallback` is kept but not called),
+  `maya.app.general.mayaMixin` (the base, dockable and dock widget mixins, over QDockWidget), `maya.standalone`,
+  `maya.app.flux.core`, and stubs that raise for Render Setup's model and the proximity wrap's interface.
+- Commands: `dirmap`, `allNodeTypes`; `getApplicationVersionAsFloat`. `setAttr -type nurbsCurve` (MEL's knot count
+  first, or Python's knot list). `worldUpType` on constraints by number as well as name.
+- Every node type now has `caching`, `frozen`, `isHistoricallyInteresting`, `nodeState` and `binMembership`. They are
+  kept and saved; Aztek does not act on them. `nurbsCurve.alwaysDrawOnTop` is kept; the views do not act on it.
+- Nodes `quatProd`, `quatAdd`, `quatSub`, `quatNegate`, `quatConjugate`, `quatSlerp` (shortest way only). Loading
+  `matrixNodes`, `quatNodes` or `fbxmaya` succeeds: Aztek has those in its core.
+- Python commands take vectors, points, matrices and node objects as arguments, as lists of numbers or as names.
+  `worldInverseMatrix` and `parentInverseMatrix` are one-element arrays to the API, as `worldMatrix` is.
+- Plug-in kit: `MFnNurbsCurve` (reading, points, tangents, length, closest point) and `MFnNurbsCurveData` over curves
+  a compute is given; `MFnMesh` (counts, vertices, points, vertex normals, `closestIntersection`); typed attributes of
+  kNurbsCurve; `MDataHandle::asNurbsCurve`; `MFnNumericAttribute::child`; `MTransformationMatrix` quaternion get and
+  set; `MEulerRotation` `*=`, `+=`, `-=`; `MFloatVector` from `MPoint`. A status code compared with a status, code
+  first, now compares as the reference's does (it compared as a bool, so `MS::kSuccess == status` was false on
+  success). Hosts give curves to plug-ins through new table entries; an older host has none and the kit says so.
+- A compiled plug-in's deformer can go on a curve: its points are the curve's CVs.

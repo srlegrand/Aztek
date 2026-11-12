@@ -282,8 +282,59 @@ fn set_attr(s: &mut Session, a: &Args, prev: &aztek_ops::RunFn<Session>) -> CmdR
     Ok(r)
 }
 
+/// A curve as setAttr -type "nurbsCurve" writes it: degree, spans, form, rational, dimension, then the knots with
+/// their count (the count first in MEL and scene files, the list first from Python), the number of CVs, and the CVs.
+fn curve_from_values(values: &[Value]) -> Option<aztek_geo::nurbs::NurbsCurve> {
+    let num = |v: &Value| v.as_f64().or_else(|| v.as_bool().map(|b| b as i64 as f64)).or_else(|| v.as_str().and_then(|t| if t == "no" || t == "false" { Some(0.0) } else if t == "yes" || t == "true" { Some(1.0) } else { t.parse().ok() }));
+    if values.len() < 7 {
+        return None;
+    }
+    let (degree, form, dim) = (num(&values[0])? as usize, num(&values[2])? as i64, num(&values[4])? as usize);
+    let mut at = 5;
+    let knots: Vec<f64> = match &values[at] {
+        Value::Array(list) => {
+            at += 2; // the list, then its count
+            list.iter().filter_map(num).collect()
+        }
+        count => {
+            let n = num(count)? as usize;
+            at += 1;
+            let k: Vec<f64> = values.get(at..at + n)?.iter().filter_map(num).collect();
+            at += n;
+            k
+        }
+    };
+    let n_cvs = num(values.get(at)?)? as usize;
+    at += 1;
+    let mut flat: Vec<f64> = Vec::new();
+    for v in &values[at..] {
+        match v {
+            Value::Array(p) => {
+                let mut c: Vec<f64> = p.iter().filter_map(num).collect();
+                c.resize(3, 0.0);
+                flat.extend(&c[..3]);
+            }
+            other => flat.push(num(other)?),
+        }
+    }
+    let step = if values[at..].iter().any(Value::is_array) { 3 } else { dim.clamp(2, 4) };
+    let cvs: Vec<DVec3> = flat.chunks(step).filter(|c| c.len() == step).map(|c| DVec3::new(c[0], c[1], if step > 2 { c[2] } else { 0.0 })).collect();
+    if cvs.len() != n_cvs || degree == 0 {
+        return None;
+    }
+    let c = aztek_geo::nurbs::NurbsCurve::new(degree, aztek_geo::nurbs::Form::from_index(form), cvs, knots);
+    c.is_valid().then_some(c)
+}
+
 fn set_attr_one(s: &mut Session, a: &Args, prev: &aztek_ops::RunFn<Session>) -> CmdResult {
     let Some(name) = a.pos_str(0).map(str::to_string) else { fail!("setAttr: expected (plug, value)") };
+    if a.get("type").and_then(Value::as_str) == Some("nurbsCurve") {
+        let Some(curve) = curve_from_values(&a.positional[1..]) else { fail!("setAttr: {name}: the values do not make a curve (degree, spans, form, rational, dimension, knots, CVs)") };
+        let p = s.graph.plug(&name)?;
+        let data: crate::plug::DataPtr = std::sync::Arc::new(crate::curves::CurveData(curve));
+        s.graph.set_value(p, PlugValue::Data(Some(data)))?;
+        return Ok(Value::Null);
+    }
     if let (Some(id), Some(level)) = (old_smooth_plug(s, &name), a.positional.get(1).and_then(Value::as_i64)) {
         crate::mesh_nodes::MeshNode::set_preview(&mut s.graph, id, level)?;
         return Ok(Value::Null);

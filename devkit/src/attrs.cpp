@@ -330,7 +330,38 @@ MObject MFnNumericAttribute::create(const MString& ln, const MString& sn, const 
     return obj_;
 }
 
-MObject MFnNumericAttribute::createPoint(const MString& ln, const MString& sn, MStatus* st) { return create(ln, sn, MFnNumericData::k3Float, 0.0, st); }
+MObject MFnNumericAttribute::createPoint(const MString& ln, const MString& sn, MStatus* st) {
+    create(ln, sn, MFnNumericData::k3Float, 0.0, st);
+    azSpec()->point = true;
+    return obj_;
+}
+MObject MFnNumericAttribute::child(unsigned int i, MStatus* st) const {
+    std::shared_ptr<AttrSpec> self = obj_.azData() ? obj_.azData()->attr : std::shared_ptr<AttrSpec>();
+    if (!self || self->components < 2 || (int)i >= self->components) {
+        if (st) *st = MS::kInvalidParameter;
+        return MObject();
+    }
+    if (self->children.empty()) {
+        // Named as the reference names them: X Y Z for a point, R G B for a colour, 0 1 2 otherwise.
+        const char* point[3] = {"X", "Y", "Z"};
+        const char* color[3] = {"R", "G", "B"};
+        const char* plain[3] = {"0", "1", "2"};
+        const char** suffix = self->color ? color : self->point ? point : plain;
+        for (int k = 0; k < self->components; ++k) {
+            std::shared_ptr<AttrSpec> c = std::make_shared<AttrSpec>();
+            c->fn = MFn::kNumericAttribute;
+            c->name = self->name + suffix[k];
+            c->shortName = self->shortName + suffix[k];
+            c->type = "float";
+            c->numeric = self->numeric == MFnNumericData::k3Float || self->numeric == MFnNumericData::k2Float ? MFnNumericData::kFloat : MFnNumericData::kDouble;
+            c->def.assign(1, (size_t)k < self->def.size() ? self->def[k] : 0.0);
+            c->parent = self.get();
+            self->children.push_back(c);
+        }
+    }
+    if (st) *st = MS::kSuccess;
+    return attrObject(self->children[i]);
+}
 MObject MFnNumericAttribute::createColor(const MString& ln, const MString& sn, MStatus* st) {
     create(ln, sn, MFnNumericData::k3Float, 0.0, st);
     azSpec()->color = true;
@@ -429,7 +460,7 @@ MFnTypedAttribute::MFnTypedAttribute() {}
 MFnTypedAttribute::MFnTypedAttribute(const MObject& o, MStatus* st) : MFnAttribute(o, st) {}
 MFn::Type MFnTypedAttribute::type() const { return MFn::kTypedAttribute; }
 MObject MFnTypedAttribute::create(const MString& ln, const MString& sn, MFnData::Type t, const MObject& def, MStatus* st) {
-    const char* host = t == MFnData::kString ? "string" : t == MFnData::kMatrix ? "matrix" : t == MFnData::kMesh ? "mesh" : "float";
+    const char* host = t == MFnData::kString ? "string" : t == MFnData::kMatrix ? "matrix" : t == MFnData::kMesh ? "mesh" : t == MFnData::kNurbsCurve ? "curve" : "float";
     azNew(MFn::kTypedAttribute, ln, sn, host, st);
     AttrSpec* s = azSpec();
     s->dataType = t;
@@ -441,7 +472,7 @@ MObject MFnTypedAttribute::create(const MString& ln, const MString& sn, MFnData:
     }
     if (std::string(host) != "float") s->def.clear();
     if (t == MFnData::kString && def.azData() && def.azData()->type == MFn::kStringData) s->defString = def.azData()->str;
-    if (std::string(host) == "mesh") s->storable = false;
+    if (std::string(host) == "mesh" || std::string(host) == "curve") s->storable = false;
     return obj_;
 }
 MObject MFnTypedAttribute::create(const MString& ln, const MString& sn, MFnData::Type t, MStatus* st) { return create(ln, sn, t, MObject::kNullObj, st); }

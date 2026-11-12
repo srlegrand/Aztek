@@ -8,6 +8,8 @@ extern "C" {
 
 void aztek_free(char* p);
 void aztek_init(void);
+// The address of the main window, for Python tools that parent Qt windows to it.
+void aztek_set_main_window(void* window);
 // The application's start-up: reads the saved preferences (up axis, new scene units, optionVars) and keeps them.
 void aztek_use_prefs(void);
 // Once the main window is up: loads the plug-ins marked to load at start and runs the user folder's userSetup scripts.

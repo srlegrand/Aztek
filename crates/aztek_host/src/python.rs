@@ -447,12 +447,25 @@ fn source(name: &str) -> Option<&'static str> {
         "om1_anim" => include_str!("../python/om1_anim.py"),
         "om1_mpx" => include_str!("../python/om1_mpx.py"),
         "pxr_shim" => include_str!("../python/pxr_shim.py"),
+        "omui" => include_str!("../python/omui.py"),
+        "maya_mixin" => include_str!("../python/maya_mixin.py"),
+        "maya_misc" => include_str!("../python/maya_misc.py"),
         _ => return None,
     })
 }
 
+/// The address of the application's main window (a QMainWindow), or 0 when there is none, as in batch.
+#[pyfunction]
+fn main_window() -> usize {
+    MAIN_WINDOW.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Set by the shell once its main window exists.
+pub static MAIN_WINDOW: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
 #[pymodule]
 fn _aztek(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(main_window, m)?)?;
     m.add_function(wrap_pyfunction!(call, m)?)?;
     m.add_function(wrap_pyfunction!(stored_units, m)?)?;
     m.add_function(wrap_pyfunction!(mel, m)?)?;

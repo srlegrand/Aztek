@@ -236,11 +236,19 @@ MObject MDataHandle::asMesh() const {
     return o;
 }
 MObject MDataHandle::asMeshTransformed() const { return asMesh(); }
+MObject MDataHandle::asNurbsCurve() const {
+    int i = index(0);
+    if (i < 0 || !host || host->size < offsetof(AzHost, block_set_curve) + sizeof(host->block_set_curve)) return MObject();
+    AzCurve* h = host->block_curve(azBlock->block, i, hostElement(*this));
+    return h ? curveObject(h) : MObject();
+}
+MObject MDataHandle::asNurbsCurveTransformed() const { return asNurbsCurve(); }
 MMatrix MDataHandle::geometryTransformMatrix() const { return MMatrix(); }
 
 MObject MDataHandle::data() const {
     if (!azSpec) return MObject();
     if (azSpec->type == "mesh") return asMesh();
+    if (azSpec->type == "curve") return asNurbsCurve();
     if (azSpec->type == "matrix") {
         MFnMatrixData f;
         return f.create(asMatrix());

@@ -86,6 +86,7 @@ std::string quoted(const std::string& s);
 // What an MObject points at.
 
 struct MeshData;
+struct CurveData;
 struct NodeClass;
 
 // An attribute as the plug-in made it.
@@ -102,6 +103,7 @@ struct AttrSpec {
     std::string defString;
     bool readable = true, writable = true, storable = true, keyable = false, hidden = false, array = false;
     bool connectable = true, channelBox = false, color = false, builder = false, cached = true;
+    bool point = false;  // made by createPoint: its numbers are named X, Y and Z
     bool hasMin = false, hasMax = false, hasSoftMin = false, hasSoftMax = false;
     double min = 0, max = 0, softMin = 0, softMax = 0;
     std::vector<std::pair<std::string, int> > fields;
@@ -116,6 +118,7 @@ struct ObjectData {
     int64_t node = -1;  // a scene node
     std::shared_ptr<AttrSpec> attr;
     std::shared_ptr<MeshData> mesh;
+    std::shared_ptr<CurveData> curve;
     std::vector<double> nums;  // numeric and matrix data
     int numericType = 0;
     std::string str;              // string data; a component's node path

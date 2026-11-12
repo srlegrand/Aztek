@@ -94,6 +94,11 @@ private:
     std::shared_ptr<std::string> text_;
 };
 
+// A code compared with a status, the code first: without these the status became a bool, and kSuccess (0) never
+// equalled a successful status (true).
+inline bool operator==(MS::MStatusCode code, const MStatus& s) { return s == code; }
+inline bool operator!=(MS::MStatusCode code, const MStatus& s) { return s != code; }
+
 std::ostream& operator<<(std::ostream& os, const MStatus& s);
 
 // Reports a failed status with where it happened.
@@ -385,6 +390,7 @@ public:
         kMatrixData,
         kStringData,
         kGeometryData,
+        kNurbsCurveData,
         kComponent,
         kSingleIndexedComponent,
         kDoubleIndexedComponent,

@@ -66,6 +66,7 @@ public:
     MFloatVector(const float d[3]) : x(d[0]), y(d[1]), z(d[2]) {}
     MFloatVector(const MVector& v) : x((float)v.x), y((float)v.y), z((float)v.z) {}
     MFloatVector(const MFloatPoint& p);
+    MFloatVector(const MPoint& p);
     float operator[](unsigned int i) const { return i == 0 ? x : i == 1 ? y : z; }
     float& operator[](unsigned int i) { return i == 0 ? x : i == 1 ? y : z; }
     MFloatVector operator+(const MFloatVector& o) const { return MFloatVector(x + o.x, y + o.y, z + o.z); }
@@ -237,6 +238,9 @@ public:
     MEulerRotation operator-(const MEulerRotation& o) const { return MEulerRotation(x - o.x, y - o.y, z - o.z, order); }
     MEulerRotation operator-() const { return MEulerRotation(-x, -y, -z, order); }
     MEulerRotation operator*(double s) const { return MEulerRotation(x * s, y * s, z * s, order); }
+    MEulerRotation& operator*=(double s) { x *= s; y *= s; z *= s; return *this; }
+    MEulerRotation& operator+=(const MEulerRotation& o) { x += o.x; y += o.y; z += o.z; return *this; }
+    MEulerRotation& operator-=(const MEulerRotation& o) { x -= o.x; y -= o.y; z -= o.z; return *this; }
     bool operator==(const MEulerRotation& o) const { return x == o.x && y == o.y && z == o.z && order == o.order; }
     bool operator!=(const MEulerRotation& o) const { return !(*this == o); }
     MEulerRotation& setValue(double xx, double yy, double zz, RotationOrder o = kXYZ) { x = xx; y = yy; z = zz; order = o; return *this; }
@@ -318,6 +322,8 @@ public:
     MQuaternion rotation() const;
     MStatus getRotation(double out[3], RotationOrder& order) const;
     MStatus setRotation(const double r[3], RotationOrder order);
+    MStatus setRotationQuaternion(double x, double y, double z, double w, MSpace::Space space = MSpace::kTransform);
+    MStatus getRotationQuaternion(double& x, double& y, double& z, double& w, MSpace::Space space = MSpace::kTransform) const;
     MTransformationMatrix& rotateTo(const MQuaternion& q);
     MTransformationMatrix& rotateTo(const MEulerRotation& e);
     MTransformationMatrix& rotateBy(const MQuaternion& q, MSpace::Space space, MStatus* status = 0);

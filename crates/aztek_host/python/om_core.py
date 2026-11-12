@@ -290,7 +290,7 @@ _ANGLE_ATTRS = {
     "rotateAxis", "rotateAxisX", "rotateAxisY", "rotateAxisZ", "ra", "rax", "ray", "raz",
 }
 # One-element arrays in the reference that are single plugs here.
-_ONE_ELEMENT = {"worldMatrix", "wm", "parentMatrix", "pm", "worldSpace", "ws"}
+_ONE_ELEMENT = {"worldMatrix", "wm", "parentMatrix", "pm", "worldInverseMatrix", "wim", "parentInverseMatrix", "pim", "worldSpace", "ws"}
 
 
 def _fn_chain(info):

@@ -112,6 +112,7 @@ int main(int argc, char** argv) {
     // The saved preferences first: the up axis and units decide the first scene's cameras and grid.
     aztek_use_prefs();
     az::MainWindow w;
+    aztek_set_main_window(static_cast<QMainWindow*>(&w));
     w.show();
     if (splash) {
         splash->finish(&w);

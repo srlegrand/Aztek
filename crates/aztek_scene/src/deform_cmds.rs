@@ -47,6 +47,29 @@ fn maker(ty: &str) -> Option<(&'static str, Option<&str>)> {
 
 /// A plug-in's deformer on the objects named or selected: one node per mesh, the first the leader, as for any deformer.
 fn create_plugin(s: &mut Session, a: &Args, ty: &str) -> CmdResult {
+    // On a curve: the node keeps the curve as it is now and feeds the shape what it makes of it. Aztek's own
+    // deformers do not take curves; a plug-in's does, its points being the curve's CVs.
+    let mut asked: Vec<NodeId> = a.named().iter().chain(named_geometry(a).iter()).filter_map(|n| s.graph.find(n).ok().flatten()).collect();
+    if asked.is_empty() {
+        asked = s.graph.selection().to_vec();
+    }
+    let curves: Vec<NodeId> = asked.iter().filter_map(|&id| crate::curves::as_curve(&s.graph, id)).collect();
+    if !curves.is_empty() && curves.len() == asked.len() {
+        let name = a.string("name", &format!("{ty}1"));
+        let mut made = Vec::new();
+        for shape in curves {
+            let Some(start) = crate::curves::local_curve(&mut s.graph, shape) else { fail!("deformer: {} has no curve yet", s.graph.path(shape)) };
+            let g = &mut s.graph;
+            let Some(t) = crate::node::types::find(ty) else { fail!("deformer: no node type {ty}") };
+            let n = g.create_node(&t, &name, crate::plug::NO_NODE, true)?;
+            let (Some(inp), Some(out)) = (t.attr_index("inputCurve"), t.attr_index("outputCurve")) else { fail!("deformer: {ty} does not take curves") };
+            g.set_value(PlugRef::new(n, inp as i32), crate::curves::to_value(start))?;
+            let create = g.node(shape).and_then(|x| x.ty().attr_index("create")).ok_or_else(|| aztek_ops::CommandError::new("deformer: not a curve shape"))?;
+            g.connect(&PlugRef::new(n, out as i32), &PlugRef::new(shape, create as i32), true)?;
+            made.push(json!(g.path(n)));
+        }
+        return Ok(Value::Array(made));
+    }
     let mut targets = deform::targets(s, a)?;
     let names: Vec<String> = named_geometry(a);
     if !names.is_empty() {

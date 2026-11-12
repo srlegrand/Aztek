@@ -237,7 +237,7 @@ The tools we build our work on shouldn't belong to whoever bought them last. Too
 A 3D application for modelling, UVs, rigging, animation, dynamics and rendering, with the industry-standard commands, hotkeys, menus and file format. Rust core (scene graph, commands,
 geometry, Vulkan viewport), Qt Widgets shell in C++, a MEL interpreter, and embedded Python with `aztek.cmds`,
 compatibility modules so existing scripts import unchanged, and the Python API (2.0, and 1.0 as `maya.OpenMaya`). Reads and writes `.ma` files and reads `.mb` files. [PARITY.md](PARITY.md) has the behaviour
-target and status, including known differences; [docs/COMMANDS.md](docs/COMMANDS.md) lists all 1126 commands;
+target and status, including known differences; [docs/COMMANDS.md](docs/COMMANDS.md) lists all 1128 commands;
 [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) lists the environment variables and which are read.
 
 Website: [srlegrand.github.io/Aztek](https://srlegrand.github.io/Aztek/). Licence: [MIT-0](LICENSE).

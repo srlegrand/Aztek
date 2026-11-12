@@ -132,6 +132,7 @@ pub fn attr_from_json(j: &Value) -> AttrDef {
                 "string" => (PlugType::String, PlugValue::String(String::new())),
                 "matrix" => (PlugType::Matrix, PlugValue::Matrix(DMat4::IDENTITY)),
                 "mesh" => (PlugType::Mesh, PlugValue::Mesh(None)),
+                "curve" => (PlugType::Data, PlugValue::Data(None)),
                 _ => (PlugType::Float, PlugValue::Float(0.0)),
             };
             AttrDef {
@@ -194,7 +195,16 @@ pub fn register_native_type(name: &str, owner: &str, attrs: &[Value], deformer: 
         owner: owner.to_string(),
         base,
         doc: format!("A node from the plug-in {owner}."),
-        own_attrs: attrs.iter().map(attr_from_json).collect(),
+        own_attrs: {
+            let mut own: Vec<AttrDef> = attrs.iter().map(attr_from_json).collect();
+            if deformer {
+                // A plug-in's deformer on a curve: the curve it starts from is kept on the node, and what it makes
+                // of it goes into the shape.
+                own.push(crate::curves::curve_attr("inputCurve", "icv", flags::INPUT | flags::STORABLE | flags::HIDDEN, "The curve the deformer starts from, when it deforms a curve."));
+                own.push(crate::curves::curve_attr("outputCurve", "ocv", flags::OUTPUT | flags::HIDDEN, "The deformed curve."));
+            }
+            own
+        },
         create: Some(create),
         ..Default::default()
     })?;

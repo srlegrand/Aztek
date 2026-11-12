@@ -88,6 +88,17 @@ pub(crate) struct AzHost {
     pub block_weights: unsafe extern "C" fn(*mut Block, *mut usize) -> *const f64,
     pub guard_enter: unsafe extern "C" fn(Option<Jump>, *mut c_void) -> *mut c_void,
     pub guard_leave: unsafe extern "C" fn(*mut c_void),
+    pub block_curve: unsafe extern "C" fn(*mut Block, i32, i32) -> *mut c_void,
+    pub curve_release: unsafe extern "C" fn(*mut c_void),
+    pub curve_info: unsafe extern "C" fn(*const c_void, *mut i32, *mut i32, *mut usize, *mut usize, *mut f64),
+    pub curve_cvs: unsafe extern "C" fn(*const c_void, *mut f64),
+    pub curve_eval: unsafe extern "C" fn(*const c_void, f64, *mut f64, *mut f64),
+    pub curve_length: unsafe extern "C" fn(*const c_void) -> f64,
+    pub curve_param_at_length: unsafe extern "C" fn(*const c_void, f64) -> f64,
+    pub curve_length_at_param: unsafe extern "C" fn(*const c_void, f64) -> f64,
+    pub curve_closest_param: unsafe extern "C" fn(*const c_void, *const f64) -> f64,
+    pub curve_with_cvs: unsafe extern "C" fn(*const c_void, *const f64, usize) -> *mut c_void,
+    pub block_set_curve: unsafe extern "C" fn(*mut Block, i32, i32, *const c_void),
 }
 
 pub(crate) static TABLE: AzHost = AzHost {
@@ -134,7 +145,133 @@ pub(crate) static TABLE: AzHost = AzHost {
     block_weights,
     guard_enter: guard::enter,
     guard_leave: guard::leave,
+    block_curve,
+    curve_release,
+    curve_info,
+    curve_cvs,
+    curve_eval,
+    curve_length,
+    curve_param_at_length,
+    curve_length_at_param,
+    curve_closest_param,
+    curve_with_cvs,
+    block_set_curve,
 };
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Curves: a handle is a boxed curve, the plug-in's until it releases it. The numbers are worked out here, so a
+// plug-in's answers are the ones the rest of Aztek gives.
+
+type Curve = aztek_geo::nurbs::NurbsCurve;
+
+pub(crate) fn curve_handle(c: Curve) -> *mut c_void {
+    Box::into_raw(Box::new(c)) as *mut c_void
+}
+
+pub(crate) unsafe fn curve_ref<'a>(h: *const c_void) -> Option<&'a Curve> {
+    (h as *const Curve).as_ref().filter(|c| c.is_valid())
+}
+
+unsafe extern "C" fn curve_release(h: *mut c_void) {
+    if !h.is_null() {
+        drop(Box::from_raw(h as *mut Curve));
+    }
+}
+
+unsafe extern "C" fn curve_info(h: *const c_void, degree: *mut i32, form: *mut i32, cvs: *mut usize, knots: *mut usize, domain: *mut f64) {
+    let Some(c) = curve_ref(h) else { return };
+    if !degree.is_null() {
+        *degree = c.degree as i32;
+    }
+    if !form.is_null() {
+        *form = c.form.index() as i32;
+    }
+    if !cvs.is_null() {
+        *cvs = c.cvs.len();
+    }
+    if !knots.is_null() {
+        *knots = c.knots.len();
+    }
+    if !domain.is_null() {
+        let (a, b) = c.domain();
+        *domain = a;
+        *domain.add(1) = b;
+    }
+}
+
+unsafe extern "C" fn curve_cvs(h: *const c_void, xyz: *mut f64) {
+    let Some(c) = curve_ref(h) else { return };
+    if xyz.is_null() {
+        return;
+    }
+    for (k, p) in c.cvs.iter().enumerate() {
+        *xyz.add(k * 3) = p.x;
+        *xyz.add(k * 3 + 1) = p.y;
+        *xyz.add(k * 3 + 2) = p.z;
+    }
+}
+
+unsafe extern "C" fn curve_eval(h: *const c_void, u: f64, point: *mut f64, tangent: *mut f64) {
+    let Some(c) = curve_ref(h) else { return };
+    let (a, b) = c.domain();
+    let u = u.clamp(a, b);
+    let (p, t) = (c.eval(u), c.tangent(u));
+    for k in 0..3 {
+        if !point.is_null() {
+            *point.add(k) = p[k];
+        }
+        if !tangent.is_null() {
+            *tangent.add(k) = t[k];
+        }
+    }
+}
+
+unsafe extern "C" fn curve_length(h: *const c_void) -> f64 {
+    curve_ref(h).map_or(0.0, |c| c.length())
+}
+
+unsafe extern "C" fn curve_param_at_length(h: *const c_void, length: f64) -> f64 {
+    let Some(c) = curve_ref(h) else { return 0.0 };
+    let whole = c.length();
+    c.param_at_fraction(if whole > 1e-12 { length / whole } else { 0.0 })
+}
+
+unsafe extern "C" fn curve_length_at_param(h: *const c_void, u: f64) -> f64 {
+    let Some(c) = curve_ref(h) else { return 0.0 };
+    let (a, b) = c.domain();
+    let u = u.clamp(a, b);
+    // The same steps the whole length is measured in, as far as the parameter.
+    let n = (c.spans() * 32).max(32);
+    let step = (b - a) / n as f64;
+    let (mut sum, mut last, mut at) = (0.0, c.eval(a), a);
+    while at + step < u {
+        at += step;
+        let p = c.eval(at);
+        sum += (p - last).length();
+        last = p;
+    }
+    sum + (c.eval(u) - last).length()
+}
+
+unsafe extern "C" fn curve_closest_param(h: *const c_void, point: *const f64) -> f64 {
+    let Some(c) = curve_ref(h) else { return 0.0 };
+    if point.is_null() {
+        return 0.0;
+    }
+    c.closest_param(glam::DVec3::new(*point, *point.add(1), *point.add(2)))
+}
+
+unsafe extern "C" fn curve_with_cvs(h: *const c_void, xyz: *const f64, count: usize) -> *mut c_void {
+    let Some(c) = curve_ref(h) else { return std::ptr::null_mut() };
+    if xyz.is_null() || count != c.cvs.len() {
+        return std::ptr::null_mut();
+    }
+    let mut out = c.clone();
+    for (k, p) in out.cvs.iter_mut().enumerate() {
+        *p = glam::DVec3::new(*xyz.add(k * 3), *xyz.add(k * 3 + 1), *xyz.add(k * 3 + 2));
+    }
+    curve_handle(out)
+}
 
 unsafe extern "C" fn string_new(t: *const c_char) -> *mut c_char {
     give(text(t))

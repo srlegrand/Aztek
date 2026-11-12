@@ -155,6 +155,15 @@ pub extern "C" fn aztek_image_free(data: *mut u8, width: i32, height: i32) {
     }
 }
 
+/// The shell's main window (a QMainWindow), for Python tools that parent their own Qt windows to it.
+#[no_mangle]
+pub extern "C" fn aztek_set_main_window(window: *mut std::ffi::c_void) {
+    #[cfg(feature = "python")]
+    python::MAIN_WINDOW.store(window as usize, std::sync::atomic::Ordering::Relaxed);
+    #[cfg(not(feature = "python"))]
+    let _ = window;
+}
+
 #[no_mangle]
 pub extern "C" fn aztek_init() {
     with(|_| ());

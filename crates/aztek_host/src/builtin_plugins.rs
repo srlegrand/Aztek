@@ -20,6 +20,10 @@ pub const VENDOR: &str = "Aztek";
 pub const FOLDER: &str = "Aztek (built in)";
 
 pub const BUILTINS: &[Builtin] = &[
+    // The reference keeps these nodes in plug-ins of these names, and tools load them by name before they make the
+    // nodes. Aztek's are part of the core: the names are here so that loading them succeeds.
+    Builtin { name: "matrixNodes", doc: "The matrix utility nodes: decomposeMatrix, composeMatrix, multMatrix, inverseMatrix, wtAddMatrix and the rest. Part of Aztek's core; listed so that tools which load matrixNodes find it.", commands: &[], register: |_| {} },
+    Builtin { name: "quatNodes", doc: "The quaternion utility nodes: quatAdd, quatConjugate, quatInvert, quatNegate, quatNormalize, quatProd, quatSlerp, quatSub, quatToEuler and eulerToQuat. Part of Aztek's core; listed so that tools which load quatNodes find it.", commands: &[], register: |_| {} },
     Builtin {
         name: "fbx",
         doc: "FBX import and export: File > Import and File > Export with a .fbx name, importFbx, exportFbx, FBXImport and FBXExport.",
@@ -41,7 +45,7 @@ pub const BUILTINS: &[Builtin] = &[
 ];
 
 /// The names the two went by when they only exported.
-const OLD_NAMES: &[(&str, &str)] = &[("fbxExport", "fbx"), ("gltfExport", "gltf")];
+const OLD_NAMES: &[(&str, &str)] = &[("fbxExport", "fbx"), ("gltfExport", "gltf"), ("fbxmaya", "fbx")];
 
 thread_local! {
     static LOADED: RefCell<Vec<&'static str>> = const { RefCell::new(Vec::new()) };

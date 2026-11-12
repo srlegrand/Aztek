@@ -9,7 +9,7 @@ use crate::core::LineKind;
 
 /// Every name `call` answers.
 pub const NAMES: &[&str] = &[
-    "getProcArguments", "print", "eval", "evalEcho", "evalDeferred", "source", "error", "warning", "python", "whatIs", "exists", "about", "env", "getenv", "putenv", "size", "sizeBytes",
+    "getApplicationVersionAsFloat", "getProcArguments", "print", "eval", "evalEcho", "evalDeferred", "source", "error", "warning", "python", "whatIs", "exists", "about", "env", "getenv", "putenv", "size", "sizeBytes",
     "substring", "tokenize", "tokenizeList", "match", "gmatch", "substitute", "substituteAllString", "strip", "toupper", "tolower", "startsWith", "endsWith", "strcmp", "stringArrayToString",
     "stringToStringArray", "stringArrayContains", "stringArrayRemove", "stringArrayRemoveExact", "stringArrayRemoveDuplicates", "stringArrayCount", "stringArrayFind", "stringArrayCatenate",
     "stringArrayInsertAtIndex", "stringArrayReverse", "startString", "endString", "capitalizeString", "shortNameOf", "rootOf", "longNameOf", "basename", "dirname", "fromNativePath",
@@ -270,6 +270,8 @@ fn run(it: &mut Interp, name: &str, a: &mut Vec<Value>) -> R<Value> {
             let w = s(&a[0]);
             Ok(Value::Int((it.is_proc(&w) || it.is_command(&w) || NAMES.contains(&w.as_str()) || super::builtins_sys::NAMES.contains(&w.as_str()) || find_script(&w).is_some()) as i32))
         }
+        // A script of the reference's, here a built-in: the version as a number, for tools that branch on it.
+        "getApplicationVersionAsFloat" => Ok(Value::Float(aztek_core::REFERENCE_VERSION.parse().unwrap_or(0.0))),
         "about" => {
             let flag = a.iter().map(s).find(|f| f.starts_with('-')).unwrap_or_default();
             let on = |b: bool| Value::Int(b as i32);

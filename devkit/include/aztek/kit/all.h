@@ -4,3 +4,4 @@
 #include "math.h"
 #include "plugin.h"
 #include "scene.h"
+#include "geometry.h"

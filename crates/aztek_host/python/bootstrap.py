@@ -56,7 +56,15 @@ def _plain(v):
         return {k: _plain(x) for k, x in v.items()}
     if callable(v):
         return {"__pycb__": _keep_callable(v)}
-    return v
+    if v is None or isinstance(v, (str, bytes, bool, int, float)):
+        return v
+    # A vector, a point, a matrix, an array: anything that can be gone through goes as a list of its numbers.
+    try:
+        return [_plain(x) for x in v]
+    except TypeError:
+        pass
+    # Anything else goes as its text, as the reference takes a node object for its name.
+    return str(v)
 
 
 def _unplain(v):
@@ -246,8 +254,32 @@ class _ApiImporter:
         "OpenMayaMPx": ["om1_mpx"],
     }
 
+    # Other modules of the reference's that tools import: name to embedded source, or None for a plain package.
+    EXTRA = {
+        "maya.OpenMayaUI": "omui",
+        "maya.standalone": "maya_misc",
+        "maya.app": None,
+        "maya.app.general": None,
+        "maya.app.general.mayaMixin": "maya_mixin",
+        "maya.app.flux": None,
+        "maya.app.flux.core": "maya_misc",
+        "maya.app.renderSetup": None,
+        "maya.app.renderSetup.model": None,
+        "maya.app.renderSetup.model.renderSetup": "maya_misc",
+        "maya.app.renderSetup.model.renderLayer": "maya_misc",
+        "maya.app.renderSetup.model.typeIDs": "maya_misc",
+        "maya.internal": None,
+        "maya.internal.nodes": None,
+        "maya.internal.nodes.proximitywrap": None,
+        "maya.internal.nodes.proximitywrap.node_interface": "maya_misc",
+    }
+
     def find_spec(self, name, path=None, target=None):
         parts = name.split(".")
+        if name in self.EXTRA:
+            import importlib.machinery as m
+
+            return m.ModuleSpec(name, self, is_package=self.EXTRA[name] is None)
         if len(parts) == 2 and parts[0] == "maya" and parts[1] in self.V1:
             import importlib.machinery as m
 
@@ -272,6 +304,11 @@ class _ApiImporter:
 
     def exec_module(self, module):
         parts = module.__spec__.name.split(".")
+        if module.__spec__.name in self.EXTRA:
+            part = self.EXTRA[module.__spec__.name]
+            if part is not None:
+                exec(compile(_aztek.source(part), "<%s>" % part, "exec"), module.__dict__)
+            return
         if len(parts) == 2 and parts[1] in self.V1:
             for part in self.V1[parts[1]]:
                 exec(compile(_aztek.source(part), "<%s>" % part, "exec"), module.__dict__)

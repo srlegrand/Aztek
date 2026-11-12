@@ -815,6 +815,87 @@ fn base_table() -> Vec<Spec> {
                 let q = get_quat(d, "input2Quat") * get_quat(d, "input1Quat");
                 set_quat(d, "outputQuat", q);
             }),
+        Spec("quatProd", "utility/general", "The product of two quaternions: input1Quat's rotation, then input2Quat's.",
+            {
+                let mut a = quat("input1Quat", "i1q", IN);
+                a.extend(quat("input2Quat", "i2q", IN));
+                a.extend(quat("outputQuat", "oq", OUT));
+                a
+            },
+            |d| {
+                let (a, b) = (get_quat(d, "input1Quat"), get_quat(d, "input2Quat"));
+                set_quat(d, "outputQuat", b * a);
+            }),
+        Spec("quatAdd", "utility/general", "The sum of two quaternions, part by part.",
+            {
+                let mut a = quat("input1Quat", "i1q", IN);
+                a.extend(quat("input2Quat", "i2q", IN));
+                a.extend(quat("outputQuat", "oq", OUT));
+                a
+            },
+            |d| {
+                let (a, b) = (get_quat(d, "input1Quat"), get_quat(d, "input2Quat"));
+                set_quat(d, "outputQuat", DQuat::from_xyzw(a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w));
+            }),
+        Spec("quatSub", "utility/general", "The difference of two quaternions, part by part.",
+            {
+                let mut a = quat("input1Quat", "i1q", IN);
+                a.extend(quat("input2Quat", "i2q", IN));
+                a.extend(quat("outputQuat", "oq", OUT));
+                a
+            },
+            |d| {
+                let (a, b) = (get_quat(d, "input1Quat"), get_quat(d, "input2Quat"));
+                set_quat(d, "outputQuat", DQuat::from_xyzw(a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w));
+            }),
+        Spec("quatNegate", "utility/general", "Every part of the quaternion negated: the same rotation, the other way round the sphere.",
+            {
+                let mut a = quat("inputQuat", "iq", IN);
+                a.extend(quat("outputQuat", "oq", OUT));
+                a
+            },
+            |d| {
+                let q = get_quat(d, "inputQuat");
+                set_quat(d, "outputQuat", DQuat::from_xyzw(-q.x, -q.y, -q.z, -q.w));
+            }),
+        Spec("quatConjugate", "utility/general", "The conjugate: the vector part negated.",
+            {
+                let mut a = quat("inputQuat", "iq", IN);
+                a.extend(quat("outputQuat", "oq", OUT));
+                a
+            },
+            |d| {
+                let q = get_quat(d, "inputQuat");
+                set_quat(d, "outputQuat", DQuat::from_xyzw(-q.x, -q.y, -q.z, q.w));
+            }),
+        Spec("quatSlerp", "utility/general", "From input1Quat to input2Quat along the sphere, by inputT, the shortest way.",
+            {
+                let mut a = quat("input1Quat", "i1q", IN);
+                a.extend(quat("input2Quat", "i2q", IN));
+                a.push(fin("inputT", "it", 0.0));
+                a.push(en("angleInterpolation", "ait", 0, &["Shortest", "Positive", "Negative"]));
+                a.extend(quat("outputQuat", "oq", OUT));
+                a
+            },
+            |d| {
+                let (a, mut b) = (get_quat(d, "input1Quat").normalize(), get_quat(d, "input2Quat").normalize());
+                let t = f(d, "inputT");
+                // The same rotation is at b and at -b: the nearer of the two is aimed for. The positive and negative ways
+                // round are not told apart yet: all three settings take the shortest.
+                if a.dot(b) < 0.0 {
+                    b = DQuat::from_xyzw(-b.x, -b.y, -b.z, -b.w);
+                }
+                let cos = a.dot(b).clamp(-1.0, 1.0);
+                let angle = cos.acos();
+                let q = if angle.abs() < 1e-9 {
+                    a
+                } else {
+                    let s = angle.sin();
+                    let (wa, wb) = (((1.0 - t) * angle).sin() / s, (t * angle).sin() / s);
+                    DQuat::from_xyzw(a.x * wa + b.x * wb, a.y * wa + b.y * wb, a.z * wa + b.z * wb, a.w * wa + b.w * wb)
+                };
+                set_quat(d, "outputQuat", q);
+            }),
         Spec("quatInvert", "utility/general", "The inverse quaternion.",
             {
                 let mut a = quat("inputQuat", "iq", IN);
