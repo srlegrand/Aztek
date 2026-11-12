@@ -68,3 +68,8 @@ QToolButton#shelfSide:hover { background: #5a5a5a; border-radius: 2px; }
 QLabel#toolboxMark { padding: 6px 0 4px 0; }
 QMainWindow > QTabBar::tab { background: #3c3c3c; color: #bdbdbd; padding: 6px 3px; border: 1px solid #2b2b2b; }
 QMainWindow > QTabBar::tab:selected { background: #525252; color: #e6e6e6; }
+
+/* A field something else drives: the reference's yellow. */
+QLineEdit#connectedField { background: #f1f1a5; color: #101010; }
+QToolButton#mapButton { border: none; padding: 0; }
+QToolButton#mapButton:hover { background: #5d5d5d; }

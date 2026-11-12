@@ -655,7 +655,91 @@ pub fn icon_lines(n: &Node, w: &DMat4) -> Vec<(DVec3, DVec3)> {
                 }
             }
         }
-        None => {}
+        None => harold_icon_lines(n, w, k, &mut s),
     }
     s
+}
+
+/// Harold's lights in the view, drawn as what they light from, so there is something to see and to pick:
+/// the area light's quad, disc or cylinder at its real size with the way it faces, the sky dome's sphere, the
+/// photometric light's point and aim, and a marker for a mesh light (the mesh itself is its surface).
+fn harold_icon_lines(n: &Node, w: &DMat4, k: f64, s: &mut Vec<(DVec3, DVec3)>) {
+    let t = n.ty();
+    let idx = |name: &str, d: f64| t.attr_index(name).and_then(|i| n.value(i).scalar()).unwrap_or(d);
+    let c = w.w_axis.truncate();
+    let (x, y, z) = (w.x_axis.truncate().normalize_or_zero(), w.y_axis.truncate().normalize_or_zero(), w.z_axis.truncate().normalize_or_zero());
+    let p = |a: f64, b: f64, d: f64| w.transform_point3(DVec3::new(a, b, d));
+    let seg = 32;
+    let turn = |i: usize| i as f64 / seg as f64 * std::f64::consts::TAU;
+    match t.name.as_str() {
+        "aiAreaLight" => match idx("aiTranslator", 0.0) as i32 {
+            1 => {
+                // A disc of radius one in the light's XY, facing down its -Z.
+                for i in 0..seg {
+                    let (a0, a1) = (turn(i), turn(i + 1));
+                    s.push((p(a0.cos(), a0.sin(), 0.0), p(a1.cos(), a1.sin(), 0.0)));
+                }
+                s.push((p(-1.0, 0.0, 0.0), p(1.0, 0.0, 0.0)));
+                s.push((p(0.0, -1.0, 0.0), p(0.0, 1.0, 0.0)));
+                arrow(c, c - z * k, x, s);
+            }
+            2 => {
+                // A cylinder along the light's Y, from -1 to 1, radius one.
+                for end in [-1.0, 1.0] {
+                    for i in 0..seg {
+                        let (a0, a1) = (turn(i), turn(i + 1));
+                        s.push((p(a0.cos(), end, a0.sin()), p(a1.cos(), end, a1.sin())));
+                    }
+                }
+                for i in 0..8 {
+                    let a = i as f64 / 8.0 * std::f64::consts::TAU;
+                    s.push((p(a.cos(), -1.0, a.sin()), p(a.cos(), 1.0, a.sin())));
+                }
+            }
+            _ => {
+                let q = [p(-1.0, -1.0, 0.0), p(1.0, -1.0, 0.0), p(1.0, 1.0, 0.0), p(-1.0, 1.0, 0.0)];
+                for i in 0..4 {
+                    s.push((q[i], q[(i + 1) % 4]));
+                }
+                s.push((q[0], q[2]));
+                s.push((q[1], q[3]));
+                arrow(c, c - z * k, x, s);
+            }
+        },
+        "aiSkyDomeLight" => {
+            // The dome lights from every direction and turns with its transform: a sphere round the light, with the
+            // rings of latitude that show which way up it is.
+            let r = idx("skyRadius", 1000.0).max(1e-3);
+            ring(c, x, z, r, 64, s);
+            ring(c, x, y, r, 64, s);
+            ring(c, z, y, r, 64, s);
+            for lat in [-60.0_f64, -30.0, 30.0, 60.0] {
+                let (sn, cs) = lat.to_radians().sin_cos();
+                ring(c + y * (sn * r), x, z, cs * r, 48, s);
+            }
+        }
+        "aiPhotometricLight" => {
+            // A point, and the way its measured profile is aimed: down the light's -Z.
+            ring(c, x, y, 0.25 * k, 16, s);
+            ring(c, y, z, 0.25 * k, 16, s);
+            ring(c, z, x, 0.25 * k, 16, s);
+            let end = c - z * (1.2 * k);
+            ring(end, x, y, 0.45 * k, 20, s);
+            for (u, v) in [(1.0, 0.0), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0)] {
+                s.push((c + (x * u + y * v) * (0.25 * k), end + (x * u + y * v) * (0.45 * k)));
+            }
+            arrow(c, c - z * (1.9 * k), x, s);
+        }
+        "aiMeshLight" => {
+            // The mesh named in inMesh is the surface that lights; this marks the light's own node.
+            let tips = [x, -x, y, -y, z, -z].map(|d| c + d * (0.4 * k));
+            for (a, b) in [(0, 2), (0, 3), (0, 4), (0, 5), (1, 2), (1, 3), (1, 4), (1, 5), (2, 4), (2, 5), (3, 4), (3, 5)] {
+                s.push((tips[a], tips[b]));
+            }
+            for d in [x, -x, y, -y, z, -z] {
+                s.push((c + d * (0.55 * k), c + d * (0.85 * k)));
+            }
+        }
+        _ => {}
+    }
 }

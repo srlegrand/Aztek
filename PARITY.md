@@ -1300,3 +1300,90 @@ glTF 2.0 (issue 26): `exportGltf path [objects]`, `-all`, and File > Export All 
 - Checked against the format's rules by a script here and against Aztek's own world bounds. Not opened in another
   application or run through the Khronos validator: neither was available.
 - FBX is not written. The format can be written without its owner's SDK, but nothing here can read one back to check it.
+
+### Issues 26 to 33 (12/11/2026)
+
+What the reference does was taken from its documentation where a page says it, and from the screenshots in the issues.
+Where neither says, the line says so.
+
+View switching (issue 33): a Space tap swaps one view for four and back. After the first tap the keyboard went to the
+menu set box, which Space then opened. The view that had the keyboard was hidden while the panes were laid out again,
+and the window gave the keyboard to the next widget along. It stays with the views. Choosing a menu set hands it
+back as well. The view under the pointer is the one that fills the window, as in the reference.
+
+Attribute Editor sliders (issue 27): the editor rebuilt itself at each change of the value it was showing, which took
+the slider from under the mouse a step or two into a drag. It waits for the release.
+
+- A press on a slider's track puts the handle there and the drag goes on, as the reference's sliders do.
+- A slider runs over the attribute's soft range. A value typed past it, inside the attribute's limits, widens the
+  slider so the value sits half way (0 to 1, type 5: 0 to 10). Unverified against the reference: the factor of two.
+- Rows fit the panel's width (the sliders give), names sit in a column of one width down the tab, and a name too long
+  for it loses its start.
+
+Map buttons (issue 29): the reference puts one on every attribute a texture can drive. Only colours had one.
+
+- Every input colour and number of a material, texture, light or shading utility has the checker button at the end
+  of its row. It opens Create Render Node; the node chosen is made (a file texture with its placement) and wired in:
+  its colour into a colour, its alpha into a number. The new node is then selected, so the editor shows it.
+- Connected, the button is an arrow into a box and goes to the input; the field is yellow and read only. Right click on
+  the button or the name: Break Connection.
+- A row's name has the reference's menu for what the attribute can take: the input node, Set Key, Break Connection,
+  Create New Texture, Color Chooser, Lock or Unlock Attribute. Not there: Create New Expression, Set Driven Key,
+  Ignore when Rendering.
+- A colour row has a slider for its value, as the reference's has.
+- The standard surface's rows are named as the reference's: Weight, Color, Roughness, IOR inside each frame. Base and
+  Specular are from the issue's screenshot; the other frames follow the same rule and are unverified, as is Dispersion
+  Abbe. IOR has a slider to 3 (the screenshot's 1.5 sits half way).
+- The map button no longer opens a file dialog: the reference makes the file node and shows it, and so does this.
+
+Hypershade (issue 28): it was three lists. It is laid out as the reference's.
+
+- Browser: Materials, Textures, Utilities, Rendering, Lights, Cameras, Shading Groups, Bake Sets, Projects, Asset
+  Nodes, with a search field. Materials are drawn on a lit ball from their own values. A swatch picked is the node
+  selected. Right click: Graph Network, Assign Material To Selection, Select Objects With Material, Rename, Delete.
+  Projects shows the project's folders. Bake Sets and Asset Nodes are empty: Aztek has neither kind of node.
+- Create: the reference's groups (Surface, Volumetric, Displacement, 2D, 3D, Env and Other Textures, Lights,
+  Utilities) and Harold's (Texture, Light, Shader, Utility), filled from the node types by their classification,
+  with a search field. A surface material is made with its shading group.
+- Work area: a node graph a tab (Tab creates a node), with Input Connections, Input and Output Connections, Add
+  Selected, Clear Graph and Frame All.
+- Material Viewer: the selected material on a ball. It is drawn by the interface from the material's main values
+  (colour, specular, roughness, metalness, emission), not by Harold, and has no choice of renderer, shape or light.
+- Property Editor: the Attribute Editor on the selection.
+- Menus: Edit, View, Create, Tabs, Graph, Window. Not there: File, Options, Help, bins, the toolbar's icons, drag and
+  drop from the Browser to the graph, and Delete Unused Nodes.
+
+Outliner (issues 30 and 32):
+
+- An icon is drawn the same on a selected row, with a dark edge round it: the style's tint washed blue icons into the
+  blue of the selection.
+- Pictures for what had letters in a box: curves, surfaces, annotations and measures. Joints are a filled bone, an
+  empty transform three heavy axes.
+- Shapes on lists the original shapes deformers read (`pSphereShape1Orig`) under the transform, as the reference's
+  Outliner does. It took the Intermediate Objects switch before.
+
+Harold's lights (issues 30 and 31):
+
+- New ones are named `haroldSkyDomeLight1`, `haroldAreaLight1`, `haroldMeshLight1`, `haroldPhotometricLight1`. The
+  names are Aztek's own choice. The node types (`aiSkyDomeLight` and the rest) and attribute names stay as scene
+  files write them; the Attribute Editor's heading says `haroldSkyDomeLight`.
+- They draw in the view and can be picked there: the area light's quad, disc or cylinder at its real size with the
+  way it faces; the dome as a sphere of its Sky Radius (a new attribute, 1000 by default, drawing only); the
+  photometric light as a point and its aim; a marker for a mesh light, whose surface is the mesh.
+
+Bind Skin (issue 32): the bound object's translate, rotate and scale are locked, as the reference locks them, and
+freed by Unbind Skin. Undo takes the locks off with the bind. Not done: the reference's `tweak` node, and a warning
+when the bound object is under a moving parent.
+
+glTF (issue 26):
+
+- A Z-up scene went out with a node over everything carrying a quarter turn. Everything in it changes basis instead
+  (each node's matrix, points, normals, bind matrices), so a point at Z 2 is at Y 2 and no node is added.
+- `exportGltf -upAxis z` writes Z up: for a Z-up scene, the data as it is. File > Export asks which when the scene
+  is Z up. A Y-up scene can be written Z up the same way. The format is Y up, and the result says so when Z is asked for.
+- Skins: the joints go out as nodes in their hierarchy (also when only the mesh was asked for), a bound mesh in its
+  bind pose with `JOINTS_0` and `WEIGHTS_0` (the four heaviest a point, summing to one), and a skin with the joints
+  and their inverse bind matrices. A mesh whose points change after its skin (a smooth on top) goes out as it
+  stands, with a warning.
+- Not written: animation, blend shapes, cameras, lights. Not checked: the files have not been opened in another
+  application from here.

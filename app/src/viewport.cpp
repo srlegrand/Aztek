@@ -304,6 +304,18 @@ PanelLayout::PanelLayout(QWidget* parent) : QWidget(parent) {
 }
 
 void PanelLayout::relayout() {
+    // Hiding the view that has the keyboard hands it to whatever comes next in the window (the menu set box, which
+    // then opens on the next Space). The keyboard stays with the views.
+    QWidget* had = QApplication::focusWidget();
+    const bool ours = had && (had == this || isAncestorOf(had));
+    struct Refocus {
+        PanelLayout* l;
+        bool on;
+        ~Refocus() {
+            if (!on) return;
+            if (ViewportWidget* v = l->active()) v->setFocus(Qt::OtherFocusReason);
+        }
+    } refocus{this, ours};
     for (auto* p : panels_) {
         grid_->removeWidget(p);
         p->hide();

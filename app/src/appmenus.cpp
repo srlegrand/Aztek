@@ -188,6 +188,17 @@ QMenu* MainWindow::file_menu() {
             // Its own command: the hierarchy, materials and textures go with the meshes.
             QJsonObject call{{"args", QJsonArray{f}}};
             if (all) call["all"] = true;
+            // The format is Y up. A Z-up scene can go out converted (what readers expect) or as it is.
+            if (ask("upAxis", QJsonObject{{"query", true}, {"axis", true}}).toString() == "z") {
+                QMessageBox ask_up(QMessageBox::Question, "glTF Up Axis", "This scene is Z up and glTF is Y up.\nConvert to Y up, or write the scene Z up as it is?", QMessageBox::NoButton, nullptr);
+                QPushButton* convert = ask_up.addButton("Convert to Y Up", QMessageBox::AcceptRole);
+                QPushButton* keep = ask_up.addButton("Keep Z Up", QMessageBox::ActionRole);
+                ask_up.addButton(QMessageBox::Cancel);
+                ask_up.setDefaultButton(convert);
+                ask_up.exec();
+                if (ask_up.clickedButton() == keep) call["upAxis"] = "z";
+                else if (ask_up.clickedButton() != convert) return;
+            }
             const QJsonObject r = exec("exportGltf", call).toObject();
             for (const QJsonValue& n : r["notes"].toArray()) log("// Warning: " + n.toString() + " //", 4);
             return;

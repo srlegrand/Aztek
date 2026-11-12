@@ -81,7 +81,10 @@ fn outliner_node(g: &Graph, id: NodeId, shapes: bool, show_intermediate: bool, s
     let n = g.node(id)?;
     let shape = n.ty().is_a("shape");
     let intermediate = shape && n.bool(DagNode::INTERMEDIATE_OBJECT);
-    if (shape && !shapes) || (intermediate && !show_intermediate) {
+    // Shapes on shows the original shapes deformers read from as well (pSphereShape1Orig), as the reference's Outliner
+    // lists them under the transform.
+    let _ = show_intermediate;
+    if shape && !shapes {
         return None;
     }
     if n.ty().dag && n.bool(DagNode::HIDDEN_IN_OUTLINER) {
@@ -127,7 +130,7 @@ fn usd_shape_of(g: &Graph, id: NodeId) -> Value {
     shape.map_or(Value::Null, |s| json!(g.full_path(s)))
 }
 
-/// `arg` holds the words shapes, intermediate and dg (the nodes that aren't in the DAG as well). Deformers' sets and original shapes show only with intermediate, as
+/// `arg` holds the words shapes, intermediate and dg (the nodes that aren't in the DAG as well). Original shapes show with shapes; deformers' sets show only with intermediate, as
 /// The reference's Display > Intermediate Objects does.
 pub fn outliner(core: &Core, arg: &str) -> Value {
     let show_intermediate = arg.contains("intermediate");
@@ -412,7 +415,14 @@ fn node_attrs(g: &Graph, id: NodeId) -> Value {
             "color": a.flags & flags::COLOR != 0,
             "pair": !a.child_names[0].is_empty() && a.child_names[2].is_empty(),
             "file": a.flags & flags::FILE != 0,
-            "mappable": a.flags & flags::COLOR != 0 && a.flags & flags::INPUT != 0 && aztek_scene::shading::is_material_type(n.ty()),
+            // What a texture can drive: the colours and the numbers of materials, textures, utilities and lights, as the
+            // reference puts a map button on each of those rows.
+            "mappable": a.flags & flags::INPUT != 0
+                && a.flags & flags::OUTPUT == 0
+                && (a.flags & flags::COLOR != 0 || a.ty == aztek_scene::plug::PlugType::Float)
+                && aztek_scene::shading::takes_textures(n.ty()),
+            "hardMin": a.min_value,
+            "hardMax": a.max_value,
         }));
     }
     json!({"name": n.name(), "path": path, "type": n.ty().name, "doc": n.ty().doc, "attrs": attrs})
@@ -500,7 +510,26 @@ pub fn shading(core: &mut Core) -> Value {
             utilities.push(json!({"name": name, "type": t.name}));
         }
     }
-    json!({"materials": materials, "textures": textures, "utilities": utilities})
+    // The Browser's other tabs: lights and cameras by their transforms' shapes, shading groups, and the render nodes.
+    let (mut lights, mut cameras, mut groups, mut rendering) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    let mut ids = g.nodes();
+    ids.sort_unstable();
+    for id in ids {
+        let Some(n) = g.node(id) else { continue };
+        let t = n.type_arc().clone();
+        let name = g.path(id);
+        let leaf = name.rsplit('|').next().unwrap_or(&name).to_string();
+        if t.is_a("light") || aztek_scene::lights::is_light_type(&t.name) {
+            lights.push(json!({"name": leaf, "type": t.name}));
+        } else if t.name == "camera" {
+            cameras.push(json!({"name": leaf, "type": t.name}));
+        } else if t.name == "shadingEngine" {
+            groups.push(json!({"name": name, "type": t.name}));
+        } else if matches!(t.name.as_str(), "renderLayer" | "renderGlobals" | "resolution" | "renderQuality") || aztek_scene::harold_nodes::is_default_node(&name) {
+            rendering.push(json!({"name": name, "type": t.name}));
+        }
+    }
+    json!({"materials": materials, "textures": textures, "utilities": utilities, "lights": lights, "cameras": cameras, "groups": groups, "rendering": rendering, "project": project})
 }
 
 /// The image to draw behind the UV Editor's UVs: the first selected mesh's first material with a file on its colour.

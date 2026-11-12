@@ -42,6 +42,10 @@ void MainWindow::build_status_line() {
     menu_set_->addItems({"Modeling", "Rigging", "Animation", "Dynamics", "Rendering"});
     menu_set_->setToolTip("Menu set");
     connect(menu_set_, &QComboBox::currentTextChanged, this, &MainWindow::build_menu_set);
+    // Once a set is chosen the keyboard goes back to the view, so Space and the tool keys are not typed into the box.
+    connect(menu_set_, &QComboBox::activated, this, [this](int) {
+        if (ViewportWidget* v = panels_->active()) v->setFocus(Qt::OtherFocusReason);
+    });
     tb->addWidget(menu_set_);
     tb->addSeparator();
     tb->addAction(icon("new"), "New Scene", [this] { new_scene(); });

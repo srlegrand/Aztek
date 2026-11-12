@@ -284,6 +284,39 @@ Outliner::Outliner(QWidget* parent) : Panel(parent) {
     });
 }
 
+namespace {
+
+// An icon with a dark edge round what it draws, so it reads on the row's own colour and on the selection's.
+QIcon outlined(const QIcon& ic, qreal dpr) {
+    const int px = int(16 * dpr + 0.5);
+    QPixmap src = ic.pixmap(QSize(16, 16), dpr);
+    QImage shadow(src.size(), QImage::Format_ARGB32_Premultiplied);
+    shadow.fill(Qt::transparent);
+    {
+        QPainter p(&shadow);
+        p.drawPixmap(0, 0, src);
+        p.setCompositionMode(QPainter::CompositionMode_SourceIn);
+        p.fillRect(shadow.rect(), QColor(20, 20, 20, 235));
+    }
+    QPixmap out(src.size());
+    out.setDevicePixelRatio(src.devicePixelRatio());
+    out.fill(Qt::transparent);
+    {
+        QPainter p(&out);
+        const qreal o = 1.0 / src.devicePixelRatio() * qMax(1.0, dpr * 0.75);
+        shadow.setDevicePixelRatio(src.devicePixelRatio());
+        for (const QPointF& d : {QPointF(-o, 0), QPointF(o, 0), QPointF(0, -o), QPointF(0, o)}) p.drawImage(d, shadow);
+        p.drawPixmap(0, 0, src);
+    }
+    Q_UNUSED(px);
+    QIcon made;
+    made.addPixmap(out, QIcon::Normal);
+    made.addPixmap(out, QIcon::Selected);
+    return made;
+}
+
+} // namespace
+
 void Outliner::add(QTreeWidgetItem* parent, const QJsonObject& node) {
     QString filter = filter_->text().trimmed();
     QString ic = node["icon"].toString();
@@ -308,7 +341,10 @@ void Outliner::add(QTreeWidgetItem* parent, const QJsonObject& node) {
             p.end();
             shown = QIcon(pm);
         }
-        it->setIcon(0, shown);
+        static QHash<QString, QIcon> edged;
+        const QString key = ic + (node["referenced"].toBool() ? "@ref" : "");
+        if (!edged.contains(key)) edged.insert(key, outlined(shown, devicePixelRatioF()));
+        it->setIcon(0, edged.value(key));
     }
     it->setFlags(it->flags() | Qt::ItemIsEditable | Qt::ItemIsDragEnabled | Qt::ItemIsDropEnabled);
     // Default nodes dim, as the reference's are.

@@ -23,7 +23,7 @@ use crate::session::Session;
 use crate::transform::Transform;
 
 pub const SKIN_TYPE: &str = "skinCluster";
-const SK_IN: usize = 0;
+pub(crate) const SK_IN: usize = 0;
 const SK_OUT: usize = 1;
 const SK_MATRIX: usize = 2;
 const SK_BIND: usize = 3;
@@ -963,6 +963,9 @@ fn bind(s: &mut Session, a: &Args, names: &[String]) -> CmdResult {
         if !skeleton.is_empty() && !skeleton.iter().all(|&j| bind_pose_of(g, j).is_some()) {
             pose_node(g, "bindPose1", &skeleton, true)?;
         }
+        // The bound geometry's transform is locked, as the reference locks it: the joints move the points now, and a
+        // move of the object itself would be a second transform on top of theirs.
+        lock_bound_transform(g, mesh, true)?;
         Ok(sk)
     })();
     g.close_chunk();
@@ -983,6 +986,20 @@ pub fn rebind_weights(g: &mut Graph, sk: NodeId, method: i64, max_inf: usize, dr
     set_bind(g, sk, bind)
 }
 
+/// Locks or frees translate, rotate and scale on the transform over a bound shape.
+fn lock_bound_transform(g: &mut Graph, mesh: NodeId, locked: bool) -> CmdResult<()> {
+    let xf = if g.node(mesh).is_some_and(|n| n.ty().is_a("transform")) { mesh } else { g.parent(mesh) };
+    if xf == NO_NODE || !g.node(xf).is_some_and(|n| n.ty().is_a("transform")) {
+        return Ok(());
+    }
+    for attr in [Transform::TRANSLATE, Transform::ROTATE, Transform::SCALE] {
+        for c in 0..3 {
+            g.set_locked(&PlugRef { component: c, ..plug(xf, attr) }, locked)?;
+        }
+    }
+    Ok(())
+}
+
 fn unbind(g: &mut Graph, mesh: NodeId, keep_history: bool) -> CmdResult<()> {
     let Some(sk) = skin_of(g, mesh) else { return Ok(()) };
     if keep_history {
@@ -992,6 +1009,7 @@ fn unbind(g: &mut Graph, mesh: NodeId, keep_history: bool) -> CmdResult<()> {
     }
     let src = g.source(&plug(sk, SK_IN));
     let dsts = g.destinations(&plug(sk, SK_OUT));
+    lock_bound_transform(g, mesh, false)?;
     g.delete_node(sk)?;
     if let Some(src) = src {
         for d in dsts {

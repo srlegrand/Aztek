@@ -69,6 +69,8 @@ add_executable(aztek WIN32
   app/src/referenceeditor.cpp
   app/src/usdui.cpp
   app/src/materials.cpp
+  app/src/rendernodes.cpp
+  app/src/hypershade.cpp
   app/src/toolsettings.cpp
   app/src/dopesheet.cpp
   app/src/nodeeditor.cpp

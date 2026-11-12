@@ -123,6 +123,10 @@ pub fn standard_attrs(snake: bool) -> Vec<AttrDef> {
         if !colour && !matches!(camel, "specularIOR" | "coatIOR" | "thinFilmIOR" | "thinFilmThickness" | "transmissionDepth" | "subsurfaceScale" | "emission") {
             a = ranged(a, 0.0, 1.0);
         }
+        // An index of refraction's slider runs to 3, as the reference's does; a greater one is typed.
+        if matches!(camel, "specularIOR" | "coatIOR" | "thinFilmIOR") {
+            a = ranged(a, 0.0, 3.0);
+        }
         if colour && snake {
             for k in 0..3 {
                 a.child_short[k] = a.child_names[k].clone();
@@ -450,7 +454,7 @@ pub fn light_render_attrs() -> Vec<AttrDef> {
 /// Arnold's lights: (name, doc, own attributes). Their base is renderLight.
 pub fn ai_lights() -> Vec<(&'static str, &'static str, Vec<AttrDef>)> {
     vec![
-        ("aiSkyDomeLight", "Light from a sphere around the scene: a colour or an HDR image, importance sampled.", vec![e("format", "format", 2, &["mirrored_ball", "angular", "latlong"]), f("camera", "camera", 1.0), f("aiPortalMode", "portal_mode", 0.0), base("inMesh", "inMesh", PlugType::Mesh, PlugValue::Mesh(None), flags::INPUT | flags::HIDDEN)]),
+        ("aiSkyDomeLight", "Light from a sphere around the scene: a colour or an HDR image, importance sampled.", vec![e("format", "format", 2, &["mirrored_ball", "angular", "latlong"]), f("camera", "camera", 1.0), f("skyRadius", "sky_radius", 1000.0), f("aiPortalMode", "portal_mode", 0.0), base("inMesh", "inMesh", PlugType::Mesh, PlugValue::Mesh(None), flags::INPUT | flags::HIDDEN)]),
         ("aiAreaLight", "Light from a quad, disc or cylinder.", vec![e("aiTranslator", "ai_translator", 0, &["quad", "disk", "cylinder"]), f("camera", "camera", 0.0)]),
         ("aiMeshLight", "Light from the surface of a mesh.", vec![b("lightVisible", "light_visible", false), base("inMesh", "inMesh", PlugType::Mesh, PlugValue::Mesh(None), flags::INPUT | flags::HIDDEN)]),
         ("aiPhotometricLight", "Light from a point shaped by a measured profile (IES file).", vec![s("aiFilename", "ai_filename", "")]),

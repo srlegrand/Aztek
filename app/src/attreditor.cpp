@@ -5,6 +5,7 @@
 #include "colorchooser.h"
 #include "host.h"
 #include "icons.h"
+#include "rendernodes.h"
 
 #include <QApplication>
 #include <QCheckBox>
@@ -20,9 +21,14 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPlainTextEdit>
+#include <QPointer>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QMouseEvent>
+#include <QPainter>
 #include <QSlider>
+#include <QStyle>
+#include <QWheelEvent>
 #include <QTabBar>
 #include <QTabWidget>
 #include <QToolButton>
@@ -217,7 +223,7 @@ const QList<Section>& sections_for(const QString& type) {
     if (type == "standardSurface") return standard;
     if (type == "aiStandardSurface") return ai_standard;
     static const QList<Section> sky{
-        {"Sky Dome Light Attributes", "color intensity aiExposure shadowColor resolution aiResolution format camera aiCamera"},
+        {"Sky Dome Light Attributes", "color intensity aiExposure shadowColor resolution aiResolution format camera aiCamera skyRadius"},
         {"Harold", kHaroldLight},
         {"Display", "visibility locatorScale"},
         {"Node Behaviour", "caching nodeState frozen"}};
@@ -262,21 +268,134 @@ const QList<Section>& sections_for(const QString& type) {
     return other;
 }
 
-// A number with a slider beside it, when the attribute has a range.
+// A slider as the reference's: a press anywhere on the track puts the handle there and the drag goes on from it.
+class AttrSlider : public QSlider {
+public:
+    using QSlider::QSlider;
+
+protected:
+    void mousePressEvent(QMouseEvent* e) override {
+        if (e->button() == Qt::LeftButton) {
+            jump(e);
+            setSliderDown(true);
+            e->accept();
+            return;
+        }
+        QSlider::mousePressEvent(e);
+    }
+    void mouseMoveEvent(QMouseEvent* e) override {
+        if (isSliderDown() && (e->buttons() & Qt::LeftButton)) {
+            jump(e);
+            e->accept();
+            return;
+        }
+        QSlider::mouseMoveEvent(e);
+    }
+    void mouseReleaseEvent(QMouseEvent* e) override {
+        if (e->button() == Qt::LeftButton && isSliderDown()) {
+            setSliderDown(false);
+            e->accept();
+            return;
+        }
+        QSlider::mouseReleaseEvent(e);
+    }
+    void wheelEvent(QWheelEvent* e) override { e->ignore(); }
+
+private:
+    void jump(QMouseEvent* e) {
+        const int handle = 10;
+        int v = QStyle::sliderValueFromPosition(minimum(), maximum(), int(e->position().x()) - handle / 2, qMax(1, width() - handle));
+        if (v != sliderPosition()) {
+            setSliderPosition(v);
+            emit sliderMoved(v);
+        }
+    }
+};
+
+// The map button's two faces: a checker where a texture can go, an arrow into a box where something is connected.
+QIcon map_icon(bool connected) {
+    QPixmap px(14, 14);
+    px.fill(Qt::transparent);
+    QPainter p(&px);
+    if (!connected) {
+        p.fillRect(1, 1, 12, 12, QColor(20, 20, 20));
+        p.fillRect(1, 1, 6, 6, QColor(235, 235, 235));
+        p.fillRect(7, 7, 6, 6, QColor(235, 235, 235));
+    } else {
+        p.setPen(QPen(QColor(225, 225, 225), 1.2));
+        p.drawRect(5, 2, 8, 10);
+        p.drawLine(0, 7, 8, 7);
+        p.drawLine(8, 7, 5, 4);
+        p.drawLine(8, 7, 5, 10);
+    }
+    return QIcon(px);
+}
+
+void break_connection(const QString& plug) {
+    QJsonArray from = ask("listConnections", QJsonObject{{"args", QJsonArray{plug}}, {"plugs", true}, {"destination", false}}).toArray();
+    if (!from.isEmpty()) exec("disconnectAttr", args(QJsonArray{from.at(0), plug}));
+}
+
+// The button at the end of a row that a texture can drive: it opens Create Render Node, or goes to what is connected.
+QToolButton* map_button(const QJsonObject& a, QWidget* parent) {
+    QString plug = a["plug"].toString(), source = a["source"].toString();
+    auto* b = new QToolButton(parent);
+    b->setObjectName("mapButton");
+    b->setAutoRaise(true);
+    b->setFixedSize(18, 18);
+    b->setIcon(map_icon(!source.isEmpty()));
+    b->setToolTip(source.isEmpty() ? "Create a render node and connect it to this attribute" : "Go to input connection: " + source);
+    b->setContextMenuPolicy(Qt::CustomContextMenu);
+    QObject::connect(b, &QToolButton::clicked, b, [b, plug, source] {
+        if (!source.isEmpty()) {
+            exec("select", args(QJsonArray{source}));
+            return;
+        }
+        create_render_node(b->window(), plug);
+    });
+    QObject::connect(b, &QToolButton::customContextMenuRequested, b, [b, plug, source](const QPoint& at) {
+        if (source.isEmpty()) return;
+        QMenu m;
+        m.addAction("Break Connection", [plug] { break_connection(plug); });
+        m.exec(b->mapToGlobal(at));
+    });
+    return b;
+}
+
+// Slider ranges widened by a value typed past them, kept while the program runs, as the reference's sliders keep theirs.
+QHash<QString, QPair<double, double>>& widened() {
+    static QHash<QString, QPair<double, double>> w;
+    return w;
+}
+
+// A number with a slider beside it, when the attribute has a range. The slider runs over the soft range; a value typed
+// past it, within the attribute's limits, widens the slider so the value sits half way.
 QWidget* ranged_field(const QJsonObject& a, double lo, double hi, QWidget* parent) {
     QString plug = a["plug"].toString(), type = a["type"].toString();
+    const double value = a["value"].toDouble();
+    if (widened().contains(plug)) {
+        lo = qMin(lo, widened()[plug].first);
+        hi = qMax(hi, widened()[plug].second);
+    }
+    if (value > hi) hi = value * 2.0;
+    if (value < lo) lo = value < 0 ? value * 2.0 : value;
+    if (a["hardMax"].isDouble()) hi = qMin(hi, a["hardMax"].toDouble());
+    if (a["hardMin"].isDouble()) lo = qMax(lo, a["hardMin"].toDouble());
+    widened()[plug] = {lo, hi};
     auto* row = new QWidget(parent);
     auto* h = new QHBoxLayout(row);
     h->setContentsMargins(0, 0, 0, 0);
     h->setSpacing(4);
-    auto* e = new QLineEdit(type == "int" ? QString::number(a["value"].toInteger()) : fmt3(a["value"].toDouble()), row);
-    e->setFixedWidth(64);
-    auto* s = new QSlider(Qt::Horizontal, row);
+    auto* e = new QLineEdit(type == "int" ? QString::number(a["value"].toInteger()) : fmt3(value), row);
+    e->setFixedWidth(54);
+    auto* s = new AttrSlider(Qt::Horizontal, row);
+    s->setMinimumWidth(8);
     s->setRange(0, 1000);
-    auto to_pos = [lo, hi](double v) { return int(qBound(0.0, (v - lo) / qMax(1e-9, hi - lo), 1.0) * 1000); };
-    s->setValue(to_pos(a["value"].toDouble()));
+    auto to_pos = [lo, hi](double v) { return int(qBound(0.0, (v - lo) / qMax(1e-9, hi - lo), 1.0) * 1000 + 0.5); };
+    s->setValue(to_pos(value));
     bool ro = a["output"].toBool() || a["connected"].toBool();
     e->setReadOnly(ro);
+    if (a["connected"].toBool()) e->setObjectName("connectedField");
     s->setEnabled(!ro);
     bool is_int = type == "int";
     auto value_of = [lo, hi, is_int](int p) {
@@ -298,6 +417,7 @@ QWidget* ranged_field(const QJsonObject& a, double lo, double hi, QWidget* paren
     });
     h->addWidget(e);
     h->addWidget(s, 1);
+    if (a["mappable"].toBool()) h->addWidget(map_button(a, row));
     return row;
 }
 
@@ -328,7 +448,7 @@ QWidget* color_field(const QJsonObject& a, QWidget* parent) {
     h->setContentsMargins(0, 0, 0, 0);
     h->setSpacing(3);
     auto* swatch = new QPushButton(w);
-    swatch->setFixedSize(56, 18);
+    swatch->setFixedSize(54, 18);
     bool stored = a["displayColor"].toBool();
     QJsonArray value = a["value"].toArray();
     QColor shown = stored ? QColor::fromRgbF(value.at(0).toDouble(), value.at(1).toDouble(), value.at(2).toDouble()) : swatch_color(value);
@@ -342,33 +462,29 @@ QWidget* color_field(const QJsonObject& a, QWidget* parent) {
         exec("setAttr", QJsonObject{{"args", QJsonArray{plug, dec(c.red()), dec(c.green()), dec(c.blue())}}, {"type", "double3"}});
     });
     h->addWidget(swatch);
-    if (a["mappable"].toBool()) {
-        QString source = a["source"].toString();
-        auto* slot = new QToolButton(w);
-        slot->setObjectName("textureSlot");
-        slot->setText(source.isEmpty() ? QString::fromUtf8("\u25a6") : QString("\u2192 ") + source);
-        slot->setToolTip(source.isEmpty() ? "Map a file texture" : "Go to " + source + ". Right click to break the connection.");
-        slot->setContextMenuPolicy(Qt::CustomContextMenu);
-        QObject::connect(slot, &QToolButton::clicked, slot, [slot, plug, source] {
-            if (!source.isEmpty()) {
-                exec("select", args(QJsonArray{source}));
-                return;
-            }
-            QString path = QFileDialog::getOpenFileName(slot, "Choose an image", QString(), kImageFilter);
-            if (!path.isEmpty()) make_file_texture(plug, path);
-        });
-        QObject::connect(slot, &QToolButton::customContextMenuRequested, slot, [slot, plug, source](const QPoint& at) {
-            if (source.isEmpty()) return;
-            QMenu m;
-            m.addAction("Break Connection", [plug] {
-                QJsonArray from = ask("listConnections", QJsonObject{{"args", QJsonArray{plug}}, {"plugs", true}, {"destination", false}}).toArray();
-                if (!from.isEmpty()) exec("disconnectAttr", args(QJsonArray{from.at(0), plug}));
-            });
-            m.exec(slot->mapToGlobal(at));
-        });
-        h->addWidget(slot);
-    }
-    h->addStretch(1);
+    // The slider runs the colour's value from black to full, keeping its hue and saturation.
+    auto* s = new AttrSlider(Qt::Horizontal, w);
+    s->setMinimumWidth(8);
+    s->setRange(0, 1000);
+    s->setValue(int(shown.valueF() * 1000 + 0.5));
+    s->setEnabled(!ro);
+    auto colour_at = [shown, stored](int p) {
+        QColor c = QColor::fromHsvF(qMax(0.0f, shown.hsvHueF()), shown.hsvSaturationF(), p / 1000.0);
+        auto dec = [stored](double x) { return stored ? x : std::pow(x, 2.2); };
+        return QJsonArray{dec(c.redF()), dec(c.greenF()), dec(c.blueF())};
+    };
+    QObject::connect(s, &QSlider::sliderMoved, swatch, [swatch, colour_at, plug, shown](int p) {
+        QJsonArray c = colour_at(p);
+        swatch->setStyleSheet(QString("background-color: %1; border: 1px solid #222;").arg(QColor::fromHsvF(qMax(0.0f, shown.hsvHueF()), shown.hsvSaturationF(), p / 1000.0).name()));
+        exec_quiet("setAttr", QJsonObject{{"args", QJsonArray{plug, c.at(0), c.at(1), c.at(2)}}, {"type", "double3"}});
+        Host::get()->poke();
+    });
+    QObject::connect(s, &QSlider::sliderReleased, swatch, [s, colour_at, plug] {
+        QJsonArray c = colour_at(s->value());
+        exec("setAttr", QJsonObject{{"args", QJsonArray{plug, c.at(0), c.at(1), c.at(2)}}, {"type", "double3"}});
+    });
+    h->addWidget(s, 1);
+    if (a["mappable"].toBool()) h->addWidget(map_button(a, w));
     return w;
 }
 
@@ -481,6 +597,9 @@ QWidget* attr_field(const QJsonObject& a, QWidget* parent) {
         QJsonArray kids = a["children"].toArray();
         for (int k = 0; k < (a["pair"].toBool() ? 2 : 3); ++k) {
             auto* e = new QLineEdit(fmt3(v.at(k).toDouble()), w);
+            // Three to a row: thin padding, so a value shows whole at the panel's usual width.
+            e->setStyleSheet("padding-left: 1px; padding-right: 0px;");
+            e->setMinimumWidth(38);
             e->setReadOnly(ro);
             QString child = kids.at(k).toString();
             if (child.isEmpty()) child = a["attr"].toString() + QString("XYZ")[k];
@@ -506,7 +625,19 @@ QWidget* attr_field(const QJsonObject& a, QWidget* parent) {
             e->setProperty("editing", false);
             set_plug(plug, is_int ? QJsonValue(qint64(e->text().toDouble())) : QJsonValue(e->text().toDouble()), "float");
         });
-        return e;
+        if (!a["mappable"].toBool()) return e;
+        // A number a texture can drive: the field, then the map button at the row's end where the sliders' are.
+        if (a["connected"].toBool()) e->setObjectName("connectedField");
+        auto* w = new QWidget(parent);
+        auto* h = new QHBoxLayout(w);
+        h->setContentsMargins(0, 0, 0, 0);
+        h->setSpacing(4);
+        e->setParent(w);
+        e->setFixedWidth(54);
+        h->addWidget(e);
+        h->addStretch(1);
+        h->addWidget(map_button(a, w));
+        return w;
     }
     if (type == "string") {
         auto* e = new QLineEdit(a["value"].toString(), parent);
@@ -520,6 +651,86 @@ QWidget* attr_field(const QJsonObject& a, QWidget* parent) {
         return e;
     }
     return new QLabel(type == "matrix" ? "(matrix)" : "", parent);
+}
+
+// A row's name in a column of one width down the whole tab, so the fields line up from frame to frame. A name too long
+// for it loses its start, as the reference's does; the whole of it is in the tooltip.
+class RowLabel : public QLabel {
+public:
+    RowLabel(const QString& text, QWidget* parent) : QLabel(text, parent) {
+        setFixedWidth(112);
+        setToolTip(text);
+    }
+
+protected:
+    void paintEvent(QPaintEvent*) override {
+        QPainter p(this);
+        p.setPen(palette().color(isEnabled() ? QPalette::Active : QPalette::Disabled, QPalette::WindowText));
+        p.drawText(rect(), Qt::AlignRight | Qt::AlignVCenter, fontMetrics().elidedText(text(), Qt::ElideLeft, width()));
+    }
+};
+
+// A row's name. A right click on it gives what the reference's gives there, for what this attribute can take.
+QLabel* attr_label(const QString& text, const QJsonObject& a, QWidget* parent, QWidget* field_widget) {
+    QPointer<QWidget> field = field_widget;
+    auto* l = new RowLabel(text, parent);
+    l->setContextMenuPolicy(Qt::CustomContextMenu);
+    const QString plug = a["plug"].toString(), source = a["source"].toString();
+    const bool mappable = a["mappable"].toBool(), connected = a["connected"].toBool(), output = a["output"].toBool();
+    const bool colour = a["type"].toString() == "vec3" && a["color"].toBool();
+    QObject::connect(l, &QLabel::customContextMenuRequested, l, [=](const QPoint& at) {
+        QMenu m;
+        if (!source.isEmpty()) {
+            m.addAction(source + "...", [source] { exec("select", args(QJsonArray{source})); });
+            m.addSeparator();
+        }
+        if (!output) m.addAction("Set Key", [plug] { exec("setKeyframe", args(QJsonArray{plug})); })->setEnabled(!connected || source.startsWith("animCurve"));
+        if (connected) m.addAction("Break Connection", [plug] { break_connection(plug); });
+        if (mappable && !connected) m.addAction("Create New Texture...", [l, plug] { create_render_node(l->window(), plug); });
+        if (colour && !connected && !output) {
+            m.addAction("Color Chooser...", [field] {
+                if (!field) return;
+                if (auto* b = field->findChild<QPushButton*>("colorSwatch")) b->click();
+            });
+        }
+        if (!output) {
+            const bool locked = ask("getAttr", QJsonObject{{"args", QJsonArray{plug}}, {"lock", true}}).toBool();
+            m.addAction(locked ? "Unlock Attribute" : "Lock Attribute", [plug, locked] { exec("setAttr", QJsonObject{{"args", QJsonArray{plug}}, {"lock", !locked}}); });
+        }
+        if (!m.isEmpty()) m.exec(l->mapToGlobal(at));
+    });
+    return l;
+}
+
+// A standard surface's rows as the reference names them: inside the Specular frame, specularRoughness is Roughness and
+// the frame's own weight is Weight.
+QString material_label(const QString& section, const QString& attr, const QString& nice) {
+    static const QHash<QString, QString> named{{"transmissionDispersion", "Dispersion Abbe"}, {"transmission_dispersion", "Dispersion Abbe"}, {"normalCamera", "Bump Mapping"},
+                                               {"tangentUCamera", "Anisotropy Tangent"}, {"tangent", "Anisotropy Tangent"}, {"coatNormal", "Normal"}, {"coat_normal", "Normal"}};
+    if (named.contains(attr)) return named.value(attr);
+    QString camel = section;
+    camel.remove(' ');
+    if (camel.isEmpty()) return nice;
+    camel[0] = camel[0].toLower();
+    QString snake = section.toLower().replace(' ', '_');
+    QString rest;
+    if (attr == camel || attr == snake) return "Weight";
+    if (attr.startsWith(camel) && attr.size() > camel.size() && attr[camel.size()].isUpper()) rest = attr.mid(camel.size());
+    else if (attr.startsWith(snake + "_")) rest = attr.mid(snake.size() + 1);
+    else return nice;
+    if (rest == "IOR") return rest;
+    QString out;
+    for (int i = 0; i < rest.size(); ++i) {
+        if (rest[i] == '_') {
+            out += ' ';
+        } else if (i == 0 || rest[i - 1] == '_') {
+            out += rest[i].toUpper();
+        } else {
+            if (rest[i].isUpper() && !rest[i - 1].isUpper()) out += ' ';
+            out += rest[i];
+        }
+    }
+    return out;
 }
 
 // A collapsible section header, remembered per title across refreshes.
@@ -542,7 +753,8 @@ QFormLayout* add_section(QVBoxLayout* v, QWidget* parent, const QString& title) 
     auto* box = new QWidget(parent);
     auto* f = new QFormLayout(box);
     f->setLabelAlignment(Qt::AlignRight);
-    f->setContentsMargins(8, 2, 2, 6);
+    f->setContentsMargins(4, 2, 2, 6);
+    f->setHorizontalSpacing(4);
     f->setVerticalSpacing(3);
     box->setVisible(open);
     v->addWidget(box);
@@ -612,6 +824,10 @@ void AttributeEditor::refresh() {
     QJsonObject ae = query("attributeEditor", pinned_).toObject();
     const QByteArray now = QJsonDocument(ae).toJson(QJsonDocument::Compact);
     if (now == last_ && tabs_->count()) return;
+    // A slider being dragged changes the value this is built from: rebuilding would take the slider from under the
+    // mouse. The release comes back here.
+    for (QSlider* sl : findChildren<QSlider*>())
+        if (sl->isSliderDown()) return;
     last_ = now;
     QString keep = current_tab_;
     tabs_->blockSignals(true);
@@ -627,13 +843,20 @@ void AttributeEditor::refresh() {
         auto* scroll = new QScrollArea();
         scroll->setWidgetResizable(true);
         scroll->setFrameShape(QFrame::NoFrame);
+        // Rows fit the panel's width: the sliders give, so the map buttons at the rows' ends stay in sight.
+        scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
         auto* body = new QWidget();
+        // Narrower than its rows would like, it still takes the panel's width: the sliders are what give way.
+        body->setMinimumWidth(40);
         auto* v = new QVBoxLayout(body);
-        v->setContentsMargins(6, 6, 6, 6);
+        v->setContentsMargins(3, 6, 3, 6);
         v->setSpacing(2);
         auto* head = new QHBoxLayout();
-        head->addWidget(new QLabel(QString("<b>%1:</b>").arg(node_type), body));
+        // Harold's node types carry the ai prefix of the files they are read from: the heading says whose they are.
+        const bool harold_type = node_type.startsWith("ai") && node_type.size() > 2 && node_type[2].isUpper();
+        head->addWidget(new QLabel(QString("<b>%1:</b>").arg(harold_type ? "harold" + node_type.mid(2) : node_type), body));
         auto* name = new QLineEdit(t["name"].toString(), body);
+        name->setMinimumWidth(40);
         QString path = t["path"].toString();
         scroll->setProperty("nodePath", path);
         connect(name, &QLineEdit::editingFinished, name, [name, path] {
@@ -711,7 +934,7 @@ void AttributeEditor::refresh() {
                     used.insert(n);
                     QWidget* field = attr_field(a, body);
                     field->setToolTip(item.contains("annotation") ? item["annotation"].toString() : a["doc"].toString());
-                    current->addRow(item.contains("label") ? item["label"].toString() : a["nice"].toString(), field);
+                    current->addRow(attr_label(item.contains("label") ? item["label"].toString() : a["nice"].toString(), a, body, field), field);
                 }
             }
         }
@@ -736,7 +959,8 @@ void AttributeEditor::refresh() {
                     QWidget* field = attr_field(a, body);
                     field->setToolTip(a["doc"].toString());
                     if (drawing && n != "overrideEnabled") field->setEnabled(overrides_on);
-                    f->addRow(override_label(n, a["nice"].toString()), field);
+                    const bool standard = node_type == "standardSurface" || node_type == "aiStandardSurface";
+                    f->addRow(attr_label(standard ? material_label(sec.title, n, a["nice"].toString()) : override_label(n, a["nice"].toString()), a, body, field), field);
                 }
         }
         // The rest grouped by their own category, then Extra Attributes.
@@ -756,7 +980,7 @@ void AttributeEditor::refresh() {
             if (!forms.contains(cat)) forms[cat] = add_section(v, body, cat);
             QWidget* field = attr_field(a, body);
             field->setToolTip(a["doc"].toString());
-            forms[cat]->addRow(a["nice"].toString(), field);
+            forms[cat]->addRow(attr_label(a["nice"].toString(), a, body, field), field);
         }
         // Notes: a string attribute added the first time it's written.
         auto* note_head = new QLabel("Notes: " + t["name"].toString(), body);

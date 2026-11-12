@@ -324,8 +324,9 @@ Every extra copy makes the project harder to lose.
   ![Two rigs and a row of materials rendered with Harold](docs/harold.png)
 - **UV sets and glTF:** several UV sets to a mesh, each with its own seams, kept in `.ma` files; the UV Set Editor
   and a UV set list in the UV Editor. File > Export writes glTF 2.0 (`.glb` or `.gltf`): hierarchy, meshes, normals,
-  UV sets, vertex colours, materials and colour textures. Skins and animation are not written yet.
-- **Materials and textures:** a physically based standard surface, and lambert, blinn, phong, phongE and surfaceShader with file textures and place2dTexture, assigned to objects or faces; Textured mode (6) in the viewport; Hypershade lists; the image behind the UV Editor.
+  UV sets, vertex colours, materials, colour textures and skins (joints, weights, bind matrices). The file is Y up; a
+  Z-up scene is converted with no node added, or kept Z up (`exportGltf -upAxis z`). Animation is not written yet.
+- **Materials and textures:** a physically based standard surface, and lambert, blinn, phong, phongE and surfaceShader with file textures and place2dTexture, assigned to objects or faces; Textured mode (6) in the viewport; the Hypershade (Browser, Create panel, node graph, Material Viewer, Property Editor); a map button on every colour and number a texture can drive; the image behind the UV Editor.
 
   ![Materials and a file texture in Textured mode](docs/materials.png)
 - **Lights:** ambient, directional, point, spot, area and volume lights with their icons, attributes and `.ma` layout; Use All Lights (7), Use Selected Lights, flat and no lights in the viewport, with decay, spot cones, blinn and phong highlights and light linking. A matte surface lights the same in the viewport and in Harold.

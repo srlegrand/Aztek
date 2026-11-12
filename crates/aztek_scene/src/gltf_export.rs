@@ -2,10 +2,16 @@
 //!
 //! What goes out: the transform hierarchy of the objects asked for, their meshes as they stand (deformed, triangulated,
 //! split along hard edges and UV seams), normals, every UV set, vertex colours, and each shading group's material with
-//! its base colour, transparency, emission and colour texture. Lengths go from centimetres to metres and a Z-up scene
-//! is turned Y up, as the format wants. Not written: skins, animation, blend shapes, cameras and lights.
+//! its base colour, transparency, emission and colour texture, and skins: the joints as nodes, each bound mesh in its
+//! bind pose with its four heaviest weights a point and the joints' inverse bind matrices. Lengths go from
+//! centimetres to metres.
+//!
+//! The format is Y up. A Z-up scene is written Y up by changing the basis of everything in it (each node's matrix,
+//! the points, the normals, the bind matrices), so no node carries a turn the scene did not have: a point at Z 2 goes
+//! out at Y 2. `-upAxis z` writes Z up instead, which for a Z-up scene is the data as it is.
+//! Not written: animation, blend shapes, cameras and lights.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use aztek_geo::render_mesh::{build_render_mesh, RenderMeshOptions};
@@ -23,6 +29,7 @@ const SCALE: f64 = 0.01;
 
 const FLOAT: u32 = 5126;
 const UINT: u32 = 5125;
+const USHORT: u32 = 5123;
 const ARRAY_BUFFER: u32 = 34962;
 const ELEMENT_ARRAY_BUFFER: u32 = 34963;
 
@@ -38,6 +45,15 @@ struct Doc {
     samplers: Vec<Value>,
     nodes: Vec<Value>,
     extensions: Vec<&'static str>,
+    skins: Vec<Value>,
+    /// From the scene's axes to the file's: identity when both have the same up axis.
+    basis: DMat4,
+    /// Transforms written though no mesh is under them: the joints skins use, and what is above them.
+    needed: HashSet<NodeId>,
+    /// The glTF node of each transform written.
+    node_of: HashMap<NodeId, usize>,
+    /// (glTF node carrying the mesh, skinCluster) for each bound mesh written with weights.
+    bound: Vec<(usize, NodeId)>,
     material_of: HashMap<NodeId, usize>,
     image_of: HashMap<String, Option<usize>>,
     notes: Vec<String>,
@@ -73,6 +89,28 @@ impl Doc {
             a["max"] = json!(hi);
         }
         self.accessors.push(a);
+        self.accessors.len() - 1
+    }
+
+    /// A matrix of the scene's, in the file's axes and metres.
+    fn matrix(&self, m: DMat4) -> DMat4 {
+        let mut out = self.basis * m * self.basis.inverse();
+        out.w_axis = (out.w_axis.truncate() * SCALE).extend(1.0);
+        out
+    }
+
+    /// Data that isn't a vertex attribute: no buffer target.
+    fn matrices(&mut self, data: &[DMat4]) -> usize {
+        let bytes: Vec<u8> = data.iter().flat_map(|m| m.to_cols_array()).flat_map(|f| (f as f32).to_le_bytes()).collect();
+        let view = self.view(&bytes, None);
+        self.accessors.push(json!({"bufferView": view, "componentType": FLOAT, "count": data.len(), "type": "MAT4"}));
+        self.accessors.len() - 1
+    }
+
+    fn joints(&mut self, data: &[[u16; 4]]) -> usize {
+        let bytes: Vec<u8> = data.iter().flatten().flat_map(|i| i.to_le_bytes()).collect();
+        let view = self.view(&bytes, Some(ARRAY_BUFFER));
+        self.accessors.push(json!({"bufferView": view, "componentType": USHORT, "count": data.len(), "type": "VEC4"}));
         self.accessors.len() - 1
     }
 
@@ -219,11 +257,30 @@ fn material(doc: &mut Doc, s: &mut Session, sg: NodeId, out_dir: &Path, embed: b
 }
 
 /// A shape's mesh as a glTF mesh: one primitive per shading group, all on the same vertices.
-fn mesh(doc: &mut Doc, s: &mut Session, shape: NodeId, out_dir: &Path, embed: bool) -> Option<usize> {
+/// The skin on a shape, with the mesh it deforms (the bind pose) when that has the points the shape ends up with.
+fn bound(s: &mut Session, shape: NodeId, points: usize) -> Option<(NodeId, aztek_geo::mesh::Mesh, std::sync::Arc<crate::skin::SkinBind>)> {
+    let sk = crate::skin::skin_of(&s.graph, shape)?;
+    let bind = crate::skin::bind_of(&s.graph, sk)?;
+    let input = s.graph.value(&crate::plug::PlugRef::new(sk, crate::skin::SK_IN as i32)).ok()?;
+    let cage = input.as_mesh()?.clone();
+    (cage.num_points() as usize == points && bind.weights.len() == points).then(|| (sk, (*cage).clone(), bind))
+}
+
+/// Writes a shape's mesh. The second value is its skinCluster when the mesh went out bound: in its bind pose, with
+/// JOINTS_0 and WEIGHTS_0.
+fn mesh(doc: &mut Doc, s: &mut Session, shape: NodeId, out_dir: &Path, embed: bool) -> Option<(usize, Option<NodeId>)> {
     let ptr = crate::modifiers::export_mesh(&mut s.graph, shape)?;
     let mut m = (*ptr).clone();
     if m.num_faces() == 0 {
         return None;
+    }
+    let skin = bound(s, shape, m.num_points() as usize);
+    if crate::skin::skin_of(&s.graph, shape).is_some() && skin.is_none() {
+        doc.notes.push(format!("{}: something after its skin changes its points, so it is written as it stands, without weights", s.graph.path(shape)));
+    }
+    if let Some((_, cage, _)) = &skin {
+        // The bind pose is what the joints move.
+        m = cage.clone();
     }
     let groups = crate::shading::membership_of(&s.graph, shape);
     let of_face = crate::shading::face_groups(&m, &groups);
@@ -240,11 +297,42 @@ fn mesh(doc: &mut Doc, s: &mut Session, shape: NodeId, out_dir: &Path, embed: bo
         return None;
     }
     let mut attributes = Map::new();
-    let positions: Vec<f32> = r.positions.iter().flat_map(|p| [(p.x as f64 * SCALE) as f32, (p.y as f64 * SCALE) as f32, (p.z as f64 * SCALE) as f32]).collect();
+    let basis = doc.basis;
+    let positions: Vec<f32> = r.positions.iter().flat_map(|p| (basis.transform_point3(p.as_dvec3()) * SCALE).as_vec3().to_array()).collect();
     attributes.insert("POSITION".into(), json!(doc.floats(&positions, 3, "VEC3", true)));
     if r.normals.len() == r.positions.len() {
-        let normals: Vec<f32> = r.normals.iter().flat_map(|n| n.try_normalize().unwrap_or(glam::Vec3::Y).to_array()).collect();
+        let normals: Vec<f32> = r.normals.iter().flat_map(|n| basis.transform_vector3(n.as_dvec3()).as_vec3().try_normalize().unwrap_or(glam::Vec3::Y).to_array()).collect();
         attributes.insert("NORMAL".into(), json!(doc.floats(&normals, 3, "VEC3", false)));
+    }
+    let mut skinned = None;
+    if let Some((sk, _, bind)) = &skin {
+        // Influences are numbered by their place in the skin's joint list; the four heaviest a point, summing to one.
+        let order: HashMap<u32, u16> = crate::skin::influences(&s.graph, *sk).iter().enumerate().map(|(k, (element, _))| (*element as u32, k as u16)).collect();
+        let (mut joints, mut weights) = (Vec::with_capacity(r.positions.len()), Vec::with_capacity(r.positions.len() * 4));
+        let mut dropped = false;
+        for &point in &r.vertex_point {
+            let mut w: Vec<(u16, f64)> = bind.weights.get(point as usize).map(|w| w.iter().filter_map(|(e, x)| order.get(e).map(|k| (*k, *x))).collect()).unwrap_or_default();
+            w.sort_by(|a, b| b.1.total_cmp(&a.1));
+            dropped |= w.len() > 4;
+            w.truncate(4);
+            let sum: f64 = w.iter().map(|x| x.1).sum();
+            let (mut j, mut x) = ([0u16; 4], [0f32; 4]);
+            for (k, (joint, weight)) in w.iter().enumerate() {
+                j[k] = *joint;
+                x[k] = if sum > 0.0 { (*weight / sum) as f32 } else { 0.0 };
+            }
+            if sum <= 0.0 {
+                x[0] = 1.0;
+            }
+            joints.push(j);
+            weights.extend_from_slice(&x);
+        }
+        if dropped {
+            doc.notes.push(format!("{}: points with more than four influences keep their four heaviest", s.graph.path(shape)));
+        }
+        attributes.insert("JOINTS_0".into(), json!(doc.joints(&joints)));
+        attributes.insert("WEIGHTS_0".into(), json!(doc.floats(&weights, 4, "VEC4", false)));
+        skinned = Some(*sk);
     }
     let mut slot = 0;
     for layer in layers {
@@ -275,7 +363,7 @@ fn mesh(doc: &mut Doc, s: &mut Session, shape: NodeId, out_dir: &Path, embed: bo
         return None;
     }
     doc.meshes.push(json!({"name": s.graph.path(shape), "primitives": primitives}));
-    Some(doc.meshes.len() - 1)
+    Some((doc.meshes.len() - 1, skinned))
 }
 
 /// A node's own name, without the path above it or its namespace.
@@ -299,16 +387,18 @@ fn has_mesh_below(g: &Graph, id: NodeId) -> bool {
 /// A transform and what is under it. `matrix` is the node's own, or its world one for the top of what is exported.
 fn node(doc: &mut Doc, s: &mut Session, id: NodeId, top: bool, out_dir: &Path, embed: bool, counts: &mut (usize, usize)) -> usize {
     let n = s.graph.node(id).unwrap();
-    let m: DMat4 = n.matrix(if top { Transform::WORLD_MATRIX } else { Transform::MATRIX });
+    // In the file's axes and metres: the same turn and scale seen from there, the offset a hundredth.
+    let m: DMat4 = doc.matrix(n.matrix(if top { Transform::WORLD_MATRIX } else { Transform::MATRIX }));
     let name = leaf(&s.graph, id);
     let mut out = json!({"name": name});
-    // Metres: the same turn and scale, the offset a hundredth.
     let (scale, rotation, translation) = m.to_scale_rotation_translation();
+    // The change of axes leaves dust where a zero was: a hundred-millionth of a millimetre is nothing.
+    let translation = translation.map(|v| if v.abs() < 1e-11 { 0.0 } else { v });
     let rebuilt = DMat4::from_scale_rotation_translation(scale, rotation, translation);
     let plain = (0..4).all(|c| (rebuilt.col(c) - m.col(c)).length() < 1e-6 * (1.0 + m.col(c).length()));
     if plain {
         if translation.length() > 0.0 {
-            out["translation"] = json!((translation * SCALE).to_array());
+            out["translation"] = json!(translation.to_array());
         }
         if rotation.angle_between(DQuat::IDENTITY) > 1e-9 {
             out["rotation"] = json!(rotation.normalize().to_array());
@@ -318,29 +408,30 @@ fn node(doc: &mut Doc, s: &mut Session, id: NodeId, top: bool, out_dir: &Path, e
         }
     } else if m != DMat4::IDENTITY {
         // Sheared: a matrix says it where three values can't.
-        let mut cols = m.to_cols_array();
-        for k in 12..15 {
-            cols[k] *= SCALE;
-        }
-        out["matrix"] = json!(cols);
+        out["matrix"] = json!(m.to_cols_array());
     }
     let children: Vec<NodeId> = s.graph.children(id).to_vec();
     let shapes: Vec<NodeId> = children.iter().copied().filter(|&c| visible_shape(&s.graph, c)).collect();
     let mut below = Vec::new();
+    let mut own_skin = None;
     for (k, shape) in shapes.iter().enumerate() {
-        let Some(mesh_index) = mesh(doc, s, *shape, out_dir, embed) else { continue };
+        let Some((mesh_index, skin)) = mesh(doc, s, *shape, out_dir, embed) else { continue };
         counts.1 += 1;
         if k == 0 {
             out["mesh"] = json!(mesh_index);
+            own_skin = skin;
         } else {
             // glTF has one mesh to a node: a second shape rides on a node of its own.
             doc.nodes.push(json!({"name": leaf(&s.graph, *shape), "mesh": mesh_index}));
             below.push(doc.nodes.len() - 1);
+            if let Some(sk) = skin {
+                doc.bound.push((doc.nodes.len() - 1, sk));
+            }
         }
     }
     for c in children {
-        // Only what leads to a mesh: cameras, lights and joints have nothing to write yet.
-        if is_transform(&s.graph, c) && has_mesh_below(&s.graph, c) {
+        // What leads to a mesh, and the joints skins use. Cameras and lights have nothing to write yet.
+        if is_transform(&s.graph, c) && (has_mesh_below(&s.graph, c) || doc.needed.contains(&c)) {
             below.push(node(doc, s, c, false, out_dir, embed, counts));
         }
     }
@@ -349,12 +440,76 @@ fn node(doc: &mut Doc, s: &mut Session, id: NodeId, top: bool, out_dir: &Path, e
     }
     counts.0 += 1;
     doc.nodes.push(out);
-    doc.nodes.len() - 1
+    let index = doc.nodes.len() - 1;
+    doc.node_of.insert(id, index);
+    if let Some(sk) = own_skin {
+        doc.bound.push((index, sk));
+    }
+    index
+}
+
+/// The joints the skins under these objects use, each with everything above it.
+fn skeletons(g: &Graph, tops: &[NodeId]) -> HashSet<NodeId> {
+    let mut needed = HashSet::new();
+    let mut stack: Vec<NodeId> = tops.to_vec();
+    while let Some(id) = stack.pop() {
+        for &c in g.children(id) {
+            if is_transform(g, c) {
+                stack.push(c);
+            } else if visible_shape(g, c) {
+                let Some(sk) = crate::skin::skin_of(g, c) else { continue };
+                for (_, joint) in crate::skin::influences(g, sk) {
+                    let mut at = joint;
+                    while at != NO_NODE && needed.insert(at) {
+                        at = g.parent(at);
+                    }
+                }
+            }
+        }
+    }
+    needed
+}
+
+/// The skin objects, once every joint has its node: the joints in the skin's own order and their inverse bind matrices.
+fn write_skins(doc: &mut Doc, g: &Graph) {
+    let mut written: HashMap<NodeId, Option<usize>> = HashMap::new();
+    for (node_index, sk) in doc.bound.clone() {
+        let index = match written.get(&sk) {
+            Some(i) => *i,
+            None => {
+                let made = (|| {
+                    let bind = crate::skin::bind_of(g, sk)?;
+                    let mut joints = Vec::new();
+                    let mut inverse = Vec::new();
+                    for (element, joint) in crate::skin::influences(g, sk) {
+                        joints.push(*doc.node_of.get(&joint)?);
+                        // A point of the mesh at the bind, seen from the joint as it stood then.
+                        let pre = bind.bind_pre.get(element as usize).copied().unwrap_or(DMat4::IDENTITY);
+                        inverse.push(doc.matrix(pre * bind.geom));
+                    }
+                    if joints.is_empty() {
+                        return None;
+                    }
+                    let accessor = doc.matrices(&inverse);
+                    doc.skins.push(json!({"name": g.path(sk), "joints": joints, "inverseBindMatrices": accessor}));
+                    Some(doc.skins.len() - 1)
+                })();
+                if made.is_none() {
+                    doc.notes.push(format!("{}: a joint of it is not in what was exported, so its mesh went out without a skin", g.path(sk)));
+                }
+                written.insert(sk, made);
+                made
+            }
+        };
+        if let Some(i) = index {
+            doc.nodes[node_index]["skin"] = json!(i);
+        }
+    }
 }
 
 /// Writes the objects (and what is under them) to `path`: `.glb` is binary, anything else JSON. Returns what was
 /// written and what was left out.
-pub fn export(s: &mut Session, path: &str, objects: &[NodeId]) -> CmdResult {
+pub fn export(s: &mut Session, path: &str, objects: &[NodeId], up_z: bool) -> CmdResult {
     let out = PathBuf::from(path);
     let glb = out.extension().is_some_and(|e| e.eq_ignore_ascii_case("glb"));
     let out_dir = out.parent().map(Path::to_path_buf).unwrap_or_default();
@@ -380,20 +535,36 @@ pub fn export(s: &mut Session, path: &str, objects: &[NodeId]) -> CmdResult {
         }
         true
     });
-    let mut doc = Doc::default();
+    // From the scene's up axis to the file's: a quarter turn about X one way or the other, or nothing.
+    let basis = match (crate::world::up_z(), up_z) {
+        (true, false) => DMat4::from_rotation_x(-std::f64::consts::FRAC_PI_2),
+        (false, true) => DMat4::from_rotation_x(std::f64::consts::FRAC_PI_2),
+        _ => DMat4::IDENTITY,
+    };
+    // Skeletons go out with the meshes bound to them: a joint's top-most parent is exported if nothing asked for holds it.
+    let mut doc = Doc { basis, needed: skeletons(&s.graph, &tops), ..Default::default() };
+    let mut skeleton_tops: Vec<NodeId> = doc.needed.iter().copied().filter(|&j| s.graph.parent(j) == NO_NODE).collect();
+    skeleton_tops.sort_unstable();
+    for t in skeleton_tops {
+        if !tops.contains(&t) {
+            tops.push(t);
+        }
+    }
     let mut counts = (0usize, 0usize);
     let mut roots = Vec::new();
     for t in tops {
+        // A joint under something that was asked for is written there, in its place.
+        if doc.node_of.contains_key(&t) {
+            continue;
+        }
         roots.push(node(&mut doc, s, t, true, &out_dir, glb, &mut counts));
     }
     if counts.1 == 0 {
         fail!("exportGltf: no meshes to export");
     }
-    if crate::world::up_z() {
-        // Z up becomes Y up: a quarter turn back about X, on a node over everything.
-        let turn = DQuat::from_rotation_x(-std::f64::consts::FRAC_PI_2);
-        doc.nodes.push(json!({"name": "zUp", "rotation": turn.to_array(), "children": roots}));
-        roots = vec![doc.nodes.len() - 1];
+    write_skins(&mut doc, &s.graph);
+    if up_z {
+        doc.notes.push("written Z up: the format is Y up, and a reader that follows it will turn the scene".to_string());
     }
     while doc.bin.len() % 4 != 0 {
         doc.bin.push(0);
@@ -412,7 +583,7 @@ pub fn export(s: &mut Session, path: &str, objects: &[NodeId]) -> CmdResult {
         "bufferViews": doc.views,
         "accessors": doc.accessors,
     });
-    for (key, list) in [("materials", &doc.materials), ("textures", &doc.textures), ("images", &doc.images), ("samplers", &doc.samplers)] {
+    for (key, list) in [("materials", &doc.materials), ("textures", &doc.textures), ("images", &doc.images), ("samplers", &doc.samplers), ("skins", &doc.skins)] {
         if !list.is_empty() {
             root[key] = json!(list);
         }
@@ -443,7 +614,7 @@ pub fn export(s: &mut Session, path: &str, objects: &[NodeId]) -> CmdResult {
     if std::fs::write(&out, bytes).is_err() {
         fail!("exportGltf: can't write {path}");
     }
-    Ok(json!({"path": path, "nodes": counts.0, "meshes": counts.1, "materials": doc.materials.len(), "textures": doc.textures.len(), "notes": doc.notes}))
+    Ok(json!({"path": path, "nodes": counts.0, "meshes": counts.1, "materials": doc.materials.len(), "textures": doc.textures.len(), "skins": doc.skins.len(), "notes": doc.notes}))
 }
 
 pub fn register(c: &mut Commands<Session>) {
@@ -452,8 +623,9 @@ pub fn register(c: &mut Commands<Session>) {
             "exportGltf",
             "Export to glTF 2.0: a .glb file (binary, textures inside it) or a .gltf file (JSON, textures by path). The objects \
              named, or the selection, with what is under them: hierarchy, meshes as they stand, normals, UV sets, vertex \
-             colours, materials and colour textures, in metres and Y up. Skins, animation, blend shapes, cameras and lights \
-             are not written. -all exports every top-level object.",
+             colours, materials, colour textures and skins (joints, weights, bind matrices), in metres. The file is Y up, \
+             as the format is: a Z-up scene is converted, with no node added to carry the turn. -upAxis z writes Z up \
+             instead. Animation, blend shapes, cameras and lights are not written. -all exports every top-level object.",
             |s, a| {
                 let Some(path) = a.pos_str(0).map(str::to_string) else { fail!("exportGltf: path required") };
                 let mut ids = Vec::new();
@@ -475,11 +647,16 @@ pub fn register(c: &mut Commands<Session>) {
                 if ids.is_empty() {
                     fail!("exportGltf: nothing selected");
                 }
-                export(s, &path, &ids)
+                let up = a.string("upAxis", "y").to_ascii_lowercase();
+                if up != "y" && up != "z" {
+                    fail!("exportGltf: -upAxis is y or z");
+                }
+                export(s, &path, &ids, up == "z")
             },
         )
         .positional("path objects...")
         .flag(FlagDef::new("all", "all", ArgType::Bool, Value::Null, "Every top-level object, not the selection."))
+        .flag(FlagDef::new("upAxis", "up", ArgType::String, Value::Null, "The file's up axis: y (the format's, the default) or z."))
         .undoable(false),
     );
 }

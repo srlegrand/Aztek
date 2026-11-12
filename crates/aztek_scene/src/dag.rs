@@ -21,6 +21,11 @@ pub fn transform_stem(shape_type: &str) -> &str {
         "mesh" => "polySurface",
         "nurbsCurve" => "curve",
         "nurbsSurface" => "nurbsSurface",
+        // Harold's lights are named as Harold's. Their node types keep the names scene files use.
+        "aiSkyDomeLight" => "haroldSkyDomeLight",
+        "aiAreaLight" => "haroldAreaLight",
+        "aiMeshLight" => "haroldMeshLight",
+        "aiPhotometricLight" => "haroldPhotometricLight",
         other => other,
     }
 }

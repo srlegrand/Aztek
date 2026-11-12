@@ -225,12 +225,13 @@ QPixmap draw(const QString& name, int size) {
             p.drawLine(QPointF(11, 6), QPointF(11, 26));
         }
     } else if (name == "transform") {
-        pen_color(kRed, 1.4);
-        p.drawLine(QPointF(16, 16), QPointF(27, 16));
-        pen_color(kGreen, 1.4);
-        p.drawLine(QPointF(16, 16), QPointF(16, 5));
-        pen_color(kBlue, 1.4);
-        p.drawLine(QPointF(16, 16), QPointF(8, 24));
+        // An empty transform: its three axes, heavy enough to read at the Outliner's size.
+        pen_color(QColor(240, 90, 90), 3.2);
+        p.drawLine(QPointF(15, 18), QPointF(28, 18));
+        pen_color(QColor(110, 220, 110), 3.2);
+        p.drawLine(QPointF(15, 18), QPointF(15, 4));
+        pen_color(QColor(110, 160, 255), 3.2);
+        p.drawLine(QPointF(15, 18), QPointF(5, 28));
     } else if (name == "group") {
         p.setBrush(QColor(200, 200, 200));
         p.setPen(Qt::NoPen);
@@ -239,7 +240,7 @@ QPixmap draw(const QString& name, int size) {
         p.drawRect(QRectF(5, 18, 9, 9));
         p.drawRect(QRectF(18, 18, 9, 9));
     } else if (name == "locator") {
-        pen_color(kInk, 1.6);
+        pen_color(QColor(235, 235, 235), 2.4);
         p.drawLine(QPointF(16, 3), QPointF(16, 29));
         p.drawLine(QPointF(3, 16), QPointF(29, 16));
         p.drawLine(QPointF(8, 24), QPointF(24, 8));
@@ -364,12 +365,13 @@ QPixmap draw(const QString& name, int size) {
         else
             p.drawPolygon(QPolygonF({{22, 7}, {7, 16}, {22, 25}}));
     } else if (name == "joint") {
-        p.setPen(QPen(QColor(90, 130, 230), 1.6));
-        p.setBrush(Qt::NoBrush);
-        p.drawEllipse(QRectF(4, 20, 8, 8));
-        p.drawEllipse(QRectF(20, 4, 8, 8));
-        p.drawPolygon(QPolygonF({{11, 21}, {21, 11}, {13, 23}}));
-        p.drawLine(QPointF(11, 21), QPointF(21, 11));
+        // A bone: a filled wedge from the joint's ball to the next one, light enough to read on any row.
+        p.setPen(QPen(QColor(30, 45, 90), 1.2));
+        p.setBrush(QColor(150, 185, 255));
+        p.drawPolygon(QPolygonF({{8, 20}, {24, 6}, {12, 24}}));
+        p.setBrush(QColor(235, 240, 255));
+        p.drawEllipse(QRectF(3, 18, 11, 11));
+        p.drawEllipse(QRectF(21, 3, 7, 7));
     } else if (name == "ik") {
         p.setPen(QPen(QColor(90, 130, 230), 1.6));
         p.setBrush(Qt::NoBrush);
@@ -522,6 +524,52 @@ QPixmap draw(const QString& name, int size) {
         p.drawEllipse(QRectF(4, 10, 24, 12));
         p.setBrush(kInk);
         p.drawEllipse(QPointF(16, 16), 3.5, 3.5);
+    } else if (name == "nurbsCurve" || name == "bezierCurve") {
+        // A curve through its points.
+        QPainterPath c(QPointF(4, 25));
+        c.cubicTo(QPointF(8, 2), QPointF(22, 30), QPointF(28, 7));
+        p.setBrush(Qt::NoBrush);
+        pen_color(QColor(120, 200, 255), 2.6);
+        p.drawPath(c);
+        p.setPen(QPen(QColor(30, 30, 30), 1.0));
+        p.setBrush(QColor(245, 245, 245));
+        for (const QPointF& at : {QPointF(4, 25), QPointF(16, 16), QPointF(28, 7)}) p.drawRect(QRectF(at.x() - 2.5, at.y() - 2.5, 5, 5));
+    } else if (name == "nurbsSurface") {
+        // A curved patch with its isoparms.
+        QPainterPath patch(QPointF(4, 22));
+        patch.quadTo(QPointF(10, 6), QPointF(20, 5));
+        patch.lineTo(QPointF(28, 12));
+        patch.quadTo(QPointF(18, 14), QPointF(13, 28));
+        patch.closeSubpath();
+        p.setPen(QPen(QColor(25, 60, 90), 1.2));
+        p.setBrush(QColor(110, 190, 235));
+        p.drawPath(patch);
+        p.setBrush(Qt::NoBrush);
+        pen_color(QColor(25, 60, 90), 1.0);
+        QPainterPath iso(QPointF(8.5, 25));
+        iso.quadTo(QPointF(14, 10), QPointF(24, 8.5));
+        p.drawPath(iso);
+        p.drawLine(QPointF(9, 12), QPointF(18, 19));
+    } else if (name == "annotationShape") {
+        // A note with its pointer.
+        p.setPen(QPen(QColor(40, 40, 40), 1.2));
+        p.setBrush(QColor(250, 235, 150));
+        p.drawRoundedRect(QRectF(9, 4, 20, 14), 2, 2);
+        pen_color(QColor(60, 60, 60), 1.4);
+        p.drawLine(QPointF(13, 9), QPointF(25, 9));
+        p.drawLine(QPointF(13, 13), QPointF(22, 13));
+        pen_color(QColor(250, 235, 150), 2.4);
+        arrow(p, {14, 18}, {4, 28}, 5);
+    } else if (name == "distanceDimShape") {
+        // A measure between two points.
+        pen_color(QColor(240, 240, 240), 2.2);
+        p.drawLine(QPointF(5, 20), QPointF(27, 20));
+        p.drawLine(QPointF(5, 14), QPointF(5, 26));
+        p.drawLine(QPointF(27, 14), QPointF(27, 26));
+        pen_color(QColor(250, 215, 90), 2.0);
+        p.drawLine(QPointF(11, 20), QPointF(11, 16));
+        p.drawLine(QPointF(16, 20), QPointF(16, 13));
+        p.drawLine(QPointF(21, 20), QPointF(21, 16));
     } else if (draw_more(name, p)) {
         // Drawn in icons_more.cpp.
     } else if (draw_render_icon(name, p)) {
@@ -552,7 +600,12 @@ QIcon icon(const QString& name, int size) {
     auto it = cache.find(key);
     if (it != cache.end()) return *it;
     QIcon ic;
-    for (int s : {size, size * 2}) ic.addPixmap(draw(name, s));
+    // The same picture when its row is selected: the style's tint would wash a coloured icon into the highlight.
+    for (int s : {size, size * 2}) {
+        const QPixmap pm = draw(name, s);
+        ic.addPixmap(pm, QIcon::Normal);
+        ic.addPixmap(pm, QIcon::Selected);
+    }
     cache.insert(key, ic);
     return ic;
 }

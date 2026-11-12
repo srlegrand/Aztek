@@ -5553,13 +5553,14 @@ The selection and what is connected to it: -d steps (1), -et DG, EG or SG. EG an
 
 ## exportGltf
 
-Export to glTF 2.0: a .glb file (binary, textures inside it) or a .gltf file (JSON, textures by path). The objects named, or the selection, with what is under them: hierarchy, meshes as they stand, normals, UV sets, vertex colours, materials and colour textures, in metres and Y up. Skins, animation, blend shapes, cameras and lights are not written. -all exports every top-level object.
+Export to glTF 2.0: a .glb file (binary, textures inside it) or a .gltf file (JSON, textures by path). The objects named, or the selection, with what is under them: hierarchy, meshes as they stand, normals, UV sets, vertex colours, materials, colour textures and skins (joints, weights, bind matrices), in metres. The file is Y up, as the format is: a Z-up scene is converted, with no node added to carry the turn. -upAxis z writes Z up instead. Animation, blend shapes, cameras and lights are not written. -all exports every top-level object.
 
 Arguments: path objects...
 
 | Flag | Short | Description |
 | --- | --- | --- |
 | `all` | `all` | Every top-level object, not the selection. |
+| `upAxis` | `up` | The file's up axis: y (the format's, the default) or z. |
 
 ## exportObj
 

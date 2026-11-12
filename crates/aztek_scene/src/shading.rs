@@ -319,6 +319,16 @@ pub fn is_material_type(t: &NodeType) -> bool {
     t.is_a("lambert") || matches!(t.name.as_str(), "surfaceShader" | "standardSurface") || crate::harold_nodes::classification(&t.name) == Some("shader/surface")
 }
 
+/// Nodes whose attributes a texture can drive from the Attribute Editor: materials, textures, lights and the
+/// rendering utilities.
+pub fn takes_textures(t: &NodeType) -> bool {
+    if is_material_type(t) || is_texture_type(t) || t.is_a("light") {
+        return true;
+    }
+    matches!(classification(&t.name), Some(c) if c.starts_with("shader") || c.starts_with("texture") || c.starts_with("light"))
+        || matches!(t.name.as_str(), "bump2d" | "aiBump2d" | "aiNormalMap" | "displacementShader")
+}
+
 pub fn is_texture_type(t: &NodeType) -> bool {
     t.name == "file" || crate::harold_nodes::classification(&t.name) == Some("texture/2d")
 }
