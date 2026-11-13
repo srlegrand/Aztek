@@ -37,6 +37,44 @@ pub(crate) struct AzNodeClass {
     pub destroy: Option<unsafe extern "C" fn(*mut c_void, *mut c_void)>,
     pub scheduling: Option<unsafe extern "C" fn(*mut c_void, *mut c_void) -> i32>,
     pub compute: Option<unsafe extern "C" fn(*mut c_void, *mut c_void, i32, i32, *mut Block, *mut *mut c_char) -> i32>,
+    /// ABI 2: the node's postConstructor, run once the scene can be reached (see `run_post_create`).
+    pub post_create: Option<unsafe extern "C" fn(*mut c_void, *mut c_void)>,
+}
+
+/// The class as a plug-in built with ABI 1 gives it, without post_create.
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct AzNodeClassV1 {
+    ctx: *mut c_void,
+    create: Option<unsafe extern "C" fn(*mut c_void, i64, *mut *mut c_char) -> *mut c_void>,
+    destroy: Option<unsafe extern "C" fn(*mut c_void, *mut c_void)>,
+    scheduling: Option<unsafe extern "C" fn(*mut c_void, *mut c_void) -> i32>,
+    compute: Option<unsafe extern "C" fn(*mut c_void, *mut c_void, i32, i32, *mut Block, *mut *mut c_char) -> i32>,
+}
+
+/// Nodes just made whose postConstructor waits for the scene to be reachable: the end of the command, or the file
+/// reader's next step.
+struct PostCreate {
+    func: unsafe extern "C" fn(*mut c_void, *mut c_void),
+    ctx: *mut c_void,
+    inst: *mut c_void,
+    entry: Arc<NodeEntry>,
+}
+thread_local! {
+    static PENDING_POST: std::cell::RefCell<Vec<PostCreate>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Runs the postConstructors waiting, each with the scene reachable.
+pub(crate) fn run_post_create(s: &mut aztek_scene::Session) {
+    loop {
+        let next = PENDING_POST.with(|p| {
+            let mut p = p.borrow_mut();
+            (!p.is_empty()).then(|| p.remove(0))
+        });
+        let Some(pc) = next else { break };
+        let _keep = pc.entry.clone();
+        super::nested(s, || unsafe { (pc.func)(pc.ctx, pc.inst) });
+    }
 }
 
 fn or_else(e: String, fallback: impl FnOnce() -> String) -> String {
@@ -214,6 +252,8 @@ pub(crate) struct NodeEntry {
     name: String,
     owner: String,
     deformer: bool,
+    /// A locator: a shape, whose world matrix and position come first.
+    locator: bool,
     outputs: OnceLock<Vec<usize>>,
     /// For kSerial and kGloballySerial: one node of the type at a time.
     lock: Mutex<()>,
@@ -287,12 +327,21 @@ impl NativeNode {
             return;
         }
         self.sched = e.cls.scheduling.map_or(3, |f| unsafe { f(e.cls.ctx, self.inst) });
+        if let Some(func) = e.cls.post_create {
+            PENDING_POST.with(|p| p.borrow_mut().push(PostCreate { func, ctx: e.cls.ctx, inst: self.inst, entry: e.clone() }));
+        }
     }
 }
 
 impl NodeBehavior for NativeNode {
     fn compute(&mut self, ctx: &EvalContext, d: &mut NodeData) {
         let e = self.entry.clone();
+        if e.locator {
+            aztek_scene::transform::Shape::compute_matrices(d);
+            let (lp, wp) = (aztek_scene::transform::Locator::LOCAL_POSITION, aztek_scene::transform::Locator::WORLD_POSITION);
+            let p = d.matrix(aztek_scene::transform::DagNode::WORLD_MATRIX).transform_point3(d.vec3(lp));
+            d.set_output(wp, PlugValue::Vec3(p));
+        }
         let (inp, out) = if e.deformer { (d.ty().attr_index("inputPolymesh"), d.ty().attr_index("output")) } else { (None, None) };
         let mut input = inp.and_then(|i| d.mesh(i).cloned());
         // A curve to deform: its CVs go to the plug-in as the points of a mesh with no faces, and come back as the
@@ -401,7 +450,15 @@ impl NodeBehavior for NativeNode {
 }
 
 pub(crate) unsafe extern "C" fn register_node(plugin: *mut c_void, name: *const c_char, _type_id: u32, kind: i32, attrs: *const c_char, outputs: *const c_char, cls: *const AzNodeClass) -> *mut c_char {
-    let (Some(p), Some(cls)) = ((plugin as *mut PluginState).as_mut(), cls.as_ref()) else { return give("registerNode: no plug-in") };
+    let (Some(p), false) = ((plugin as *mut PluginState).as_mut(), cls.is_null()) else { return give("registerNode: no plug-in") };
+    // A plug-in built with ABI 1 gives a shorter class.
+    let cls: AzNodeClass = if p.abi >= 2 {
+        *cls
+    } else {
+        let v1 = *(cls as *const AzNodeClassV1);
+        AzNodeClass { ctx: v1.ctx, create: v1.create, destroy: v1.destroy, scheduling: v1.scheduling, compute: v1.compute, post_create: None }
+    };
+    let cls = &cls;
     let name = text(name).to_string();
     let attrs: Vec<Value> = match serde_json::from_str(text(attrs)) {
         Ok(a) => a,
@@ -409,11 +466,13 @@ pub(crate) unsafe extern "C" fn register_node(plugin: *mut c_void, name: *const 
     };
     let outs: Vec<String> = serde_json::from_str(text(outputs)).unwrap_or_default();
     let deformer = kind == 1;
+    let locator = kind == 2;
     let entry = Arc::new(NodeEntry {
         cls: *cls,
         name: name.clone(),
         owner: p.name.clone(),
         deformer,
+        locator,
         outputs: OnceLock::new(),
         lock: Mutex::new(()),
         crashed: AtomicBool::new(false),
@@ -421,7 +480,8 @@ pub(crate) unsafe extern "C" fn register_node(plugin: *mut c_void, name: *const 
     });
     let e = entry.clone();
     let create: aztek_scene::node::CreateFn = Arc::new(move || Box::new(NativeNode { entry: e.clone(), inst: std::ptr::null_mut(), sched: 3, id: NO_NODE, name: String::new(), failed: false }));
-    if let Err(err) = scripted::register_native_type(&name, &p.name, &attrs, deformer, create) {
+    let kind = if deformer { scripted::NativeKind::Deformer } else if locator { scripted::NativeKind::Locator } else { scripted::NativeKind::Depend };
+    if let Err(err) = scripted::register_native_type(&name, &p.name, &attrs, kind, create) {
         return give(&format!("(kFailure): {err}"));
     }
     let t = types::find(&name).expect("just registered");
@@ -568,6 +628,10 @@ pub(crate) unsafe extern "C" fn block_string(b: *mut Block, attr: i32, el: i32) 
     let Some(b) = b.as_mut() else { return std::ptr::null() };
     let s = match b.attr(attr).map(|a| b.read(a, el)) {
         Some(PlugValue::String(s)) => s,
+        // Array data goes as a JSON list.
+        Some(v @ PlugValue::Data(_)) if b.attr(attr).is_some_and(|a| aztek_scene::array_data::of(&b.d().ty().attrs[a].default_value).is_some()) => {
+            aztek_scene::array_data::of(&v).map_or_else(|| "[]".to_string(), |d| d.values_json().to_string())
+        }
         Some(PlugValue::Mesh(_)) | Some(PlugValue::Data(_)) | Some(PlugValue::Matrix(_)) | None => String::new(),
         Some(v) => number_of(&v, -1).to_string(),
     };
@@ -619,6 +683,12 @@ pub(crate) unsafe extern "C" fn block_set_matrix(b: *mut Block, attr: i32, el: i
 pub(crate) unsafe extern "C" fn block_set_string(b: *mut Block, attr: i32, el: i32, s: *const c_char) {
     let Some(b) = b.as_mut() else { return };
     let Some(a) = b.attr(attr) else { return };
+    // Array data comes as a JSON list.
+    if let Some(empty) = aztek_scene::array_data::of(&b.d().ty().attrs[a].default_value).cloned() {
+        let v: serde_json::Value = serde_json::from_str(text(s)).unwrap_or(serde_json::Value::Null);
+        b.write(a, el, empty.with_values(&v).value());
+        return;
+    }
     b.write(a, el, PlugValue::String(text(s).to_string()));
 }
 

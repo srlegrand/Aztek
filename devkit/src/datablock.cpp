@@ -76,11 +76,13 @@ MTime MDGContext::getTime(MStatus* st) const { if (st) *st = MS::kSuccess; retur
 // MDataHandle
 
 MDataHandle::MDataHandle() : azBlock(0), azElement(-1) {}
-MDataHandle::MDataHandle(const MDataHandle& o) : azBlock(o.azBlock), azSpec(o.azSpec), azElement(o.azElement) {}
+MDataHandle::MDataHandle(const MDataHandle& o) : azBlock(o.azBlock), azSpec(o.azSpec), azElement(o.azElement), azOuter(o.azOuter), azLoose(o.azLoose) {}
 MDataHandle& MDataHandle::operator=(const MDataHandle& o) {
     azBlock = o.azBlock;
     azSpec = o.azSpec;
     azElement = o.azElement;
+    azOuter = o.azOuter;
+    azLoose = o.azLoose;
     return *this;
 }
 
@@ -92,10 +94,23 @@ int MDataHandle::index(int* comp) const {
     return indexOf(azBlock->cls, azSpec.get(), comp);
 }
 
-// The element the host knows: deformer attributes that are arrays in the API are single plugs here.
-static int hostElement(const MDataHandle& h) { return h.azSpec && !h.azSpec->builtin.empty() ? -1 : h.azElement; }
+// The element the host knows: the indices at every array level packed into one, or -1 while one of them isn't chosen.
+// Deformer attributes that are arrays in the API are single plugs here.
+static int hostElement(const MDataHandle& h) {
+    if (!h.azSpec || !h.azSpec->builtin.empty()) return -1;
+    std::vector<int> idx = h.azOuter;
+    if (h.azSpec->array && h.azElement >= 0) idx.push_back(h.azElement);
+    int levels = arrayDepth(h.azSpec.get());
+    // A vec3's numbers: the vec3's own levels.
+    if (levels == 0) return h.azElement;
+    return (int)idx.size() == levels ? packPath(idx) : -1;
+}
 
 double MDataHandle::number(int component) const {
+    if (!azLoose.empty()) {
+        size_t k = component >= 0 ? (size_t)component : 0;
+        return k < azLoose.size() ? azLoose[k] : 0.0;
+    }
     if (isWeights(azSpec.get()) && azBlock && azBlock->block) {
         size_t n = 0;
         const double* w = host->block_weights(azBlock->block, &n);
@@ -130,6 +145,10 @@ void MDataHandle::setVec(double a, double b, double c) {
 
 static void readVec(const MDataHandle& h, int i, double out[3]) {
     out[0] = out[1] = out[2] = 0;
+    if (!h.azLoose.empty()) {
+        for (size_t k = 0; k < 3 && k < h.azLoose.size(); ++k) out[k] = h.azLoose[k];
+        return;
+    }
     if (i < 0) return;
     host->block_vec3(h.azBlock->block, i, hostElement(h), out);
 }
@@ -241,8 +260,33 @@ MObject MDataHandle::asNurbsCurve() const {
 MObject MDataHandle::asNurbsCurveTransformed() const { return asNurbsCurve(); }
 MMatrix MDataHandle::geometryTransformMatrix() const { return MMatrix(); }
 
+static MObject newData(MFn::Type t) {
+    std::shared_ptr<ObjectData> d = std::make_shared<ObjectData>();
+    d->type = t;
+    return MObject(d);
+}
+
+// Array data travels as JSON in the host's string calls: numbers flat (a point's four, a vector's three), or strings.
+static MFn::Type arrayKind(const std::string& type) {
+    return type == "doubleArray" ? MFn::kDoubleArrayData : type == "floatArray" ? MFn::kFloatArrayData : type == "intArray" ? MFn::kIntArrayData
+         : type == "stringArray" ? MFn::kStringArrayData : type == "pointArray" ? MFn::kPointArrayData : type == "vectorArray" ? MFn::kVectorArrayData : MFn::kInvalid;
+}
+
 MObject MDataHandle::data() const {
     if (!azSpec) return MObject();
+    MFn::Type kind = arrayKind(azSpec->type);
+    if (kind != MFn::kInvalid) {
+        MObject o = newData(kind);
+        int i = index(0);
+        if (i < 0 || !azBlock || !azBlock->block) return o;
+        const char* text = host->block_string(azBlock->block, i, hostElement(*this));
+        Json j = Json::parse(text ? text : "[]");
+        for (size_t k = 0; k < j.size(); ++k) {
+            if (kind == MFn::kStringArrayData) o.azData()->strs.push_back(j[k].str());
+            else o.azData()->nums.push_back(j[k].num());
+        }
+        return o;
+    }
     if (azSpec->type == "mesh") return asMesh();
     if (azSpec->type == "curve") return asNurbsCurve();
     if (azSpec->type == "matrix") {
@@ -268,17 +312,19 @@ MObject MDataHandle::data() const {
 
 MStatus MDataHandle::setData(const MObject& d) { return set(d); }
 
+// A child of an array's element carries that element among its outer ones.
+static MDataHandle childOf(const MDataHandle& in, const std::shared_ptr<AttrSpec>& spec) {
+    MDataHandle h(in);
+    h.azSpec = spec;
+    if (in.azSpec && in.azSpec->array && in.azElement >= 0) h.azOuter.push_back(in.azElement);
+    h.azElement = -1;
+    return h;
+}
 MDataHandle MDataHandle::child(const MObject& attr) {
-    MDataHandle h(*this);
     const std::shared_ptr<ObjectData>& d = attr.azData();
-    h.azSpec = d ? d->attr : std::shared_ptr<AttrSpec>();
-    return h;
+    return childOf(*this, d ? d->attr : std::shared_ptr<AttrSpec>());
 }
-MDataHandle MDataHandle::child(const MPlug& plug) {
-    MDataHandle h(*this);
-    h.azSpec = plug.azSpec();
-    return h;
-}
+MDataHandle MDataHandle::child(const MPlug& plug) { return childOf(*this, plug.azSpec()); }
 
 void MDataHandle::set(bool v) { setNumber(v ? 1 : 0); }
 void MDataHandle::set(char v) { setNumber(v); }
@@ -333,6 +379,21 @@ MStatus MDataHandle::set(const MObject& data) {
         return MS::kSuccess;
     }
     case MFn::kStringData: set(MString(d->str)); return MS::kSuccess;
+    case MFn::kDoubleArrayData:
+    case MFn::kFloatArrayData:
+    case MFn::kIntArrayData:
+    case MFn::kPointArrayData:
+    case MFn::kVectorArrayData:
+    case MFn::kStringArrayData: {
+        Json j = Json::array();
+        if (d->type == MFn::kStringArrayData) {
+            for (size_t k = 0; k < d->strs.size(); ++k) j.push(d->strs[k]);
+        } else {
+            for (size_t k = 0; k < d->nums.size(); ++k) j.push(d->nums[k]);
+        }
+        host->block_set_string(azBlock->block, i, hostElement(*this), j.dump().c_str());
+        return MS::kSuccess;
+    }
     case MFn::kNumericData:
         if (d->nums.size() >= 2) setVec(d->nums[0], d->nums[1], d->nums.size() > 2 ? d->nums[2] : 0.0);
         else if (!d->nums.empty()) setNumber(d->nums[0]);
@@ -380,8 +441,9 @@ void MDataHandle::setClean() {}
 // ---------------------------------------------------------------------------------------------------------------------
 // Arrays
 
-// The elements an array attribute has: an array compound's are those any of its children have.
-static std::vector<int> elementIds(BlockImpl* b, const std::shared_ptr<AttrSpec>& spec) {
+// The elements an array attribute has under the elements of the arrays above it: an array compound's are those any of
+// its children have.
+static std::vector<int> elementIds(BlockImpl* b, const std::shared_ptr<AttrSpec>& spec, const std::vector<int>& outer) {
     std::vector<int> out;
     if (!b || !b->block || !spec) return out;
     if (spec->builtin == "input" || spec->builtin == "output" || spec->builtin == "weightList") {
@@ -391,7 +453,7 @@ static std::vector<int> elementIds(BlockImpl* b, const std::shared_ptr<AttrSpec>
     if (spec->type == "compound") {
         std::set<int> all;
         for (size_t k = 0; k < spec->children.size(); ++k) {
-            std::vector<int> ids = elementIds(b, spec->children[k]);
+            std::vector<int> ids = elementIds(b, spec->children[k], outer);
             all.insert(ids.begin(), ids.end());
         }
         out.assign(all.begin(), all.end());
@@ -400,33 +462,46 @@ static std::vector<int> elementIds(BlockImpl* b, const std::shared_ptr<AttrSpec>
     int i = indexOf(b->cls, spec.get(), 0);
     if (i < 0) return out;
     int n = host->block_element_count(b->block, i);
-    for (int k = 0; k < n; ++k) out.push_back(host->block_element_at(b->block, i, k));
+    int levels = arrayDepth(spec.get());
+    std::set<int> all;
+    for (int k = 0; k < n; ++k) {
+        int e = host->block_element_at(b->block, i, k);
+        if (levels <= 1) {
+            all.insert(e);
+            continue;
+        }
+        std::vector<int> idx = unpackPath(e, levels);
+        if (idx.size() > outer.size() && std::equal(outer.begin(), outer.end(), idx.begin())) all.insert(idx[outer.size()]);
+    }
+    out.assign(all.begin(), all.end());
     return out;
 }
 
 MArrayDataHandle::MArrayDataHandle() : azBlock(0), azAt(0) {}
-MArrayDataHandle::MArrayDataHandle(const MDataHandle& in, MStatus* st) : azBlock(in.azBlock), azSpec(in.azSpec), azAt(0) {
+MArrayDataHandle::MArrayDataHandle(const MDataHandle& in, MStatus* st) : azBlock(in.azBlock), azSpec(in.azSpec), azAt(0), azOuter(in.azOuter) {
     if (isWeights(azSpec.get()) && azBlock && azBlock->block) {
         size_t n = 0;
         if (host->block_weights(azBlock->block, &n))
             for (size_t i = 0; i < n; ++i) azIds.push_back((int)i);
     } else {
-        azIds = elementIds(azBlock, azSpec);
+        azIds = elementIds(azBlock, azSpec, azOuter);
     }
     if (st) *st = azSpec ? MStatus(MS::kSuccess) : MStatus(MS::kInvalidParameter);
 }
-MArrayDataHandle::MArrayDataHandle(const MArrayDataHandle& o) : azBlock(o.azBlock), azSpec(o.azSpec), azIds(o.azIds), azAt(o.azAt) {}
+MArrayDataHandle::MArrayDataHandle(const MArrayDataHandle& o) : azBlock(o.azBlock), azSpec(o.azSpec), azIds(o.azIds), azAt(o.azAt), azOuter(o.azOuter) {}
 MArrayDataHandle& MArrayDataHandle::operator=(const MArrayDataHandle& o) {
     azBlock = o.azBlock;
     azSpec = o.azSpec;
     azIds = o.azIds;
     azAt = o.azAt;
+    azOuter = o.azOuter;
     return *this;
 }
 MDataHandle MArrayDataHandle::inputValue(MStatus* st) {
     MDataHandle h;
     h.azBlock = azBlock;
     h.azSpec = azSpec;
+    h.azOuter = azOuter;
     h.azElement = azAt < azIds.size() ? azIds[azAt] : -1;
     if (st) *st = azAt < azIds.size() ? MStatus(MS::kSuccess) : MStatus(MS::kFailure);
     return h;
@@ -472,6 +547,7 @@ MArrayDataBuilder MArrayDataHandle::builder(MStatus* st) {
     b.azBlock = azBlock;
     b.azSpec = azSpec;
     b.azAdded = azIds;
+    b.azOuter = azOuter;
     if (st) *st = MS::kSuccess;
     return b;
 }
@@ -489,11 +565,12 @@ MArrayDataBuilder::MArrayDataBuilder(MDataBlock* block, const MObject& attr, uns
     azSpec = attr.azData() ? attr.azData()->attr : std::shared_ptr<AttrSpec>();
     if (st) *st = azSpec ? MStatus(MS::kSuccess) : MStatus(MS::kInvalidParameter);
 }
-MArrayDataBuilder::MArrayDataBuilder(const MArrayDataBuilder& o) : azBlock(o.azBlock), azSpec(o.azSpec), azAdded(o.azAdded) {}
+MArrayDataBuilder::MArrayDataBuilder(const MArrayDataBuilder& o) : azBlock(o.azBlock), azSpec(o.azSpec), azAdded(o.azAdded), azOuter(o.azOuter) {}
 MArrayDataBuilder& MArrayDataBuilder::operator=(const MArrayDataBuilder& o) {
     azBlock = o.azBlock;
     azSpec = o.azSpec;
     azAdded = o.azAdded;
+    azOuter = o.azOuter;
     return *this;
 }
 MDataHandle MArrayDataBuilder::addElement(unsigned int index, MStatus* st) {
@@ -504,6 +581,7 @@ MDataHandle MArrayDataBuilder::addElement(unsigned int index, MStatus* st) {
     MDataHandle h;
     h.azBlock = azBlock;
     h.azSpec = azSpec;
+    h.azOuter = azOuter;
     h.azElement = (int)index;
     if (st) *st = MS::kSuccess;
     return h;
@@ -522,11 +600,12 @@ MStatus MArrayDataBuilder::setGrowSize(unsigned int) { return MS::kSuccess; }
 // ---------------------------------------------------------------------------------------------------------------------
 // MDataBlock
 
-static MDataHandle handleOf(BlockImpl* b, const std::shared_ptr<AttrSpec>& spec, int element, MStatus* st) {
+static MDataHandle handleOf(BlockImpl* b, const std::shared_ptr<AttrSpec>& spec, int element, MStatus* st, const std::vector<int>& outer = std::vector<int>()) {
     MDataHandle h;
     h.azBlock = b;
     h.azSpec = spec;
     h.azElement = element;
+    h.azOuter = outer;
     bool ok = spec && (isWeights(spec.get()) || spec->type == "compound" || spec->builtin == "input" || indexOf(b ? b->cls : 0, spec.get(), 0) >= 0);
     if (st) *st = ok ? MStatus(MS::kSuccess) : fail(MStatus::kInvalidParameter, std::string("(kInvalidParameter): the attribute ") + (spec ? spec->name : std::string("?")) + " is not on this node");
     return h;
@@ -534,13 +613,13 @@ static MDataHandle handleOf(BlockImpl* b, const std::shared_ptr<AttrSpec>& spec,
 
 static std::shared_ptr<AttrSpec> specOf(const MObject& o) { return o.azData() ? o.azData()->attr : std::shared_ptr<AttrSpec>(); }
 
-MDataHandle MDataBlock::inputValue(const MPlug& p, MStatus* st) { return handleOf(b_, p.azSpec(), p.azElement(), st); }
+MDataHandle MDataBlock::inputValue(const MPlug& p, MStatus* st) { return handleOf(b_, p.azSpec(), p.azOwnElement(), st, p.azOuter()); }
 MDataHandle MDataBlock::inputValue(const MObject& a, MStatus* st) { return handleOf(b_, specOf(a), -1, st); }
-MDataHandle MDataBlock::outputValue(const MPlug& p, MStatus* st) { return handleOf(b_, p.azSpec(), p.azElement(), st); }
+MDataHandle MDataBlock::outputValue(const MPlug& p, MStatus* st) { return handleOf(b_, p.azSpec(), p.azOwnElement(), st, p.azOuter()); }
 MDataHandle MDataBlock::outputValue(const MObject& a, MStatus* st) { return handleOf(b_, specOf(a), -1, st); }
-MArrayDataHandle MDataBlock::inputArrayValue(const MPlug& p, MStatus* st) { return MArrayDataHandle(handleOf(b_, p.azSpec(), -1, st)); }
+MArrayDataHandle MDataBlock::inputArrayValue(const MPlug& p, MStatus* st) { return MArrayDataHandle(handleOf(b_, p.azSpec(), -1, st, p.azOuter())); }
 MArrayDataHandle MDataBlock::inputArrayValue(const MObject& a, MStatus* st) { return MArrayDataHandle(handleOf(b_, specOf(a), -1, st)); }
-MArrayDataHandle MDataBlock::outputArrayValue(const MPlug& p, MStatus* st) { return MArrayDataHandle(handleOf(b_, p.azSpec(), -1, st)); }
+MArrayDataHandle MDataBlock::outputArrayValue(const MPlug& p, MStatus* st) { return MArrayDataHandle(handleOf(b_, p.azSpec(), -1, st, p.azOuter())); }
 MArrayDataHandle MDataBlock::outputArrayValue(const MObject& a, MStatus* st) { return MArrayDataHandle(handleOf(b_, specOf(a), -1, st)); }
 MStatus MDataBlock::setClean(const MPlug&) { return MS::kSuccess; }
 MStatus MDataBlock::setClean(const MObject&) { return MS::kSuccess; }

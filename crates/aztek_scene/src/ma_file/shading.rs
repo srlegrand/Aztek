@@ -13,19 +13,17 @@ use crate::shading::{self, SG_TYPE};
 pub(super) fn short_plug(g: &Graph, p: &PlugRef) -> String {
     let n = g.node(p.node).unwrap();
     let a = g.attr(p);
-    let attr = if p.component >= 0 {
+    let attr = if p.component >= 0 && p.element < 0 {
         a.child_short[p.component as usize].clone()
-    } else if p.element >= 0 {
-        format!("{}[{}]", a.short_name, p.element)
     } else {
-        a.short_name.clone()
+        crate::graph::short_attr_part(a, p)
     };
     format!("{}.{attr}", node_ref(g, n.id()))
 }
 
 /// Whether a node's setAttr lines use short names, as the reference's do for these.
 pub(super) fn writes_short(g: &Graph, id: NodeId) -> bool {
-    g.node(id).is_some_and(|n| n.ty().is_a(SG_TYPE) || crate::defaults::is_scene_node(n.name()) || n.ty().is_a("light") || shading::classification(&n.ty().name).is_some() || n.ty().name == "animLayer" || n.ty().name.starts_with("animBlendNode"))
+    g.node(id).is_some_and(|n| n.ty().is_a(SG_TYPE) || crate::defaults::is_scene_node(n.name()) || n.ty().is_a("light") || shading::classification(&n.ty().name).is_some() || n.ty().name == "animLayer" || n.ty().name.starts_with("animBlendNode") || !n.ty().owner.is_empty())
 }
 
 fn node_ref(g: &Graph, id: NodeId) -> String {

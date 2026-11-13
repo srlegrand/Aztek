@@ -265,6 +265,9 @@ pub mod flags {
     /// A number or a vector, whichever is connected: unitConversion's input and output, which carry a rotation's three
     /// angles as readily as one value.
     pub const GENERIC: u32 = 1 << 17;
+    /// An output array whose elements exist once something is connected to them, as the reference's do: a mesh's
+    /// worldMesh[0] is only made when read.
+    pub const MADE_ON_READ: u32 = 1 << 18;
 }
 
 #[derive(Clone, Debug)]
@@ -299,6 +302,41 @@ pub struct AttrDef {
     pub category: String,
     /// What the attr measures: stored in centimetres or radians, shown in the current unit.
     pub unit: aztek_ops::units::Unit,
+    /// For an attr inside arrays inside arrays (`driverList[0].pose[2].poseValues[1]`, named "driverList.pose.poseValues"):
+    /// which parts of its name are arrays, bit k for part k. Its elements are those indices packed into one (`pack`).
+    /// 0 for every other attr, a group's child (`inputs[3].color`) included.
+    pub nest: u8,
+}
+
+/// Indices at each array level of a nested attr, packed into the one element the graph keeps: the outer ones in the
+/// high bits. Two levels: 7 bits and 24; three: 7, 12 and 12; four: 7, 8, 8 and 8. The plug-in kit packs the same way.
+pub fn pack(idx: &[i32]) -> i32 {
+    let shifts: &[u32] = match idx.len() {
+        0 => return -1,
+        1 => return idx[0],
+        2 => &[24, 0],
+        3 => &[24, 12, 0],
+        _ => &[24, 16, 8, 0],
+    };
+    idx.iter().zip(shifts).fold(0, |acc, (&i, &sh)| acc | (i << sh))
+}
+
+/// `pack` undone, for `levels` array levels.
+pub fn unpack(element: i32, levels: usize) -> Vec<i32> {
+    let (shifts, masks): (&[u32], &[i32]) = match levels {
+        0 | 1 => return vec![element],
+        2 => (&[24, 0], &[0x7f, 0xff_ffff]),
+        3 => (&[24, 12, 0], &[0x7f, 0xfff, 0xfff]),
+        _ => (&[24, 16, 8, 0], &[0x7f, 0xff, 0xff, 0xff]),
+    };
+    shifts.iter().zip(masks).map(|(&sh, &m)| (element >> sh) & m).collect()
+}
+
+impl AttrDef {
+    /// How many array levels a nested attr has; 0 when it is not one.
+    pub fn nest_levels(&self) -> usize {
+        self.nest.count_ones() as usize
+    }
 }
 
 impl Default for AttrDef {
@@ -325,6 +363,7 @@ impl Default for AttrDef {
             step: None,
             category: String::new(),
             unit: aztek_ops::units::Unit::None,
+            nest: 0,
         }
     }
 }

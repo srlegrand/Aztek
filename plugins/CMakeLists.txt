@@ -3,6 +3,8 @@
 #
 #   mgear_solvers     mGear's solver nodes (mgear_curveCns, mgear_ikfk2Bone, mgear_matrixConstraint ...), from
 #                     mGear 5's src/ (github.com/mgear-dev/mgear), unchanged
+#   mGearWeightDriver mGear's RBF and vector angle node (github.com/mgear-dev/mgear), unchanged
+#   cvwrap            the cvWrap deformer and command, mGear's copy (github.com/mgear-dev/cvwrap), unchanged
 #
 # They are written to plug-ins/ beside the program and installed to lib/aztek/plug-ins (Linux); Windows builds copy
 # plug-ins/ beside aztek.exe and the Mac app keeps them in Contents/PlugIns/aztek. Aztek looks there after the folders
@@ -27,3 +29,9 @@ endfunction()
 file(GLOB MGEAR_SOLVERS_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/mgear_solvers/*.cpp")
 aztek_shipped_plugin(mgear_solvers SOURCES ${MGEAR_SOLVERS_SOURCES})
 
+
+file(GLOB MGEAR_WEIGHT_DRIVER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/mGearWeightDriver/*.cpp")
+aztek_shipped_plugin(mGearWeightDriver SOURCES ${MGEAR_WEIGHT_DRIVER_SOURCES})
+
+file(GLOB CVWRAP_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/cvwrap/*.cpp")
+aztek_shipped_plugin(cvwrap SOURCES ${CVWRAP_SOURCES})

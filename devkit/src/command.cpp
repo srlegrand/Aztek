@@ -298,7 +298,7 @@ MArgParser::MArgParser(const MSyntax& syntax, const MArgList& args, MStatus* st)
                 continue;
             }
             Use u;
-            u.flag = f;
+            u.flag = *f;
             u.position = (unsigned int)i;
             size_t n = f->args.size();
             for (size_t k = 0; k < n; ++k) {
@@ -326,7 +326,7 @@ const MArgParser::Use* MArgParser::azUse(const char* flag, unsigned int use) con
     std::string n = bare(flag);
     unsigned int k = 0;
     for (size_t i = 0; i < uses_.size(); ++i) {
-        if (uses_[i].flag->shortName == n || uses_[i].flag->longName == n) {
+        if (uses_[i].flag.shortName == n || uses_[i].flag.longName == n) {
             if (k == use) return &uses_[i];
             ++k;
         }

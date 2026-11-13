@@ -32,6 +32,8 @@ fn walk(doc: &Doc, shape: usize) -> NurbsChain {
                 break;
             }
             "skinCluster" => c.deformers.insert(0, (next, index)),
+            // A plug-in's deformer on a curve keeps the curve itself: read by `curve_deformers`.
+            t if crate::scripted::is_plugin_deformer(t) => break,
             t if deformers::is_file_deformer(t) => c.deformers.insert(0, (next, index)),
             "tweak" => c.deformers.insert(0, (next, index)),
             "groupParts" | "groupId" => {}

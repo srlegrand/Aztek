@@ -24,7 +24,14 @@ is used first. A file of that name built for the reference, earlier on the path,
 
 - `mgear_solvers`: mGear's solver nodes (`mgear_matrixConstraint`, `mgear_curveCns`, `mgear_rollSplineKine`,
   `mgear_ikfk2Bone` and the rest), from mGear's source, unchanged. A rig built with mGear opens and works without mGear
-  installed. mGear's other plug-ins (`mGearWeightDriver`, `cvwrap`) are not shipped yet.
+  installed.
+- `mGearWeightDriver`: mGear's RBF and vector angle node, from its source, unchanged. Its locator shape computes in
+  all three modes (vector angle, generic RBF, RBF on matrices); the cones and poses it draws in the reference are not
+  drawn in Aztek's viewport yet.
+- `cvwrap`: the cvWrap deformer and command, mGear's copy, unchanged. `cvWrap`, `cvWrap -rb` (rebind to some faces),
+  `-ex`/`-im` (export and import a binding) and `-b` work. Its GPU override is registered and never used: Aztek
+  deforms on the CPU. Loaded in the interface it asks Python for its menu module (`cvwrap.menu`), which is not shipped,
+  as the reference does when that module is missing.
 
 ## The Plug-in Manager
 

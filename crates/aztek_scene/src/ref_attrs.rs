@@ -147,6 +147,9 @@ fn read(g: &mut Graph, p: &PlugRef) -> CmdResult {
         return Ok(to_json(&PlugValue::Matrix(m)));
     }
     let v = g.value(p)?;
+    if let Some(d) = crate::array_data::of(&v) {
+        return Ok(d.get_json());
+    }
     let a = g.attr(p);
     if p.component < 0 && a.ty == PlugType::Vec3 && !a.child_names[0].is_empty() && a.child_names[2].is_empty() {
         let x = v.as_vec3();
@@ -413,6 +416,32 @@ fn set_attr_one(s: &mut Session, a: &Args, prev: &aztek_ops::RunFn<Session>) -> 
         match ty.as_str() {
             "stringArray" | "doubleArray" | "floatArray" | "Int32Array" | "int32Array" | "vectorArray" | "pointArray" => {
                 // MEL and the reference's Python put the count first in some forms: setAttr n.a -type stringArray 2 "x" "y".
+                // Array data held in one plug, as a plug-in's typed attribute holds it.
+                if let Some(d) = crate::array_data::of(&def.default_value) {
+                    let mut items = flat.clone();
+                    let w = d.width().min(3);
+                    let counted = items.first().and_then(Value::as_u64).map(|c| c as usize);
+                    if counted.is_some_and(|c| c * w == items.len() - 1) {
+                        items.remove(0);
+                    }
+                    let kind = crate::array_data::file_kind(&ty).unwrap_or(&d.kind).to_string();
+                    let mut out = crate::array_data::ArrayData::empty(&kind);
+                    if kind == "stringArray" {
+                        out.strings = items.iter().map(|v| v.as_str().map(str::to_string).unwrap_or_else(|| v.to_string())).collect();
+                    } else if kind == "pointArray" && d.width() == 4 {
+                        for c in items.chunks(3) {
+                            out.nums.extend(c.iter().filter_map(Value::as_f64));
+                            out.nums.push(1.0);
+                        }
+                    } else {
+                        out.nums = items.iter().filter_map(Value::as_f64).collect();
+                    }
+                    s.graph.set_value(p, out.value())?;
+                    if a.has("lock") && a.bool("lock") {
+                        s.graph.set_locked(&p, true)?;
+                    }
+                    return Ok(Value::Null);
+                }
                 let mut items = flat;
                 let counted = items.first().and_then(Value::as_u64).map(|c| c as usize);
                 let per = if matches!(ty.as_str(), "vectorArray" | "pointArray") { 3 } else { 1 };

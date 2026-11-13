@@ -141,7 +141,7 @@ impl Build<'_> {
             self.warnings.push(format!("{}: a nonlinear deformer with no handle shape", n.name));
             return None;
         };
-        let Some(t) = types::find(&ty).filter(|_| deform::is_deformer(&ty)) else {
+        let Some(t) = types::find(&ty).filter(|_| deform::is_deformer(&ty) || crate::scripted::is_plugin_deformer(&ty)) else {
             self.warnings.push(format!("{}: {ty} is not a deformer here", n.name));
             return None;
         };
@@ -207,6 +207,45 @@ impl Build<'_> {
         }
     }
 
+    /// What a plug-in's deformer holds under its own compounds: `.bindData[0].sampleWeights[3]`.
+    fn nested_sets(&mut self, n: &MaNode, id: NodeId) {
+        let path = self.s.graph.path(id);
+        for set in &n.sets {
+            if set.values.is_empty() || set.path.len() < 2 || matches!(set.path[0].name.as_str(), "ip" | "input" | "wl" | "weightList") {
+                continue;
+            }
+            let (lo, hi) = set.path.iter().rev().find_map(|s| s.range).unwrap_or((-1, -1));
+            let ranged = set.path.iter().rposition(|s| s.range.is_some());
+            let count = (hi - lo + 1).max(1) as usize;
+            let stride = (set.values.len() / count).max(1);
+            for (k, chunk) in set.values.chunks(stride).enumerate().take(count) {
+                let text: Vec<String> = set
+                    .path
+                    .iter()
+                    .enumerate()
+                    .map(|(at, seg)| match seg.range {
+                        Some(r) if Some(at) == ranged => format!("{}[{}]", seg.name, r.0 + k as i64),
+                        Some(r) => format!("{}[{}]", seg.name, r.0),
+                        None => seg.name.clone(),
+                    })
+                    .collect();
+                let Ok(p) = self.s.graph.plug(&format!("{path}.{}", text.join("."))) else {
+                    self.warnings.push(format!("{}.{}: no such attribute", n.name, text.join(".")));
+                    continue;
+                };
+                if self.s.graph.source(&p).is_some() {
+                    continue;
+                }
+                let def = self.s.graph.attr(&p).clone();
+                if let Some(v) = plug_value(&def, p.component, chunk, 1.0) {
+                    if let Err(e) = self.s.graph.set_value(p, v) {
+                        self.warnings.push(format!("{}.{}: {e}", n.name, text.join(".")));
+                    }
+                }
+            }
+        }
+    }
+
     fn fill_deformer(&mut self, d: FileDeformer) {
         let doc = self.doc;
         let n = &doc.nodes[d.doc];
@@ -216,6 +255,9 @@ impl Build<'_> {
         let xf = crate::dag::transform_of(&self.s.graph, d.shape);
         let _ = self.s.graph.connect(&deform::plug(xf, Transform::WORLD_MATRIX), &deform::plug(id, GEOM), false);
         self.scalar_sets(n, id);
+        if !t.owner.is_empty() {
+            self.nested_sets(n, id);
+        }
 
         // What only Aztek's nodes hold, by the attributes' short names.
         if let Some(plugs) = state.get("plugs").and_then(Value::as_object) {
@@ -439,7 +481,7 @@ impl Build<'_> {
         for c in &doc.conns {
             let dst_doc = by_shape.get(&c.dst).copied().unwrap_or(c.dst);
             let list = nodes(self, dst_doc);
-            let src_is_deformer = is_file_deformer(&doc.nodes[c.src].ty);
+            let src_is_deformer = is_file_deformer(&doc.nodes[c.src].ty) || self.deformers.iter().any(|d| d.doc == c.src);
             if list.is_empty() && !src_is_deformer {
                 continue;
             }
@@ -447,7 +489,9 @@ impl Build<'_> {
             let plain_dst = plain_attr(&c.dst_attr);
             // A solver's or field's link to a cloth is a message connection that means something.
             let dyn_link = matches!(plain_dst.as_str(), "slv" | "solver" | "ifc" | "inputForce");
-            if matches!(plain_dst.as_str(), "bw" | "baseWire" | "dw" | "deformedWire" | "ip.ig" | "ip.gi" | "input.inputGeometry" | "input.groupId" | "i" | "inMesh" | "dd" | "deformerData" | "gm" | "geomMatrix") || (!dyn_link && matches!(plain_attr(&sa).as_str(), "og" | "outputGeometry" | "msg" | "message") && !crate::rig_extra::is_flexor_type(&doc.nodes[sn].ty)) {
+            // A plug-in's deformer may read a node's message (cvWrap's bindMesh): only it knows what for.
+            let plugin_msg = crate::scripted::is_plugin_deformer(&doc.nodes[dst_doc].ty) && matches!(plain_attr(&sa).as_str(), "msg" | "message");
+            if matches!(plain_dst.as_str(), "bw" | "baseWire" | "dw" | "deformedWire" | "ip.ig" | "ip.gi" | "input.inputGeometry" | "input.groupId" | "i" | "inMesh" | "dd" | "deformerData" | "gm" | "geomMatrix") || (!dyn_link && !plugin_msg && matches!(plain_attr(&sa).as_str(), "og" | "outputGeometry" | "msg" | "message") && !crate::rig_extra::is_flexor_type(&doc.nodes[sn].ty)) {
                 continue;
             }
             let Some(src) = self.id(sn) else { continue };
@@ -793,7 +837,7 @@ impl Writer<'_> {
     pub(super) fn deformer_connection(&mut self, src: PlugRef, dst: PlugRef) {
         let g = &self.s.graph;
         let (dt, st) = (g.node(dst.node).unwrap().type_arc().clone(), g.node(src.node).unwrap().type_arc().clone());
-        let is_def = |t: &NodeType| deform::is_deformer(&t.name);
+        let is_def = |t: &NodeType| deform::is_deformer(&t.name) || crate::scripted::is_plugin_deformer(&t.name);
         if is_def(&dt) && matches!(dst.attr as usize, IN | GEOM | deform::DEFORMER_SET) {
             return;
         }

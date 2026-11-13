@@ -537,6 +537,28 @@ impl fmt::Debug for Node {
 }
 
 impl Node {
+    /// A stand-in kept in the scene while the node computes away from it: its name, type and values as they were, so
+    /// a plug-in's compute can look the node up. It computes nothing.
+    pub(crate) fn ghost(&self) -> Node {
+        Node {
+            id: self.id,
+            name: self.name.clone(),
+            namespace: self.namespace.clone(),
+            uuid: self.uuid.clone(),
+            channels: self.channels.clone(),
+            aliases: self.aliases.clone(),
+            reference: self.reference,
+            locked: self.locked,
+            data: self.data.clone(),
+            own_type: self.own_type,
+            locks: self.locks.clone(),
+            dirty: false,
+            playback: self.playback,
+            evaluated_pass: self.evaluated_pass,
+            behavior: Box::new(Plain),
+        }
+    }
+
     pub(crate) fn new(ty: Arc<NodeType>, behavior: Box<dyn NodeBehavior>) -> Self {
         Self {
             id: NO_NODE,

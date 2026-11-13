@@ -226,7 +226,10 @@ impl Session {
 
     /// Runs a command from a script.
     pub fn run(&mut self, name: &str, call: Value) -> Result<Value, CommandError> {
-        aztek_ops::run(self, name, call)
+        let r = aztek_ops::run(self, name, call);
+        // A plug-in node the command made: its postConstructor, now the scene can be reached.
+        crate::scripted::run_post_create(self);
+        r
     }
 
     /// Undoes a step, keeping the last op in step with the stack.

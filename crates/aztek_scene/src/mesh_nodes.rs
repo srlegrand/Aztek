@@ -109,7 +109,9 @@ impl MeshNode {
     pub const INST_OBJ_GROUPS: usize = Shape::COUNT + 16;
     /// instObjGroups.objectGroups: the same for some of its faces.
     pub const OBJECT_GROUPS: usize = Shape::COUNT + 17;
-    pub const COUNT: usize = Shape::COUNT + 18;
+    /// worldMesh[0]: the output mesh in world space, made only once something reads it (see `flags::MADE_ON_READ`).
+    pub const WORLD_MESH: usize = Shape::COUNT + 18;
+    pub const COUNT: usize = Shape::COUNT + 19;
 
     pub fn make_type(base: Arc<NodeType>) -> NodeType {
         let stored = flags::INPUT | flags::STORABLE;
@@ -237,6 +239,12 @@ impl MeshNode {
                 ),
                 crate::shading::inst_obj_groups(),
                 crate::shading::object_groups(),
+                mesh_attr(
+                    "worldMesh",
+                    "w",
+                    flags::OUTPUT | flags::HIDDEN | flags::ARRAY | flags::MADE_ON_READ,
+                    "The output mesh in world space, one per instance.",
+                ),
             ]
             .into_iter()
             .chain(crate::harold_nodes::shape_render_attrs())
@@ -252,6 +260,19 @@ impl NodeBehavior for MeshNode {
     fn compute(&mut self, _ctx: &EvalContext, d: &mut NodeData) {
         Shape::compute_matrices(d);
         let m = d.mesh(Self::IN_MESH).cloned();
+        // In world space only for what reads it: most meshes have nothing on worldMesh, and a copy of each would cost.
+        let read: Vec<i32> = d.elements(Self::WORLD_MESH).iter().map(|(i, _)| *i).collect();
+        if !read.is_empty() {
+            let w = d.matrix(crate::transform::DagNode::WORLD_MATRIX);
+            let world = m.as_ref().map(|m| {
+                if w == glam::DMat4::IDENTITY {
+                    m.clone()
+                } else {
+                    Arc::new(m.with_positions(m.positions().iter().map(|p| w.transform_point3(*p)).collect()))
+                }
+            });
+            d.set_output_elements(Self::WORLD_MESH, read.into_iter().map(|i| (i, PlugValue::Mesh(world.clone()))).collect());
+        }
         d.set_output(Self::OUT_MESH, PlugValue::Mesh(m));
     }
     fn as_any(&self) -> &dyn Any {

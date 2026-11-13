@@ -95,6 +95,7 @@ impl Core {
     pub fn new() -> Core {
         let mut c = Core { s: Session::new(), log: Vec::new(), log_read: 0, version: 1, preview: Vec::new(), mel_state: Default::default(), in_idle: false, node_manip: Default::default(), settings: Settings::now(), saved_vars: Default::default() };
         register_ui_commands(&mut c.s);
+        aztek_scene::scripted::set_post_create_hook(crate::native_plugin::run_post_create);
         crate::ui_cmds::register(&mut c.s);
         crate::scriptui::register(&mut c.s);
         crate::script_objects::register(&mut c.s);
@@ -241,6 +242,7 @@ impl Core {
     }
 
     fn after_command(&mut self, name: &str, call: &Value, ok: bool) {
+        aztek_scene::scripted::run_post_create(&mut self.s);
         self.note_settings();
         self.save_option_vars();
         crate::usd_view::note_events();

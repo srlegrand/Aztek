@@ -84,6 +84,24 @@ MStatus MFnNumericData::setData(float a, float b, float c) { double v[] = {a, b,
 MStatus MFnNumericData::setData(double a, double b) { double v[] = {a, b}; return setN(obj_, v, 2); }
 MStatus MFnNumericData::setData(double a, double b, double c) { double v[] = {a, b, c}; return setN(obj_, v, 3); }
 MStatus MFnNumericData::setData(double a, double b, double c, double e) { double v[] = {a, b, c, e}; return setN(obj_, v, 4); }
+MStatus MFnNumericData::getData2Short(short& a, short& b) { short* o[] = {&a, &b}; return getN(obj_, o, 2); }
+MStatus MFnNumericData::getData2Int(int& a, int& b) { return getData(a, b); }
+MStatus MFnNumericData::getData2Float(float& a, float& b) { return getData(a, b); }
+MStatus MFnNumericData::getData2Double(double& a, double& b) { return getData(a, b); }
+MStatus MFnNumericData::getData3Short(short& a, short& b, short& c) { short* o[] = {&a, &b, &c}; return getN(obj_, o, 3); }
+MStatus MFnNumericData::getData3Int(int& a, int& b, int& c) { return getData(a, b, c); }
+MStatus MFnNumericData::getData3Float(float& a, float& b, float& c) { return getData(a, b, c); }
+MStatus MFnNumericData::getData3Double(double& a, double& b, double& c) { return getData(a, b, c); }
+MStatus MFnNumericData::getData4Double(double& a, double& b, double& c, double& d) { return getData(a, b, c, d); }
+MStatus MFnNumericData::setData2Short(short a, short b) { double v[] = {(double)a, (double)b}; return setN(obj_, v, 2); }
+MStatus MFnNumericData::setData2Int(int a, int b) { return setData(a, b); }
+MStatus MFnNumericData::setData2Float(float a, float b) { return setData(a, b); }
+MStatus MFnNumericData::setData2Double(double a, double b) { return setData(a, b); }
+MStatus MFnNumericData::setData3Short(short a, short b, short c) { double v[] = {(double)a, (double)b, (double)c}; return setN(obj_, v, 3); }
+MStatus MFnNumericData::setData3Int(int a, int b, int c) { return setData(a, b, c); }
+MStatus MFnNumericData::setData3Float(float a, float b, float c) { return setData(a, b, c); }
+MStatus MFnNumericData::setData3Double(double a, double b, double c) { return setData(a, b, c); }
+MStatus MFnNumericData::setData4Double(double a, double b, double c, double d) { return setData(a, b, c, d); }
 
 MFnMatrixData::MFnMatrixData() {}
 MFnMatrixData::MFnMatrixData(const MObject& o, MStatus* st) {
@@ -138,6 +156,237 @@ MStatus MFnStringData::set(const MString& s) {
     ObjectData* d = dataOf(obj_, MFn::kStringData);
     if (!d) return MS::kInvalidParameter;
     d->str = s.asChar();
+    return MS::kSuccess;
+}
+
+// Array data: numbers in nums (a point's four, a vector's three), strings in strs.
+
+#define AZ_ARRAY_DATA_COMMON(Fn, Kind)                                                                                   \
+    Fn::Fn() {}                                                                                                          \
+    Fn::Fn(const MObject& o, MStatus* st) {                                                                              \
+        obj_ = o;                                                                                                        \
+        if (st) *st = dataOf(o, Kind) ? MStatus(MS::kSuccess) : MStatus(MS::kInvalidParameter);                          \
+    }                                                                                                                    \
+    MFn::Type Fn::type() const { return Kind; }
+
+AZ_ARRAY_DATA_COMMON(MFnDoubleArrayData, MFn::kDoubleArrayData)
+MObject MFnDoubleArrayData::create(const MDoubleArray& v, MStatus* st) {
+    obj_ = newData(MFn::kDoubleArrayData);
+    set(v);
+    if (st) *st = MS::kSuccess;
+    return obj_;
+}
+MObject MFnDoubleArrayData::create(MStatus* st) { return create(MDoubleArray(), st); }
+MDoubleArray MFnDoubleArrayData::array(MStatus* st) {
+    MDoubleArray out;
+    copyTo(out);
+    if (st) *st = dataOf(obj_, MFn::kDoubleArrayData) ? MStatus(MS::kSuccess) : MStatus(MS::kInvalidParameter);
+    return out;
+}
+unsigned int MFnDoubleArrayData::length(MStatus* st) const {
+    ObjectData* d = dataOf(obj_, MFn::kDoubleArrayData);
+    if (st) *st = d ? MStatus(MS::kSuccess) : MStatus(MS::kInvalidParameter);
+    return d ? (unsigned int)d->nums.size() : 0;
+}
+double MFnDoubleArrayData::operator[](unsigned int i) const {
+    ObjectData* d = dataOf(obj_, MFn::kDoubleArrayData);
+    return d && i < d->nums.size() ? d->nums[i] : 0.0;
+}
+MStatus MFnDoubleArrayData::set(const MDoubleArray& v) {
+    ObjectData* d = dataOf(obj_, MFn::kDoubleArrayData);
+    if (!d) return MS::kInvalidParameter;
+    d->nums.clear();
+    for (unsigned int i = 0; i < v.length(); ++i) d->nums.push_back(v[i]);
+    return MS::kSuccess;
+}
+MStatus MFnDoubleArrayData::copyTo(MDoubleArray& out) const {
+    ObjectData* d = dataOf(obj_, MFn::kDoubleArrayData);
+    out.clear();
+    if (!d) return MS::kInvalidParameter;
+    for (size_t i = 0; i < d->nums.size(); ++i) out.append(d->nums[i]);
+    return MS::kSuccess;
+}
+
+AZ_ARRAY_DATA_COMMON(MFnFloatArrayData, MFn::kFloatArrayData)
+MObject MFnFloatArrayData::create(const MFloatArray& v, MStatus* st) {
+    obj_ = newData(MFn::kFloatArrayData);
+    set(v);
+    if (st) *st = MS::kSuccess;
+    return obj_;
+}
+MObject MFnFloatArrayData::create(MStatus* st) { return create(MFloatArray(), st); }
+MFloatArray MFnFloatArrayData::array(MStatus* st) {
+    MFloatArray out;
+    copyTo(out);
+    if (st) *st = dataOf(obj_, MFn::kFloatArrayData) ? MStatus(MS::kSuccess) : MStatus(MS::kInvalidParameter);
+    return out;
+}
+unsigned int MFnFloatArrayData::length(MStatus* st) const {
+    ObjectData* d = dataOf(obj_, MFn::kFloatArrayData);
+    if (st) *st = d ? MStatus(MS::kSuccess) : MStatus(MS::kInvalidParameter);
+    return d ? (unsigned int)d->nums.size() : 0;
+}
+MStatus MFnFloatArrayData::set(const MFloatArray& v) {
+    ObjectData* d = dataOf(obj_, MFn::kFloatArrayData);
+    if (!d) return MS::kInvalidParameter;
+    d->nums.clear();
+    for (unsigned int i = 0; i < v.length(); ++i) d->nums.push_back(v[i]);
+    return MS::kSuccess;
+}
+MStatus MFnFloatArrayData::copyTo(MFloatArray& out) const {
+    ObjectData* d = dataOf(obj_, MFn::kFloatArrayData);
+    out.clear();
+    if (!d) return MS::kInvalidParameter;
+    for (size_t i = 0; i < d->nums.size(); ++i) out.append((float)d->nums[i]);
+    return MS::kSuccess;
+}
+
+AZ_ARRAY_DATA_COMMON(MFnIntArrayData, MFn::kIntArrayData)
+MObject MFnIntArrayData::create(const MIntArray& v, MStatus* st) {
+    obj_ = newData(MFn::kIntArrayData);
+    set(v);
+    if (st) *st = MS::kSuccess;
+    return obj_;
+}
+MObject MFnIntArrayData::create(MStatus* st) { return create(MIntArray(), st); }
+MIntArray MFnIntArrayData::array(MStatus* st) {
+    MIntArray out;
+    copyTo(out);
+    if (st) *st = dataOf(obj_, MFn::kIntArrayData) ? MStatus(MS::kSuccess) : MStatus(MS::kInvalidParameter);
+    return out;
+}
+unsigned int MFnIntArrayData::length(MStatus* st) const {
+    ObjectData* d = dataOf(obj_, MFn::kIntArrayData);
+    if (st) *st = d ? MStatus(MS::kSuccess) : MStatus(MS::kInvalidParameter);
+    return d ? (unsigned int)d->nums.size() : 0;
+}
+int MFnIntArrayData::operator[](unsigned int i) const {
+    ObjectData* d = dataOf(obj_, MFn::kIntArrayData);
+    return d && i < d->nums.size() ? (int)d->nums[i] : 0;
+}
+MStatus MFnIntArrayData::set(const MIntArray& v) {
+    ObjectData* d = dataOf(obj_, MFn::kIntArrayData);
+    if (!d) return MS::kInvalidParameter;
+    d->nums.clear();
+    for (unsigned int i = 0; i < v.length(); ++i) d->nums.push_back(v[i]);
+    return MS::kSuccess;
+}
+MStatus MFnIntArrayData::copyTo(MIntArray& out) const {
+    ObjectData* d = dataOf(obj_, MFn::kIntArrayData);
+    out.clear();
+    if (!d) return MS::kInvalidParameter;
+    for (size_t i = 0; i < d->nums.size(); ++i) out.append((int)d->nums[i]);
+    return MS::kSuccess;
+}
+
+AZ_ARRAY_DATA_COMMON(MFnStringArrayData, MFn::kStringArrayData)
+MObject MFnStringArrayData::create(const MStringArray& v, MStatus* st) {
+    obj_ = newData(MFn::kStringArrayData);
+    set(v);
+    if (st) *st = MS::kSuccess;
+    return obj_;
+}
+MObject MFnStringArrayData::create(MStatus* st) { return create(MStringArray(), st); }
+MStringArray MFnStringArrayData::array(MStatus* st) {
+    MStringArray out;
+    copyTo(out);
+    if (st) *st = dataOf(obj_, MFn::kStringArrayData) ? MStatus(MS::kSuccess) : MStatus(MS::kInvalidParameter);
+    return out;
+}
+unsigned int MFnStringArrayData::length(MStatus* st) const {
+    ObjectData* d = dataOf(obj_, MFn::kStringArrayData);
+    if (st) *st = d ? MStatus(MS::kSuccess) : MStatus(MS::kInvalidParameter);
+    return d ? (unsigned int)d->strs.size() : 0;
+}
+MStatus MFnStringArrayData::set(const MStringArray& v) {
+    ObjectData* d = dataOf(obj_, MFn::kStringArrayData);
+    if (!d) return MS::kInvalidParameter;
+    d->strs.clear();
+    for (unsigned int i = 0; i < v.length(); ++i) d->strs.push_back(v[i].asChar());
+    return MS::kSuccess;
+}
+MStatus MFnStringArrayData::copyTo(MStringArray& out) const {
+    ObjectData* d = dataOf(obj_, MFn::kStringArrayData);
+    out.clear();
+    if (!d) return MS::kInvalidParameter;
+    for (size_t i = 0; i < d->strs.size(); ++i) out.append(MString(d->strs[i]));
+    return MS::kSuccess;
+}
+
+AZ_ARRAY_DATA_COMMON(MFnPointArrayData, MFn::kPointArrayData)
+MObject MFnPointArrayData::create(const MPointArray& v, MStatus* st) {
+    obj_ = newData(MFn::kPointArrayData);
+    set(v);
+    if (st) *st = MS::kSuccess;
+    return obj_;
+}
+MObject MFnPointArrayData::create(MStatus* st) { return create(MPointArray(), st); }
+MPointArray MFnPointArrayData::array(MStatus* st) {
+    MPointArray out;
+    copyTo(out);
+    if (st) *st = dataOf(obj_, MFn::kPointArrayData) ? MStatus(MS::kSuccess) : MStatus(MS::kInvalidParameter);
+    return out;
+}
+unsigned int MFnPointArrayData::length(MStatus* st) const {
+    ObjectData* d = dataOf(obj_, MFn::kPointArrayData);
+    if (st) *st = d ? MStatus(MS::kSuccess) : MStatus(MS::kInvalidParameter);
+    return d ? (unsigned int)(d->nums.size() / 4) : 0;
+}
+MStatus MFnPointArrayData::set(const MPointArray& v) {
+    ObjectData* d = dataOf(obj_, MFn::kPointArrayData);
+    if (!d) return MS::kInvalidParameter;
+    d->nums.clear();
+    for (unsigned int i = 0; i < v.length(); ++i) {
+        d->nums.push_back(v[i].x);
+        d->nums.push_back(v[i].y);
+        d->nums.push_back(v[i].z);
+        d->nums.push_back(v[i].w);
+    }
+    return MS::kSuccess;
+}
+MStatus MFnPointArrayData::copyTo(MPointArray& out) const {
+    ObjectData* d = dataOf(obj_, MFn::kPointArrayData);
+    out.clear();
+    if (!d) return MS::kInvalidParameter;
+    for (size_t i = 0; i + 3 < d->nums.size(); i += 4) out.append(MPoint(d->nums[i], d->nums[i + 1], d->nums[i + 2], d->nums[i + 3]));
+    return MS::kSuccess;
+}
+
+AZ_ARRAY_DATA_COMMON(MFnVectorArrayData, MFn::kVectorArrayData)
+MObject MFnVectorArrayData::create(const MVectorArray& v, MStatus* st) {
+    obj_ = newData(MFn::kVectorArrayData);
+    set(v);
+    if (st) *st = MS::kSuccess;
+    return obj_;
+}
+MObject MFnVectorArrayData::create(MStatus* st) { return create(MVectorArray(), st); }
+MVectorArray MFnVectorArrayData::array(MStatus* st) {
+    MVectorArray out;
+    copyTo(out);
+    if (st) *st = dataOf(obj_, MFn::kVectorArrayData) ? MStatus(MS::kSuccess) : MStatus(MS::kInvalidParameter);
+    return out;
+}
+unsigned int MFnVectorArrayData::length(MStatus* st) const {
+    ObjectData* d = dataOf(obj_, MFn::kVectorArrayData);
+    if (st) *st = d ? MStatus(MS::kSuccess) : MStatus(MS::kInvalidParameter);
+    return d ? (unsigned int)(d->nums.size() / 3) : 0;
+}
+MStatus MFnVectorArrayData::set(const MVectorArray& v) {
+    ObjectData* d = dataOf(obj_, MFn::kVectorArrayData);
+    if (!d) return MS::kInvalidParameter;
+    d->nums.clear();
+    for (unsigned int i = 0; i < v.length(); ++i) {
+        d->nums.push_back(v[i].x);
+        d->nums.push_back(v[i].y);
+        d->nums.push_back(v[i].z);
+    }
+    return MS::kSuccess;
+}
+MStatus MFnVectorArrayData::copyTo(MVectorArray& out) const {
+    ObjectData* d = dataOf(obj_, MFn::kVectorArrayData);
+    out.clear();
+    if (!d) return MS::kInvalidParameter;
+    for (size_t i = 0; i + 2 < d->nums.size(); i += 3) out.append(MVector(d->nums[i], d->nums[i + 1], d->nums[i + 2]));
     return MS::kSuccess;
 }
 
@@ -459,7 +708,9 @@ MFnTypedAttribute::MFnTypedAttribute() {}
 MFnTypedAttribute::MFnTypedAttribute(const MObject& o, MStatus* st) : MFnAttribute(o, st) {}
 MFn::Type MFnTypedAttribute::type() const { return MFn::kTypedAttribute; }
 MObject MFnTypedAttribute::create(const MString& ln, const MString& sn, MFnData::Type t, const MObject& def, MStatus* st) {
-    const char* host = t == MFnData::kString ? "string" : t == MFnData::kMatrix ? "matrix" : t == MFnData::kMesh ? "mesh" : t == MFnData::kNurbsCurve ? "curve" : "float";
+    const char* host = t == MFnData::kString ? "string" : t == MFnData::kMatrix ? "matrix" : t == MFnData::kMesh ? "mesh" : t == MFnData::kNurbsCurve ? "curve"
+                     : t == MFnData::kDoubleArray ? "doubleArray" : t == MFnData::kFloatArray ? "floatArray" : t == MFnData::kIntArray ? "intArray"
+                     : t == MFnData::kStringArray ? "stringArray" : t == MFnData::kPointArray ? "pointArray" : t == MFnData::kVectorArray ? "vectorArray" : "float";
     azNew(MFn::kTypedAttribute, ln, sn, host, st);
     AttrSpec* s = azSpec();
     s->dataType = t;

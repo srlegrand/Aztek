@@ -252,7 +252,10 @@ fn top_level(s: &Session, a: &Args, cmd: &str) -> CmdResult<Vec<NodeId>> {
     let mut ids = Vec::new();
     for n in objects(s, a) {
         let Some(id) = s.graph.find(&n)? else { fail!("{cmd}: no node named '{n}'") };
-        ids.push(id);
+        // A shape duplicates as its transform does, as in the reference.
+        let shape = s.graph.node(id).is_some_and(|x| x.ty().dag && !x.ty().is_a("transform"));
+        let parent = s.graph.parent(id);
+        ids.push(if shape && parent != NO_NODE { parent } else { id });
     }
     Ok(xf::top_level(&s.graph, &ids))
 }

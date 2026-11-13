@@ -19,6 +19,9 @@ EXTRA = {
     "MIOStreamFwd.h": None,
     "MStreamUtils.h": "base.h",
     "MCallbackIdArray.h": "base.h",
+    "MHWGeometryUtilities.h": "viewport.h",
+    "MViewport2Renderer.h": "viewport.h",
+    "MOpenCLAutoPtr.h": "gpu.h",
 }
 
 STREAM = """#include <iostream>

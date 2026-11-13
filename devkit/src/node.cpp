@@ -138,6 +138,44 @@ int az::indexOf(NodeClass* cls, const AttrSpec* spec, int* comp) {
     return it->second;
 }
 
+int az::arrayDepth(const AttrSpec* s) {
+    int n = 0;
+    for (const AttrSpec* a = s; a; a = a->parent)
+        if (a->array) ++n;
+    return n;
+}
+
+std::vector<const AttrSpec*> az::arrayAncestors(const AttrSpec* s) {
+    std::vector<const AttrSpec*> out;
+    for (const AttrSpec* a = s ? s->parent : 0; a; a = a->parent)
+        if (a->array) out.insert(out.begin(), a);
+    return out;
+}
+
+int az::packPath(const std::vector<int>& idx) {
+    static const int two[2] = {24, 0}, three[3] = {24, 12, 0}, four[4] = {24, 16, 8, 0};
+    if (idx.empty()) return -1;
+    if (idx.size() == 1) return idx[0];
+    const int* sh = idx.size() == 2 ? two : idx.size() == 3 ? three : four;
+    int out = 0;
+    for (size_t i = 0; i < idx.size() && i < 4; ++i) out |= idx[i] << sh[i];
+    return out;
+}
+
+std::vector<int> az::unpackPath(int element, int levels) {
+    std::vector<int> out;
+    if (levels <= 1) {
+        out.push_back(element);
+        return out;
+    }
+    static const int two[2] = {24, 0}, three[3] = {24, 12, 0}, four[4] = {24, 16, 8, 0};
+    static const int m2[2] = {0x7f, 0xffffff}, m3[3] = {0x7f, 0xfff, 0xfff}, m4[4] = {0x7f, 0xff, 0xff, 0xff};
+    const int* sh = levels == 2 ? two : levels == 3 ? three : four;
+    const int* m = levels == 2 ? m2 : levels == 3 ? m3 : m4;
+    for (int i = 0; i < levels && i < 4; ++i) out.push_back((element >> sh[i]) & m[i]);
+    return out;
+}
+
 BlockImpl*& az::currentBlock() {
     static thread_local BlockImpl* b = 0;
     return b;
@@ -152,6 +190,11 @@ static std::shared_ptr<AttrSpec> makeBuiltin(const char* name, const char* short
     s->array = array;
     s->fn = std::string(type) == "compound" ? MFn::kCompoundAttribute : std::string(type) == "mesh" ? MFn::kTypedAttribute : MFn::kNumericAttribute;
     return s;
+}
+
+std::map<std::string, std::pair<std::string, MHWRender::DrawOverrideCreator> >& az::drawOverrides() {
+    static std::map<std::string, std::pair<std::string, MHWRender::DrawOverrideCreator> > all;
+    return all;
 }
 
 std::shared_ptr<AttrSpec> az::builtinAttr(const char* name) {
@@ -178,6 +221,24 @@ std::shared_ptr<AttrSpec> az::builtinAttr(const char* name) {
         all["caching"] = makeBuiltin("caching", "cch", "bool", "caching", false);
         all["nodeState"] = makeBuiltin("nodeState", "nds", "enum", "nodeState", false);
         all["frozen"] = makeBuiltin("frozen", "fzn", "bool", "frozen", false);
+        // A locator's own, as the host's locator has them.
+        const char* vecs[3][2] = {{"localPosition", "lp"}, {"worldPosition", "wp"}, {"localScale", "ls"}};
+        for (int k = 0; k < 3; ++k) {
+            std::shared_ptr<AttrSpec> v = makeBuiltin(vecs[k][0], vecs[k][1], "vec3", vecs[k][0], false);
+            v->components = 3;
+            v->fn = MFn::kAttribute3Double;
+            const char* axes = "XYZ";
+            for (int c = 0; c < 3; ++c) {
+                std::string ln = std::string(vecs[k][0]) + axes[c], sn = std::string(vecs[k][1]) + (char)('x' + c);
+                std::shared_ptr<AttrSpec> ch = makeBuiltin(ln.c_str(), sn.c_str(), "float", vecs[k][0], false);
+                ch->parent = v.get();
+                v->children.push_back(ch);
+                all[ln] = ch;
+            }
+            all[vecs[k][0]] = v;
+        }
+        all["underWorldObject"] = makeBuiltin("underWorldObject", "uwo", "bool", "underWorldObject", false);
+        all["boundingBox"] = makeBuiltin("boundingBox", "bb", "vec3", "boundingBox", false);
     }
     std::map<std::string, std::shared_ptr<AttrSpec> >::iterator it = all.find(name);
     return it == all.end() ? std::shared_ptr<AttrSpec>() : it->second;
@@ -336,7 +397,7 @@ MItGeometry::MItGeometry(const std::shared_ptr<MeshData>& mesh, const MMatrix& w
     }
 }
 
-static std::shared_ptr<MeshData> meshOfNode(int64_t node, MStatus* st) {
+std::shared_ptr<MeshData> az::meshOfNode(int64_t node, MStatus* st) {
     std::shared_ptr<MeshData> m = std::make_shared<MeshData>();
     char* err = 0;
     AzMesh* h = host ? host->mesh_of_node(node, &err) : 0;
@@ -355,6 +416,23 @@ MItGeometry::MItGeometry(const MDagPath& path, MStatus* st) : node_(path.azNode(
     world_ = path.inclusiveMatrix();
     mesh_->loadPoints();
     for (size_t i = 0; i < mesh_->points.size() / 3; ++i) order_.push_back((int)i);
+}
+MItGeometry::MItGeometry(const MDagPath& path, MObject& comp, MStatus* st) : node_(path.azNode()), at_(0) {
+    mesh_ = meshOfNode(node_, st);
+    world_ = path.inclusiveMatrix();
+    mesh_->loadPoints();
+    size_t n = mesh_->points.size() / 3;
+    const std::shared_ptr<ObjectData>& d = comp.azData();
+    if (d && !d->complete && !d->ids.empty()) {
+        // The component's points, in the order they come in the mesh.
+        std::vector<bool> on(n, false);
+        for (size_t i = 0; i < d->ids.size(); ++i)
+            if (d->ids[i] >= 0 && (size_t)d->ids[i] < n) on[d->ids[i]] = true;
+        for (size_t i = 0; i < n; ++i)
+            if (on[i]) order_.push_back((int)i);
+    } else {
+        for (size_t i = 0; i < n; ++i) order_.push_back((int)i);
+    }
 }
 MItGeometry::MItGeometry(const MObject& o, MStatus* st) : node_(nodeOf(o)), at_(0) {
     mesh_ = meshOfNode(node_, st);
@@ -499,7 +577,8 @@ static int runNode(void* p) {
             c->cls->instances[c->id] = n;
         }
         c->node = n;
-        n->postConstructor();
+        // A host that calls post_create runs postConstructor once the scene can be reached.
+        if (host->abi_version < 2) n->postConstructor();
         return AZ_OK;
     }
     case 1:
@@ -545,6 +624,18 @@ static int nodeScheduling(void*, void* inst) {
     }
 }
 
+static int runPostConstructor(void* p) {
+    ((MPxNode*)p)->postConstructor();
+    return AZ_OK;
+}
+
+static void nodePostCreate(void*, void* inst) {
+    if (!inst) return;
+    std::string e;
+    guarded(runPostConstructor, inst, e);
+    if (!e.empty()) log("// Error: postConstructor: " + e + " //", 2);
+}
+
 static int nodeCompute(void* ctx, void* inst, int attr, int element, AzBlock* block, char** error) {
     NodeClass* cls = (NodeClass*)ctx;
     std::map<int, std::shared_ptr<AttrSpec> >::iterator it = cls->byIndex.find(attr);
@@ -555,8 +646,19 @@ static int nodeCompute(void* ctx, void* inst, int attr, int element, AzBlock* bl
     b.node = host->block_node(block);
     MDataBlock data(&b);
     const std::shared_ptr<AttrSpec>& spec = it->second;
-    bool inArrayCompound = spec->parent && spec->parent->array && spec->builtin.empty();
-    MPlug plug = MPlug::azMake(b.node, spec->name, spec, inArrayCompound ? -1 : element, inArrayCompound ? element : -1);
+    // The host's element: the indices of the arrays above the attribute, then its own if it is an array.
+    std::vector<int> outer;
+    int own = element;
+    if (spec->builtin.empty() && element >= 0 && arrayDepth(spec.get()) > 0) {
+        int levels = arrayDepth(spec.get());
+        outer = unpackPath(element, levels);
+        own = -1;
+        if (spec->array && !outer.empty()) {
+            own = outer.back();
+            outer.pop_back();
+        }
+    }
+    MPlug plug = MPlug::azMake(b.node, spec->name, spec, own, outer);
     BlockImpl* was = currentBlock();
     currentBlock() = &b;
     NodeCall c = {cls, (MPxNode*)inst, b.node, &plug, &data, MStatus(), 1};
@@ -569,22 +671,34 @@ static int nodeCompute(void* ctx, void* inst, int attr, int element, AzBlock* bl
 }
 
 // The host's attributes for a class: three numbers make a vec3; other compounds give their children; an array compound's
-// children are arrays named parent.child.
+// children are arrays named parent.child, and arrays inside those a.b.c, with "nest" saying which parts are arrays.
 static void hostAttrs(NodeClass* cls, const std::shared_ptr<AttrSpec>& s, const AttrSpec* arrayParent, const std::set<const AttrSpec*>& affected,
                       Json& out, std::vector<std::pair<std::string, std::shared_ptr<AttrSpec> > >& names) {
     if (s->type == "compound") {
-        if (s->array && arrayParent) {
-            log("// Warning: " + cls->name + "." + s->name + ": an array compound inside an array compound isn't available //", 4);
+        if (arrayDepth(s.get()) > 4) {
+            log("// Warning: " + cls->name + "." + s->name + ": arrays more than four deep aren't available //", 4);
             return;
         }
         for (size_t i = 0; i < s->children.size(); ++i) hostAttrs(cls, s->children[i], s->array ? s.get() : arrayParent, affected, out, names);
         return;
     }
     Json j = Json::object();
-    std::string name = arrayParent ? arrayParent->name + "." + s->name : s->name;
-    std::string shortName = arrayParent ? arrayParent->shortName + "." + s->shortName : s->shortName;
+    std::vector<const AttrSpec*> arrays = arrayAncestors(s.get());
+    std::string name, shortName;
+    for (size_t i = 0; i < arrays.size(); ++i) {
+        name += arrays[i]->name + ".";
+        shortName += arrays[i]->shortName + ".";
+    }
+    name += s->name;
+    shortName += s->shortName;
     j.set("name", name);
     j.set("short", shortName);
+    if (arrayDepth(s.get()) >= 2) {
+        int nest = 0;
+        for (size_t i = 0; i < arrays.size(); ++i) nest |= 1 << i;
+        if (s->array) nest |= 1 << arrays.size();
+        j.set("nest", nest);
+    }
     std::string type = s->type == "message" ? "bool" : s->type;
     j.set("type", type);
     bool output = affected.count(s.get()) || !s->writable || (s->parent && affected.count(s->parent));
@@ -639,11 +753,13 @@ static void hostAttrs(NodeClass* cls, const std::shared_ptr<AttrSpec>& s, const 
     names.push_back(std::make_pair(name, s));
 }
 
-MStatus MFnPlugin::registerNode(const MString& name, const MTypeId& id, MCreatorFunction creator, MInitializeFunction init, MPxNode::Type type, const MString*) {
+MStatus MFnPlugin::registerNode(const MString& name, const MTypeId& id, MCreatorFunction creator, MInitializeFunction init, MPxNode::Type type, const MString* classification) {
     if (!host || !creator) return fail(MStatus::kInvalidParameter, "registerNode: no creator");
     int kind = AZ_NODE_DEPEND;
     if (type == MPxNode::kDeformerNode || type == MPxNode::kGeometryFilter) {
         kind = AZ_NODE_DEFORMER;
+    } else if (type == MPxNode::kLocatorNode) {
+        kind = AZ_NODE_LOCATOR;
     } else if (type != MPxNode::kDependNode) {
         return fail(MStatus::kNotImplemented, std::string("registerNode ") + name.asChar() + ": only dependency nodes and deformers can come from plug-ins yet");
     }
@@ -653,6 +769,7 @@ MStatus MFnPlugin::registerNode(const MString& name, const MTypeId& id, MCreator
     c->id = id;
     c->creator = creator;
     c->kind = kind;
+    if (classification) c->classification = classification->asChar();
     NodeClass* was = registering;
     registering = c;
     MStatus st;
@@ -700,6 +817,7 @@ MStatus MFnPlugin::registerNode(const MString& name, const MTypeId& id, MCreator
     c->cls.destroy = nodeDestroy;
     c->cls.scheduling = nodeScheduling;
     c->cls.compute = nodeCompute;
+    c->cls.post_create = nodePostCreate;
     std::string err = take(host->register_node(pluginToken, c->name.c_str(), id.id(), kind, attrs.dump().c_str(), outputs.dump().c_str(), &c->cls));
     if (!err.empty()) {
         delete c;
@@ -714,6 +832,20 @@ MStatus MFnPlugin::registerNode(const MString& name, const MTypeId& id, MCreator
         for (size_t k = 0; k < s->children.size() && s->type == "vec3"; ++k) {
             c->index[s->children[k].get()] = idx;
             c->component[s->children[k].get()] = (int)k;
+        }
+    }
+    if (kind == AZ_NODE_LOCATOR) {
+        // The locator's own vectors, read and written through the host's locator attributes.
+        const char* vecs[] = {"localPosition", "worldPosition", "localScale"};
+        for (int k = 0; k < 3; ++k) {
+            std::shared_ptr<AttrSpec> s = builtinAttr(vecs[k]);
+            int idx = host->attr_index(c->name.c_str(), vecs[k]);
+            if (idx < 0) continue;
+            c->index[s.get()] = idx;
+            for (size_t n = 0; n < s->children.size(); ++n) {
+                c->index[s->children[n].get()] = idx;
+                c->component[s->children[n].get()] = (int)n;
+            }
         }
     }
     if (kind == AZ_NODE_DEFORMER) {

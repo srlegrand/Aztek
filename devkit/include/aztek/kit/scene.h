@@ -11,6 +11,7 @@ class MDagPath;
 class MDagPathArray;
 class MSelectionList;
 class MFnDagNode;
+class MDataHandle;
 class MPxNode;
 
 class MFnBase {
@@ -70,6 +71,9 @@ public:
     MPlug child(unsigned int i, MStatus* status = 0) const;
     MPlug child(const MObject& attr, MStatus* status = 0) const;
     unsigned int numChildren(MStatus* status = 0) const;
+    unsigned int numConnectedChildren(MStatus* status = 0) const;
+    void setAttribute(MObject& attribute, MStatus* status = 0);
+    MDataHandle asMDataHandle(MStatus* status = 0) const;
     unsigned int numElements(MStatus* status = 0) const;
     unsigned int evaluateNumElements(MStatus* status = 0) const;
     unsigned int numConnectedElements(MStatus* status = 0) const;
@@ -134,16 +138,17 @@ public:
     std::string azAttrPath() const;
     int64_t azNode() const { return node_; }
     const std::shared_ptr<az::AttrSpec>& azSpec() const { return spec_; }
-    // The element the host reads: the plug's own, or that of the array compound it is a child of.
-    int azElement() const { return element_ >= 0 ? element_ : parentElement_; }
-    static MPlug azMake(int64_t node, const std::string& attr, const std::shared_ptr<az::AttrSpec>& spec, int element, int parentElement = -1);
+    // The plug's own element, and the elements of the array compounds it is inside, outermost first.
+    int azOwnElement() const { return element_; }
+    const std::vector<int>& azOuter() const { return outer_; }
+    static MPlug azMake(int64_t node, const std::string& attr, const std::shared_ptr<az::AttrSpec>& spec, int element, const std::vector<int>& outer = std::vector<int>());
 
 private:
     int64_t node_;
     std::string attr_;  // long name; a vec3 child's own name
     std::shared_ptr<az::AttrSpec> spec_;
-    int element_;        // logical index when an element of an array, else -1
-    int parentElement_;  // the element of an array compound this is a child of, else -1
+    int element_;             // logical index when an element of an array, else -1
+    std::vector<int> outer_;  // the elements of the array compounds this is inside, outermost first
 };
 
 AZ_ARRAY(MPlugArray, MPlug)
@@ -460,6 +465,21 @@ public:
     MQuaternion rotateOrientation(MSpace::Space space, MStatus* status = 0) const;
     MStatus setRotateOrientation(const MQuaternion& q, MSpace::Space space, bool balance = true);
     MStatus resetFromRestPosition();
+};
+
+// A joint: a transform with an orientation (jointOrient) between its rotation and its parent.
+class MFnIkJoint : public MFnTransform {
+public:
+    MFnIkJoint();
+    MFnIkJoint(const MObject& o, MStatus* status = 0);
+    MFnIkJoint(const MDagPath& path, MStatus* status = 0);
+    virtual MFn::Type type() const;
+    MStatus getOrientation(MEulerRotation& rotation) const;
+    MStatus getOrientation(MQuaternion& quaternion) const;
+    MStatus setOrientation(const MEulerRotation& rotation);
+    MStatus setOrientation(const MQuaternion& quaternion);
+    MStatus getScaleOrientation(MQuaternion& quaternion) const;
+    MStatus getSegmentScale(double scale[3]) const;
 };
 
 #endif

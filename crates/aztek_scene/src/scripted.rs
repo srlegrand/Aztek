@@ -2,6 +2,7 @@
 
 use std::any::Any;
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::OnceLock;
 use std::sync::{Arc, RwLock};
 
 use glam::{DMat4, DVec3};
@@ -87,7 +88,7 @@ pub fn value_to_json(v: &PlugValue) -> Value {
 }
 
 /// An attr from {name, short, type, default, input, keyable, storable, hidden, array, color, min, max, softMin, softMax,
-/// enum, nice}: type is bool, int, float, vec3, matrix, string, enum or mesh.
+/// enum, nice, nest}: type is bool, int, float, vec3, matrix, string, enum or mesh.
 pub fn attr_from_json(j: &Value) -> AttrDef {
     let text = |k: &str| j.get(k).and_then(Value::as_str).unwrap_or("").to_string();
     let on = |k: &str, d: bool| j.get(k).and_then(Value::as_bool).unwrap_or(d);
@@ -124,6 +125,17 @@ pub fn attr_from_json(j: &Value) -> AttrDef {
             }
             a
         }
+        kind if crate::array_data::file_kind(kind).is_some() => {
+            crate::array_data::register();
+            AttrDef {
+                name: name.clone(),
+                short_name: short.clone(),
+                ty: PlugType::Data,
+                default_value: crate::array_data::ArrayData::empty(crate::array_data::file_kind(kind).unwrap()).value(),
+                flags: fl,
+                ..Default::default()
+            }
+        }
         other => {
             let (ty, fallback) = match other {
                 "bool" => (PlugType::Bool, PlugValue::Bool(false)),
@@ -155,6 +167,8 @@ pub fn attr_from_json(j: &Value) -> AttrDef {
     a.soft_min = num("softMin");
     a.soft_max = num("softMax");
     a.nice_name = text("nice");
+    // Arrays inside arrays: which parts of the name are arrays (see AttrDef::nest).
+    a.nest = j.get("nest").and_then(Value::as_u64).unwrap_or(0) as u8;
     a.enum_names = j.get("enum").and_then(Value::as_array).map(|e| e.iter().filter_map(|x| x.as_str().map(str::to_string)).collect()).unwrap_or_default();
     a
 }
@@ -180,6 +194,30 @@ pub fn deregister_type(name: &str) {
     TYPE_OWNERS.write().unwrap().remove(name);
 }
 
+/// What runs the postConstructors of compiled plug-ins' nodes just made, set by the host: at the end of a command and
+/// as the file reader goes, when the scene can be reached.
+static POST_CREATE: OnceLock<fn(&mut crate::Session)> = OnceLock::new();
+
+pub fn set_post_create_hook(f: fn(&mut crate::Session)) {
+    let _ = POST_CREATE.set(f);
+}
+
+pub fn run_post_create(s: &mut crate::Session) {
+    if let Some(f) = POST_CREATE.get() {
+        f(s);
+    }
+}
+
+/// `run_post_create` for a node made with a name: the name back if its postConstructor gave it another, as the
+/// reference's createNode names a node after its postConstructor has run (mGearWeightDriver's sets its own).
+pub fn post_create_named(s: &mut crate::Session, id: crate::plug::NodeId) {
+    let Some(given) = s.graph.node(id).map(|n| n.name().to_string()) else { return };
+    run_post_create(s);
+    if s.graph.node(id).is_some_and(|n| n.name() != given) {
+        let _ = s.graph.rename(id, &given);
+    }
+}
+
 /// Plug-in deformer types.
 static DEFORMERS: RwLock<BTreeSet<String>> = RwLock::new(BTreeSet::new());
 /// Every plug-in node type and the plug-in it came from, for the file's requires lines.
@@ -187,12 +225,31 @@ static TYPE_OWNERS: RwLock<BTreeMap<String, String>> = RwLock::new(BTreeMap::new
 /// Plug-in versions, as they say in their requires lines.
 static VERSIONS: RwLock<BTreeMap<String, String>> = RwLock::new(BTreeMap::new());
 
-/// Adds a node type from a compiled plug-in, whose behaviour the host supplies: a deformer type goes on geometryFilter.
-pub fn register_native_type(name: &str, owner: &str, attrs: &[Value], deformer: bool, create: crate::node::CreateFn) -> Result<()> {
-    let base = if deformer { types::find("geometryFilter") } else { None };
+/// What a compiled plug-in's node type is built on.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum NativeKind {
+    Depend,
+    /// On geometryFilter.
+    Deformer,
+    /// On locator: a shape in the DAG.
+    Locator,
+}
+
+/// Adds a node type from a compiled plug-in, whose behaviour the host supplies: a deformer type goes on geometryFilter,
+/// a locator on locator.
+pub fn register_native_type(name: &str, owner: &str, attrs: &[Value], kind: NativeKind, create: crate::node::CreateFn) -> Result<()> {
+    let deformer = kind == NativeKind::Deformer;
+    let base = match kind {
+        NativeKind::Deformer => types::find("geometryFilter"),
+        NativeKind::Locator => types::find("locator"),
+        NativeKind::Depend => None,
+    };
+    let dag = kind == NativeKind::Locator;
     types::register_type(NodeType {
         name: name.to_string(),
         owner: owner.to_string(),
+        dag,
+        icon: if dag { "crosshair".into() } else { String::new() },
         base,
         doc: format!("A node from the plug-in {owner}."),
         own_attrs: {

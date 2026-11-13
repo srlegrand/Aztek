@@ -53,6 +53,8 @@ fn describe_attr(a: &AttrDef) -> Value {
         "softMax": a.soft_max,
         "nice": a.nice_name,
         "default": value_to_json(&a.default_value),
+        // A typed attribute's array data: doubleArray, Int32Array, stringArray, pointArray, vectorArray or floatArray.
+        "arrayData": aztek_scene::array_data::of(&a.default_value).map(|d| d.kind.clone()),
     })
 }
 
@@ -164,59 +166,99 @@ pub fn out_mesh_of(core: &mut Core, id: NodeId) -> Result<Option<MeshPtr>, Strin
     out_mesh(&mut core.s.graph, id).map(|x| x.1)
 }
 
+/// The queries that only read the scene: also what a plug-in's compute may ask, with the scene as it computes.
+pub fn read_query(g: &Graph, op: &str, a: &Value) -> Option<Result<Value, String>> {
+    let r = || -> Result<Value, String> {
+        Ok(match op {
+            "node.find" => json!(g.find(text_of(a, "name")?).map_err(|e| e.to_string())?),
+            "node.exists" => json!(g.node(id_of(a)?).is_some()),
+            "node.all" => json!(g.nodes()),
+            "node.roots" => json!(g.roots()),
+            "node.info" => {
+                let id = id_of(a)?;
+                let Some(n) = g.node(id) else { return Ok(Value::Null) };
+                let mut chain = Vec::new();
+                let mut t = Some(n.ty());
+                while let Some(ty) = t {
+                    chain.push(ty.name.clone());
+                    t = ty.base.as_deref();
+                }
+                let dag = n.ty().dag;
+                json!({
+                    "id": id,
+                    "name": n.name(),
+                    "type": n.ty().name,
+                    "chain": chain,
+                    "dag": dag,
+                    "owner": n.ty().owner,
+                    "path": g.path(id),
+                    "full": if dag { g.full_path(id) } else { n.name().to_string() },
+                    "parent": g.parent(id),
+                    "children": g.children(id),
+                    "intermediate": dag && n.bool(DagNode::INTERMEDIATE_OBJECT),
+                })
+            }
+            "node.attrs" => {
+                let n = g.node(id_of(a)?).ok_or("(kInvalidParameter): Object does not exist")?;
+                Value::Array(n.ty().attrs.iter().map(describe_attr).collect())
+            }
+            "node.connections" => {
+                let id = id_of(a)?;
+                // The graph lists them destination first; here it's source, destination.
+                let pairs: Vec<(PlugRef, PlugRef)> = g.connections().into_iter().filter(|(d, s)| s.node == id || d.node == id).collect();
+                Value::Array(pairs.iter().map(|(d, s)| json!([g.plug_name(s), g.plug_name(d)])).collect())
+            }
+            "plug.info" => {
+                let p = g.plug(text_of(a, "name")?).map_err(|e| e.to_string())?;
+                let attr = g.attr(&p);
+                let mut d = describe_attr(attr);
+                let o = d.as_object_mut().unwrap();
+                o.insert("node".into(), json!(p.node));
+                o.insert("component".into(), json!(p.component));
+                o.insert("element".into(), json!(p.element));
+                o.insert("name".into(), json!(g.plug_name(&p)));
+                o.insert("locked".into(), json!(g.is_locked(&p)));
+                d
+            }
+            "plug.connections" => {
+                let p = g.plug(text_of(a, "name")?).map_err(|e| e.to_string())?;
+                let source = g.source(&p).map(|s| g.plug_name(&s));
+                let dests: Vec<String> = g.destinations(&p).iter().map(|d| g.plug_name(d)).collect();
+                json!({"source": source, "dests": dests})
+            }
+            "plug.elements" => {
+                let p = g.plug(text_of(a, "name")?).map_err(|e| e.to_string())?;
+                json!(g.existing_elements(&p))
+            }
+            "dag.matrices" => {
+                let id = id_of(a)?;
+                let n = g.node(id).ok_or("(kInvalidParameter): Object does not exist")?;
+                if !n.ty().dag {
+                    return Err("(kInvalidParameter): Object is incompatible with this method".into());
+                }
+                let is_xform = n.ty().is_a("transform");
+                json!({
+                    "world": matrix_of(g, id, DagNode::WORLD_MATRIX),
+                    "parent": matrix_of(g, id, DagNode::PARENT_MATRIX),
+                    "local": if is_xform { matrix_of(g, id, Transform::MATRIX) } else { DMat4::IDENTITY.to_cols_array().to_vec() },
+                })
+            }
+            _ => unreachable!(),
+        })
+    };
+    const READS: &[&str] = &["node.find", "node.exists", "node.all", "node.roots", "node.info", "node.attrs", "node.connections", "plug.info", "plug.connections", "plug.elements", "dag.matrices"];
+    READS.contains(&op).then(r)
+}
+
 pub fn query(core: &mut Core, op: &str, a: &Value) -> Result<Value, String> {
     let g = &mut core.s.graph;
+    if op == "dag.matrices" {
+        g.evaluate();
+    }
+    if let Some(r) = read_query(g, op, a) {
+        return r;
+    }
     Ok(match op {
-        "node.find" => json!(g.find(text_of(a, "name")?).map_err(|e| e.to_string())?),
-        "node.exists" => json!(g.node(id_of(a)?).is_some()),
-        "node.all" => json!(g.nodes()),
-        "node.roots" => json!(g.roots()),
-        "node.info" => {
-            let id = id_of(a)?;
-            let Some(n) = g.node(id) else { return Ok(Value::Null) };
-            let mut chain = Vec::new();
-            let mut t = Some(n.ty());
-            while let Some(ty) = t {
-                chain.push(ty.name.clone());
-                t = ty.base.as_deref();
-            }
-            let dag = n.ty().dag;
-            json!({
-                "id": id,
-                "name": n.name(),
-                "type": n.ty().name,
-                "chain": chain,
-                "dag": dag,
-                "owner": n.ty().owner,
-                "path": g.path(id),
-                "full": if dag { g.full_path(id) } else { n.name().to_string() },
-                "parent": g.parent(id),
-                "children": g.children(id),
-                "intermediate": dag && n.bool(DagNode::INTERMEDIATE_OBJECT),
-            })
-        }
-        "node.attrs" => {
-            let n = g.node(id_of(a)?).ok_or("(kInvalidParameter): Object does not exist")?;
-            Value::Array(n.ty().attrs.iter().map(describe_attr).collect())
-        }
-        "node.connections" => {
-            let id = id_of(a)?;
-            // The graph lists them destination first; here it's source, destination.
-            let pairs: Vec<(PlugRef, PlugRef)> = g.connections().into_iter().filter(|(d, s)| s.node == id || d.node == id).collect();
-            Value::Array(pairs.iter().map(|(d, s)| json!([g.plug_name(s), g.plug_name(d)])).collect())
-        }
-        "plug.info" => {
-            let p = g.plug(text_of(a, "name")?).map_err(|e| e.to_string())?;
-            let attr = g.attr(&p);
-            let mut d = describe_attr(attr);
-            let o = d.as_object_mut().unwrap();
-            o.insert("node".into(), json!(p.node));
-            o.insert("component".into(), json!(p.component));
-            o.insert("element".into(), json!(p.element));
-            o.insert("name".into(), json!(g.plug_name(&p)));
-            o.insert("locked".into(), json!(g.is_locked(&p)));
-            d
-        }
         "plug.setFlag" => {
             let p = g.plug(text_of(a, "name")?).map_err(|e| e.to_string())?;
             let bit = if text_of(a, "flag")? == "keyable" { flags::KEYABLE } else { flags::CHANNEL_BOX };
@@ -228,30 +270,6 @@ pub fn query(core: &mut Core, op: &str, a: &Value) -> Result<Value, String> {
             }
             g.edit_attr(&p, def).map_err(|e| e.to_string())?;
             Value::Null
-        }
-        "plug.connections" => {
-            let p = g.plug(text_of(a, "name")?).map_err(|e| e.to_string())?;
-            let source = g.source(&p).map(|s| g.plug_name(&s));
-            let dests: Vec<String> = g.destinations(&p).iter().map(|d| g.plug_name(d)).collect();
-            json!({"source": source, "dests": dests})
-        }
-        "plug.elements" => {
-            let p = g.plug(text_of(a, "name")?).map_err(|e| e.to_string())?;
-            json!(g.elements(&p).iter().map(|e| e.element).collect::<Vec<i32>>())
-        }
-        "dag.matrices" => {
-            let id = id_of(a)?;
-            let n = g.node(id).ok_or("(kInvalidParameter): Object does not exist")?;
-            if !n.ty().dag {
-                return Err("(kInvalidParameter): Object is incompatible with this method".into());
-            }
-            let is_xform = n.ty().is_a("transform");
-            g.evaluate();
-            json!({
-                "world": matrix_of(g, id, DagNode::WORLD_MATRIX),
-                "parent": matrix_of(g, id, DagNode::PARENT_MATRIX),
-                "local": if is_xform { matrix_of(g, id, Transform::MATRIX) } else { DMat4::IDENTITY.to_cols_array().to_vec() },
-            })
         }
         "dag.bounds" => {
             g.evaluate();

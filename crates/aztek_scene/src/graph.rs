@@ -125,6 +125,8 @@ fn time_key(seconds: f64) -> i64 {
 }
 
 thread_local! {
+    /// The scene a node computing on this thread belongs to, while an extension's node computes (see `in_compute`).
+    static COMPUTING_IN: Cell<usize> = const { Cell::new(0) };
     static DEFER_MESHES: Cell<i32> = const { Cell::new(0) };
 }
 
@@ -153,23 +155,56 @@ fn next_structure() -> u64 {
 
 /// The attr part of a plug's name: attr, attr[3], or group[3].child for a grouped array's child.
 fn attr_part(a: &AttrDef, p: &PlugRef) -> String {
+    attr_part_named(a, p, false)
+}
+
+/// The attr part of a plug by short names, as the reference's files write most nodes': `dl[0].p[2].pmat`.
+pub fn short_attr_part(a: &AttrDef, p: &PlugRef) -> String {
+    attr_part_named(a, p, true)
+}
+
+fn attr_part_named(a: &AttrDef, p: &PlugRef, short: bool) -> String {
+    let name = if short && !a.short_name.is_empty() { &a.short_name } else { &a.name };
+    let kid = |c: i32| -> String {
+        let c = c as usize;
+        if short && !a.child_short[c].is_empty() { a.child_short[c].clone() } else { a.child_names[c].clone() }
+    };
+    // driverList[0].pose[2].poseValues[1], from the packed element.
+    if a.nest_levels() >= 2 && p.element >= 0 {
+        let idx = crate::plug::unpack(p.element, a.nest_levels());
+        let mut k = 0;
+        let mut out: Vec<String> = Vec::new();
+        for (part, name) in name.split('.').enumerate() {
+            if a.nest & (1 << part) != 0 && k < idx.len() {
+                out.push(format!("{name}[{}]", idx[k]));
+                k += 1;
+            } else {
+                out.push(name.to_string());
+            }
+        }
+        let mut text = out.join(".");
+        if p.component >= 0 {
+            text = format!("{text}.{}", kid(p.component));
+        }
+        return text;
+    }
     if p.component >= 0 && p.element >= 0 {
-        return format!("{}[{}].{}", a.name, p.element, a.child_names[p.component as usize]);
+        return format!("{}[{}].{}", name, p.element, kid(p.component));
     }
     if p.component >= 0 {
-        return a.child_names[p.component as usize].clone();
+        return kid(p.component).clone();
     }
     if p.element < 0 {
-        return a.name.clone();
+        return name.clone();
     }
     // The reference's name: the object group's index is the second, under instance 0.
     if a.name == "instObjGroups.objectGroups" {
-        return format!("instObjGroups[0].objectGroups[{}]", p.element);
+        return if short { format!("iog[0].og[{}]", p.element) } else { format!("instObjGroups[0].objectGroups[{}]", p.element) };
     }
     let index = format!("[{}]", p.element);
-    match a.name.find('.') {
-        None => format!("{}{index}", a.name),
-        Some(dot) => format!("{}{index}{}", &a.name[..dot], &a.name[dot..]),
+    match name.find('.') {
+        None => format!("{}{index}", name),
+        Some(dot) => format!("{}{index}{}", &name[..dot], &name[dot..]),
     }
 }
 
@@ -363,6 +398,20 @@ struct EvalView<'a> {
     cache: bool,
     /// Values of source plugs that are plain inputs: read here, since their node may be computing beside this one.
     passed: &'a HashMap<PlugRef, PlugValue>,
+    /// The scene, for an extension's compute to read (`in_compute`); 0 when no node of the level is an extension's.
+    graph: usize,
+}
+
+/// Runs `f` on the scene the node computing on this thread belongs to, read only: what a plug-in's compute may ask
+/// about other nodes (their names, connections, matrices, stored values), as the reference lets a compute read the
+/// graph. None outside such a compute. Nodes computing at the same time are seen as they were before the pass.
+pub fn in_compute<R>(f: impl FnOnce(&Graph) -> R) -> Option<R> {
+    let p = COMPUTING_IN.with(Cell::get);
+    if p == 0 {
+        return None;
+    }
+    // Set by `EvalView::pull_reading` for the length of one compute, while the scene is only read.
+    Some(f(unsafe { &*(p as *const Graph) }))
 }
 
 /// An attr a node only reads: its value doesn't depend on the node computing, so reading it needs no ordering against
@@ -626,6 +675,16 @@ impl EvalView<'_> {
         inner.bytes += bytes;
         inner.times.entry(key).or_default().insert(n.id, entry);
         true
+    }
+
+    /// `pull`, with the scene readable from an extension's compute.
+    fn pull_reading(&self, n: &mut Node) {
+        if self.graph == 0 {
+            return self.pull(n);
+        }
+        let was = COMPUTING_IN.with(|c| c.replace(self.graph));
+        self.pull(n);
+        COMPUTING_IN.with(|c| c.set(was));
     }
 
     fn pull(&self, n: &mut Node) {
@@ -1230,18 +1289,24 @@ impl Graph {
 
     /// `thing#` as the next free name: each run of hashes is a number padded to its length, counted from 1.
     pub fn resolve_hashes(&self, wanted: &str) -> String {
+        self.resolve_hashes_for(wanted, NO_NODE)
+    }
+
+    /// `resolve_hashes` for renaming a node: its own name is free to take again (shape1 renamed shape# stays shape1).
+    pub fn resolve_hashes_for(&self, wanted: &str, renamed: NodeId) -> String {
         let Some(start) = wanted.find('#') else { return wanted.to_string() };
         let len = wanted[start..].bytes().take_while(|b| *b == b'#').count();
         let (head, tail) = (&wanted[..start], &wanted[start + len..]);
+        let taken = |name: &str| self.names.get(name).is_some_and(|ids| ids.iter().any(|&i| i != renamed));
         let mut n = 1;
         loop {
             let candidate = format!("{head}{n:0len$}{tail}");
             if candidate.contains('#') {
-                let inner = self.resolve_hashes(&candidate);
-                if !self.names.contains_key(&inner) {
+                let inner = self.resolve_hashes_for(&candidate, renamed);
+                if !taken(&inner) {
                     return inner;
                 }
-            } else if !self.names.contains_key(&candidate) {
+            } else if !taken(&candidate) {
                 return candidate;
             }
             n += 1;
@@ -1373,6 +1438,14 @@ impl Graph {
         if parent != NO_NODE && !self.node(parent).is_some_and(|p| p.ty().dag) {
             return Err(GraphError::invalid("parent must be a transform"));
         }
+        // "cvWrap#": the first free number in place of the hashes, as the reference names it.
+        let hashed;
+        let name = if name.contains('#') {
+            hashed = self.resolve_hashes(name);
+            hashed.as_str()
+        } else {
+            name
+        };
         let fixed;
         let name = if !name.is_empty() && !Self::valid_name(name) {
             fixed = Self::legal_name(name);
@@ -1939,6 +2012,12 @@ impl Graph {
                 }
             }
         }
+        // Arrays inside arrays: a[1].b[2].c[3], or a[1].b[2].c for a child that is no array itself.
+        if attr_name.matches('[').count() >= 2 {
+            if let Some(p) = Self::nested_plug(id, n, &attr_name) {
+                return Ok(p);
+            }
+        }
         let mut element = -1;
         if let Some(close) = attr_name.find("].") {
             // group[3].child names the child attr "group.child", element 3.
@@ -2103,6 +2182,36 @@ impl Graph {
     }
 
     /// The node's shortest unique path, a dot and the attr.
+    /// A plug on a nested attr (see `AttrDef::nest`) from its name with every index given.
+    fn nested_plug(id: NodeId, n: &Node, attr_name: &str) -> Option<PlugRef> {
+        let mut names = Vec::new();
+        let mut idx = Vec::new();
+        for part in attr_name.split('.') {
+            match part.split_once('[') {
+                Some((name, rest)) => {
+                    names.push(name);
+                    idx.push(parse_index(rest.strip_suffix(']')?)?);
+                }
+                None => names.push(part),
+            }
+        }
+        // Each part by its long or its short name.
+        let matches = |a: &AttrDef, names: &[&str]| {
+            let (long, short): (Vec<&str>, Vec<&str>) = (a.name.split('.').collect(), a.short_name.split('.').collect());
+            long.len() == names.len() && names.iter().enumerate().all(|(k, x)| long[k] == *x || short.get(k) == Some(x))
+        };
+        let find = |names: &[&str]| n.ty().attrs.iter().position(|a| a.nest_levels() == idx.len() && matches(a, names));
+        if let Some(i) = find(&names) {
+            return Some(PlugRef { node: id, attr: i as i32, component: -1, element: crate::plug::pack(&idx) });
+        }
+        // The last part a vec3's child.
+        let (leaf, head) = names.split_last()?;
+        let i = find(head)?;
+        let a = &n.ty().attrs[i];
+        let c = (0..3).find(|&c| a.ty == PlugType::Vec3 && (a.child_names[c] == *leaf || a.child_short[c] == *leaf))?;
+        Some(PlugRef { node: id, attr: i as i32, component: c as i32, element: crate::plug::pack(&idx) })
+    }
+
     pub fn plug_name(&self, p: &PlugRef) -> String {
         match self.node(p.node) {
             Some(n) => format!(
@@ -2545,6 +2654,16 @@ impl Graph {
         self.nodes[&p.node].value(p.attr as usize)
     }
 
+    /// What `value` gives, as stored, without evaluating.
+    pub fn peek(&self, p: &PlugRef) -> Option<PlugValue> {
+        let n = self.node(p.node)?;
+        if p.element >= 0 {
+            return Some(stored_plug(n, p));
+        }
+        let v = n.value(p.attr as usize);
+        Some(if p.component >= 0 { PlugValue::Float(vec3_component(v, p.component)) } else { v.clone() })
+    }
+
     /// Evaluates first if the node is dirty. Component plugs return a float.
     pub fn value(&mut self, p: &PlugRef) -> Result<PlugValue> {
         let n = self
@@ -2626,6 +2745,11 @@ impl Graph {
     fn connect_raw(&mut self, src: &PlugRef, dst: &PlugRef) {
         if dst.element >= 0 && self.nodes.contains_key(&dst.node) {
             self.element_slot(dst);
+        }
+        if src.element >= 0 && self.nodes.get(&src.node).is_some_and(|n| n.data.ty.attrs[src.attr as usize].has(flags::MADE_ON_READ)) {
+            let whole = PlugRef { component: -1, ..*src };
+            self.element_slot(&whole);
+            self.mark_dirty(src.node);
         }
         self.held.remove(dst);
         self.wiring += 1;
@@ -2841,6 +2965,22 @@ impl Graph {
                     .collect()
             })
             .unwrap_or_default()
+    }
+
+    /// The elements of an array that exist as the reference counts them: those holding a value and those connected
+    /// from, an output's among them. Ascending.
+    pub fn existing_elements(&self, array: &PlugRef) -> Vec<i32> {
+        let mut out: Vec<i32> = self.elements(array).iter().map(|e| e.element).collect();
+        for d in self.outgoing_dst.get(&array.node).into_iter().flatten() {
+            if let Some(s) = self.inputs.get(d) {
+                if s.node == array.node && s.attr == array.attr && s.element >= 0 {
+                    out.push(s.element);
+                }
+            }
+        }
+        out.sort_unstable();
+        out.dedup();
+        out
     }
 
     /// The element indices any child of a grouped array uses, ascending.
@@ -3661,6 +3801,14 @@ impl Graph {
                 .iter()
                 .map(|id| self.nodes.remove(id).unwrap())
                 .collect();
+            // An extension's compute may look up nodes, its own among them: those computing stay findable as they were.
+            let reading = owned.iter().any(|n| !n.data.ty.owner.is_empty());
+            if reading {
+                for n in &owned {
+                    self.nodes.insert(n.id, Box::new(n.ghost()));
+                }
+            }
+            let graph = if reading { &*self as *const Graph as usize } else { 0 };
             {
                 let view = EvalView {
                     nodes: &self.nodes,
@@ -3675,13 +3823,14 @@ impl Graph {
                     pass,
                     cache,
                     passed: &passed,
+                    graph,
                 };
                 if owned.len() < 16 {
                     for n in owned.iter_mut() {
-                        view.pull(n);
+                        view.pull_reading(n);
                     }
                 } else {
-                    owned.par_iter_mut().for_each(|n| view.pull(n));
+                    owned.par_iter_mut().for_each(|n| view.pull_reading(n));
                 }
             }
             for n in owned {

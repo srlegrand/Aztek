@@ -1634,6 +1634,14 @@ fn apply_deletion(n: &MaNode, m: &mut Mesh) {
     aztek_geo::ops::basic::delete_edges(m, &edges, None);
 }
 
+/// Whether a file's plug-in deformer deforms something other than curves and surfaces: its output goes anywhere but a
+/// NURBS shape's create.
+fn mesh_plugin_deformer(doc: &Doc, i: usize) -> bool {
+    doc.conns.iter().any(|c| {
+        c.src == i && matches!(plain_attr(&c.src_attr).as_str(), "og" | "outputGeometry") && !matches!(doc.nodes[c.dst].ty.as_str(), "nurbsCurve" | "nurbsSurface")
+    })
+}
+
 fn walk_chain(doc: &Doc, shape: usize, stored: &HashMap<usize, MaMesh>) -> Chain {
     let mut c = Chain::default();
     let mut seen = HashSet::new();
@@ -1646,7 +1654,9 @@ fn walk_chain(doc: &Doc, shape: usize, stored: &HashMap<usize, MaMesh>) -> Chain
         let Some(conn) = by_index.or_else(|| doc.conns.iter().find(plain)) else { break };
         let next = conn.src;
         let index = first_index(&conn.src_attr).unwrap_or(0);
-        through = if deformers::is_file_deformer(&doc.nodes[next].ty) || doc.nodes[next].ty == "skinCluster" || doc.nodes[next].ty == "tweak" { index } else { 0 };
+        // A plug-in's deformer on a mesh is in the chain like any other.
+        let file_deformer = |t: &str| deformers::is_file_deformer(t) || crate::scripted::is_plugin_deformer(t);
+        through = if file_deformer(&doc.nodes[next].ty) || doc.nodes[next].ty == "skinCluster" || doc.nodes[next].ty == "tweak" { index } else { 0 };
         let n = &doc.nodes[next];
         match n.ty.as_str() {
             "mesh" => {
@@ -1658,7 +1668,7 @@ fn walk_chain(doc: &Doc, shape: usize, stored: &HashMap<usize, MaMesh>) -> Chain
             // Under a deformer it is in the chain; `walk_chain` moves any with no deformer upstream back to the base.
             "polyTweak" => c.deformers.insert(0, (next, index)),
             "skinCluster" => c.deformers.insert(0, (next, index)),
-            t if deformers::is_file_deformer(t) => c.deformers.insert(0, (next, index)),
+            t if file_deformer(t) => c.deformers.insert(0, (next, index)),
             "tweak" => c.vertex_tweaks.push(next),
             // A colour set changes no points.
             "groupParts" | "groupId" | "unitConversion" | "createColorSet" => {}
@@ -1835,7 +1845,8 @@ impl Build<'_> {
             "transform" | "joint" | "locator" | "nurbsCurve" | "nurbsSurface" | "camera" => true,
             ty if PLAIN_SHAPES.contains(&ty) || crate::lights::is_light_type(ty) => true,
             "mesh" => !n.truth(&["io", "intermediateObject"]).unwrap_or(false),
-            _ => false,
+            // A plug-in's locator (mGearWeightDriver).
+            ty => crate::scripted::plugin_of_type(ty).is_some() && types::find(ty).is_some_and(|t| t.is_a("locator")),
         }
     }
 
@@ -1863,6 +1874,7 @@ impl Build<'_> {
         })();
         match r {
             Ok(id) => {
+                crate::scripted::post_create_named(self.s, id);
                 self.ids[i] = Some(id);
                 self.used[i] = true;
                 if let Some((shape, kind)) = handle {
@@ -1951,6 +1963,10 @@ impl Build<'_> {
     /// (The reference's nodeState and the like) are passed over.
     fn create_plain(&mut self, i: usize) {
         let n = &self.doc.nodes[i];
+        // A plug-in's deformer on a mesh is made with the mesh's chain; on a curve it is a plain node.
+        if crate::scripted::is_plugin_deformer(&n.ty) && self.ids[i].is_none() && mesh_plugin_deformer(self.doc, i) {
+            return;
+        }
         self.used[i] = true;
         let id = match self.ids[i] {
             // A shape create_dag made under its transform, or a default node.
@@ -1958,7 +1974,11 @@ impl Build<'_> {
             None => {
                 let Some(t) = types::find(&n.ty) else { return };
                 match self.s.graph.create_node(&t, &n.name, NO_NODE, false) {
-                    Ok(id) => id,
+                    Ok(id) => {
+                        // A compiled plug-in's node: its postConstructor before the file sets anything, under the file's name.
+                        crate::scripted::post_create_named(self.s, id);
+                        id
+                    }
                     Err(e) => {
                         self.warnings.push(format!("{}: {e}", n.name));
                         return;
@@ -2845,7 +2865,9 @@ impl Build<'_> {
                 continue;
             }
             // These go through `deformer_connections`.
-            if crate::deform::is_deformer(&dt.name) || crate::deform::is_deformer(&st.name) {
+            // A plug-in's deformer goes that way only on a mesh; on a curve its connections are plain ones.
+            let chained = |ty: &str, id: NodeId| crate::deform::is_deformer(ty) || (crate::scripted::is_plugin_deformer(ty) && self.deformers.iter().any(|d| d.id == id));
+            if chained(&dt.name, dst) || chained(&st.name, src) {
                 continue;
             }
             // What HIKState2SK reads from each joint in the reference: here the definition's rig information holds it.
@@ -3255,6 +3277,15 @@ fn plug_value(def: &AttrDef, comp: i32, values: &[Tok], _factor: f64) -> Option<
         }
         PlugType::String => PlugValue::String(f0.text()?.to_string()),
         PlugType::Matrix => PlugValue::Matrix(matrix_from(values)?),
+        // Array data: the count, then the items.
+        PlugType::Data => {
+            let kind = crate::array_data::of(&def.default_value)?.kind.clone();
+            let toks: Vec<Value> = values.iter().map(|t| match t {
+                Tok::Num(x) => json!(x),
+                Tok::Word(w) | Tok::Str(w) => json!(w),
+            }).collect();
+            crate::array_data::from_tokens(&kind, &toks)?.value()
+        }
         _ => return None,
     })
 }
@@ -4889,6 +4920,11 @@ impl Writer<'_> {
                 PlugValue::Matrix(m) => {
                     let _ = writeln!(out, "\tsetAttr \".{attr}\" -type \"matrix\" {};", matrix_text(m));
                 }
+                v @ PlugValue::Data(_) => {
+                    if let Some(d) = crate::array_data::of(v) {
+                        let _ = writeln!(out, "\tsetAttr \".{attr}\" {};", crate::array_data::file_text(d, fmt_num, quoted));
+                    }
+                }
                 _ => {}
             }
         };
@@ -4935,7 +4971,9 @@ impl Writer<'_> {
             if crate::scripted::is_plugin_deformer(&sn.ty().name) && sn.ty().attr_index("outputCurve") == Some(src.attr as usize) && dn.ty().name == crate::curves::SHAPE_TYPE {
                 continue;
             }
-            let deforms = crate::deform::is_deformer(&dn.ty().name) || crate::deform::is_deformer(&sn.ty().name);
+            // A plug-in's deformer is written with a mesh's chain; on a curve its other connections are plain ones.
+            let chained = |ty: &str, id: NodeId| crate::deform::is_deformer(ty) || self.chain_written.contains(&id);
+            let deforms = chained(&dn.ty().name, dst.node) || chained(&sn.ty().name, src.node);
             if deforms {
                 self.deformer_connection(src, dst);
                 continue;
@@ -4991,6 +5029,10 @@ impl Writer<'_> {
             if plain(dt) || plain(st) {
                 // By full attribute name. The reference's matrix outputs are arrays: worldMatrix[0].
                 let name = |p: &PlugRef| {
+                    // A plug-in's node by its short names, as the reference writes them.
+                    if g.node(p.node).is_some_and(|n| !n.ty().owner.is_empty()) {
+                        return shading::short_plug(g, p);
+                    }
                     let text = g.plug_name(p);
                     let one_of = matches!(g.attr(p).name.as_str(), "worldMatrix" | "worldInverseMatrix" | "parentMatrix" | "parentInverseMatrix");
                     if one_of && p.element < 0 {
@@ -5125,7 +5167,7 @@ fn closure(g: &Graph, roots: &[NodeId]) -> HashSet<NodeId> {
         // Other deformers, and the handles and curves that drive them.
         for h in crate::history::history_of(g, shape) {
             let Some(n) = g.node(h) else { continue };
-            if !crate::deform::is_deformer(n.ty().name.as_str()) {
+            if !crate::deform::is_deformer(n.ty().name.as_str()) && !crate::scripted::is_plugin_deformer(n.ty().name.as_str()) {
                 continue;
             }
             keep.insert(h);
@@ -5244,7 +5286,7 @@ pub fn write_text(s: &mut Session, file_name: &str, only: Option<&[NodeId]>) -> 
             }
         } else if let Some(kind) = rig::CONSTRAINT_TYPES.iter().position(|c| *c == ty) {
             w.write_constraint(id, kind);
-        } else if is_plain_node(ty) || ty == "unitConversion" {
+        } else if (is_plain_node(ty) && !w.chain_written.contains(&id)) || ty == "unitConversion" {
             w.write_plain(id);
         } else if ty == "dagPose" {
             w.write_pose(id);
@@ -5254,7 +5296,7 @@ pub fn write_text(s: &mut Session, file_name: &str, only: Option<&[NodeId]>) -> 
             let _ = writeln!(w.out, "createNode reference -n {};", quoted(n.name()));
         } else if ty == skin::SKIN_TYPE || ty == "ikSolve" {
             // Written with their mesh and handle.
-        } else if crate::deform::is_deformer(ty) {
+        } else if crate::deform::is_deformer(ty) || w.chain_written.contains(&id) {
             if !w.chain_written.contains(&id) {
                 *unwritten.entry(ty.to_string()).or_default() += 1;
             }

@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 
-#define AZTEK_ABI_VERSION 1
+#define AZTEK_ABI_VERSION 2
 
 typedef struct AzBlock AzBlock;
 typedef struct AzMesh AzMesh;
@@ -27,7 +27,7 @@ enum { AZ_OK = 0, AZ_UNKNOWN_PARAMETER = 1, AZ_FAILURE = 2, AZ_CRASHED = 3 };
 enum { AZ_SCHED_PARALLEL = 0, AZ_SCHED_SERIAL = 1, AZ_SCHED_GLOBALLY_SERIAL = 2, AZ_SCHED_UNTRUSTED = 3 };
 
 // Node kinds a plug-in can register.
-enum { AZ_NODE_DEPEND = 0, AZ_NODE_DEFORMER = 1 };
+enum { AZ_NODE_DEPEND = 0, AZ_NODE_DEFORMER = 1, AZ_NODE_LOCATOR = 2 };
 
 typedef struct AzMeshArrays {
     int64_t shape;
@@ -64,6 +64,9 @@ typedef struct AzNodeClass {
     int (*scheduling)(void* ctx, void* inst);
     // attr is the output's index on the type, element its array element or -1.
     int (*compute)(void* ctx, void* inst, int attr, int element, AzBlock* block, char** error);
+    // ABI 2: called once the node is in the scene and the scene can be reached, before anything else is set on it:
+    // the node's postConstructor.
+    void (*post_create)(void* ctx, void* inst);
 } AzNodeClass;
 
 typedef struct AzCommandClass {

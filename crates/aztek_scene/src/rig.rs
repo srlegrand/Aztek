@@ -716,7 +716,7 @@ fn register_types_now() {
 }
 
 pub fn is_rig_chain_node(type_name: &str) -> bool {
-    type_name == crate::skin::SKIN_TYPE || crate::deform::is_deformer(type_name)
+    type_name == crate::skin::SKIN_TYPE || crate::deform::is_deformer(type_name) || crate::scripted::is_plugin_deformer(type_name)
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

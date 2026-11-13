@@ -95,6 +95,25 @@ public:
     MStatus setData(double a, double b);
     MStatus setData(double a, double b, double c);
     MStatus setData(double a, double b, double c, double d);
+    // The named forms the reference's API also has.
+    MStatus getData2Short(short& a, short& b);
+    MStatus getData2Int(int& a, int& b);
+    MStatus getData2Float(float& a, float& b);
+    MStatus getData2Double(double& a, double& b);
+    MStatus getData3Short(short& a, short& b, short& c);
+    MStatus getData3Int(int& a, int& b, int& c);
+    MStatus getData3Float(float& a, float& b, float& c);
+    MStatus getData3Double(double& a, double& b, double& c);
+    MStatus getData4Double(double& a, double& b, double& c, double& d);
+    MStatus setData2Short(short a, short b);
+    MStatus setData2Int(int a, int b);
+    MStatus setData2Float(float a, float b);
+    MStatus setData2Double(double a, double b);
+    MStatus setData3Short(short a, short b, short c);
+    MStatus setData3Int(int a, int b, int c);
+    MStatus setData3Float(float a, float b, float c);
+    MStatus setData3Double(double a, double b, double c);
+    MStatus setData4Double(double a, double b, double c, double d);
 };
 
 class MFnMatrixData : public MFnData {
@@ -122,6 +141,87 @@ public:
     MObject create(MStatus* status = 0);
     MString string(MStatus* status = 0) const;
     MStatus set(const MString& s);
+};
+
+// Array data: what a typed attribute of kDoubleArray, kIntArray and the like holds.
+class MFnDoubleArrayData : public MFnData {
+public:
+    MFnDoubleArrayData();
+    MFnDoubleArrayData(const MObject& o, MStatus* status = 0);
+    virtual MFn::Type type() const;
+    MObject create(const MDoubleArray& values, MStatus* status = 0);
+    MObject create(MStatus* status = 0);
+    MDoubleArray array(MStatus* status = 0);
+    unsigned int length(MStatus* status = 0) const;
+    double operator[](unsigned int i) const;
+    MStatus set(const MDoubleArray& values);
+    MStatus copyTo(MDoubleArray& out) const;
+};
+
+class MFnFloatArrayData : public MFnData {
+public:
+    MFnFloatArrayData();
+    MFnFloatArrayData(const MObject& o, MStatus* status = 0);
+    virtual MFn::Type type() const;
+    MObject create(const MFloatArray& values, MStatus* status = 0);
+    MObject create(MStatus* status = 0);
+    MFloatArray array(MStatus* status = 0);
+    unsigned int length(MStatus* status = 0) const;
+    MStatus set(const MFloatArray& values);
+    MStatus copyTo(MFloatArray& out) const;
+};
+
+class MFnIntArrayData : public MFnData {
+public:
+    MFnIntArrayData();
+    MFnIntArrayData(const MObject& o, MStatus* status = 0);
+    virtual MFn::Type type() const;
+    MObject create(const MIntArray& values, MStatus* status = 0);
+    MObject create(MStatus* status = 0);
+    MIntArray array(MStatus* status = 0);
+    unsigned int length(MStatus* status = 0) const;
+    int operator[](unsigned int i) const;
+    MStatus set(const MIntArray& values);
+    MStatus copyTo(MIntArray& out) const;
+};
+
+class MFnStringArrayData : public MFnData {
+public:
+    MFnStringArrayData();
+    MFnStringArrayData(const MObject& o, MStatus* status = 0);
+    virtual MFn::Type type() const;
+    MObject create(const MStringArray& values, MStatus* status = 0);
+    MObject create(MStatus* status = 0);
+    MStringArray array(MStatus* status = 0);
+    unsigned int length(MStatus* status = 0) const;
+    MStatus set(const MStringArray& values);
+    MStatus copyTo(MStringArray& out) const;
+};
+
+class MFnPointArrayData : public MFnData {
+public:
+    MFnPointArrayData();
+    MFnPointArrayData(const MObject& o, MStatus* status = 0);
+    virtual MFn::Type type() const;
+    MObject create(const MPointArray& values, MStatus* status = 0);
+    MObject create(MStatus* status = 0);
+    MPointArray array(MStatus* status = 0);
+    unsigned int length(MStatus* status = 0) const;
+    MStatus set(const MPointArray& values);
+    MStatus copyTo(MPointArray& out) const;
+};
+
+class MFnVectorArrayData : public MFnData {
+public:
+    MFnVectorArrayData();
+    MFnVectorArrayData(const MObject& o, MStatus* status = 0);
+    virtual MFn::Type type() const;
+    MObject create(const MVectorArray& values, MStatus* status = 0);
+    MObject create(MStatus* status = 0);
+    MVectorArray array(MStatus* status = 0);
+    unsigned int length(MStatus* status = 0) const;
+    MStatus set(const MVectorArray& values);
+    MStatus copyTo(MVectorArray& out) const;
 };
 
 class MFnGeometryData : public MFnData {
@@ -482,7 +582,8 @@ public:
 
 protected:
     struct Use {
-        const MSyntax::Flag* flag;
+        // A copy: the syntax a parser is made from is often a temporary (MPxCommand::syntax() returns one).
+        MSyntax::Flag flag;
         std::vector<MArgList::Item> values;
         unsigned int position;
     };
@@ -673,7 +774,9 @@ public:
     // The kit's own: where the handle reads and writes.
     az::BlockImpl* azBlock;
     std::shared_ptr<az::AttrSpec> azSpec;
-    int azElement;
+    int azElement;               // the attribute's own element when it is an array, else -1
+    std::vector<int> azOuter;    // the elements of the array compounds it is inside, outermost first
+    std::vector<double> azLoose; // numbers read outside a compute (MPlug::asMDataHandle), when there is no block
 
 private:
     int index(int* component) const;
@@ -699,6 +802,7 @@ public:
     az::BlockImpl* azBlock;
     std::shared_ptr<az::AttrSpec> azSpec;
     std::vector<int> azAdded;
+    std::vector<int> azOuter;
 };
 
 class MArrayDataHandle {
@@ -728,6 +832,7 @@ public:
     std::shared_ptr<az::AttrSpec> azSpec;
     std::vector<int> azIds;
     size_t azAt;
+    std::vector<int> azOuter;
 };
 
 class MDataBlock {
@@ -841,6 +946,35 @@ public:
     static MObject envelope;
 };
 
+// A ramp attribute: an array compound of positions, values and interpolations (blendCurve[0].blendCurve_Position).
+class MRampAttribute {
+public:
+    enum MInterpolation { kNone = 0, kLinear = 1, kSmooth = 2, kSpline = 3 };
+    MRampAttribute();
+    MRampAttribute(const MPlug& plug, MStatus* status = 0);
+    MRampAttribute(const MObject& node, const MObject& attr, MStatus* status = 0);
+    MRampAttribute(const MRampAttribute& other);
+    MRampAttribute& operator=(const MRampAttribute& other);
+    ~MRampAttribute();
+    unsigned int getNumEntries(MStatus* status = 0);
+    void getEntries(MIntArray& indexes, MFloatArray& positions, MFloatArray& values, MIntArray& interps, MStatus* status = 0);
+    void getEntries(MIntArray& indexes, MFloatArray& positions, MColorArray& colors, MIntArray& interps, MStatus* status = 0);
+    void setRamp(const MFloatArray& values, const MFloatArray& positions, const MIntArray& interps, MStatus* status = 0);
+    void setRamp(float value, float position = 1.0f, unsigned int index = 0, MStatus* status = 0);
+    void addEntries(MFloatArray& positions, MFloatArray& values, MIntArray& interps, MStatus* status = 0);
+    void deleteEntries(MIntArray& indexes, MStatus* status = 0);
+    void getValueAtPosition(float position, float& value, MStatus* status = 0);
+    void getColorAtPosition(float position, MColor& color, MStatus* status = 0);
+    bool isCurveRamp(MStatus* status = 0) const;
+    bool isColorRamp(MStatus* status = 0) const;
+    static MObject createCurveRamp(const MString& longName, const MString& shortName, MStatus* status = 0);
+    static MObject createColorRamp(const MString& longName, const MString& shortName, MStatus* status = 0);
+    static MObject createRamp(const MString& longName, const MString& shortName, const MObject& parent, MStatus* status = 0);
+
+private:
+    MPlug plug_;
+};
+
 class MPxDeformerNode : public MPxGeometryFilter {
 public:
     MPxDeformerNode();
@@ -855,6 +989,7 @@ public:
 class MItGeometry {
 public:
     MItGeometry(const MDagPath& path, MStatus* status = 0);
+    MItGeometry(const MDagPath& path, MObject& component, MStatus* status = 0);
     MItGeometry(const MObject& dagObject, MStatus* status = 0);
     MItGeometry(MDataHandle& handle, unsigned int groupId, bool readOnly = true, MStatus* status = 0);
     MItGeometry(MDataHandle& handle, bool readOnly = true, MStatus* status = 0);

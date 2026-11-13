@@ -8,6 +8,10 @@
 #include <memory>
 #include <string>
 #include <vector>
+// As the reference's headers do on Linux, where its builds define REQUIRE_IOSTREAM: cout, endl and ios at file scope.
+#ifdef REQUIRE_IOSTREAM
+#include <maya/MIOStream.h>
+#endif
 
 #if defined(_WIN32)
 #define PLUGIN_EXPORT __declspec(dllexport)
@@ -123,6 +127,8 @@ void azReportStatus(const MStatus& s, const char* expr, const char* file, int li
         }                                                                                                              \
     } while (0)
 #define CHECK_MSTATUS_AND_RETURN_IT(_status) CHECK_MSTATUS_AND_RETURN((_status), (_status))
+#define MFAIL(_status) (MS::kSuccess != (_status))
+#define MSUCCESS(_status) (MS::kSuccess == (_status))
 
 // ---------------------------------------------------------------------------------------------------------------------
 
@@ -396,6 +402,13 @@ public:
         kStringData,
         kGeometryData,
         kNurbsCurveData,
+        kDoubleArrayData,
+        kFloatArrayData,
+        kIntArrayData,
+        kStringArrayData,
+        kPointArrayData,
+        kVectorArrayData,
+        kRamp,
         kComponent,
         kSingleIndexedComponent,
         kDoubleIndexedComponent,

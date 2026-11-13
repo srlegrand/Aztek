@@ -122,6 +122,7 @@ struct ObjectData {
     std::vector<double> nums;  // numeric and matrix data
     int numericType = 0;
     std::string str;              // string data; a component's node path
+    std::vector<std::string> strs;  // string array data
     std::vector<int> ids;         // component indices
     std::vector<int> ids2;        // second indices of a double-indexed component
     bool complete = false;        // a component standing for all
@@ -129,6 +130,7 @@ struct ObjectData {
 };
 
 MObject nodeObject(int64_t id);
+std::shared_ptr<MeshData> meshOfNode(int64_t node, MStatus* status);  // a mesh shape's output mesh
 MObject attrObject(const std::shared_ptr<AttrSpec>& spec);
 int64_t nodeOf(const MObject& o);  // -1 when not a node
 std::string nodePath(int64_t id);  // "" when gone
@@ -160,7 +162,8 @@ struct NodeClass {
     std::string name;
     MTypeId id;
     MCreatorFunction creator = 0;
-    int kind = 0;  // AZ_NODE_DEPEND or AZ_NODE_DEFORMER
+    int kind = 0;  // AZ_NODE_DEPEND, AZ_NODE_DEFORMER or AZ_NODE_LOCATOR
+    std::string classification;  // as registered: a draw override is found by it
     std::vector<std::shared_ptr<AttrSpec> > attrs;  // as added
     std::vector<std::pair<AttrSpec*, AttrSpec*> > affects;
     // Each attribute's index on the host's type, and the component of a vec3 child.
@@ -180,6 +183,18 @@ NodeClass* classOfId(const MTypeId& id);
 int indexOf(NodeClass* cls, const AttrSpec* spec, int* component);
 // The deformer attributes every deformer has.
 std::shared_ptr<AttrSpec> builtinAttr(const char* name);
+// Arrays inside arrays. How many array levels lead down to an attribute, its own included; the array compounds above it,
+// outermost first; and the indices at those levels packed into the one element the host keeps, as the host packs them
+// (aztek_scene::plug::pack): two levels 7 and 24 bits, three 7, 12 and 12, four 7, 8, 8 and 8.
+int arrayDepth(const AttrSpec* s);
+// Every number in a value, flattened; a one-argument list.
+std::vector<double> numbers(const Json& v);
+Json args1(const std::string& a);
+// Draw overrides by draw classification: the registrant id and the creator.
+std::map<std::string, std::pair<std::string, MHWRender::DrawOverrideCreator> >& drawOverrides();
+std::vector<const AttrSpec*> arrayAncestors(const AttrSpec* s);
+int packPath(const std::vector<int>& idx);
+std::vector<int> unpackPath(int element, int levels);
 
 // One compute: the host's block and storage for what handles give out by reference.
 struct BlockImpl {

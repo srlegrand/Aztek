@@ -300,6 +300,7 @@ fn load_native(s: &mut Session, key: &str, path: &Path) -> Result<(), String> {
         vendor: "Unknown".into(),
         version: "Unknown".into(),
         api: "Any".into(),
+        abi: version as u32,
         lib,
         commands: Vec::new(),
         nodes: Vec::new(),

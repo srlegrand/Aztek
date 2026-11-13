@@ -297,6 +297,9 @@ fn json_arg(p: *const c_char) -> Value {
 
 unsafe extern "C" fn query(op: *const c_char, args: *const c_char) -> *mut c_char {
     let (op, args) = (text(op).to_string(), json_arg(args));
+    if let Some(r) = aztek_scene::graph::in_compute(|g| python_api::read_query(g, &op, &args)).flatten() {
+        return answer(r);
+    }
     answer(with_core(|c| python_api::query(c, &op, &args)).and_then(|r| r))
 }
 
@@ -311,6 +314,15 @@ unsafe extern "C" fn command(name: *const c_char, args: *const c_char, flags: *c
         Value::Object(m) => m,
         _ => Map::new(),
     };
+    // Inside a compute, reading another node's stored value is all a command may do.
+    if name == "getAttr" && flags.is_empty() && args.len() == 1 {
+        if let Some(r) = aztek_scene::graph::in_compute(|g| {
+            let p = g.plug(args[0].as_str().unwrap_or("")).map_err(|e| e.to_string())?;
+            g.peek(&p).map(|v| aztek_scene::array_data::of(&v).map_or_else(|| aztek_scene::plug::to_json(&v), |d| d.get_json())).ok_or_else(|| "(kInvalidParameter): Object does not exist".to_string())
+        }) {
+            return answer(r);
+        }
+    }
     answer(with_core(|c| c.py_call(&name, args, flags)).and_then(|r| r))
 }
 

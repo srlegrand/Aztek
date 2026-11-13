@@ -385,7 +385,7 @@ MPlug MFnDependencyNode::findPlug(const MString& n, MStatus* st) const {
     MPlug p = plugNamed(full);
     // A short name reaches the long one, as the plug names itself.
     if (!p.azSpec() && info["component"].integer(-1) < 0 && std::string(n.asChar()).find('[') == std::string::npos && info["long"].isString())
-        p = MPlug::azMake(id, info["long"].str(), std::shared_ptr<AttrSpec>(), -1, -1);
+        p = MPlug::azMake(id, info["long"].str(), std::shared_ptr<AttrSpec>(), -1);
     ok(st);
     return p;
 }
@@ -731,6 +731,43 @@ MStatus MFnTransform::getRotation(double r[3], MTransformationMatrix::RotationOr
     order = (MTransformationMatrix::RotationOrder)(e.order + 1);
     return st;
 }
+// MFnIkJoint: jointOrient is in XYZ order, in degrees as getAttr gives it.
+MFnIkJoint::MFnIkJoint() {}
+MFnIkJoint::MFnIkJoint(const MObject& o, MStatus* st) : MFnTransform(o, st) {}
+MFnIkJoint::MFnIkJoint(const MDagPath& p, MStatus* st) : MFnTransform(p, st) {}
+MFn::Type MFnIkJoint::type() const { return MFn::kJoint; }
+MStatus MFnIkJoint::getOrientation(MEulerRotation& e) const {
+    MStatus st;
+    MVector r = channel(path_, "jointOrient", &st);
+    e = MEulerRotation(r.x / kDeg, r.y / kDeg, r.z / kDeg, MEulerRotation::kXYZ);
+    return st;
+}
+MStatus MFnIkJoint::getOrientation(MQuaternion& q) const {
+    MEulerRotation e;
+    MStatus st = getOrientation(e);
+    q = e.asQuaternion();
+    return st;
+}
+MStatus MFnIkJoint::setOrientation(const MEulerRotation& e0) {
+    MEulerRotation e = e0.reorder(MEulerRotation::kXYZ);
+    return setChannel(path_, "jointOrient", MVector(e.x * kDeg, e.y * kDeg, e.z * kDeg));
+}
+MStatus MFnIkJoint::setOrientation(const MQuaternion& q) { return setOrientation(MEulerRotation::decompose(q.asMatrix(), MEulerRotation::kXYZ)); }
+MStatus MFnIkJoint::getScaleOrientation(MQuaternion& q) const {
+    MStatus st;
+    MVector r = channel(path_, "rotateAxis", &st);
+    q = MEulerRotation(r.x / kDeg, r.y / kDeg, r.z / kDeg, MEulerRotation::kXYZ).asQuaternion();
+    return st;
+}
+MStatus MFnIkJoint::getSegmentScale(double s[3]) const {
+    MStatus st;
+    MVector v = channel(path_, "scale", &st);
+    s[0] = v.x;
+    s[1] = v.y;
+    s[2] = v.z;
+    return st;
+}
+
 MStatus MFnTransform::setRotation(const MEulerRotation& e0) {
     MEulerRotation e = e0.reorder((MEulerRotation::RotationOrder)(rotationOrder() - 1));
     return setChannel(path_, "rotate", MVector(e.x * kDeg, e.y * kDeg, e.z * kDeg));

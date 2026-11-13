@@ -1855,3 +1855,41 @@ attributes. Not compared with a running copy of the reference.
 - Not checked: whether the reference refuses deleting `lightLinker1` and the layer managers (Aztek does), and its
   exact error wording.
 
+### mGear's weight driver and cvWrap ship (13/11/2026)
+
+Written from the plug-ins' source and what the reference's API is known to do; `duplicate` of a shape from pymel's
+documentation of `duplicate -addShape` (without it, a shape duplicates as its transform). The kit classes were not
+checked page by page against the reference's API documentation, and nothing was compared with a running copy of the
+reference: the numbers below are Aztek's.
+
+- `mGearWeightDriver` and `cvwrap` ship with Aztek, from mGear's source, unchanged (`THIRD_PARTY.md`).
+- The weight driver computes in all three modes. In vector angle mode the weight follows the driver's angle (0.777778
+  at 10 degrees, 0.5 at 22.5, 0 at 45 for the node's default ramp). In RBF mode on matrices a pose's output is 1 on it
+  and 0 on another; in generic mode two inputs and three poses give back each pose's values. Its locator shape draws as
+  a plain locator: what its draw override adds (cones, poses, labels) is collected but not drawn yet.
+- A plug-in's compute may now read the scene as the reference lets it: another node's name, type, parents, matrices,
+  connections and stored values. Nodes computing at the same moment are seen as they were before the pass.
+- A connected output element exists, as in the reference: `getExistingArrayAttributeIndices` on an output lists the
+  ones connected.
+- Nested arrays (`driverList[0].pose[2].poseMatrix`) and array data (doubleArray, Int32Array, stringArray, pointArray,
+  vectorArray, floatArray in one plug) are set, read, saved and read back; a plug-in's node is saved by its short names.
+- A mesh has `worldMesh[0]`, the mesh in world space, made only once something is connected to it.
+- cvWrap: `cvWrap` makes the deformer and its hidden bind mesh, `-rb` rebinds to selected faces, `-ex`/`-im` export
+  and import a binding, `-b` binds from a file. The wrapped mesh follows its driver's points and transform. A file
+  keeps the deformer in the reference's layout (Orig shape, groupParts, set) with its binding and its `worldMesh[0]`
+  and bind mesh connections, and reads back still wrapping.
+- A plug-in's deformer on a mesh is now saved and read as part of the mesh's deformer chain; before, it was lost.
+- `createNode type -n name` and `deformer -n "name#"` number `#` as the reference does; a name given to a plug-in's
+  node stays when its postConstructor names it otherwise (mGearWeightDriver's does), as the reference names a node
+  after its postConstructor has run.
+- `duplicate` of a shape duplicates its transform. `delete` of faces, edges or vertices deletes them off the mesh;
+  before, it deleted the whole object.
+- The kit: `MThreadPool` (tasks run in turn on the calling thread), `MMeshIntersector`, `MPointOnMesh`,
+  `MItMeshVertex`, `MItSelectionList`, `MItDependencyGraph`, `MFnSingleIndexedComponent`, `MFnGeometryFilter`,
+  `MFnWeightGeometryFilter`, `MFnMesh` over a shape (world space, triangles, normals, closest point), the GPU deformer
+  classes (registered, never used), `MFnNumericData`'s `getData3Float` family, `MFAIL`, and `cout`/`ios` at file
+  scope as the reference's Linux headers give them. `MGlobal::mayaState()` answers `kBatch` in batch runs.
+- Fixed in the kit: flags of a plug-in command were read through pointers into a copy of its syntax that had gone, so
+  some flags (`cvWrap -n`) were lost.
+- Not done: the GPU override (Aztek deforms on the CPU only), drawing the weight driver's override, cvWrap's menu
+  module (Python, Qt and the reference's menus).

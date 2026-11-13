@@ -2,6 +2,7 @@
 #include "internal.h"
 
 #include <algorithm>
+#include <set>
 #include <cmath>
 #include <cstdlib>
 
@@ -32,14 +33,22 @@ Json args1(const std::string& a) {
 }
 
 // The shared pointer behind a spec's parent: specs only hold a raw pointer up.
+static std::shared_ptr<AttrSpec> findIn(const std::shared_ptr<AttrSpec>& at, const AttrSpec* s) {
+    if (at.get() == s) return at;
+    for (size_t j = 0; j < at->children.size(); ++j) {
+        std::shared_ptr<AttrSpec> f = findIn(at->children[j], s);
+        if (f) return f;
+    }
+    return std::shared_ptr<AttrSpec>();
+}
+
 std::shared_ptr<AttrSpec> sharedOf(const AttrSpec* s) {
     if (!s) return std::shared_ptr<AttrSpec>();
     for (size_t k = 0; k < nodeClasses().size(); ++k) {
         NodeClass* c = nodeClasses()[k];
         for (size_t i = 0; i < c->attrs.size(); ++i) {
-            if (c->attrs[i].get() == s) return c->attrs[i];
-            for (size_t j = 0; j < c->attrs[i]->children.size(); ++j)
-                if (c->attrs[i]->children[j].get() == s) return c->attrs[i]->children[j];
+            std::shared_ptr<AttrSpec> f = findIn(c->attrs[i], s);
+            if (f) return f;
         }
     }
     const char* builtins[] = {"input", "weightList"};
@@ -52,11 +61,25 @@ std::shared_ptr<AttrSpec> sharedOf(const AttrSpec* s) {
 std::shared_ptr<AttrSpec> specNamed(int64_t node, const std::string& name) {
     NodeClass* c = classOfNode(node);
     if (!c) return std::shared_ptr<AttrSpec>();
+    // Top-level attributes first, then children at any depth.
     for (size_t i = 0; i < c->attrs.size(); ++i) {
         const std::shared_ptr<AttrSpec>& s = c->attrs[i];
         if (s->name == name || s->shortName == name) return s;
-        for (size_t j = 0; j < s->children.size(); ++j)
-            if (s->children[j]->name == name || s->children[j]->shortName == name) return s->children[j];
+    }
+    struct Walk {
+        static std::shared_ptr<AttrSpec> in(const std::shared_ptr<AttrSpec>& s, const std::string& name) {
+            for (size_t j = 0; j < s->children.size(); ++j) {
+                const std::shared_ptr<AttrSpec>& k = s->children[j];
+                if (k->name == name || k->shortName == name) return k;
+                std::shared_ptr<AttrSpec> f = in(k, name);
+                if (f) return f;
+            }
+            return std::shared_ptr<AttrSpec>();
+        }
+    };
+    for (size_t i = 0; i < c->attrs.size(); ++i) {
+        std::shared_ptr<AttrSpec> f = Walk::in(c->attrs[i], name);
+        if (f) return f;
     }
     return std::shared_ptr<AttrSpec>();
 }
@@ -68,19 +91,25 @@ MPlug plugNamed(const std::string& full) {
     int64_t node = nodeNamed(full.substr(0, dot));
     if (node < 0) return MPlug();
     std::string attr = full.substr(dot + 1);
-    int element = -1, parentElement = -1;
-    size_t close = attr.find("].");
-    if (close != std::string::npos) {
-        size_t open = attr.rfind('[', close);
-        parentElement = atoi(attr.c_str() + open + 1);
-        attr = attr.substr(close + 2);
-    } else if (!attr.empty() && attr[attr.size() - 1] == ']') {
-        size_t open = attr.rfind('[');
-        element = atoi(attr.c_str() + open + 1);
-        attr = attr.substr(0, open);
+    // a[1].b[2].c[3]: the indices of the parts before the last are the outer ones, the last part's is its own.
+    std::vector<int> outer;
+    int element = -1;
+    size_t start = 0;
+    for (;;) {
+        size_t next = attr.find('.', start);
+        std::string part = attr.substr(start, next == std::string::npos ? std::string::npos : next - start);
+        size_t open = part.find('[');
+        int index = open == std::string::npos ? -1 : atoi(part.c_str() + open + 1);
+        if (next == std::string::npos) {
+            element = index;
+            attr = open == std::string::npos ? part : part.substr(0, open);
+            break;
+        }
+        if (index >= 0) outer.push_back(index);
+        start = next + 1;
     }
     std::shared_ptr<AttrSpec> spec = specNamed(node, attr);
-    return MPlug::azMake(node, spec ? spec->name : attr, spec, element, parentElement);
+    return MPlug::azMake(node, spec ? spec->name : attr, spec, element, outer);
 }
 
 bool isAngleName(const std::string& a) {
@@ -96,8 +125,8 @@ bool isAngleName(const std::string& a) {
 // ---------------------------------------------------------------------------------------------------------------------
 // MPlug
 
-MPlug::MPlug() : node_(-1), element_(-1), parentElement_(-1) {}
-MPlug::MPlug(const MObject& node, const MObject& attr) : node_(nodeOf(node)), element_(-1), parentElement_(-1) {
+MPlug::MPlug() : node_(-1), element_(-1) {}
+MPlug::MPlug(const MObject& node, const MObject& attr) : node_(nodeOf(node)), element_(-1) {
     const std::shared_ptr<ObjectData>& d = attr.azData();
     if (d && d->attr) {
         spec_ = d->attr;
@@ -106,27 +135,27 @@ MPlug::MPlug(const MObject& node, const MObject& attr) : node_(nodeOf(node)), el
         attr_ = d->str;
     }
 }
-MPlug::MPlug(const MPlug& o) : node_(o.node_), attr_(o.attr_), spec_(o.spec_), element_(o.element_), parentElement_(o.parentElement_) {}
+MPlug::MPlug(const MPlug& o) : node_(o.node_), attr_(o.attr_), spec_(o.spec_), element_(o.element_), outer_(o.outer_) {}
 MPlug::~MPlug() {}
 MPlug& MPlug::operator=(const MPlug& o) {
     node_ = o.node_;
     attr_ = o.attr_;
     spec_ = o.spec_;
     element_ = o.element_;
-    parentElement_ = o.parentElement_;
+    outer_ = o.outer_;
     return *this;
 }
-MPlug MPlug::azMake(int64_t node, const std::string& attr, const std::shared_ptr<AttrSpec>& spec, int element, int parentElement) {
+MPlug MPlug::azMake(int64_t node, const std::string& attr, const std::shared_ptr<AttrSpec>& spec, int element, const std::vector<int>& outer) {
     MPlug p;
     p.node_ = node;
     p.attr_ = attr;
     p.spec_ = spec;
     p.element_ = element;
-    p.parentElement_ = parentElement;
+    p.outer_ = outer;
     return p;
 }
 bool MPlug::operator==(const MPlug& o) const {
-    return node_ == o.node_ && attr_ == o.attr_ && element_ == o.element_ && parentElement_ == o.parentElement_;
+    return node_ == o.node_ && attr_ == o.attr_ && element_ == o.element_ && outer_ == o.outer_;
 }
 bool MPlug::operator==(const MObject& attr) const {
     const std::shared_ptr<ObjectData>& d = attr.azData();
@@ -137,13 +166,18 @@ bool MPlug::operator==(const MObject& attr) const {
 bool MPlug::operator!=(const MPlug& o) const { return !(*this == o); }
 bool MPlug::operator!=(const MObject& a) const { return !(*this == a); }
 
-std::string MPlug::azAttrPath() const {
+// The array compounds above a plug with their elements, as names: "driverList[0].pose[2]." for long, or short names.
+static std::string outerPath(const std::shared_ptr<AttrSpec>& spec, const std::vector<int>& outer, bool useLong) {
     std::string out;
-    if (parentElement_ >= 0 && spec_ && spec_->parent) {
-        out = spec_->parent->name + "[" + std::to_string(parentElement_) + "]." + attr_;
-    } else {
-        out = attr_;
-    }
+    if (!spec || outer.empty()) return out;
+    std::vector<const AttrSpec*> arrays = arrayAncestors(spec.get());
+    for (size_t i = 0; i < arrays.size() && i < outer.size(); ++i)
+        out += (useLong ? arrays[i]->name : arrays[i]->shortName) + "[" + std::to_string(outer[i]) + "].";
+    return out;
+}
+
+std::string MPlug::azAttrPath() const {
+    std::string out = outerPath(spec_, outer_, true) + attr_;
     if (element_ >= 0) out += "[" + std::to_string(element_) + "]";
     return out;
 }
@@ -194,8 +228,7 @@ MString MPlug::partialName(bool includeNode, bool, bool, bool, bool, bool useLon
             if (info["short"].isString() && info["component"].integer(-1) < 0) a = info["short"].str();
         }
     }
-    std::string base = a;
-    if (parentElement_ >= 0 && spec_ && spec_->parent) base = (useLong ? spec_->parent->name : spec_->parent->shortName) + "[" + std::to_string(parentElement_) + "]." + a;
+    std::string base = outerPath(spec_, outer_, useLong) + a;
     if (element_ >= 0) base += "[" + std::to_string(element_) + "]";
     if (includeNode) {
         Json args = Json::object();
@@ -263,19 +296,26 @@ MPlug MPlug::array(MStatus* st) const {
         return MPlug();
     }
     ok(st);
-    return azMake(node_, attr_, spec_, -1, parentElement_);
+    return azMake(node_, attr_, spec_, -1, outer_);
 }
 MPlug MPlug::parent(MStatus* st) const {
     if (spec_ && spec_->parent) {
         ok(st);
         std::shared_ptr<AttrSpec> p = sharedOf(spec_->parent);
-        return azMake(node_, spec_->parent->name, p, parentElement_, -1);
+        // An array compound's element: the last of the outer elements is its own.
+        std::vector<int> outer = outer_;
+        int element = -1;
+        if (spec_->parent->array && !outer.empty()) {
+            element = outer.back();
+            outer.pop_back();
+        }
+        return azMake(node_, spec_->parent->name, p, element, outer);
     }
     if (!spec_) {
         Json info = plugInfo(*this, 0);
         if (info["component"].integer(-1) >= 0) {
             ok(st);
-            return azMake(node_, info["long"].str(), std::shared_ptr<AttrSpec>(), -1, -1);
+            return azMake(node_, info["long"].str(), std::shared_ptr<AttrSpec>(), -1);
         }
     }
     if (st) *st = MS::kFailure;
@@ -288,9 +328,10 @@ MPlug MPlug::child(unsigned int i, MStatus* st) const {
             return MPlug();
         }
         ok(st);
-        // A child of an array compound's element carries that element; a vec3's child its parent's.
-        bool arrayParent = spec_->array || spec_->type == "compound";
-        return azMake(node_, spec_->children[i]->name, spec_->children[i], arrayParent ? -1 : element_, arrayParent ? element_ : parentElement_);
+        // A child of an array's element carries that element among its outer ones.
+        std::vector<int> outer = outer_;
+        if (spec_->array && element_ >= 0) outer.push_back(element_);
+        return azMake(node_, spec_->children[i]->name, spec_->children[i], -1, outer);
     }
     Json info = plugInfo(*this, 0);
     const Json& kids = info["children"];
@@ -299,7 +340,7 @@ MPlug MPlug::child(unsigned int i, MStatus* st) const {
         return MPlug();
     }
     ok(st);
-    return azMake(node_, kids[i].str(), std::shared_ptr<AttrSpec>(), element_, -1);
+    return azMake(node_, kids[i].str(), std::shared_ptr<AttrSpec>(), element_);
 }
 MPlug MPlug::child(const MObject& attr, MStatus* st) const {
     unsigned int n = numChildren();
@@ -320,18 +361,58 @@ unsigned int MPlug::numChildren(MStatus* st) const {
     return info["component"].integer(-1) >= 0 ? 0 : (unsigned int)info["children"].size();
 }
 
+// The elements of the host attribute behind a spec, each as its indices at every array level.
+static std::vector<std::vector<int> > hostElements(int64_t node, const AttrSpec* leaf) {
+    std::vector<std::vector<int> > out;
+    std::vector<const AttrSpec*> arrays = arrayAncestors(leaf);
+    std::string name;
+    for (size_t i = 0; i < arrays.size(); ++i) name += arrays[i]->name + ".";
+    Json a = Json::object();
+    a.set("name", nodePath(node) + "." + name + leaf->name);
+    std::vector<double> e = numbers(query("plug.elements", a));
+    int levels = arrayDepth(leaf);
+    for (size_t k = 0; k < e.size(); ++k) out.push_back(unpackPath((int)e[k], levels));
+    return out;
+}
+
+// The indices at the level below `outer` that any leaf under a spec has.
+static void elementsUnder(int64_t node, const AttrSpec* s, const std::vector<int>& outer, std::set<int>& out) {
+    if (s->type == "compound") {
+        for (size_t i = 0; i < s->children.size(); ++i) elementsUnder(node, s->children[i].get(), outer, out);
+        return;
+    }
+    std::vector<std::vector<int> > all = hostElements(node, s);
+    for (size_t k = 0; k < all.size(); ++k)
+        if (all[k].size() > outer.size() && std::equal(outer.begin(), outer.end(), all[k].begin())) out.insert(all[k][outer.size()]);
+}
+
+unsigned int MPlug::numConnectedChildren(MStatus* st) const {
+    ok(st);
+    unsigned int n = 0, kids = numChildren();
+    for (unsigned int i = 0; i < kids; ++i)
+        if (child(i).isConnected()) ++n;
+    return n;
+}
+void MPlug::setAttribute(MObject& attr, MStatus* st) {
+    const std::shared_ptr<ObjectData>& d = attr.azData();
+    if (!d || !d->attr) {
+        if (st) *st = MS::kInvalidParameter;
+        return;
+    }
+    spec_ = d->attr;
+    attr_ = spec_->name;
+    element_ = -1;
+    outer_.clear();
+    ok(st);
+}
+
 static std::vector<int> elementsOf(const MPlug& p) {
     std::vector<int> out;
-    if (p.azSpec() && p.azSpec()->type == "compound") {
-        // An array compound's elements: those of its children.
-        for (size_t i = 0; i < p.azSpec()->children.size(); ++i) {
-            Json a = Json::object();
-            a.set("name", nodePath(p.azNode()) + "." + p.azSpec()->name + "." + p.azSpec()->children[i]->name);
-            std::vector<double> e = numbers(query("plug.elements", a));
-            for (size_t k = 0; k < e.size(); ++k)
-                if (std::find(out.begin(), out.end(), (int)e[k]) == out.end()) out.push_back((int)e[k]);
-        }
-        std::sort(out.begin(), out.end());
+    if (p.azSpec() && (p.azSpec()->type == "compound" || arrayDepth(p.azSpec().get()) >= 2)) {
+        // An array compound's elements: those of its children; inside arrays, under the plug's outer elements.
+        std::set<int> all;
+        elementsUnder(p.azNode(), p.azSpec().get(), p.azOuter(), all);
+        out.assign(all.begin(), all.end());
         return out;
     }
     Json a = Json::object();
@@ -359,7 +440,7 @@ unsigned int MPlug::getExistingArrayAttributeIndices(MIntArray& out, MStatus* st
 }
 MPlug MPlug::elementByLogicalIndex(unsigned int i, MStatus* st) const {
     ok(st);
-    return azMake(node_, attr_, spec_, (int)i, parentElement_);
+    return azMake(node_, attr_, spec_, (int)i, outer_);
 }
 MPlug MPlug::elementByPhysicalIndex(unsigned int i, MStatus* st) const {
     std::vector<int> ids = elementsOf(*this);
@@ -386,9 +467,24 @@ MPlug MPlug::source(MStatus* st) const {
 }
 MPlug MPlug::sourceWithConversion(MStatus* st) const { return source(st); }
 bool MPlug::destinations(MPlugArray& out, MStatus* st) const { return connectedTo(out, false, true, st); }
-MStatus MPlug::selectAncestorLogicalIndex(unsigned int i, const MObject&) {
-    if (spec_ && spec_->parent) parentElement_ = (int)i;
-    else element_ = (int)i;
+MStatus MPlug::selectAncestorLogicalIndex(unsigned int i, const MObject& attr) {
+    // The level the attribute named is at among the arrays above; the plug's own when it names none of them.
+    const std::shared_ptr<ObjectData>& d = attr.azData();
+    if (spec_ && d && d->attr) {
+        std::vector<const AttrSpec*> arrays = arrayAncestors(spec_.get());
+        for (size_t k = 0; k < arrays.size(); ++k)
+            if (arrays[k] == d->attr.get()) {
+                if (outer_.size() <= k) outer_.resize(k + 1, 0);
+                outer_[k] = (int)i;
+                return MS::kSuccess;
+            }
+    }
+    if (spec_ && spec_->parent && !spec_->array) {
+        if (outer_.empty()) outer_.push_back(0);
+        outer_.back() = (int)i;
+    } else {
+        element_ = (int)i;
+    }
     return MS::kSuccess;
 }
 
@@ -399,8 +495,21 @@ static bool fromBlock(const MPlug& p, MDataHandle& h) {
     if (!b || b->node != p.azNode() || !p.azSpec()) return false;
     h.azBlock = b;
     h.azSpec = p.azSpec();
-    h.azElement = p.azElement();
+    h.azElement = p.azOwnElement();
+    h.azOuter = p.azOuter();
     return true;
+}
+
+MDataHandle MPlug::asMDataHandle(MStatus* st) const {
+    MDataHandle h;
+    ok(st);
+    if (fromBlock(*this, h)) return h;
+    // Outside a compute: the plug's numbers now, as getAttr gives them.
+    h.azSpec = spec_;
+    h.azElement = element_;
+    h.azOuter = outer_;
+    h.azLoose = numbers(command("getAttr", args1(azPath()), Json::object(), st));
+    return h;
 }
 
 static bool angled(const MPlug& p) {
@@ -469,6 +578,19 @@ MObject MPlug::asMObject(MStatus* st) const {
         return MObject(d);
     }
     Json v = command("getAttr", args1(azPath()), Json::object(), st);
+    const std::string kind = info["arrayData"].str();
+    if (!kind.empty()) {
+        MFn::Type t = kind == "doubleArray" ? MFn::kDoubleArrayData : kind == "floatArray" ? MFn::kFloatArrayData : kind == "Int32Array" ? MFn::kIntArrayData
+                    : kind == "stringArray" ? MFn::kStringArrayData : kind == "pointArray" ? MFn::kPointArrayData : MFn::kVectorArrayData;
+        std::shared_ptr<ObjectData> d = std::make_shared<ObjectData>();
+        d->type = t;
+        if (t == MFn::kStringArrayData) {
+            for (size_t i = 0; i < v.size(); ++i) d->strs.push_back(v[i].text());
+        } else {
+            d->nums = numbers(v);
+        }
+        return MObject(d);
+    }
     if (type == "matrix") {
         std::vector<double> n = numbers(v);
         MMatrix m;
@@ -544,6 +666,27 @@ MStatus MPlug::setValue(const MObject& data) {
     case MFn::kNumericData:
         for (size_t i = 0; i < d->nums.size(); ++i) a.push(angled(*this) ? d->nums[i] * kDeg : d->nums[i]);
         command("setAttr", a, Json::object(), &st);
+        return st;
+    case MFn::kDoubleArrayData:
+    case MFn::kFloatArrayData:
+    case MFn::kIntArrayData:
+    case MFn::kVectorArrayData:
+    case MFn::kPointArrayData: {
+        // The count first, as a file has it, then the values: x y z for points and vectors.
+        const char* kind = d->type == MFn::kDoubleArrayData ? "doubleArray" : d->type == MFn::kFloatArrayData ? "floatArray"
+                         : d->type == MFn::kIntArrayData ? "Int32Array" : d->type == MFn::kVectorArrayData ? "vectorArray" : "pointArray";
+        size_t per = d->type == MFn::kPointArrayData ? 4 : d->type == MFn::kVectorArrayData ? 3 : 1;
+        size_t n = d->nums.size() / per;
+        a.push((int64_t)n);
+        for (size_t i = 0; i < n; ++i)
+            for (size_t k = 0; k < (per == 4 ? 3 : per); ++k) a.push(d->nums[i * per + k]);
+        command("setAttr", a, Json::object().set("type", kind), &st);
+        return st;
+    }
+    case MFn::kStringArrayData:
+        a.push((int64_t)d->strs.size());
+        for (size_t i = 0; i < d->strs.size(); ++i) a.push(d->strs[i]);
+        command("setAttr", a, Json::object().set("type", "stringArray"), &st);
         return st;
     default: return fail(MStatus::kNotImplemented, "setValue: data of that kind can't be set on a scene plug yet");
     }
@@ -1087,7 +1230,13 @@ MStatus MGlobal::clearSelectionList() {
     return st;
 }
 MStatus MGlobal::getLiveList(MSelectionList& out) { out.clear(); return MS::kSuccess; }
-MGlobal::MMayaState MGlobal::mayaState(MStatus* st) { ok(st); return kInteractive; }
+MGlobal::MMayaState MGlobal::mayaState(MStatus* st) {
+    ok(st);
+    // Batch when Aztek runs without its window (--batch), as the reference's mayabatch does.
+    MStatus s;
+    Json b = command("about", Json::array(), Json::object().set("batch", true), &s);
+    return s && b.truth() ? kBatch : kInteractive;
+}
 int MGlobal::apiVersion() { return MAYA_API_VERSION; }
 MString MGlobal::mayaVersion() { return MString("2024"); }
 MString MGlobal::mayaName() { return MString("Aztek"); }

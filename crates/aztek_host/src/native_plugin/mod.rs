@@ -9,6 +9,7 @@
 
 mod load;
 mod nodes;
+pub(crate) use nodes::run_post_create;
 mod table;
 
 use std::cell::{Cell, RefCell};
@@ -24,7 +25,7 @@ use crate::core::{Core, LineKind};
 
 pub use load::{load_autoload, register_commands};
 
-pub const ABI_VERSION: u32 = 1;
+pub const ABI_VERSION: u32 = 2;
 
 pub const AZ_OK: i32 = 0;
 pub const AZ_UNKNOWN_PARAMETER: i32 = 1;
@@ -57,6 +58,8 @@ pub(crate) struct PluginState {
     pub vendor: String,
     pub version: String,
     pub api: String,
+    /// The ABI the plug-in was built with.
+    pub abi: u32,
     pub lib: Arc<Lib>,
     pub commands: Vec<String>,
     pub nodes: Vec<String>,

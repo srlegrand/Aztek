@@ -1,0 +1,3 @@
+// Aztek plug-in kit. MFnIkJoint is defined in aztek/kit/scene.h.
+#pragma once
+#include <aztek/kit/scene.h>

@@ -85,11 +85,15 @@ fn create(s: &mut Session, type_name: &str, a: &Args) -> CmdResult {
         let stem = format!("{}1", crate::dag::transform_stem(&t.name));
         let tt = types::find("transform").unwrap();
         let tr = s.graph.create_node(&tt, &stem, parent, true)?;
+        let named = !a.string("name", "").is_empty();
         let shape_name = match a.string("name", "") {
             n if n.is_empty() => crate::dag::shape_name(s.graph.node(tr).unwrap().name()),
             n => n,
         };
         let id = s.graph.create_node(&t, &shape_name, tr, true)?;
+        if named {
+            crate::scripted::post_create_named(s, id);
+        }
         if !a.bool("skipSelect") {
             s.graph.select(&[tr], SelectMode::Replace);
         }
@@ -98,6 +102,9 @@ fn create(s: &mut Session, type_name: &str, a: &Args) -> CmdResult {
     let id = s
         .graph
         .create_node(&t, &a.string("name", ""), parent, true)?;
+    if !a.string("name", "").is_empty() {
+        crate::scripted::post_create_named(s, id);
+    }
     if !a.bool("skipSelect") && t.dag {
         s.graph.select(&[id], SelectMode::Replace);
     }
@@ -558,6 +565,26 @@ fn register_scene(c: &mut Commands<Session>) {
 
     c.register(
         Cmd::new("delete", "Delete objects (and their children). Defaults to the selection.", |s, a| {
+            // Components go as the reference's delete takes them: faces, edges or vertices off their mesh, not the mesh.
+            if !a.bool("constructionHistory") {
+                // With nothing named, the selection as `ls -sl` gives it, components and all.
+                let names = if a.named().is_empty() {
+                    s.run("ls", json!({"selection": true}))?.as_array().map(|v| v.iter().filter_map(|x| x.as_str().map(str::to_string)).collect()).unwrap_or_default()
+                } else {
+                    objects(s, a)
+                };
+                let (comps, rest): (Vec<String>, Vec<String>) = names.into_iter().partition(|n| crate::components::is_component_string(n));
+                if !comps.is_empty() {
+                    s.run("select", json!({"args": comps, "replace": true}))?;
+                    s.run("deleteComponents", json!({}))?;
+                    if rest.is_empty() {
+                        return Ok(Value::Null);
+                    }
+                    let mut call = serde_json::Map::new();
+                    call.insert("args".into(), json!(rest));
+                    return s.run("delete", Value::Object(call)).map_err(Into::into);
+                }
+            }
             // The reference refuses to delete the default cameras.
             if !a.bool("constructionHistory") {
                 for n in objects(s, a) {
@@ -678,7 +705,7 @@ fn register_scene(c: &mut Commands<Session>) {
             if g.node(id).unwrap().is_locked() {
                 fail!("rename: cannot rename locked node '{target}'");
             }
-            let new_name = g.resolve_hashes(&new_name);
+            let new_name = g.resolve_hashes_for(&new_name, id);
             rename_node(g, id, &new_name)?;
             // An instanced shape keeps one name under all its parents.
             let name_now = g.node(id).unwrap().name().to_string();
