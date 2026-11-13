@@ -1,10 +1,10 @@
-# maya.OpenMaya: the reference's Python API 1.0, built on the 2.0 classes of maya.api.OpenMaya.
+# aztek.OpenAztek (maya.OpenMaya): the reference's Python API 1.0, built on the 2.0 classes of maya.api.OpenMaya.
 #
 # 1.0 hands results back through the arguments (an MDagPath to fill, an MScriptUtil pointer for a number) where 2.0
 # returns them. Each class here is its 2.0 class with the 1.0 calls on top; what a 2.0 call returns comes back as the
 # 1.0 class, so `arr.length()` and the other 1.0 spellings work on everything a script gets.
 
-import maya.api.OpenMaya as _om2
+import aztek.api.OpenAztek as _om2
 
 _V1 = {}
 
@@ -34,7 +34,7 @@ _PLAIN = {int, float, bool, str, type(None)}
 def _wrapped(f):
     def call(*a, **k):
         r = f(*a, **k)
-        return r if type(r) in _PLAIN or type(r).__module__ == "maya.OpenMaya" else _to1(r)
+        return r if type(r) in _PLAIN or type(r).__module__ == "aztek.OpenAztek" else _to1(r)
 
     call.__name__ = getattr(f, "__name__", "call")
     call.__doc__ = getattr(f, "__doc__", None)
@@ -62,7 +62,7 @@ def _get_named(self, name):
 def _v1(base, body=None, name=None):
     """The 1.0 class over a 2.0 one: the 1.0 calls in `body`, every other call handing back 1.0 values."""
     body = dict(body or {})
-    ns = {"__slots__": (), "__module__": "maya.OpenMaya"}
+    ns = {"__slots__": (), "__module__": "aztek.OpenAztek"}
     done = set(body)
     for klass in base.__mro__:
         if klass in (object, list):
@@ -519,7 +519,7 @@ MBoundingBox = _v1(
         "width": lambda self: _bb_corner("_max")(self).x - _bb_corner("_min")(self).x,
         "height": lambda self: _bb_corner("_max")(self).y - _bb_corner("_min")(self).y,
         "depth": lambda self: _bb_corner("_max")(self).z - _bb_corner("_min")(self).z,
-        "__repr__": lambda self: "maya.OpenMaya.MBoundingBox(%s, %s)" % (self.min(), self.max()),
+        "__repr__": lambda self: "aztek.OpenAztek.MBoundingBox(%s, %s)" % (self.min(), self.max()),
     },
 )
 MPlane = _v1(_om2.MPlane)
@@ -576,7 +576,7 @@ MTransformationMatrix = _v1(
 # ---------------------------------------------------------------------------------------------------------------------
 # Objects, paths and plugs
 
-MObject = _v1(_om2.MObject, {"__repr__": lambda self: "<maya.OpenMaya.MObject %s>" % (_om2.MObject.apiTypeStr.__get__(self),)})
+MObject = _v1(_om2.MObject, {"__repr__": lambda self: "<aztek.OpenAztek.MObject %s>" % (_om2.MObject.apiTypeStr.__get__(self),)})
 MObject.kNullObj = MObject()
 MObjectHandle = _v1(_om2.MObjectHandle)
 

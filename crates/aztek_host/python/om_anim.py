@@ -1,7 +1,7 @@
-# aztek.api.OpenMayaAnim: skin weights, the current time and animation curves.
+# aztek.api.OpenAztekAnim: skin weights, the current time and animation curves.
 import sys as _sys
 
-from aztek.api.OpenMaya import (
+from aztek.api.OpenAztek import (
     MDagPath,
     MDagPathArray,
     MDoubleArray,
@@ -21,7 +21,7 @@ from aztek.api.OpenMaya import (
 )
 
 # The API's commands: in stored units, as its values are.
-from aztek.api.OpenMaya import _cmds
+from aztek.api.OpenAztek import _cmds
 
 
 class MFnSkinCluster(MFnDependencyNode):
@@ -105,7 +105,7 @@ class MFnSkinCluster(MFnDependencyNode):
         return old if returnOldWeights else None
 
     def getPointsAffectedByInfluence(self, path):
-        from aztek.api.OpenMaya import MSelectionList, MFnSingleIndexedComponent
+        from aztek.api.OpenAztek import MSelectionList, MFnSingleIndexedComponent
 
         d = self._data()
         logical = self.indexForInfluenceObject(path)
@@ -126,7 +126,7 @@ class MFnSkinCluster(MFnDependencyNode):
         return (sel, wts)
 
     def getOutputGeometry(self):
-        from aztek.api.OpenMaya import MObjectArray
+        from aztek.api.OpenAztek import MObjectArray
 
         geo = self._data()["geometry"]
         return MObjectArray([_node_object(geo)] if geo else [])
@@ -323,7 +323,7 @@ class MFnAnimCurve(MFnDependencyNode):
 
     @property
     def numKeys(self):
-        from aztek.api.OpenMaya import _CInt
+        from aztek.api.OpenAztek import _CInt
 
         return _CInt(len(self._times()))
 

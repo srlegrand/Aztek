@@ -160,9 +160,6 @@ pub struct Alias {
 pub const ALIASES: &[Alias] = &[
     Alias { the_reference: "makeIdentity", target: "freezeTransforms", flags: &[("a", "apply")] },
     Alias { the_reference: "CenterPivot", target: "centerPivot", flags: &[] },
-    Alias { the_reference: "polyPlanarProjection", target: "polyProjection", flags: &[] },
-    Alias { the_reference: "polyCylindricalProjection", target: "polyProjection", flags: &[] },
-    Alias { the_reference: "polySphericalProjection", target: "polyProjection", flags: &[] },
     Alias { the_reference: "unfold", target: "u3dUnfold", flags: &[] },
     Alias { the_reference: "polyMultiLayoutUV", target: "u3dLayout", flags: &[("ps", "shellSpacing")] },
     Alias { the_reference: "DeleteHistory", target: "delete", flags: &[] },
@@ -184,7 +181,7 @@ pub fn takes_components(name: &str) -> bool {
             "polyCube" | "polySphere" | "polyCylinder" | "polyCone" | "polyTorus" | "polyPlane" | "polyDisc" | "polyPipe" | "polyCapsule"
                 | "polyIcoSphere" | "polyQuadSphere" | "polyCombine" | "polySeparate" | "polyBoolean"
                 // UV commands read their own arguments, map[] included.
-                | "polyProjection" | "polyAutoProjection" | "polyEditUV" | "polyMapCut" | "polyMapSew" | "polyMapSewMove"
+                | "polyProjection" | "polyPlanarProjection" | "polyCylindricalProjection" | "polySphericalProjection" | "polyAutoProjection" | "polyEditUV" | "polyMapCut" | "polyMapSew" | "polyMapSewMove"
                 | "polyNormalizeUV" | "polyFlipUV" | "polyRotateUVs"
         ))
         || matches!(name, "deleteComponents" | "moveComponents" | "rotateComponents" | "scaleComponents" | "convertSelection" | "growSelection" | "shrinkSelection" | "selectLoop" | "selectBorder")

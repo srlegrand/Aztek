@@ -608,6 +608,43 @@ pub fn history_of(g: &Graph, mesh: NodeId) -> Vec<NodeId> {
     out
 }
 
+/// A node's history for what isn't a mesh: its shapes, or itself, then what feeds them, breadth first.
+fn upstream_of(g: &Graph, id: NodeId) -> Vec<NodeId> {
+    let is_transform = |n: NodeId| g.node(n).is_some_and(|x| x.ty().is_a("transform"));
+    let start: Vec<NodeId> = if is_transform(id) {
+        let shapes = crate::dag::shapes(g, id, false);
+        if shapes.is_empty() { vec![id] } else { shapes }
+    } else {
+        vec![id]
+    };
+    let mut feeds: BTreeMap<NodeId, Vec<NodeId>> = BTreeMap::new();
+    for (dst, src) in g.connections() {
+        if src.node != dst.node {
+            feeds.entry(dst.node).or_default().push(src.node);
+        }
+    }
+    let mut out: Vec<NodeId> = Vec::new();
+    let mut queue: std::collections::VecDeque<NodeId> = start.into_iter().collect();
+    while let Some(n) = queue.pop_front() {
+        if out.contains(&n) {
+            continue;
+        }
+        out.push(n);
+        if is_transform(n) && n != id {
+            continue;
+        }
+        for &up in feeds.get(&n).into_iter().flatten() {
+            if !out.contains(&up) {
+                queue.push_back(up);
+            }
+        }
+    }
+    if is_transform(id) {
+        out.retain(|&n| n != id);
+    }
+    out
+}
+
 // ---------------------------------------------------------------------------------------------------------------------
 // Commands
 
@@ -678,7 +715,17 @@ pub fn register(c: &mut Commands<Session>) {
                 let mut out = Vec::new();
                 for name in objects(s, a) {
                     let Some(id) = g.find(&name)? else { aztek_ops::fail!("listHistory: no object named {name}") };
-                    let Some(m) = components::as_mesh(g, id) else { continue };
+                    let Some(m) = components::as_mesh(g, id) else {
+                        // Anything else, as the reference walks it: the object's shapes (or the node), then every node
+                        // upstream of them through their inputs, nearest first. Transforms are listed but not walked
+                        // through, so a parent's place doesn't drag the scene in.
+                        for h in upstream_of(g, id) {
+                            if wanted(h) && !out.contains(&json!(g.path(h))) {
+                                out.push(json!(g.path(h)));
+                            }
+                        }
+                        continue;
+                    };
                     if wanted(m) {
                         out.push(json!(g.path(m)));
                     }

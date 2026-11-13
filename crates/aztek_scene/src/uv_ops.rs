@@ -1045,6 +1045,21 @@ pub fn register(c: &mut Commands<Session>) {
         .flag(f("mapDirection", "md", ArgType::String, Value::Null, "x, y, z, or b (best plane)."))
         .flag(f("constructionHistory", "ch", ArgType::Bool, Value::Null, "Accepted for existing scripts.")),
     );
+    // The reference's commands for each kind: polyProjection of that type, making polyPlanarProj, polyCylProj or polySphProj.
+    for (name, ty) in [("polyPlanarProjection", "planar"), ("polyCylindricalProjection", "cylindrical"), ("polySphericalProjection", "spherical")] {
+        if let Some(mut cmd) = c.find("polyProjection").cloned() {
+            let run = cmd.run.clone();
+            cmd.name = name.to_string();
+            cmd.doc = format!("Project UVs through a {ty} projection: polyProjection -t {ty}.");
+            cmd.flags.retain(|fl| fl.name != "type");
+            cmd.run = Arc::new(move |s: &mut Session, a: &Args| {
+                let mut b = a.clone();
+                b.flags.insert("type".into(), json!(ty));
+                run(s, &b)
+            });
+            c.register(cmd);
+        }
+    }
 
     c.register(
         Cmd::new(

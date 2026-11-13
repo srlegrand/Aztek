@@ -1660,3 +1660,55 @@ one (point 13247 carries the 0.156 the file's cluster gives it), the bind pose, 
 normal maps; turning a neck joint moves the mesh. A scene written out and read back keeps joint orients, rotate
 orders, rotate axes, weights, the bent mesh, the phong with its colour and normal map, and finds the textures moved
 into the .fbm folder. Not seen: the reference itself importing these files side by side.
+
+### Every edit a node; OpenAztek (12/11/2026)
+
+Checked by running each modelling, UV and curve command on a fresh object and listing the nodes it made (about 150
+cases, the reference's commands and the ones Aztek's menus call). Most already made the reference's node. Changed:
+
+- Mesh > Booleans and `polyBoolean` make a live `polyCBoolOp` node (they baked the result, or kept Aztek's own
+  boolean modifier). Moving or editing an input updates the result; the inputs stay as hidden shapes feeding it. The
+  node has the reference's attributes (operation, classification, useThresholds, vertexDistanceThreshold,
+  faceAreaThreshold, preserveColor, useCarveBooleans, edgeInterpolation, planarTolerance, sortOutput,
+  tagIntersection, mergeUVSets) and after them Aztek's seam clean-up (cleanup, snapDistance, splitNgons, quadBand,
+  bandRings, timeout, filletWidth, filletSegments, hardAngle), which the reference doesn't have. `polyBoolean` adds a
+  polyWeightedNormals node unless -weightedNormals 0. The menus and shelf run `polyCBoolOp -op 1/2/3`.
+- Combine (`polyCombine`) makes a `polyUnite` node; with -ch 0 or history off, `polyUnite` and `polyCombine` leave a
+  plain mesh and delete the inputs, as the reference.
+- Extract and Duplicate on faces (`polyExtract`, `polyDuplicateFaces`) are `polyChipOff` then `polySeparate`, as the
+  reference's menu items. Duplicate used to copy the faces into the same mesh.
+- `polyPlanarProjection`, `polyCylindricalProjection` and `polySphericalProjection` make polyPlanarProj, polyCylProj
+  and polySphProj (the last two made a planar projection).
+- Edit Edge Flow on edges makes a `polyEditEdgeFlow` node. Circularize from the menu makes a `polyCircularize` node
+  unless one of Aztek's own fitting settings (radius, sides, rotation, spacing, strength, flatten off) is used.
+- `attachCurve` and `detachCurve` make `attachCurve` and `detachCurve` nodes with the reference's attributes, and
+  -replaceOriginal is on by default as in the reference (it was off). Moving the second curve moves the joined one;
+  changing a parameter of detachCurve moves the cut. `polyToCurve` (Create Curve From Poly Edges) makes a
+  `polyEdgeToCurve` node that follows the mesh.
+- `listHistory` walks any node's inputs (curves, surfaces, anything), not only meshes.
+- Menus: Delete Edge/Vertex runs polyDelEdge -cv 1 or polyDelVertex; Connect runs polyConnectComponents; Mesh
+  Display > Conform runs polyNormal -nm 2 and Reverse polyNormal -nm 0.
+
+Command flags: the polygon commands' flags (79 commands) come from the reference's command reference, and a history
+node's attributes are its command's flags. Node attributes were checked against the reference's node pages only for
+polyCBoolOp, attachCurve, detachCurve and polyEdgeToCurve.
+
+Python: the API is OpenAztek. `aztek.api.OpenAztek` and `aztek.api.OpenAztekAnim` are API 2.0; `aztek.OpenAztek`,
+`aztek.OpenAztekAnim`, `aztek.OpenAztekMPx` and `aztek.OpenAztekUI` are API 1.0. `maya.api.OpenMaya`,
+`maya.api.OpenMayaAnim`, `maya.OpenMaya`, `maya.OpenMayaAnim`, `maya.OpenMayaMPx` and `maya.OpenMayaUI` are the same
+module objects under the reference's names, as are `aztek.api.OpenMaya` and `aztek.api.OpenMayaAnim`, Aztek's earlier
+names. Class names are the reference's (MObject, MFnMesh ...). Values print as `aztek.api.OpenAztek.MPoint(...)`.
+Every command is in MEL, `aztek.cmds` and `maya.cmds` (they come from one registry).
+
+Still not nodes, or not the reference's node:
+
+- Aztek's own commands with no counterpart in the reference keep node types of their own: polyInset, polyBridge on
+  faces (polyBridgeFace), polyMergeCenter, polyDissolve (polyDissolveEdge/Vertex), polyConnect, polyGridFill,
+  polySplitRings. The menus call the reference's commands where it has one.
+- Direct edits with no node: polyStraighten, polySpherize, polyConform, Edit Edge Flow on vertices or faces, and
+  polyMergeUV (it made no node in the check; not looked into).
+- UVs can't be selected as `pCube1.map[3]` (UV commands read map[] arguments, `select` doesn't), nor face-vertices
+  as `vtxFace[]`. A curve's `cv[]` works in `select` but not as an argument to curve commands (`smoothCurve p.cv[0:3]`).
+- detachCurve on a periodic curve opens it with a change of shape (as before); attachCurve's blend method joins as
+  connect.
+- The C++ plug-in kit is unchanged: `aztek/kit` headers with the reference's `maya/` headers over them.

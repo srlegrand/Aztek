@@ -1,4 +1,4 @@
-# aztek.api.OpenMaya, value classes: vectors, points, matrices, rotations, units, arrays. No scene access here.
+# aztek.api.OpenAztek, value classes: vectors, points, matrices, rotations, units, arrays. No scene access here.
 # The reference's conventions: row vectors (p * m), matrices flat row by row with the translation in elements 12, 13, 14.
 from json import loads as _json_loads
 import math as _math
@@ -76,7 +76,7 @@ class _Triple:
         return "(%s, %s, %s)" % (_num(self.x), _num(self.y), _num(self.z))
 
     def __repr__(self):
-        return "aztek.api.OpenMaya.%s(%s, %s, %s)" % (type(self).__name__, _num(self.x), _num(self.y), _num(self.z))
+        return "aztek.api.OpenAztek.%s(%s, %s, %s)" % (type(self).__name__, _num(self.x), _num(self.y), _num(self.z))
 
 
 class MVector(_Triple):
@@ -354,7 +354,7 @@ class MPoint:
         return "(%s, %s, %s, %s)" % (_num(self.x), _num(self.y), _num(self.z), _num(self.w))
 
     def __repr__(self):
-        return "aztek.api.OpenMaya.%s(%s, %s, %s, %s)" % (type(self).__name__, _num(self.x), _num(self.y), _num(self.z), _num(self.w))
+        return "aztek.api.OpenAztek.%s(%s, %s, %s, %s)" % (type(self).__name__, _num(self.x), _num(self.y), _num(self.z), _num(self.w))
 
 
 MPoint.kOrigin = MPoint(0, 0, 0)
@@ -448,7 +448,7 @@ class MColor:
         return "(%s, %s, %s, %s)" % (_num(self.r), _num(self.g), _num(self.b), _num(self.a))
 
     def __repr__(self):
-        return "aztek.api.OpenMaya.MColor" + str(self)
+        return "aztek.api.OpenAztek.MColor" + str(self)
 
 
 MColor.kOpaqueBlack = MColor(0, 0, 0, 1)
@@ -597,7 +597,7 @@ class _MatrixBase:
         return "(%s)" % ", ".join("(%s)" % ", ".join(_num(x) for x in self._m[r * 4 : r * 4 + 4]) for r in range(4))
 
     def __repr__(self):
-        return "aztek.api.OpenMaya.%s(%s)" % (type(self).__name__, str(self))
+        return "aztek.api.OpenAztek.%s(%s)" % (type(self).__name__, str(self))
 
 
 class MMatrix(_MatrixBase):
@@ -841,7 +841,7 @@ class MEulerRotation:
         return "(%s, %s, %s, %s)" % (_num(self.x), _num(self.y), _num(self.z), ("kXYZ", "kYZX", "kZXY", "kXZY", "kYXZ", "kZYX")[self.order])
 
     def __repr__(self):
-        return "aztek.api.OpenMaya.MEulerRotation" + str(self)
+        return "aztek.api.OpenAztek.MEulerRotation" + str(self)
 
 
 MEulerRotation.kIdentity = MEulerRotation()
@@ -1050,7 +1050,7 @@ class MQuaternion:
         return "(%s, %s, %s, %s)" % (_num(self.x), _num(self.y), _num(self.z), _num(self.w))
 
     def __repr__(self):
-        return "aztek.api.OpenMaya.MQuaternion" + str(self)
+        return "aztek.api.OpenAztek.MQuaternion" + str(self)
 
 
 MQuaternion.kIdentity = MQuaternion()
@@ -1346,7 +1346,7 @@ class MAngle:
         return v * MAngle._to_rad[MAngle.uiUnit()]
 
     def __repr__(self):
-        return "aztek.api.OpenMaya.MAngle(%s, %d)" % (_num(self.value), self.unit)
+        return "aztek.api.OpenAztek.MAngle(%s, %d)" % (_num(self.value), self.unit)
 
 
 class MDistance:
@@ -1424,7 +1424,7 @@ class MDistance:
         return v * MDistance._to_cm[MDistance.uiUnit()]
 
     def __repr__(self):
-        return "aztek.api.OpenMaya.MDistance(%s, %d)" % (_num(self.value), self.unit)
+        return "aztek.api.OpenAztek.MDistance(%s, %d)" % (_num(self.value), self.unit)
 
 
 class MTime:
@@ -1565,7 +1565,7 @@ class MTime:
         return 141120000
 
     def __repr__(self):
-        return "aztek.api.OpenMaya.MTime(%s, %d)" % (_num(self.value), self.unit)
+        return "aztek.api.OpenAztek.MTime(%s, %d)" % (_num(self.value), self.unit)
 
 
 class MPlane:
@@ -1679,7 +1679,7 @@ class MBoundingBox:
         return self
 
     def __repr__(self):
-        return "aztek.api.OpenMaya.MBoundingBox(%s, %s)" % (self.min, self.max)
+        return "aztek.api.OpenAztek.MBoundingBox(%s, %s)" % (self.min, self.max)
 
 
 class _Array(list):
@@ -1746,7 +1746,7 @@ class _Array(list):
         return "[%s]" % ", ".join(str(x) for x in self)
 
     def __repr__(self):
-        return "aztek.api.OpenMaya.%s([%s])" % (type(self).__name__, ", ".join(repr(x) for x in self))
+        return "aztek.api.OpenAztek.%s([%s])" % (type(self).__name__, ", ".join(repr(x) for x in self))
 
     @property
     def sizeIncrement(self):

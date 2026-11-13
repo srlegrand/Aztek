@@ -3,19 +3,16 @@
 use std::sync::Arc;
 
 use aztek_geo::Mesh;
-use aztek_ops::{fail, objects, ArgType as T, CmdResult, CommandDef, Commands, FlagDef};
-use glam::DMat4;
+use aztek_ops::{fail, objects, ArgType as T, CommandDef, Commands, FlagDef};
 use serde_json::{json, Value};
 
 use crate::attr_defs::{matrix_attr, mesh_attr, param, param_enum};
-use crate::graph::{Graph, SelectMode};
-use crate::mesh_boolean::{boolean_op_from_name, mesh_boolean, BooleanOp, BooleanOperand, BooleanOptions};
-use crate::mesh_nodes::MeshNode;
-use crate::modifiers::{self, ModifierNode};
+use crate::graph::SelectMode;
+use crate::mesh_boolean::{mesh_boolean, BooleanOp, BooleanOperand, BooleanOptions};
+use crate::modifiers::ModifierNode;
 use crate::node::{types, NodeData, NodeType};
-use crate::plug::{flags, AttrDef, NodeId, PlugRef, PlugType, PlugValue};
+use crate::plug::{flags, AttrDef, PlugType, PlugValue};
 use crate::session::Session;
-use crate::transform::Transform;
 
 const OPERATIONS: [&str; 3] = ["difference", "union", "intersection"];
 
@@ -111,53 +108,6 @@ pub fn register_types() {
     types::register_type(t).expect("booleanModifier");
 }
 
-fn plug_named(g: &Graph, id: NodeId, name: &str) -> PlugRef {
-    PlugRef::new(id, g.node(id).unwrap().ty().attr_index(name).expect(name) as i32)
-}
-
-/// polyBoolean(live=True): a boolean modifier per cutter, wired to it, and the cutters moved to a template layer.
-fn live_boolean(s: &mut Session, nodes: &[NodeId], a: &aztek_ops::Args) -> CmdResult {
-    let base = crate::components::display_path(&s.graph, nodes[0]);
-    let world = s.graph.node(nodes[0]).unwrap().matrix(Transform::WORLD_MATRIX);
-    let operation = match a.string("operation", "difference").as_str() {
-        "union" => 1,
-        "intersection" => 2,
-        _ => 0,
-    };
-    let params = json!({
-        "operation": operation,
-        "cleanup": a.get("cleanup").and_then(Value::as_bool).unwrap_or(true),
-        "splitNgons": a.get("splitNgons").and_then(Value::as_bool).unwrap_or(true),
-        "quadBand": a.bool("quadBand"),
-        "bandRings": a.int("bandRings", 1),
-        "filletWidth": a.float("filletWidth", 0.0),
-        "filletSegments": a.int("filletSegments", 2),
-        "hardAngle": a.float("hardAngle", 30.0),
-    });
-    let mut cutters = Vec::new();
-    for &cutter in &nodes[1..] {
-        let made = s.run("addModifier", json!({"args": [base], "kind": "boolean", "params": params}))?;
-        let name = made.as_str().map(str::to_string).unwrap_or_else(|| made[0].as_str().unwrap_or_default().to_string());
-        let Some(m) = s.graph.find(&name)? else { fail!("polyBoolean: no modifier {name}") };
-        let g = &mut s.graph;
-        let (cm, cmat, tmat) = (plug_named(g, m, "cutterMesh"), plug_named(g, m, "cutterMatrix"), plug_named(g, m, "targetMatrix"));
-        g.connect(&PlugRef::new(cutter, MeshNode::OUT_MESH as i32), &cm, true)?;
-        g.connect(&PlugRef::new(cutter, Transform::WORLD_MATRIX as i32), &cmat, true)?;
-        g.set_value(tmat, PlugValue::Matrix(world))?;
-        cutters.push(Value::String(crate::components::display_path(g, cutter)));
-    }
-    let layer = "BooleanCutters";
-    if s.graph.find(layer)?.is_none() {
-        s.run("createDisplayLayer", json!({"name": layer, "empty": true}))?;
-    }
-    let mut members = vec![Value::String(layer.into())];
-    members.extend(cutters);
-    s.run("editDisplayLayerMembers", json!({"args": members}))?;
-    s.run("setAttr", json!({"args": [format!("{layer}.displayType"), 1]}))?;
-    s.graph.select(&[nodes[0]], SelectMode::Replace);
-    Ok(Value::String(base))
-}
-
 fn flag(name: &str, ty: T, default: Value, doc: &str) -> FlagDef {
     FlagDef::new(name, "", ty, default, doc)
 }
@@ -166,88 +116,38 @@ pub fn register(c: &mut Commands<Session>) {
     c.register(
         CommandDef::<Session>::new(
             "polyBoolean",
-            "Union, difference or intersection of meshes (Manifold: robust, watertight output), with the seam cleaned up: \
-             slivers welded, the n-gons along the cut split into quads that carry on the edge loops, an optional rounded \
-             fillet, and weighted normals. The first object keeps the result; the others are deleted unless \
-             keepCutters=True.",
+            "Union, difference or intersection of meshes as a live polyCBoolOp node, as the reference's Mesh > Booleans: \
+             moving or editing an input updates the result, and the inputs stay as hidden shapes feeding it. The seam is \
+             cleaned up (Aztek's addition, settings on the node): slivers welded, the n-gons along the cut split into quads \
+             that carry on the edge loops, an optional rounded fillet, and weighted normals (a polyWeightedNormals node). \
+             Returns [transform, polyCBoolOp].",
             |s, a| {
                 let objs = objects(s, a);
                 if objs.len() < 2 {
                     fail!("polyBoolean: give a base and at least one cutter");
                 }
-                let Some(op) = boolean_op_from_name(&a.string("operation", "difference")) else {
-                    fail!("polyBoolean: operation must be union, difference or intersection");
+                let op = match a.string("operation", "difference").as_str() {
+                    "union" => 1,
+                    "difference" => 2,
+                    "intersection" => 3,
+                    _ => fail!("polyBoolean: operation must be union, difference or intersection"),
                 };
-                s.graph.evaluate();
-                let mut nodes = Vec::new();
-                for name in &objs {
-                    let id = s.graph.find(name)?.and_then(|id| crate::components::as_mesh(&s.graph, id));
-                    let ok = id.and_then(|id| s.graph.node(id)).is_some_and(|n| n.ty().is_a("mesh") && n.data().mesh(MeshNode::OUT_MESH).is_some());
-                    if !ok {
-                        fail!("polyBoolean: {name} is not a mesh");
-                    }
-                    nodes.push(id.unwrap());
-                }
-                let opts = BooleanOptions {
-                    op,
-                    cleanup: a.get("cleanup").and_then(Value::as_bool).unwrap_or(true),
-                    snap_distance: a.float("snapDistance", -1.0),
-                    split_ngons: a.get("splitNgons").and_then(Value::as_bool).unwrap_or(true),
-                    quad_band: a.bool("quadBand"),
-                    band_rings: a.int("bandRings", 1).clamp(0, 8) as i32,
-                    band_timeout: a.float("timeout", 5.0).max(0.0),
-                    fillet_width: a.float("filletWidth", 0.0).max(0.0),
-                    fillet_segments: a.int("filletSegments", 2).clamp(1, 64) as i32,
-                    hard_angle: a.float("hardAngle", 30.0),
-                };
-                if a.bool("live") {
-                    return live_boolean(s, &nodes, a);
-                }
-
-                let r = {
-                    let g = &s.graph;
-                    let meshes: Vec<_> = nodes.iter().map(|&id| g.node(id).unwrap().data().mesh(MeshNode::OUT_MESH).unwrap().clone()).collect();
-                    let worlds: Vec<DMat4> = nodes.iter().map(|&id| g.node(id).unwrap().matrix(Transform::WORLD_MATRIX)).collect();
-                    let operands: Vec<BooleanOperand> =
-                        meshes.iter().zip(&worlds).map(|(m, w)| BooleanOperand { mesh: m, to_world: *w }).collect();
-                    mesh_boolean(&operands, &worlds[0].inverse(), &opts)
-                };
-                if !r.ok() {
-                    let who = r.bad_operand.map(|i| format!("{} ", crate::components::display_path(&s.graph, nodes[i]))).unwrap_or_default();
-                    fail!("polyBoolean: {who}{}", r.error);
-                }
-
-                let g = &mut s.graph;
-                let base = modifiers::edit_plug(g, nodes[0])?;
-                g.set_value(base, PlugValue::Mesh(Some(Arc::new(r.mesh))))?;
-                for &n in &nodes[1..] {
-                    if a.bool("keepCutters") {
-                        g.set_value(PlugRef::new(n, Transform::VISIBILITY as i32), PlugValue::Bool(false))?;
-                    } else {
-                        g.delete_node(n)?;
-                    }
-                }
+                let shapes = crate::mesh_edit::ref_poly::mesh_cmds::shapes_named(s, a, "polyBoolean")?;
+                let made = crate::mesh_edit::ref_poly::mesh_cmds::multi_input(s, a, "polyCBoolOp", &shapes, op, "polySurface1")?;
                 if a.get("weightedNormals").and_then(Value::as_bool).unwrap_or(true) {
-                    let has = modifiers::stack(g, nodes[0]).iter().any(|&m| g.node(m).is_some_and(|n| n.ty().name == "weightedNormalsModifier"));
-                    if !has {
-                        let path = crate::components::display_path(g, nodes[0]);
-                        s.run("addModifier", json!({"args": [path], "kind": "weightedNormals"}))?;
+                    if let Some(id) = made.get(0).and_then(Value::as_str).and_then(|xf| s.graph.find(xf).ok().flatten()) {
+                        s.graph.select(&[id], SelectMode::Replace);
+                        s.run("polyWeightedNormals", json!({}))?;
+                        s.graph.select(&[id], SelectMode::Replace);
                     }
                 }
-                s.graph.select(&[nodes[0]], SelectMode::Replace);
-                Ok(Value::String(crate::components::display_path(&s.graph, nodes[0])))
+                Ok(made)
             },
         )
         .positional("base cutters...")
         .flag(flag("operation", T::String, json!("difference"), "union, difference or intersection.").choices(&["union", "difference", "intersection"]))
-        .flag(flag("keepCutters", T::Bool, json!(false), "Keep the cutter objects (hidden)."))
-        .flag(flag(
-            "live",
-            T::Bool,
-            json!(false),
-            "Keep it live instead of baking: a boolean modifier per cutter, so moving or editing a cutter updates the cut. \
-             The cutters go in a template display layer (BooleanCutters): grey wire you select from the outliner.",
-        ))
+        .flag(flag("keepCutters", T::Bool, json!(false), "Accepted for existing scripts: the inputs are always kept, hidden, feeding the node."))
+        .flag(flag("live", T::Bool, json!(true), "Accepted for existing scripts: the result is always live."))
         .flag(flag("cleanup", T::Bool, json!(true), "Weld slivers and stray points along the seam."))
         .flag(flag("snapDistance", T::Float, json!(-1.0), "Weld distance for cleanup, cm; negative is a tenth of the median seam edge."))
         .flag(flag("splitNgons", T::Bool, json!(true), "Cut the n-gons along the seam into quads (and triangles) that carry on the edge loops."))

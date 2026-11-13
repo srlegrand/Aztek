@@ -911,7 +911,7 @@ pub(crate) fn f(name: &str, short: &str, ty: ArgType, doc: &str) -> FlagDef {
     FlagDef::new(name, short, ty, Value::Null, doc)
 }
 
-fn flat_numbers(v: &Value, out: &mut Vec<f64>) {
+pub(crate) fn flat_numbers(v: &Value, out: &mut Vec<f64>) {
     match v {
         Value::Array(a) => a.iter().for_each(|x| flat_numbers(x, out)),
         x => out.extend(x.as_f64()),
@@ -1091,6 +1091,7 @@ pub(crate) fn v3(a: &Args, name: &str, def: DVec3) -> DVec3 {
 
 pub fn register(c: &mut Commands<Session>) {
     register_types();
+    crate::curve_history::register(c);
 
     c.register(
         Cmd::new(
@@ -1330,95 +1331,6 @@ pub fn register(c: &mut Commands<Session>) {
     ));
 
     c.register(
-        Cmd::new(
-            "detachCurve",
-            "Cut a curve at -p (repeat it). With -rpo the first piece replaces it. Returns the pieces' transforms.",
-            |s, a| {
-                let names = objects(s, a);
-                let g = &mut s.graph;
-                let Some(n) = names.first() else { fail!("detachCurve: name or select a curve") };
-                let shape = curve_arg(g, n, "detachCurve")?;
-                let c = local_curve(g, shape).unwrap_or_default();
-                let mut params = Vec::new();
-                if let Some(v) = a.get("parameter") {
-                    flat_numbers(v, &mut params);
-                }
-                params.sort_by(f64::total_cmp);
-                if params.is_empty() {
-                    fail!("detachCurve: give -p");
-                }
-                let mut pieces = Vec::new();
-                let mut rest = if c.form == Form::Periodic { c.opened() } else { c.clone() };
-                for u in params {
-                    let (a0, b0) = rest.split(u);
-                    pieces.push(a0);
-                    rest = b0;
-                }
-                pieces.push(rest);
-                let tr = crate::dag::transform_of(g, shape);
-                let base = g.node(tr).map(|x| x.name.clone()).unwrap_or_default();
-                let wm = crate::rig::world(g, tr);
-                let mut out = Vec::new();
-                let rpo = a.bool("replaceOriginal");
-                for (i, p) in pieces.into_iter().enumerate() {
-                    if i == 0 && rpo {
-                        bake_history(g, shape)?;
-                        set_cached(g, shape, p)?;
-                        out.push(json!(g.path(tr)));
-                    } else {
-                        let (t2, _) = create_curve(g, &format!("{base}detachedCurve{}", i + 1), p.transformed(&wm), false)?;
-                        out.push(json!(g.path(t2)));
-                    }
-                }
-                Ok(Value::Array(out))
-            },
-        )
-        .positional("a curve (the selection when none)")
-        .flag(f("parameter", "p", ArgType::List, "Where to cut. Repeat it.").multi(1))
-        .flag(f("replaceOriginal", "rpo", ArgType::Bool, "The first piece replaces the curve."))
-        .flag(f("keep", "k", ArgType::Bool, "Accepted for existing scripts."))
-        .flag(f("constructionHistory", "ch", ArgType::Bool, "Accepted for existing scripts.")),
-    );
-
-    c.register(
-        Cmd::new(
-            "attachCurve",
-            "Join curves in order. With -rpo the first takes the result. Returns the transform.",
-            |s, a| {
-                let names = objects(s, a);
-                let g = &mut s.graph;
-                if names.len() < 2 {
-                    fail!("attachCurve: name or select two curves");
-                }
-                let mut shapes = Vec::new();
-                for n in &names {
-                    shapes.push(curve_arg(g, n, "attachCurve")?);
-                }
-                let mut out = world_curve(g, shapes[0]).unwrap_or_default();
-                for &sh in &shapes[1..] {
-                    let o = world_curve(g, sh).unwrap_or_default();
-                    out = out.attached(&o);
-                }
-                if a.bool("replaceOriginal") {
-                    let tr = crate::dag::transform_of(g, shapes[0]);
-                    let inv = crate::rig::world(g, tr).inverse();
-                    bake_history(g, shapes[0])?;
-                    set_cached(g, shapes[0], out.transformed(&inv))?;
-                    return Ok(json!(g.path(tr)));
-                }
-                let (tr, _) = create_curve(g, &a.string("name", "attachedCurve1"), out, true)?;
-                Ok(json!(g.path(tr)))
-            },
-        )
-        .positional("curves (the selection when none)")
-        .flag(f("replaceOriginal", "rpo", ArgType::Bool, "The first curve takes the result."))
-        .flag(f("name", "n", ArgType::String, "Name of the new curve."))
-        .flag(f("method", "m", ArgType::Int, "Accepted for existing scripts."))
-        .flag(f("blendBias", "bb", ArgType::Float, "Accepted for existing scripts."))
-        .flag(f("constructionHistory", "ch", ArgType::Bool, "Accepted for existing scripts.")),
-    );
-
-    c.register(
         Cmd::new("setCurvePoints", "Move a curve's CVs at once, in object space: -p [[x, y, z], ...], from the first CV. A periodic curve's wrapped CVs follow their first lap.", |s, a| {
             let names = objects(s, a);
             let Some(n) = names.first() else { fail!("setCurvePoints: name or select a curve") };
@@ -1481,67 +1393,6 @@ pub fn register(c: &mut Commands<Session>) {
         .flag(f("tangent", "t", ArgType::Bool, "Ask for the tangent."))
         .flag(f("normalizedTangent", "nt", ArgType::Bool, "Ask for the unit tangent."))
         .flag(f("constructionHistory", "ch", ArgType::Bool, "Accepted for existing scripts.")),
-    );
-
-    c.register(
-        Cmd::new(
-            "polyToCurve",
-            "A curve through a loop of selected edges (the reference's Mesh > Create Curve From Edges): -d the degree (3), -f 0 open or 2 best. \
-             Returns [curve].",
-            |s, a| {
-                let g = &mut s.graph;
-                let mode = components::mode(g);
-                let degree = a.int("degree", 3).max(1) as usize;
-                let mut result = None;
-                for &sel in g.selection().to_vec().iter() {
-                    let Some(shape) = components::as_mesh(g, sel) else { continue };
-                    let ids = components::selected(g, shape, components::ComponentMode::Edge).to_vec();
-                    if ids.is_empty() || mode != components::ComponentMode::Edge {
-                        continue;
-                    }
-                    let Some(m) = components::mesh_of(g, shape) else { continue };
-                    // Walk the edges end to end.
-                    let mut left = ids.clone();
-                    let first = left.remove(0);
-                    let mut chain = vec![m.edge_point(first, 0), m.edge_point(first, 1)];
-                    loop {
-                        let tail = *chain.last().unwrap();
-                        let head = chain[0];
-                        if let Some(i) = left.iter().position(|&e| m.edge_point(e, 0) == tail || m.edge_point(e, 1) == tail) {
-                            let e = left.remove(i);
-                            chain.push(m.edge_other_point(e, tail));
-                        } else if let Some(i) = left.iter().position(|&e| m.edge_point(e, 0) == head || m.edge_point(e, 1) == head) {
-                            let e = left.remove(i);
-                            chain.insert(0, m.edge_other_point(e, head));
-                        } else {
-                            break;
-                        }
-                    }
-                    let closed = chain.first() == chain.last();
-                    let w = crate::rig::world(g, crate::dag::transform_of(g, shape));
-                    let mut pts: Vec<DVec3> = chain.iter().map(|&p| w.transform_point3(m.position(p))).collect();
-                    if closed {
-                        pts.pop();
-                    }
-                    let c = if closed {
-                        let s = NurbsCurve::periodic(degree, pts);
-                        s
-                    } else {
-                        NurbsCurve::through(degree, &pts)
-                    };
-                    let (tr, _) = create_curve(g, &a.string("name", "polyToCurve1"), c, true)?;
-                    result = Some(tr);
-                }
-                match result {
-                    Some(tr) => Ok(json!([g.path(tr)])),
-                    None => fail!("polyToCurve: select edges of a mesh"),
-                }
-            },
-        )
-        .flag(f("degree", "d", ArgType::Int, "Degree."))
-        .flag(f("form", "f", ArgType::Int, "Accepted for existing scripts."))
-        .flag(f("constructionHistory", "ch", ArgType::Bool, "Accepted for existing scripts."))
-        .flag(f("name", "n", ArgType::String, "Name of the curve.")),
     );
 
     c.register(surf_flags(

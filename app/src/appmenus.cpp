@@ -1329,18 +1329,18 @@ void MainWindow::marking_menu(QPoint global, int mods) {
                      {"Triangulate", -1, run("polyTriangulate")}, {"Quadrangulate", -1, run("polyQuadrangulate")}, {"Flip", -1, run("polyFlip")}, {"Multi-Cut", -1, [this] { set_tool("multiCut"); }}};
         } else if (mode == "edge") {
             items = {{"Extrude Edge", 0, run("polyExtrude")}, {"Bevel Edge", 4, run("polyBevel")}, {"Bridge", 2, run("polyBridge")},
-                     {"Insert Edge Loop", 6, [this] { set_tool("insertLoop"); }}, {"Collapse Edge", 1, run("polyCollapse")}, {"Delete Edge", 5, run("polyDissolve")},
-                     {"Offset Edge Loop", 7, [this] { set_tool("offsetLoop"); }}, {"Connect", 3, run("polyConnect")},
+                     {"Insert Edge Loop", 6, [this] { set_tool("insertLoop"); }}, {"Collapse Edge", 1, run("polyCollapse")}, {"Delete Edge", 5, [] { delete_edge_vertex(); }},
+                     {"Offset Edge Loop", 7, [this] { set_tool("offsetLoop"); }}, {"Connect", 3, run("polyConnectComponents")},
                      {"Spin Edge", -1, run("polySpinEdge")}, {"Fill Hole", -1, run("polyFillHole")}, {"Soften Edge", -1, run("polySoftEdge", {{"angle", 180.0}})},
                      {"Harden Edge", -1, run("polySoftEdge", {{"angle", 0.0}})}, {"Slide Edge", -1, [this] { set_tool("slideEdge"); }}, {"Multi-Cut", -1, [this] { set_tool("multiCut"); }}};
         } else if (mode == "vertex") {
-            items = {{"Merge Vertices", 0, run("polyMerge")}, {"Merge to Center", 4, run("polyMergeCenter")}, {"Connect", 2, run("polyConnect")},
-                     {"Delete Vertex", 6, run("polyDissolve")}, {"Target Weld", 1, [this] { set_tool("targetWeld"); }}, {"Average Vertices", 7, run("polyAverageVertex")},
+            items = {{"Merge Vertices", 0, run("polyMerge")}, {"Merge to Center", 4, run("polyMergeCenter")}, {"Connect", 2, run("polyConnectComponents")},
+                     {"Delete Vertex", 6, [] { delete_edge_vertex(); }}, {"Target Weld", 1, [this] { set_tool("targetWeld"); }}, {"Average Vertices", 7, run("polyAverageVertex")},
                      {"Multi-Cut", -1, [this] { set_tool("multiCut"); }}};
         } else {
             items = {{"Combine", 0, run("polyCombine")}, {"Separate", 4, run("polySeparate")}, {"Smooth", 2, run("polySmooth")},
-                     {"Mirror", 6, run("polyMirror")}, {"Boolean Union", 1, run("polyBoolean", {{"operation", "union"}})},
-                     {"Boolean Difference", 7, run("polyBoolean", {{"operation", "difference"}})},
+                     {"Mirror", 6, run("polyMirror")}, {"Boolean Union", 1, run("polyCBoolOp", {{"operation", 1}})},
+                     {"Boolean Difference", 7, run("polyCBoolOp", {{"operation", 2}})},
                      {"Delete History", -1, run("delete", {{"constructionHistory", true}})}, {"Center Pivot", -1, run("centerPivot")},
                      {"Freeze Transformations", -1, run("freezeTransforms")}, {"Create Polygon", -1, [this] { set_tool("createPolygon"); }}, {"Quad Draw", -1, [this] { set_tool("quadDraw"); }}};
         }

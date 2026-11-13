@@ -209,6 +209,23 @@ pub(super) fn register_ops() {
     op("polyRetopo", "polyRetopo", "Retopologize", K::Face, retopo_op, "Rebuilds the surface as even, quad-dominant faces.");
     op("polyMirror", "polyMirrorFace", "Mirror", K::Face, mirror_op, "Adds a mirrored copy, welded along the plane.");
     op("polySeparate", "polySeparate", "Separate", K::Face, shell_op, "Keeps one shell of its input mesh.");
+    op("polyEditEdgeFlow", "polyEditEdgeFlow", "Edit Edge Flow", K::Edge, edge_flow_op, "Moves edge loops onto the curvature of the surface around them.");
+}
+
+fn edge_flow_op(a: &Args, m: &mut Mesh, sel: &Ids, _sym: Option<&SymmetryMap>) -> CmdResult<EditResult> {
+    let o = aztek_geo::loop_tools::EdgeFlowOptions {
+        amount: a.float("adjustEdgeFlow", 1.0),
+        edge_flow: a.get("edgeFlow").and_then(Value::as_bool).unwrap_or(true),
+        tension: a.float("tension", 0.0),
+        loop_smooth: a.float("loopSmooth", 0.0),
+        iterations: a.int("iterations", 1).clamp(1, 100) as i32,
+    };
+    for mv in aztek_geo::loop_tools::edit_edge_flow(m, sel, &[], &o) {
+        if m.point_valid(mv.point) {
+            m.set_position(mv.point, mv.position);
+        }
+    }
+    Ok(EditResult { kind: Some(K::Edge), ids: sel.clone(), ..Default::default() })
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -222,6 +239,43 @@ struct MultiInput {
 const IN_POLY: usize = crate::history::COUNT;
 const IN_MAT: usize = crate::history::COUNT + 1;
 const OPERATION: usize = crate::history::COUNT + 2;
+/// polyCBoolOp's own settings, the reference's then the seam clean-up Aztek adds, from here in this order.
+const BOOL_FIRST: usize = crate::history::COUNT + 4;
+
+/// polyCBoolOp's settings past operation: the reference's (name, short, default), then the seam clean-up Aztek adds.
+pub(crate) const BOOL_SETTINGS: &[(&str, &str, BoolSetting)] = &[
+    ("classification", "cls", BoolSetting::I(2)),
+    ("useThresholds", "uth", BoolSetting::B(false)),
+    ("vertexDistanceThreshold", "vdt", BoolSetting::F(0.001)),
+    ("faceAreaThreshold", "fat", BoolSetting::F(0.0001)),
+    ("preserveColor", "pcr", BoolSetting::B(false)),
+    ("useCarveBooleans", "ucb", BoolSetting::B(true)),
+    ("edgeInterpolation", "eit", BoolSetting::B(true)),
+    ("planarTolerance", "ptl", BoolSetting::F(1e-6)),
+    ("sortOutput", "sop", BoolSetting::B(true)),
+    ("tagIntersection", "ti", BoolSetting::B(true)),
+    // Aztek's seam clean-up, which the reference doesn't have.
+    ("cleanup", "cln", BoolSetting::B(true)),
+    ("snapDistance", "snd", BoolSetting::F(-1.0)),
+    ("splitNgons", "sng", BoolSetting::B(true)),
+    ("quadBand", "qb", BoolSetting::B(false)),
+    ("bandRings", "br", BoolSetting::I(1)),
+    ("timeout", "tmo", BoolSetting::F(5.0)),
+    ("filletWidth", "fw", BoolSetting::F(0.0)),
+    ("filletSegments", "fs", BoolSetting::I(2)),
+    ("hardAngle", "ha", BoolSetting::F(30.0)),
+];
+
+#[derive(Clone, Copy)]
+pub(crate) enum BoolSetting {
+    B(bool),
+    I(i64),
+    F(f64),
+}
+
+fn bool_index(name: &str) -> usize {
+    BOOL_FIRST + BOOL_SETTINGS.iter().position(|x| x.0 == name).expect(name)
+}
 
 impl NodeBehavior for MultiInput {
     fn compute(&mut self, _ctx: &EvalContext, d: &mut NodeData) {
@@ -242,7 +296,15 @@ impl NodeBehavior for MultiInput {
                     3 => BooleanOp::Intersection,
                     _ => BooleanOp::Union,
                 },
-                ..Default::default()
+                cleanup: d.bool(bool_index("cleanup")),
+                snap_distance: if d.bool(bool_index("useThresholds")) { d.float(bool_index("vertexDistanceThreshold")) } else { d.float(bool_index("snapDistance")) },
+                split_ngons: d.bool(bool_index("splitNgons")),
+                quad_band: d.bool(bool_index("quadBand")),
+                band_rings: d.int(bool_index("bandRings")).clamp(0, 8) as i32,
+                band_timeout: d.float(bool_index("timeout")).max(0.0),
+                fillet_width: d.float(bool_index("filletWidth")).max(0.0),
+                fillet_segments: d.int(bool_index("filletSegments")).clamp(1, 64) as i32,
+                hard_angle: d.float(bool_index("hardAngle")),
             };
             let r = mesh_boolean(&operands, &DMat4::IDENTITY, &o);
             if !r.ok() {
@@ -283,16 +345,27 @@ fn multi_input_type(name: &str, boolean: bool, doc: &str) -> NodeType {
         flags: flags::INPUT | flags::STORABLE | flags::KEYABLE,
         ..Default::default()
     };
+    let mut own_attrs = vec![
+        AttrDef { flags: flags::INPUT | flags::ARRAY | flags::HIDDEN, ..mesh_attr("inputPoly", "ipo", flags::INPUT, "The meshes.") },
+        AttrDef { flags: flags::INPUT | flags::ARRAY | flags::HIDDEN, ..matrix_attr("inputMat", flags::INPUT, "Each mesh's world matrix.") },
+        int_attr("operation", "op", 1),
+        int_attr("mergeUVSets", "muv", 1),
+    ];
+    if boolean {
+        for (n, short, def) in BOOL_SETTINGS {
+            let (ty, v) = match def {
+                BoolSetting::B(b) => (PlugType::Bool, PlugValue::Bool(*b)),
+                BoolSetting::I(i) => (PlugType::Int, PlugValue::Int(*i)),
+                BoolSetting::F(f) => (PlugType::Float, PlugValue::Float(*f)),
+            };
+            own_attrs.push(AttrDef { name: (*n).into(), short_name: (*short).into(), ty, default_value: v, flags: flags::INPUT | flags::STORABLE, ..Default::default() });
+        }
+    }
     NodeType {
         name: name.into(),
         base: types::find("polyModifier"),
         doc: doc.into(),
-        own_attrs: vec![
-            AttrDef { flags: flags::INPUT | flags::ARRAY | flags::HIDDEN, ..mesh_attr("inputPoly", "ipo", flags::INPUT, "The meshes.") },
-            AttrDef { flags: flags::INPUT | flags::ARRAY | flags::HIDDEN, ..matrix_attr("inputMat", flags::INPUT, "Each mesh's world matrix.") },
-            int_attr("operation", "op", 1),
-            int_attr("mergeUVSets", "muv", 1),
-        ],
+        own_attrs,
         create: Some(Arc::new(move || Box::new(MultiInput { boolean }))),
         ..Default::default()
     }
@@ -316,15 +389,30 @@ pub(crate) fn register_types() {
 }
 
 /// A new mesh fed by a multi-input node, the sources kept as the hidden shapes feeding it. Returns [transform, node].
-fn multi_input(s: &mut Session, a: &Args, node_type: &str, shapes: &[NodeId], operation: i64, default_name: &str) -> CmdResult {
+pub(crate) fn multi_input(s: &mut Session, a: &Args, node_type: &str, shapes: &[NodeId], operation: i64, default_name: &str) -> CmdResult {
     let name = a.string("name", default_name);
     let g = &mut s.graph;
+    let ch = a.get("constructionHistory").and_then(Value::as_bool).unwrap_or(true) && crate::history::enabled(g);
     g.evaluate();
     g.open_chunk(node_type);
     let r = (|| -> CmdResult {
         let t = types::find(node_type).ok_or_else(|| aztek_ops::CommandError::new(format!("no node type {node_type}")))?;
         let h = g.create_node(&t, "", NO_NODE, true)?;
         g.set_value(plug(h, OPERATION), PlugValue::Int(operation))?;
+        if node_type != "polyUnite" {
+            for (k, (n, _, def)) in BOOL_SETTINGS.iter().enumerate() {
+                let Some(v) = a.get(n) else { continue };
+                let v = match def {
+                    BoolSetting::B(_) => PlugValue::Bool(v.as_bool().unwrap_or_else(|| v.as_i64().unwrap_or(0) != 0)),
+                    BoolSetting::I(_) => PlugValue::Int(v.as_i64().or_else(|| v.as_f64().map(|x| x as i64)).unwrap_or(0)),
+                    BoolSetting::F(_) => PlugValue::Float(v.as_f64().unwrap_or(0.0)),
+                };
+                g.set_value(plug(h, BOOL_FIRST + k), v)?;
+            }
+        }
+        if let Some(m) = a.get("mergeUVSets").and_then(Value::as_i64) {
+            g.set_value(plug(h, OPERATION + 1), PlugValue::Int(m))?;
+        }
         for (i, &m) in shapes.iter().enumerate() {
             let xf = crate::dag::transform_of(g, m);
             g.connect(&plug(m, MeshNode::OUT_MESH), &PlugRef::element(h, IN_POLY as i32, i as i32), false)?;
@@ -335,13 +423,25 @@ fn multi_input(s: &mut Session, a: &Args, node_type: &str, shapes: &[NodeId], op
         g.connect(&plug(h, crate::history::OUTPUT), &plug(shape, MeshNode::IN_MESH), false)?;
         g.select(&[xf], SelectMode::Replace);
         components::clear(g);
+        if !ch {
+            // -ch 0, or history off: the result keeps its mesh, and the inputs go, as the reference does it.
+            g.evaluate();
+            crate::history::delete_history(g, shape)?;
+            for &m in shapes {
+                let t = crate::dag::transform_of(g, m);
+                if g.node(t).is_some() && t != xf {
+                    g.delete_node(t)?;
+                }
+            }
+            return Ok(json!([g.path(xf)]));
+        }
         Ok(json!([g.path(xf), g.path(h)]))
     })();
     g.close_chunk();
     r
 }
 
-fn shapes_named(s: &Session, a: &Args, cmd: &str) -> CmdResult<Vec<NodeId>> {
+pub(crate) fn shapes_named(s: &Session, a: &Args, cmd: &str) -> CmdResult<Vec<NodeId>> {
     let names = crate::mesh_nodes::mesh_objects(s, a, cmd)?;
     let mut out = Vec::new();
     for n in names {
@@ -351,14 +451,26 @@ fn shapes_named(s: &Session, a: &Args, cmd: &str) -> CmdResult<Vec<NodeId>> {
 }
 
 fn boolean_cmd(name: &'static str, node_type: &'static str, doc: &str) -> Cmd {
-    ref_cmd(name, doc, &[("operation", json!(1))], move |s, a| {
+    let mut cmd = ref_cmd(name, doc, &[("operation", json!(1))], move |s, a| {
         let shapes = shapes_named(s, a, name)?;
         if shapes.len() < 2 {
             fail!("{name}: give at least two meshes");
         }
         let op = a.get("operation").and_then(|v| v.as_i64().or_else(|| v.as_array().and_then(|l| l.first()).and_then(Value::as_i64))).unwrap_or(1);
         multi_input(s, a, node_type, &shapes, op, "polySurface1")
-    })
+    });
+    for (n, short, def) in BOOL_SETTINGS {
+        if cmd.flags.iter().any(|f| f.name == *n) {
+            continue;
+        }
+        let ty = match def {
+            BoolSetting::B(_) => aztek_ops::ArgType::Bool,
+            BoolSetting::I(_) => aztek_ops::ArgType::Int,
+            BoolSetting::F(_) => aztek_ops::ArgType::Float,
+        };
+        cmd = cmd.flag(aztek_ops::FlagDef::new(n, short, ty, Value::Null, "The node's attribute of that name."));
+    }
+    cmd
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -1001,16 +1113,6 @@ pub(super) fn register(c: &mut Commands<Session>) {
             if shapes.len() < 2 {
                 fail!("polyUnite: give at least two meshes");
             }
-            let ch = a.get("constructionHistory").and_then(Value::as_bool).unwrap_or(true) && crate::history::enabled(&s.graph);
-            if !ch {
-                let names: Vec<String> = shapes.iter().map(|&n| components::display_path(&s.graph, n)).collect();
-                let mut call = json!({"args": names});
-                if a.has("name") {
-                    call["name"] = json!(a.string("name", ""));
-                }
-                let r = execute(s, "polyCombine", &call, CallSource::Script)?;
-                return Ok(json!([r]));
-            }
             let r = multi_input(s, a, "polyUnite", &shapes, 0, "polySurface1")?;
             if a.bool("centerPivot") {
                 execute(s, "centerPivot", &json!({"args": [r[0].clone()]}), CallSource::Script)?;
@@ -1172,30 +1274,27 @@ pub(super) fn register(c: &mut Commands<Session>) {
         Some(run_op(s, "polySoftEdge", a))
     });
     extend(c, "polyCircularize", "polyCircularize", &[("evenlyDistribute", json!(true)), ("smoothingAngle", json!(30.0))], |s, a| {
-        let the_reference = !a.named().is_empty() || a.has("radialOffset") || a.has("alignment") || a.has("normalOrientation") || a.has("constructionHistory");
-        if !the_reference {
+        // Aztek's own fitting (a radius, a count of sides, a spacing) is a direct edit; otherwise a polyCircularize node.
+        let aztek_only = a.float("radius", 0.0) != 0.0
+            || a.float("rotation", 0.0) != 0.0
+            || a.int("sides", 0) != 0
+            || a.string("spacing", "even") != "even"
+            || a.float("strength", 1.0) != 1.0
+            || !a.get("flatten").and_then(Value::as_bool).unwrap_or(true);
+        if aztek_only || !s.graph.construction_history {
             return None;
         }
         Some(circularize_node(s, a))
     });
+    // Edit Edge Flow is a polyEditEdgeFlow node on the edges named or selected, as the reference makes it. Vertices and
+    // faces keep Aztek's direct edit, which fits across each vertex.
     extend(c, "polyEditEdgeFlow", "polyEditEdgeFlow", &[], |s, a| {
-        let names = a.named();
-        if names.is_empty() {
+        let mode = components::mode(&s.graph);
+        let named_edges = a.named().iter().any(|n| n.contains(".e["));
+        if !(named_edges || (a.named().is_empty() && mode == K::Edge)) {
             return None;
         }
-        // The positional form reads like the selection's, but leaves the selection as it was.
-        let before = crate::mesh_edit::current_selection(&s.graph);
-        let mode = components::mode(&s.graph);
-        if let Err(e) = execute(s, "select", &json!({"args": names}), CallSource::Script) {
-            return Some(Err(e));
-        }
-        let mut a2 = a.clone();
-        a2.positional.clear();
-        let r = edge_flow_inner(s, &a2);
-        let [p, e, f] = before;
-        components::set_all(&mut s.graph, p, e, f);
-        components::set_mode(&mut s.graph, mode);
-        Some(r)
+        Some(run_op(s, "polyEditEdgeFlow", a))
     });
 
     c.register(with_table(
@@ -1555,17 +1654,6 @@ fn circularize_node(s: &mut Session, a: &Args) -> CmdResult {
     let r = apply_targets(g, K::Edge, targets, &mut |m, sel, sym| run(a, m, sel, sym), Some((&*op, a)), None);
     g.close_chunk();
     r.map(|made| names_of(g, &made))
-}
-
-/// polyEditEdgeFlow once its components are selected.
-fn edge_flow_inner(s: &mut Session, a: &Args) -> CmdResult {
-    let mut call = serde_json::Map::new();
-    for key in ["adjustEdgeFlow", "edgeFlow", "tension", "loopSmooth", "iterations"] {
-        if let Some(v) = a.get(key) {
-            call.insert(key.to_string(), v.clone());
-        }
-    }
-    execute(s, "polyEditEdgeFlow", &Value::Object(call), CallSource::Script)
 }
 
 /// polyBridgeEdge's flags as polyBridge's.

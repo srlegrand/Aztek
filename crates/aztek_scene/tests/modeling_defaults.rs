@@ -102,13 +102,17 @@ fn offset_loop_and_edit_edge_flow_are_undoable_edits() {
 }
 
 #[test]
-fn poly_duplicate_faces_copies_into_the_same_mesh() {
+fn poly_duplicate_faces_copies_into_objects_of_their_own() {
+    // As the reference's Duplicate on faces: polyChipOff with duplicate on, then polySeparate.
     let mut s = Session::new();
     let c = cube(&mut s);
     run(&mut s, "selectComponents", json!({"args": [c], "faces": [0]}));
-    run(&mut s, "polyDuplicateFaces", json!({}));
-    assert_eq!(faces(&mut s, &c), 7);
-    assert_eq!(run(&mut s, "componentSelection", json!({}))[&c]["faces"].as_array().unwrap().len(), 1);
+    let made = run(&mut s, "polyDuplicateFaces", json!({}));
+    let made: Vec<String> = made.as_array().unwrap().iter().map(|v| v.as_str().unwrap().to_string()).collect();
+    assert_eq!(made.len(), 2, "{made:?}");
+    let mut counts: Vec<i64> = made.iter().map(|m| faces(&mut s, m)).collect();
+    counts.sort();
+    assert_eq!(counts, [1, 6]);
     run(&mut s, "undo", json!({}));
     assert_eq!(faces(&mut s, &c), 6);
 }

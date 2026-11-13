@@ -1,7 +1,6 @@
 //! Reduce, quadrangulate, subdivide, mirror, separate, combine, extract,
 //! soft edges, duplicate faces and connect.
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use aztek_geo::normals::{set_hard_edges_by_angle, set_soft_edges, update_corner_normals, CornerNormalOptions};
@@ -10,7 +9,7 @@ use aztek_geo::reduce::{reduce_mesh, ReduceOptions};
 use aztek_geo::symmetry::{remove_symmetry_layers, SymmetryMap, SymmetryPlane};
 use aztek_geo::{names, Index, Mesh};
 use aztek_ops::{execute, fail, ArgType, CallSource, CmdResult, CommandDef, Commands, FlagDef};
-use glam::{DMat3, DMat4, DVec3};
+use glam::{DMat4, DVec3};
 use serde_json::{json, Map, Value};
 
 use super::component_ops::mesh_beside;
@@ -387,109 +386,33 @@ pub fn register(c: &mut Commands<Session>) {
     );
 
     c.register(
-        Cmd::new("polyCombine", "Merge meshes into one object (world space kept). Returns its name.", |s, a| {
-            let names = mesh_objects(s, a, "polyCombine")?;
-            if names.len() < 2 {
-                fail!("polyCombine: select at least two meshes, or a group holding them");
-            }
-            let g = &mut s.graph;
-            g.evaluate();
-            let mut world_meshes = Vec::new();
-            for name in &names {
-                let n = mesh_arg(g, name, "polyCombine")?;
-                let node = g.node(n).unwrap();
-                let mut m = node.data().mesh(MeshNode::OUT_MESH).map(|m| (**m).clone()).unwrap_or_default();
-                let w = node.matrix(Transform::WORLD_MATRIX);
-                for p in 0..m.point_capacity() {
-                    if m.point_valid(p) {
-                        m.set_position(p, w.transform_point3(m.position(p)));
-                    }
+        Cmd::new(
+            "polyCombine",
+            "Merge meshes into one object, world space kept, as the reference's Mesh > Combine: a live polyUnite node fed by the \
+             meshes, which stay as hidden shapes under their transforms (with -ch 0 the result is plain and the meshes go). \
+             Returns the new object; polyUnite returns it with its node.",
+            |s, a| {
+                let names = mesh_objects(s, a, "polyCombine")?;
+                if names.len() < 2 {
+                    fail!("polyCombine: select at least two meshes, or a group holding them");
                 }
-                // Mirrored transforms flip winding; keep faces pointing out.
-                if DMat3::from_mat4(w).determinant() < 0.0 {
-                    let all: Ids = (0..m.face_capacity()).filter(|&f| m.face_valid(f)).collect();
-                    flip_normals(&mut m, &all);
+                let mut shapes = Vec::new();
+                for name in &names {
+                    shapes.push(mesh_arg(&s.graph, name, "polyCombine")?);
                 }
-                world_meshes.push(m);
-            }
-            let refs: Vec<&Mesh> = world_meshes.iter().collect();
-            let combined = combine(&refs);
-            let last = names.last().unwrap();
-            let last = last.rsplit('|').next().unwrap().to_string();
-            let _ = last;
-            let (out_xf, out) = crate::mesh_nodes::create_mesh_node(g, &a.string("name", ""))?;
-            set_mesh(g, PlugRef::new(out, MeshNode::IN_MESH as i32), combined)?;
-            let mut sources = Vec::new();
-            for name in &names {
-                if let Some(id) = g.find(name)? {
-                    sources.push(id);
-                }
-            }
-            for &id in &sources {
-                let id = crate::dag::transform_of(g, id);
-                if g.node(id).is_some() {
-                    g.delete_node(id)?;
-                }
-            }
-            isolation::inherit(g, &[out], &sources);
-            g.select(&[out_xf], SelectMode::Replace);
-            Ok(json!(g.path(out_xf)))
-        })
+                let made = crate::mesh_edit::ref_poly::mesh_cmds::multi_input(s, a, "polyUnite", &shapes, 1, "polySurface1")?;
+                Ok(made[0].clone())
+            },
+        )
         .positional("objects")
         .flag(flag("name", T::String, Value::Null, "Name of the combined mesh.")),
     );
 
     c.register(Cmd::new(
         "polyExtract",
-        "Move the selected faces out into new mesh objects (one per source mesh). Returns their names.",
-        |s, _a| {
-            let g = &mut s.graph;
-            g.evaluate();
-            let from = components::mode(g);
-            if from == K::Object {
-                fail!("polyExtract: no faces selected");
-            }
-            let mut targets = BTreeMap::new();
-            for (node, ids) in components::selected_all(g, from).clone() {
-                if !components::is_mesh(g, node) {
-                    continue;
-                }
-                if let Some(cage) = modifiers::cage(g, node) {
-                    let f = components::convert(&cage, from, &ids, K::Face, false);
-                    if !f.is_empty() {
-                        targets.insert(node, f);
-                    }
-                }
-            }
-            if targets.is_empty() {
-                fail!("polyExtract: no faces selected");
-            }
-            let mut out = Vec::new();
-            let (mut made, mut sources, mut gone) = (Vec::new(), Vec::new(), Vec::new());
-            components::clear(g);
-            for (node, sel) in targets {
-                // The source keeps its history, with one more node taking the faces out.
-                let Some(now) = modifiers::cage(g, node) else { continue };
-                let mut part = extract_faces(&now, &sel);
-                part.compact(None);
-                let piece = mesh_beside(g, node, part)?;
-                let faces = crate::history::format_components(K::Face, &sel);
-                let path = components::display_path(g, node);
-                let list: Vec<String> = faces.split_whitespace().map(|f| format!("{path}.{f}")).collect();
-                gone.push(list);
-                out.push(json!(components::display_path(g, piece)));
-                made.push(piece);
-                sources.push(node);
-            }
-            for list in gone {
-                s.run("polyDelFacet", json!({"args": list}))?;
-            }
-            let g = &mut s.graph;
-            isolation::inherit(g, &made, &sources);
-            components::set_mode(g, K::Object);
-            g.select(&made, SelectMode::Replace);
-            Ok(Value::Array(out))
-        },
+        "Move the selected faces out into objects of their own, as the reference's Edit Mesh > Extract: a polyChipOff node, \
+         then polySeparate. Returns the new objects.",
+        |s, _a| chip_and_separate(s, "polyExtract", false),
     ));
 
     c.register(
@@ -506,10 +429,9 @@ pub fn register(c: &mut Commands<Session>) {
 
     c.register(Cmd::new(
         "polyDuplicateFaces",
-        "Copy the selected faces into a separate shell of the same mesh and select the copies.",
-        |s, _a| {
-            edit_selected_op(s, "polyDuplicateFaces", _a, false, None)
-        },
+        "Copy the selected faces into objects of their own, as the reference's Edit Mesh > Duplicate on faces: a polyChipOff \
+         node with duplicate on, then polySeparate. Returns the new objects.",
+        |s, _a| chip_and_separate(s, "polyDuplicateFaces", true),
     ));
 
     c.register(Cmd::new(
@@ -521,4 +443,49 @@ pub fn register(c: &mut Commands<Session>) {
         },
     ));
 
+}
+
+/// The reference's Extract and Duplicate on faces: polyChipOff (keeping faces together) on each mesh's selected faces,
+/// then polySeparate on that mesh. Returns the objects polySeparate made.
+fn chip_and_separate(s: &mut Session, cmd: &str, duplicate: bool) -> CmdResult {
+    let g = &mut s.graph;
+    g.evaluate();
+    let from = components::mode(g);
+    if from == K::Object {
+        fail!("{cmd}: no faces selected");
+    }
+    let mut targets: Vec<(String, Vec<String>)> = Vec::new();
+    for (node, ids) in components::selected_all(g, from).clone() {
+        if !components::is_mesh(g, node) {
+            continue;
+        }
+        let Some(cage) = modifiers::cage(g, node) else { continue };
+        let f = components::convert(&cage, from, &ids, K::Face, false);
+        if f.is_empty() {
+            continue;
+        }
+        let path = components::display_path(g, node);
+        let list = crate::history::format_components(K::Face, &f).split_whitespace().map(|x| format!("{path}.{x}")).collect();
+        targets.push((path, list));
+    }
+    if targets.is_empty() {
+        fail!("{cmd}: no faces selected");
+    }
+    let mut out = Vec::new();
+    for (path, faces) in targets {
+        s.run("polyChipOff", json!({"args": faces, "duplicate": duplicate, "keepFacesTogether": true}))?;
+        let made = s.run("polySeparate", json!({"args": [path]}))?;
+        for v in made.as_array().into_iter().flatten() {
+            if let Some(n) = v.as_str() {
+                if s.graph.find(n)?.is_some_and(|id| s.graph.node(id).is_some_and(|x| x.ty().name == "transform")) {
+                    out.push(json!(n));
+                }
+            }
+        }
+    }
+    let g = &mut s.graph;
+    components::set_mode(g, K::Object);
+    let ids: Vec<NodeId> = out.iter().filter_map(|v| v.as_str()).filter_map(|n| g.find(n).ok().flatten()).collect();
+    g.select(&ids, SelectMode::Replace);
+    Ok(Value::Array(out))
 }

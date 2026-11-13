@@ -17,6 +17,7 @@ pub mod booleans;
 pub mod cameras;
 pub mod characters;
 pub mod conform_commands;
+pub mod curve_history;
 pub mod curves;
 pub mod surfaces;
 pub mod dag;

@@ -21,7 +21,7 @@ use crate::transform::Transform;
 pub use more_cmds::SymmetryState;
 pub mod flag_table;
 mod edit_ops;
-mod mesh_cmds;
+pub(crate) mod mesh_cmds;
 mod more_cmds;
 mod queries;
 mod state_cmds;

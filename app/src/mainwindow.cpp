@@ -283,15 +283,16 @@ QMenu* MainWindow::mesh_menu() {
     auto* m = new QMenu("Mesh", this);
     menu_title(m, "Combine");
     QMenu* b = m->addMenu("Booleans");
-    cmd(b, "Union", "polyBoolean", QJsonObject{{"operation", "union"}});
-    cmd(b, "Difference (A - B)", "polyBoolean", QJsonObject{{"operation", "difference"}});
+    // A live polyCBoolOp node, as the reference's Booleans make.
+    cmd(b, "Union", "polyCBoolOp", QJsonObject{{"operation", 1}});
+    cmd(b, "Difference (A - B)", "polyCBoolOp", QJsonObject{{"operation", 2}});
     b->addAction("Difference (B - A)", [] {
         // The same with the selection the other way round.
         QJsonArray sel = state()["selection"].toArray(), back;
         for (int i = sel.size() - 1; i >= 0; --i) back.append(sel.at(i));
-        exec("polyBoolean", QJsonObject{{"args", back}, {"operation", "difference"}});
+        exec("polyCBoolOp", QJsonObject{{"args", back}, {"operation", 2}});
     });
-    cmd(b, "Intersection", "polyBoolean", QJsonObject{{"operation", "intersection"}});
+    cmd(b, "Intersection", "polyCBoolOp", QJsonObject{{"operation", 3}});
     cmd(m, "Combine", "polyUnite", {}, QString(), true);
     cmd(m, "Separate", "polySeparate");
     m->addSeparator();
@@ -349,7 +350,7 @@ QMenu* MainWindow::edit_mesh_menu() {
     menu_title(m, "Vertex");
     cmd(m, "Reorder Vertices", "meshReorder");
     menu_title(m, "Edge");
-    cmd(m, "Delete Edge/Vertex", "polyDissolve", {}, "Ctrl+Delete");
+    m->addAction("Delete Edge/Vertex\tCtrl+Delete", [this] { run_repeatable("Delete Edge/Vertex", [] { delete_edge_vertex(); }); });
     cmd(m, "Edit Edge Flow", "polyEditEdgeFlow", {}, QString(), true);
     cmd(m, "Flip Triangle Edge", "polyFlipEdge");
     cmd(m, "Spin Edge Backward", "polySpinEdge", QJsonObject{{"offset", -1}});
@@ -372,7 +373,7 @@ QMenu* MainWindow::mesh_tools_menu() {
     auto* m = new QMenu("Mesh Tools", this);
     auto tool = [this, m](const QString& label, const QString& id) { m->addAction(label, [this, id] { set_tool(id); }); };
     tool("Append to Polygon", "appendPolygon");
-    cmd(m, "Connect", "polyConnect");
+    cmd(m, "Connect", "polyConnectComponents");
     tool("Crease", "crease");
     tool("Create Polygon", "createPolygon");
     tool("Insert Edge Loop", "insertLoop");
@@ -401,8 +402,9 @@ QMenu* MainWindow::mesh_tools_menu() {
 
 QMenu* MainWindow::mesh_display_menu() {
     auto* m = new QMenu("Mesh Display", this);
-    cmd(m, "Conform", "polyConform");
-    cmd(m, "Reverse", "polyFlip");
+    // Conform makes normals agree (polyNormal -nm 2); Reverse flips them (polyNormal -nm 0).
+    cmd(m, "Conform", "polyNormal", QJsonObject{{"normalMode", 2}});
+    cmd(m, "Reverse", "polyNormal", QJsonObject{{"normalMode", 0}});
     m->addSeparator();
     cmd(m, "Soften Edge", "polySoftEdge", QJsonObject{{"angle", 180.0}});
     cmd(m, "Harden Edge", "polySoftEdge", QJsonObject{{"angle", 0.0}});

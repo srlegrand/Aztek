@@ -63,7 +63,7 @@ QJsonArray ShelfBar::defaults() {
         item("Sphere", "sphere", "polySphere;"), item("Cube", "cube", "polyCube;"), item("Cylinder", "cylinder", "polyCylinder;"), item("Cone", "cone", "polyCone;"),
         item("Torus", "torus", "polyTorus;"), item("Plane", "plane", "polyPlane;"), item("Disc", "disc", "polyDisc;"), item("Pipe", "pipe", "polyPipe;"),
         item("Combine", "combine", "polyCombine;"), item("Separate", "separate", "polySeparate;"), item("Smooth", "smooth", "polySubdivide;"),
-        item("Union", "boolean", "polyBoolean -operation \"union\";"), item("Mirror", "mirror", "polyMirror;"),
+        item("Union", "boolean", "polyCBoolOp -op 1;"), item("Mirror", "mirror", "polyMirror;"),
         item("Extrude", "extrude", "polyExtrude;"), item("Bridge", "bridge", "polyBridge;"), item("Bevel", "bevel", "polyBevel;"),
         item("Insert Edge Loop", "insertLoop", "SplitEdgeRingTool;"), item("Offset Edge Loop", "offsetLoop", "OffsetEdgeLoopTool;"), item("Multi-Cut", "multiCut", "MultiCutTool;"),
         item("Quad Draw", "quadDraw", "QuadDrawTool;"), item("Merge", "merge", "polyMerge;"), item("Merge to Center", "collapse", "polyMergeCenter;")};

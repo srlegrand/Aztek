@@ -147,12 +147,14 @@ fn poly_boolean_cleans_up_and_adds_weighted_normals() {
     let mut s = Session::new();
     let bx = first(run(&mut s, "polyCube", json!({"width": 100.0, "height": 100.0, "depth": 100.0, "name": "Block", "generator": false})));
     let drill = first(run(&mut s, "polyCylinder", json!({"name": "Drill", "generator": false, "radius": 20, "height": 300})));
-    run(&mut s, "polyBoolean", json!({"args": [bx, drill]}));
-    let m = mesh_of(&mut s, &bx);
+    let made = run(&mut s, "polyBoolean", json!({"args": [bx, drill]}));
+    let out = first(made.clone());
+    assert_eq!(run(&mut s, "nodeType", json!({"args": [made[1].clone()]})), json!("polyCBoolOp"));
+    let m = mesh_of(&mut s, &out);
     assert!(m.validate(validate::MANIFOLD).is_empty());
     assert_eq!(bent_ngons(&m), 0);
-    let stack = run(&mut s, "modifiers", json!({"args": [bx]}));
-    assert!(stack.to_string().contains("weightedNormals"), "{stack}");
+    let history = run(&mut s, "listHistory", json!({"args": [out]}));
+    assert!(history.to_string().contains("polyWeightedNormals"), "{history}");
     run(&mut s, "undo", json!({}));
     assert_eq!(run(&mut s, "objExists", json!({"args": [drill]})), true);
 }
@@ -166,18 +168,18 @@ fn live_boolean_follows_the_cutter() {
         json!({"width": 100.0, "height": 100.0, "depth": 100.0, "name": "Block", "generator": false, "subdivisionsX": 6, "subdivisionsY": 6, "subdivisionsZ": 6}),
     ));
     let drill = first(run(&mut s, "polyCylinder", json!({"name": "Drill", "generator": false, "radius": 15, "height": 300})));
-    run(&mut s, "polyBoolean", json!({"args": [bx, drill], "live": true}));
+    // A polyCBoolOp node, as the reference's Booleans make: the inputs stay, hidden, feeding it.
+    let made = run(&mut s, "polyBoolean", json!({"args": [bx, drill], "weightedNormals": false}));
+    let out = first(made);
     assert_eq!(run(&mut s, "objExists", json!({"args": [drill]})), true);
-    let stack = run(&mut s, "modifiers", json!({"args": [bx]}));
-    assert!(stack.to_string().contains("booleanModifier"), "{stack}");
-    let before = mesh_of(&mut s, &bx);
+    let before = mesh_of(&mut s, &out);
     assert!(before.validate(validate::MANIFOLD).is_empty());
     let cut_faces = before.num_faces();
     assert!(cut_faces > 6 * 36);
 
     // Moving the cutter off the block leaves it whole; moving it back cuts again.
     run(&mut s, "move", json!({"args": [drill], "by": [500, 0, 0]}));
-    assert_eq!(mesh_of(&mut s, &bx).num_faces(), 6 * 36);
+    assert_eq!(mesh_of(&mut s, &out).num_faces(), 6 * 36);
     run(&mut s, "move", json!({"args": [drill], "by": [-500, 0, 0]}));
-    assert_eq!(mesh_of(&mut s, &bx).num_faces(), cut_faces);
+    assert_eq!(mesh_of(&mut s, &out).num_faces(), cut_faces);
 }

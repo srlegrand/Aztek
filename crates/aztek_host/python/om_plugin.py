@@ -1,4 +1,4 @@
-# aztek.api.OpenMaya, plugins: MPxCommand, MSyntax, MArgList, MArgDatabase, MPxNode, MDataBlock, MFnPlugin, and the
+# aztek.api.OpenAztek, plugins: MPxCommand, MSyntax, MArgList, MArgDatabase, MPxNode, MDataBlock, MFnPlugin, and the
 # entry points the host calls: loadPlugin, unloadPlugin, pluginInfo, running commands, computing nodes.
 import os as _os
 import traceback as _traceback
@@ -26,7 +26,7 @@ class MTypeId:
         return hash(self._id)
 
     def __repr__(self):
-        return "aztek.api.OpenMaya.MTypeId(0x%x)" % self._id
+        return "aztek.api.OpenAztek.MTypeId(0x%x)" % self._id
 
 
 def _type_id_of(type_name):

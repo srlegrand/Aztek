@@ -51,4 +51,10 @@ private:
     quint64 version_ = 0;
 };
 
+// Edit Mesh > Delete Edge/Vertex, as the reference does it: polyDelVertex on vertices, polyDelEdge -cv on edges.
+inline void delete_edge_vertex() {
+    if (state()["mode"].toString() == "vertex") exec("polyDelVertex");
+    else exec("polyDelEdge", QJsonObject{{"cleanVertices", true}});
+}
+
 } // namespace az

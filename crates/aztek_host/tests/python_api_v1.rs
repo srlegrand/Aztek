@@ -66,7 +66,7 @@ while not it.isDone():
     q = om.MDagPath(); it.getDagPath(q); print(q.partialPathName()); it.next()
 "#,
         &[
-            "1 |ball maya.OpenMaya",
+            "1 |ball aztek.OpenAztek",
             "True ball transform",
             "|ball|ballShape True |ball",
             "1",

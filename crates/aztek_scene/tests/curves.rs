@@ -107,8 +107,9 @@ fn edits_keep_history_or_not() {
     run(&mut s, "curve", json!({"args": ["a"], "append": true, "point": [[2, 0, 0]]}));
     assert_eq!(num(run(&mut s, "getAttr", json!({"args": ["a.spans"]}))), 2.0);
     assert_eq!(run(&mut s, "ls", json!({"args": ["a.cv[*]"], "flatten": true})).as_array().unwrap().len(), 3);
+    // The pieces, then the detachCurve node that makes them.
     let pieces = run(&mut s, "detachCurve", json!({"args": ["a"], "parameter": [1.0], "replaceOriginal": true}));
-    assert_eq!(pieces.as_array().unwrap().len(), 2, "{pieces}");
+    assert_eq!(pieces.as_array().unwrap().len(), 3, "{pieces}");
     assert!((num(run(&mut s, "arclen", json!({"args": ["a"]}))) - 1.0).abs() < 1e-6);
     assert!((num(run(&mut s, "arclen", json!({"args": [pieces[1]]}))) - 1.0).abs() < 1e-6);
     let joined = run(&mut s, "attachCurve", json!({"args": ["a", pieces[1]]}));

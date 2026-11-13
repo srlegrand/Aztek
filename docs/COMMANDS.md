@@ -3,7 +3,7 @@
 Generated from the command registry by `cargo run -p aztek_host --example gen_commands`; do not edit by hand.
 Commands take the reference's flags, long or short, in MEL and in Python (`aztek.cmds` or `maya.cmds`).
 
-1233 commands.
+1236 commands.
 
 ## AL_usdmaya_LayerCreateLayer
 
@@ -2227,17 +2227,23 @@ Arguments: [name]
 
 ## attachCurve
 
-Join curves in order. With -rpo the first takes the result. Returns the transform.
+Join curves end to end through an attachCurve node. -rpo (on by default) changes the first curve; off, a new curve. Returns [curve, node].
 
 Arguments: curves (the selection when none)
 
 | Flag | Short | Description |
 | --- | --- | --- |
-| `replaceOriginal` | `rpo` | The first curve takes the result. |
+| `replaceOriginal` | `rpo` | The first curve takes the result (on by default). |
 | `name` | `n` | Name of the new curve. |
-| `method` | `m` | Accepted for existing scripts. |
-| `blendBias` | `bb` | Accepted for existing scripts. |
-| `constructionHistory` | `ch` | Accepted for existing scripts. |
+| `method` | `m` | 0 connect, 1 blend. |
+| `blendBias` | `bb` | Which curve a blend leans to. |
+| `blendKnotInsertion` | `bki` | Insert a knot for a blend. |
+| `keepMultipleKnots` | `kmk` | Keep the knots where they meet. |
+| `parameter` | `p` | Where a blend's knot goes. |
+| `reverse1` | `rv1` | Reverse the first curve. |
+| `reverse2` | `rv2` | Reverse the second curve. |
+| `constructionHistory` | `ch` | Keep the node (on by default). |
+| `object` | `o` | Make an object (accepted for existing scripts). |
 
 ## attachSurface
 
@@ -5865,16 +5871,18 @@ Arguments: meshes or vertices (the selection when none); the deformer with -e an
 
 ## detachCurve
 
-Cut a curve at -p (repeat it). With -rpo the first piece replaces it. Returns the pieces' transforms.
+Cut a curve at -p (repeat it) through a detachCurve node, one curve per piece. -rpo (on by default): the first piece is the curve itself. Returns the pieces, then the node.
 
 Arguments: a curve (the selection when none)
 
 | Flag | Short | Description |
 | --- | --- | --- |
 | `parameter` | `p` | Where to cut. Repeat it. |
-| `replaceOriginal` | `rpo` | The first piece replaces the curve. |
-| `keep` | `k` | Accepted for existing scripts. |
-| `constructionHistory` | `ch` | Accepted for existing scripts. |
+| `replaceOriginal` | `rpo` | The first piece is the curve itself (on by default). |
+| `keep` | `k` | Keep the pieces (accepted; all are kept). |
+| `name` | `n` | Accepted for existing scripts. |
+| `constructionHistory` | `ch` | Keep the node (on by default). |
+| `object` | `o` | Make objects (accepted for existing scripts). |
 
 ## detachSurface
 
@@ -13651,18 +13659,33 @@ Arguments: components or meshes (the selection when none)
 | `caching` | `cch` | Accepted; see the command reference. |
 | `nodeState` | `nds` | Accepted; see the command reference. |
 | `frozen` | `fzn` | Accepted; see the command reference. |
+| `classification` | `cls` | The node's attribute of that name. |
+| `useCarveBooleans` | `ucb` | The node's attribute of that name. |
+| `edgeInterpolation` | `eit` | The node's attribute of that name. |
+| `planarTolerance` | `ptl` | The node's attribute of that name. |
+| `sortOutput` | `sop` | The node's attribute of that name. |
+| `tagIntersection` | `ti` | The node's attribute of that name. |
+| `cleanup` | `cln` | The node's attribute of that name. |
+| `snapDistance` | `snd` | The node's attribute of that name. |
+| `splitNgons` | `sng` | The node's attribute of that name. |
+| `quadBand` | `qb` | The node's attribute of that name. |
+| `bandRings` | `br` | The node's attribute of that name. |
+| `timeout` | `tmo` | The node's attribute of that name. |
+| `filletWidth` | `fw` | The node's attribute of that name. |
+| `filletSegments` | `fs` | The node's attribute of that name. |
+| `hardAngle` | `ha` | The node's attribute of that name. |
 
 ## polyBoolean
 
-Union, difference or intersection of meshes (Manifold: robust, watertight output), with the seam cleaned up: slivers welded, the n-gons along the cut split into quads that carry on the edge loops, an optional rounded fillet, and weighted normals. The first object keeps the result; the others are deleted unless keepCutters=True.
+Union, difference or intersection of meshes as a live polyCBoolOp node, as the reference's Mesh > Booleans: moving or editing an input updates the result, and the inputs stay as hidden shapes feeding it. The seam is cleaned up (Aztek's addition, settings on the node): slivers welded, the n-gons along the cut split into quads that carry on the edge loops, an optional rounded fillet, and weighted normals (a polyWeightedNormals node). Returns [transform, polyCBoolOp].
 
 Arguments: base cutters...
 
 | Flag | Short | Description |
 | --- | --- | --- |
 | `operation` |  | union, difference or intersection. |
-| `keepCutters` |  | Keep the cutter objects (hidden). |
-| `live` |  | Keep it live instead of baking: a boolean modifier per cutter, so moving or editing a cutter updates the cut. The cutters go in a template display layer (BooleanCutters): grey wire you select from the outliner. |
+| `keepCutters` |  | Accepted for existing scripts: the inputs are always kept, hidden, feeding the node. |
+| `live` |  | Accepted for existing scripts: the result is always live. |
 | `cleanup` |  | Weld slivers and stray points along the seam. |
 | `snapDistance` |  | Weld distance for cleanup, cm; negative is a tenth of the median seam edge. |
 | `splitNgons` |  | Cut the n-gons along the seam into quads (and triangles) that carry on the edge loops. |
@@ -13696,6 +13719,24 @@ Arguments: components or meshes (the selection when none)
 | `caching` | `cch` | Accepted; see the command reference. |
 | `nodeState` | `nds` | Accepted; see the command reference. |
 | `frozen` | `fzn` | Accepted; see the command reference. |
+| `useThresholds` | `uth` | The node's attribute of that name. |
+| `vertexDistanceThreshold` | `vdt` | The node's attribute of that name. |
+| `faceAreaThreshold` | `fat` | The node's attribute of that name. |
+| `preserveColor` | `pcr` | The node's attribute of that name. |
+| `useCarveBooleans` | `ucb` | The node's attribute of that name. |
+| `edgeInterpolation` | `eit` | The node's attribute of that name. |
+| `planarTolerance` | `ptl` | The node's attribute of that name. |
+| `sortOutput` | `sop` | The node's attribute of that name. |
+| `tagIntersection` | `ti` | The node's attribute of that name. |
+| `cleanup` | `cln` | The node's attribute of that name. |
+| `snapDistance` | `snd` | The node's attribute of that name. |
+| `splitNgons` | `sng` | The node's attribute of that name. |
+| `quadBand` | `qb` | The node's attribute of that name. |
+| `bandRings` | `br` | The node's attribute of that name. |
+| `timeout` | `tmo` | The node's attribute of that name. |
+| `filletWidth` | `fw` | The node's attribute of that name. |
+| `filletSegments` | `fs` | The node's attribute of that name. |
+| `hardAngle` | `ha` | The node's attribute of that name. |
 
 ## polyBridge
 
@@ -13779,6 +13820,18 @@ Arguments: components or meshes (the selection when none)
 | `caching` | `cch` | Accepted; see the command reference. |
 | `nodeState` | `nds` | Accepted; see the command reference. |
 | `frozen` | `fzn` | Accepted; see the command reference. |
+| `edgeInterpolation` | `eit` | The node's attribute of that name. |
+| `planarTolerance` | `ptl` | The node's attribute of that name. |
+| `sortOutput` | `sop` | The node's attribute of that name. |
+| `cleanup` | `cln` | The node's attribute of that name. |
+| `snapDistance` | `snd` | The node's attribute of that name. |
+| `splitNgons` | `sng` | The node's attribute of that name. |
+| `quadBand` | `qb` | The node's attribute of that name. |
+| `bandRings` | `br` | The node's attribute of that name. |
+| `timeout` | `tmo` | The node's attribute of that name. |
+| `filletWidth` | `fw` | The node's attribute of that name. |
+| `filletSegments` | `fs` | The node's attribute of that name. |
+| `hardAngle` | `ha` | The node's attribute of that name. |
 
 ## polyCapsule
 
@@ -14155,7 +14208,7 @@ Arguments: components or meshes (the selection when none)
 
 ## polyCombine
 
-Merge meshes into one object (world space kept). Returns its name.
+Merge meshes into one object, world space kept, as the reference's Mesh > Combine: a live polyUnite node fed by the meshes, which stay as hidden shapes under their transforms (with -ch 0 the result is plain and the meshes go). Returns the new object; polyUnite returns it with its node.
 
 Arguments: objects
 
@@ -14506,6 +14559,17 @@ Create a Cylinder mesh. Returns [mesh, generator] (generator is None with genera
 | `subdivisionsZ` | `sz` | Another name for the attribute it sets. |
 | `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as the reference's -ax 1 0 0); the scene up axis when left out. |
 
+## polyCylindricalProjection
+
+Project UVs through a cylindrical projection: polyProjection -t cylindrical.
+
+Arguments: faces or meshes
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `mapDirection` | `md` | x, y, z, or b (best plane). |
+| `constructionHistory` | `ch` | Accepted for existing scripts. |
+
 ## polyDelEdge
 
 Delete edges, merging the faces beside them. -cv also removes the vertices that leaves redundant. Returns the node.
@@ -14629,7 +14693,7 @@ Arguments: components or meshes (the selection when none)
 
 ## polyDuplicateFaces
 
-Copy the selected faces into a separate shell of the same mesh and select the copies.
+Copy the selected faces into objects of their own, as the reference's Edit Mesh > Duplicate on faces: a polyChipOff node with duplicate on, then polySeparate. Returns the new objects.
 
 ## polyEditEdgeFlow
 
@@ -14731,7 +14795,7 @@ Arguments: meshes or components (the selection when none)
 
 ## polyExtract
 
-Move the selected faces out into new mesh objects (one per source mesh). Returns their names.
+Move the selected faces out into objects of their own, as the reference's Edit Mesh > Extract: a polyChipOff node, then polySeparate. Returns the new objects.
 
 ## polyExtrude
 
@@ -15908,6 +15972,17 @@ Create a Pipe mesh. Returns [mesh, generator] (generator is None with generator=
 | `subdivisionsZ` | `sz` | Another name for the attribute it sets. |
 | `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as the reference's -ax 1 0 0); the scene up axis when left out. |
 
+## polyPlanarProjection
+
+Project UVs through a planar projection: polyProjection -t planar.
+
+Arguments: faces or meshes
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `mapDirection` | `md` | x, y, z, or b (best plane). |
+| `constructionHistory` | `ch` | Accepted for existing scripts. |
+
 ## polyPlane
 
 Create a Plane mesh. Returns [mesh, generator] (generator is None with generator=False).
@@ -16644,6 +16719,17 @@ Create a Sphere mesh. Returns [mesh, generator] (generator is None with generato
 | `subdivisionsY` | `sy` | Another name for the attribute it sets. |
 | `upAxis` |  | Direction the primitive's up points: x, y, z, -x, -y or -z (or a vector, as the reference's -ax 1 0 0); the scene up axis when left out. |
 
+## polySphericalProjection
+
+Project UVs through a spherical projection: polyProjection -t spherical.
+
+Arguments: faces or meshes
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `mapDirection` | `md` | x, y, z, or b (best plane). |
+| `constructionHistory` | `ch` | Accepted for existing scripts. |
+
 ## polySpherize
 
 Push the selected components (whole meshes in object mode) onto a sphere fitted to them, or onto an ellipsoid with scale. center and radius override the fit (world space, cm); radiusMode picks the radius from the points otherwise. With alongNormals each point slides along its own normal to the sphere. Returns the sphere used: {center, radius, scale, rotation}, world space.
@@ -17016,13 +17102,14 @@ Target weld: merge one vertex into another, which keeps its place (or both meet 
 
 ## polyToCurve
 
-A curve through a loop of selected edges (the reference's Mesh > Create Curve From Edges): -d the degree (3), -f 0 open or 2 best. Returns [curve].
+A curve through a chain of selected edges, as the reference's Mesh > Create Curve From Edges, fed live by a polyEdgeToCurve node: -dg degree (3), -f 0 open, 1 periodic, 2 best guess. Returns [curve, node].
 
 | Flag | Short | Description |
 | --- | --- | --- |
-| `degree` | `d` | Degree. |
-| `form` | `f` | Accepted for existing scripts. |
-| `constructionHistory` | `ch` | Accepted for existing scripts. |
+| `degree` | `dg` | 1 linear, 3 cubic. |
+| `form` | `f` | 0 open, 1 periodic, 2 best guess. |
+| `conformToSmoothMeshPreview` | `usm` | Accepted for existing scripts. |
+| `constructionHistory` | `ch` | Keep the node (on by default). |
 | `name` | `n` | Name of the curve. |
 
 ## polyTorus

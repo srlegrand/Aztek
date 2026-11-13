@@ -9,7 +9,7 @@ except ImportError:
     from PySide2 import QtCore, QtWidgets
     import shiboken2 as _shiboken
 
-import maya.OpenMayaUI as _omui
+import aztek.OpenAztekUI as _omui
 
 
 def _main_window():

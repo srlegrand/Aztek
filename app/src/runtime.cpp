@@ -285,7 +285,7 @@ void MainWindow::build_runtime() {
         if (state()["mode"].toString() == "object") exec("delete");
         else exec("deleteComponents");
     });
-    r("DeleteEdgeVertex", "Mesh", "Delete edges or vertices", [] { exec("polyDissolve"); });
+    r("DeleteEdgeVertex", "Mesh", "Delete edges or vertices", [] { delete_edge_vertex(); });
     r("FinishTool", "Tools", "Finish the current tool", [this] {
         if (tool_ == "joint") { exec("select", QJsonObject{{"clear", true}}); return; }
         for (ViewportWidget* v : panels_->views()) v->set("finishTool", "true");

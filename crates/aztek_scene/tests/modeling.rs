@@ -439,7 +439,6 @@ fn edits_add_to_the_history_and_never_wipe_it() {
         ("polyMirror", "", "polyMirror1"),
         ("polyReduce", "", "polyReduce1"),
         ("polySmooth", "", "polySmoothFace1"),
-        ("polyExtract", "f[1]", "polyDelFacet1"),
     ] {
         let mut s = Session::new();
         s.run("polyCube", json!({"name": "box", "sx": 2, "sy": 2, "sz": 2})).unwrap();

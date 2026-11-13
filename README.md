@@ -236,8 +236,9 @@ The tools we build our work on shouldn't belong to whoever bought them last. Too
 
 A 3D application for modelling, UVs, rigging, animation, dynamics and rendering, with the industry-standard commands, hotkeys, menus and file format. Rust core (scene graph, commands,
 geometry, Vulkan viewport), Qt Widgets shell in C++, a MEL interpreter, and embedded Python with `aztek.cmds`,
-compatibility modules so existing scripts import unchanged, and the Python API (2.0, and 1.0 as `maya.OpenMaya`). Reads and writes `.ma` files and reads `.mb` files. [PARITY.md](PARITY.md) has the behaviour
-target and status, including known differences; [docs/COMMANDS.md](docs/COMMANDS.md) lists all 1233 commands;
+compatibility modules so existing scripts import unchanged, and the Python API, OpenAztek (`aztek.api.OpenAztek`, and 1.0 as
+`aztek.OpenAztek`), which those scripts reach as `maya.api.OpenMaya` and `maya.OpenMaya`. Reads and writes `.ma` files and reads `.mb` files. [PARITY.md](PARITY.md) has the behaviour
+target and status, including known differences; [docs/COMMANDS.md](docs/COMMANDS.md) lists all 1236 commands;
 [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) lists the environment variables and which are read.
 
 Website: [srlegrand.github.io/Aztek](https://srlegrand.github.io/Aztek/). Licence: [MIT-0](LICENSE).
@@ -342,8 +343,8 @@ Every extra copy makes the project harder to lose.
 
 **Scripting**
 
-- **Scripting:** MEL (procedures, arrays, control flow, backticks), Python, the Python API 2.0 and 1.0 (`maya.OpenMaya`,
-  `MScriptUtil` and all), Python plug-ins of either API with `MPxCommand` and `MPxNode`; `scriptJob`, `scriptNode` and `evalDeferred`.
+- **Scripting:** MEL (procedures, arrays, control flow, backticks), Python, the Python API OpenAztek, 2.0 and 1.0
+  (`aztek.api.OpenAztek`, `aztek.OpenAztek`, `MScriptUtil` and all; the same modules as `maya.api.OpenMaya` and `maya.OpenMaya`), Python plug-ins of either API with `MPxCommand` and `MPxNode`; `scriptJob`, `scriptNode` and `evalDeferred`.
 
   ![A MEL script in the Script Editor building cubes with expressions, then playing them](docs/scripting.gif)
 - **Script-built interface:** `window`, layouts, controls, menus and dialogs from MEL or Python become Qt widgets;

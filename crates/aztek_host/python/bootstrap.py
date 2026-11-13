@@ -239,24 +239,40 @@ __main__.cmds = cmds
 
 
 class _ApiImporter:
-    """aztek.api.OpenMaya and OpenMayaAnim, embedded in the host and loaded on first import; maya.api.* are the same.
-    maya.OpenMaya, maya.OpenMayaAnim and maya.OpenMayaMPx are API 1.0, built on them."""
+    """OpenAztek, Aztek's Python API, embedded in the host and loaded on first import.
 
-    PARTS = {
-        "OpenMaya": ["om_values", "om_core", "om_fn", "om_iter", "om_plugin"],
-        "OpenMayaAnim": ["om_anim"],
+    aztek.api.OpenAztek and aztek.api.OpenAztekAnim are the 2.0 API; aztek.OpenAztek, aztek.OpenAztekAnim,
+    aztek.OpenAztekMPx and aztek.OpenAztekUI are the 1.0 API built on them. Scripts written for the reference import
+    them under the reference's names (maya.api.OpenMaya, maya.OpenMaya, ...) and get the very same modules: one module
+    object, whichever name is imported first. aztek.api.OpenMaya and aztek.api.OpenMayaAnim, Aztek's earlier names,
+    are kept the same way."""
+
+    # Canonical name: the embedded sources it is made of.
+    SOURCES = {
+        "aztek.api.OpenAztek": ["om_values", "om_core", "om_fn", "om_iter", "om_plugin"],
+        "aztek.api.OpenAztekAnim": ["om_anim"],
+        "aztek.OpenAztek": ["om1"],
+        "aztek.OpenAztekAnim": ["om1_anim"],
+        "aztek.OpenAztekMPx": ["om1_mpx"],
+        "aztek.OpenAztekUI": ["omui"],
     }
 
-    # The 1.0 modules: maya.OpenMaya and the rest, over the 2.0 ones.
-    V1 = {
-        "OpenMaya": ["om1"],
-        "OpenMayaAnim": ["om1_anim"],
-        "OpenMayaMPx": ["om1_mpx"],
+    # Other names for the same modules: the reference's, and Aztek's earlier ones.
+    ALIASES = {
+        "maya.api.OpenMaya": "aztek.api.OpenAztek",
+        "maya.api.OpenMayaAnim": "aztek.api.OpenAztekAnim",
+        "aztek.api.OpenMaya": "aztek.api.OpenAztek",
+        "aztek.api.OpenMayaAnim": "aztek.api.OpenAztekAnim",
+        "maya.OpenMaya": "aztek.OpenAztek",
+        "maya.OpenMayaAnim": "aztek.OpenAztekAnim",
+        "maya.OpenMayaMPx": "aztek.OpenAztekMPx",
+        "maya.OpenMayaUI": "aztek.OpenAztekUI",
     }
+
+    PACKAGES = ("aztek.api", "maya.api")
 
     # Other modules of the reference's that tools import: name to embedded source, or None for a plain package.
     EXTRA = {
-        "maya.OpenMayaUI": "omui",
         "maya.standalone": "maya_misc",
         "maya.app": None,
         "maya.app.general": None,
@@ -274,49 +290,55 @@ class _ApiImporter:
         "maya.internal.nodes.proximitywrap.node_interface": "maya_misc",
     }
 
+    @classmethod
+    def canonical(cls, name):
+        return cls.ALIASES.get(name, name)
+
     def find_spec(self, name, path=None, target=None):
-        parts = name.split(".")
+        # Only names of ours: importing machinery for any other name would come back here.
         if name in self.EXTRA:
-            import importlib.machinery as m
+            package = self.EXTRA[name] is None
+        elif name in self.PACKAGES:
+            package = True
+        elif self.canonical(name) in self.SOURCES:
+            package = False
+        else:
+            return None
+        import importlib.machinery as m
 
-            return m.ModuleSpec(name, self, is_package=self.EXTRA[name] is None)
-        if len(parts) == 2 and parts[0] == "maya" and parts[1] in self.V1:
-            import importlib.machinery as m
-
-            return m.ModuleSpec(name, self)
-        if len(parts) >= 2 and parts[0] in ("aztek", "maya") and parts[1] == "api":
-            import importlib.machinery as m
-
-            if len(parts) == 2:
-                return m.ModuleSpec(name, self, is_package=True)
-            if len(parts) == 3 and parts[2] in self.PARTS:
-                return m.ModuleSpec(name, self)
-        return None
+        return m.ModuleSpec(name, self, is_package=package)
 
     def create_module(self, spec):
-        parts = spec.name.split(".")
-        if len(parts) == 3:
-            # One module under both names: the other may have been imported first.
-            other = sys.modules.get(("maya" if parts[0] == "aztek" else "aztek") + ".api." + parts[2])
-            if other is not None:
-                return other
+        canon = self.canonical(spec.name)
+        if canon in self.SOURCES:
+            # One module under every name: whichever was imported first is the one.
+            for n in [canon] + [k for k, v in self.ALIASES.items() if v == canon]:
+                if n != spec.name and n in sys.modules:
+                    return sys.modules[n]
         return None
 
     def exec_module(self, module):
-        parts = module.__spec__.name.split(".")
-        if module.__spec__.name in self.EXTRA:
-            part = self.EXTRA[module.__spec__.name]
+        name = module.__spec__.name
+        if name in self.EXTRA:
+            part = self.EXTRA[name]
             if part is not None:
                 exec(compile(_aztek.source(part), "<%s>" % part, "exec"), module.__dict__)
             return
-        if len(parts) == 2 and parts[1] in self.V1:
-            for part in self.V1[parts[1]]:
-                exec(compile(_aztek.source(part), "<%s>" % part, "exec"), module.__dict__)
+        canon = self.canonical(name)
+        if canon not in self.SOURCES:
             return
-        if len(parts) != 3 or "_loaded" in module.__dict__:
+        import importlib
+
+        module.__name__ = canon
+        for n in [canon] + [k for k, v in self.ALIASES.items() if v == canon]:
+            sys.modules[n] = module
+            # The parent package too, so `import aztek.api.OpenMaya as x` finds aztek.api on the way.
+            parent, _, leaf = n.rpartition(".")
+            setattr(importlib.import_module(parent), leaf, module)
+        if "_loaded" in module.__dict__:
             return
         module.__dict__["_loaded"] = True
-        for part in self.PARTS[parts[2]]:
+        for part in self.SOURCES[canon]:
             exec(compile(_aztek.source(part), "<%s>" % part, "exec"), module.__dict__)
 
 

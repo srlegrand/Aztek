@@ -1,7 +1,7 @@
-# maya.OpenMayaAnim: API 1.0 over maya.api.OpenMayaAnim.
+# aztek.OpenAztekAnim (maya.OpenMayaAnim): API 1.0 over aztek.api.OpenAztekAnim.
 
-import maya.api.OpenMayaAnim as _oma2
-import maya.OpenMaya as _om1
+import aztek.api.OpenAztekAnim as _oma2
+import aztek.OpenAztek as _om1
 
 _v1, _to1, _put, _Ptr, _out, _arr_fill, _copy = _om1._v1, _om1._to1, _om1._put, _om1._Ptr, _om1._out, _om1._arr_fill, _om1._copy
 _MDoubleArray = _om1.MDoubleArray
@@ -74,9 +74,9 @@ MFnSkinCluster = _v1(
         "getBlendWeights": _sk_blend,
     },
 )
-MFnSkinCluster.__module__ = "maya.OpenMayaAnim"
+MFnSkinCluster.__module__ = "aztek.OpenAztekAnim"
 MAnimControl = _v1(_oma2.MAnimControl)
-MAnimControl.__module__ = "maya.OpenMayaAnim"
+MAnimControl.__module__ = "aztek.OpenAztekAnim"
 
 
 def _ac_find(self, t, ptr=None):
@@ -98,6 +98,6 @@ MFnAnimCurve = _v1(
         "isUnitlessInput": lambda self: _curve_type(self) > 3,
     },
 )
-MFnAnimCurve.__module__ = "maya.OpenMayaAnim"
+MFnAnimCurve.__module__ = "aztek.OpenAztekAnim"
 
 __all__ = ["MFnSkinCluster", "MAnimControl", "MFnAnimCurve"]

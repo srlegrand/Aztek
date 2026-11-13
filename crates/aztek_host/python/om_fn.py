@@ -1,4 +1,4 @@
-# aztek.api.OpenMaya, function sets: nodes, transforms, meshes, curves, sets, attributes, data, components.
+# aztek.api.OpenAztek, function sets: nodes, transforms, meshes, curves, sets, attributes, data, components.
 import __main__ as _main
 import array as _array
 

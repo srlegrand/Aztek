@@ -1,4 +1,4 @@
-# aztek.api.OpenMaya, the scene side: MFn, MObject, MObjectHandle, MDagPath, MPlug, MSelectionList, MGlobal, modifiers.
+# aztek.api.OpenAztek, the scene side: MFn, MObject, MObjectHandle, MDagPath, MPlug, MSelectionList, MGlobal, modifiers.
 # An MObject holds a node's id, not its name, so it survives renames and reparenting.
 import json as _json
 import re as _re
@@ -378,7 +378,7 @@ class MObject:
         return hash((self._kind, self._id, _attr_name(self) if self._kind == "attr" else None))
 
     def __repr__(self):
-        return "<aztek.api.OpenMaya.MObject %s>" % (self.apiTypeStr,)
+        return "<aztek.api.OpenAztek.MObject %s>" % (self.apiTypeStr,)
 
 
 MObject.kNullObj = MObject()
@@ -609,7 +609,7 @@ class MDagPath:
         return self.partialPathName() if self._nodes else ""
 
     def __repr__(self):
-        return "aztek.api.OpenMaya.MDagPath(%s)" % (self.fullPathName() if self._nodes else "")
+        return "aztek.api.OpenAztek.MDagPath(%s)" % (self.fullPathName() if self._nodes else "")
 
 
 class MDagPathArray(_Array):
@@ -1030,7 +1030,7 @@ class MPlug:
         return self.name()
 
     def __repr__(self):
-        return "aztek.api.OpenMaya.MPlug(%s)" % (self.name() if not self.isNull() else "")
+        return "aztek.api.OpenAztek.MPlug(%s)" % (self.name() if not self.isNull() else "")
 
 
 class MPlugArray(_Array):

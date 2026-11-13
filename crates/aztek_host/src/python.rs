@@ -36,7 +36,7 @@ thread_local! {
 }
 
 static MAIN: OnceLock<ThreadId> = OnceLock::new();
-/// The Python object holding the plugin entry points; set when aztek.api.OpenMaya is imported.
+/// The Python object holding the plugin entry points; set when aztek.api.OpenAztek is imported.
 static HOOKS: OnceLock<Py<PyAny>> = OnceLock::new();
 /// Lines written where the history can't be reached: inside computes and nested calls.
 static DEFERRED: Mutex<Vec<(String, LineKind)>> = Mutex::new(Vec::new());
@@ -269,7 +269,7 @@ pub(crate) fn plugin_command(s: &mut Session, method: &'static str, a: &Args) ->
     let input = json!({"args": a.positional, "flags": a.flags}).to_string();
     answer(nested(s, || {
         Python::attach(|py| {
-            py.import("aztek.api.OpenMaya").map_err(|e| e.to_string())?;
+            py.import("aztek.api.OpenAztek").map_err(|e| e.to_string())?;
             hook_call(py, method, (input.as_str(),))
         })
     }))

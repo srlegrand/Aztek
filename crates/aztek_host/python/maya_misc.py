@@ -11,7 +11,7 @@ if _name == "maya.standalone":
 
 elif _name == "maya.app.flux.core":
     def dpi(value):
-        import maya.OpenMayaUI as omui
+        import aztek.OpenAztekUI as omui
 
         return omui.MQtUtil.dpiScale(value)
 

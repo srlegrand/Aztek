@@ -1,4 +1,4 @@
-//! The native queries the Python API (aztek.api.OpenMaya) is built on: nodes by id, plug descriptions, matrices, bulk
+//! The native queries the Python API (aztek.api.OpenAztek) is built on: nodes by id, plug descriptions, matrices, bulk
 //! mesh data, ray hits and closest points. Everything else it does goes through the commands.
 
 use aztek_geo::normals::{corner_normals, point_normals, CornerNormalOptions, NormalWeight};

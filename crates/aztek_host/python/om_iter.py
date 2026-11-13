@@ -1,4 +1,4 @@
-# aztek.api.OpenMaya, iterators over selections, the DAG, the graph and mesh components.
+# aztek.api.OpenAztek, iterators over selections, the DAG, the graph and mesh components.
 
 
 class MItSelectionList:

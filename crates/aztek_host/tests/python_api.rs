@@ -1,4 +1,4 @@
-//! The Python API: aztek.api.OpenMaya and maya.api.OpenMaya, run through the embedded interpreter. Python runs once per
+//! The Python API: aztek.api.OpenAztek, and maya.api.OpenMaya over it, run through the embedded interpreter. Python runs once per
 //! process, so one test walks through the groups, each on a new scene.
 
 use std::ffi::{CStr, CString};
@@ -502,7 +502,7 @@ cmds.undo()
             "-1",
             "True",
             "2 [4.5, 5.5] (1, 0, -0.5, 1)",
-            "(aztek.api.OpenMaya.MPoint(0, 0.5, 0, 1), 1) (1, 0.5, 0, 1) (0, 1, 0)",
+            "(aztek.api.OpenAztek.MPoint(0, 0.5, 0, 1), 1) (1, 0.5, 0, 1) (0, 1, 0)",
             "(-1, -1, 1, 1) [-1.0, -1.0, 1.0]",
             "(-0.5, -0.5, 0.5, 1)",
             "(-3, -3, 3, 1)",
@@ -594,7 +594,7 @@ for bad in (lambda: om.MItMeshVertex(om.MDagPath()), lambda: om.MItMeshVertex(om
             "4 4",
             "2 True",
             "1",
-            "24 (0, 0, 0, aztek.api.OpenMaya.MPoint(-0.5, -0.5, 0.5, 1), aztek.api.OpenMaya.MVector(0, 0, 1), True, (0.375, 0.0)) (5, 3)",
+            "24 (0, 0, 0, aztek.api.OpenAztek.MPoint(-0.5, -0.5, 0.5, 1), aztek.api.OpenAztek.MVector(0, 0, 1), True, (0.375, 0.0)) (5, 3)",
             "8 0 (-0.5, -0.5, 0.5, 1) 8",
             "(-1, -1, 1, 1)",
             "(-2, -2, 2, 1)",
@@ -1309,6 +1309,13 @@ fn python_api() {
     aztek_init();
     py("import maya.api.OpenMaya as om\nimport aztek.api.OpenMaya as az\nprint(om is az, az.MVector is om.MVector)");
     expect("import maya.api.OpenMaya as a, aztek.api.OpenMaya as b\nprint(a is b)", &["True"]);
+    // OpenAztek is the API's own name; the reference's names, and Aztek's earlier ones, are the same modules.
+    expect(
+        "import aztek.api.OpenAztek as a, maya.api.OpenMaya as b, aztek.api.OpenAztekAnim as c, maya.api.OpenMayaAnim as d\n\
+         import aztek.OpenAztek as e, maya.OpenMaya as f, aztek.OpenAztekUI as g, maya.OpenMayaUI as h, aztek.OpenAztekMPx as i, maya.OpenMayaMPx as j\n\
+         print(a is b, c is d, e is f, g is h, i is j, a.__name__, repr(b.MPoint(1, 2, 3)))",
+        &["True True True True True aztek.api.OpenAztek aztek.api.OpenAztek.MPoint(1, 2, 3, 1)"],
+    );
     fresh();
     values();
     selection_and_dag();

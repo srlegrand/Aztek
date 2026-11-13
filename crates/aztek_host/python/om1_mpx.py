@@ -1,7 +1,7 @@
 # maya.OpenMayaMPx: the classes a 1.0 plug-in derives from, and the function set that registers them.
 
-import maya.api.OpenMaya as _om2
-import maya.OpenMaya as _om1
+import aztek.api.OpenAztek as _om2
+import aztek.OpenAztek as _om1
 
 MPxCommand = _om2.MPxCommand
 MPxNode = _om2.MPxNode
