@@ -853,6 +853,9 @@ pub struct Graph {
     pub namespaces: BTreeSet<String>,
     /// Where new nodes go ("" is the root): namespace -set.
     pub current_namespace: String,
+    /// What a file set on a default node that isn't modelled, as it wrote it, to write back: node -> attribute -> the
+    /// setAttr line's text after the plug.
+    pub default_lines: BTreeMap<String, Vec<(String, String)>>,
 }
 
 impl Default for Graph {
@@ -957,6 +960,7 @@ impl Graph {
             duplicate_pairs: Default::default(),
             namespaces: BTreeSet::new(),
             current_namespace: String::new(),
+            default_lines: BTreeMap::new(),
         }
     }
 
@@ -1110,8 +1114,18 @@ impl Graph {
     // Nodes
 
     /// Not undoable.
+    /// Keeps a line for a default node's attribute, replacing one kept for it before; see `default_lines`.
+    pub fn keep_default_line(&mut self, node: &str, attr: &str, text: &str) {
+        let list = self.default_lines.entry(node.to_string()).or_default();
+        match list.iter_mut().find(|x| x.0 == attr) {
+            Some(x) => x.1 = text.to_string(),
+            None => list.push((attr.to_string(), text.to_string())),
+        }
+    }
+
     pub fn clear(&mut self) {
         self.restructured();
+        self.default_lines.clear();
         self.nodes.clear();
         self.names.clear();
         self.name_hints.lock().unwrap().clear();

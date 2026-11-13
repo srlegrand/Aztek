@@ -112,11 +112,6 @@ impl Writer<'_> {
                 }
             }
         }
-        if !text.is_empty() {
-            if self.links_text.is_empty() {
-                let _ = writeln!(self.out, "createNode lightLinker -s -n \"lightLinker1\";");
-            }
-            self.links_text.push_str(&text);
-        }
+        self.links_text.push_str(&text);
     }
 }

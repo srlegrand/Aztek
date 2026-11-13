@@ -1201,6 +1201,8 @@ pub fn register_types() {
             attr("radianSlots", "rds", PlugType::String, PlugValue::String(String::new()), store | flags::HIDDEN),
             attr("animated", "ani", PlugType::Int, PlugValue::Int(0), store),
             attr("objectMsg", "obm", PlugType::Int, PlugValue::Int(0), flags::INPUT | flags::HIDDEN | flags::MESSAGE),
+            // Where the reference connects time1.outTime; here the scene's time is read directly, whether or not it is.
+            attr("time", "tim", PlugType::Float, PlugValue::Float(0.0), flags::INPUT | flags::HIDDEN),
         ],
         create: Some(Arc::new(|| Box::new(Expression::default()))),
         ..Default::default()

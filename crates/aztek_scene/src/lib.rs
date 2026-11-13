@@ -21,6 +21,7 @@ pub mod curve_history;
 pub mod curves;
 pub mod surfaces;
 pub mod dag;
+pub mod defaults;
 pub mod deform;
 pub mod deform_blend;
 pub mod deform_cmds;

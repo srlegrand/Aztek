@@ -80,38 +80,58 @@ pub const STANDARD: &[(&str, &str, &str, bool, f64)] = &[
     ("metalness", "m", "metalness", false, 0.0),
     ("specular", "s", "specular", false, 1.0),
     ("specularColor", "sc", "specular_color", true, 1.0),
-    ("specularRoughness", "sr2", "specular_roughness", false, 0.2),
+    ("specularRoughness", "sr", "specular_roughness", false, 0.2),
     ("specularIOR", "sior", "specular_IOR", false, 1.5),
     ("specularAnisotropy", "sa", "specular_anisotropy", false, 0.0),
     ("specularRotation", "srot", "specular_rotation", false, 0.0),
     ("transmission", "t", "transmission", false, 0.0),
-    ("transmissionColor", "tc", "transmission_color", true, 1.0),
+    ("transmissionColor", "trc", "transmission_color", true, 1.0),
     ("transmissionDepth", "td", "transmission_depth", false, 0.0),
     ("transmissionScatter", "ts", "transmission_scatter", true, 0.0),
     ("transmissionScatterAnisotropy", "tsa", "transmission_scatter_anisotropy", false, 0.0),
-    ("transmissionDispersion", "tdis", "transmission_dispersion", false, 0.0),
+    ("transmissionDispersion", "tdi", "transmission_dispersion", false, 0.0),
     ("transmissionExtraRoughness", "ter", "transmission_extra_roughness", false, 0.0),
-    ("subsurface", "sss", "subsurface", false, 0.0),
-    ("subsurfaceColor", "sssc", "subsurface_color", true, 1.0),
-    ("subsurfaceRadius", "sssr", "subsurface_radius", true, 1.0),
-    ("subsurfaceScale", "ssss", "subsurface_scale", false, 1.0),
-    ("subsurfaceAnisotropy", "sssa", "subsurface_anisotropy", false, 0.0),
+    ("subsurface", "sub", "subsurface", false, 0.0),
+    ("subsurfaceColor", "subc", "subsurface_color", true, 1.0),
+    ("subsurfaceRadius", "subr", "subsurface_radius", true, 1.0),
+    ("subsurfaceScale", "subs", "subsurface_scale", false, 1.0),
+    ("subsurfaceAnisotropy", "suba", "subsurface_anisotropy", false, 0.0),
     ("sheen", "sh", "sheen", false, 0.0),
     ("sheenColor", "shc", "sheen_color", true, 1.0),
     ("sheenRoughness", "shr", "sheen_roughness", false, 0.3),
-    ("coat", "c", "coat", false, 0.0),
-    ("coatColor", "cc", "coat_color", true, 1.0),
-    ("coatRoughness", "cr", "coat_roughness", false, 0.1),
-    ("coatAnisotropy", "ca", "coat_anisotropy", false, 0.0),
-    ("coatRotation", "crot", "coat_rotation", false, 0.0),
-    ("coatIOR", "cior", "coat_IOR", false, 1.5),
-    ("coatAffectColor", "cac", "coat_affect_color", false, 0.0),
-    ("coatAffectRoughness", "car", "coat_affect_roughness", false, 0.0),
+    ("coat", "ct", "coat", false, 0.0),
+    ("coatColor", "ctc", "coat_color", true, 1.0),
+    ("coatRoughness", "ctr", "coat_roughness", false, 0.1),
+    ("coatAnisotropy", "cta", "coat_anisotropy", false, 0.0),
+    ("coatRotation", "ctro", "coat_rotation", false, 0.0),
+    ("coatIOR", "ctior", "coat_IOR", false, 1.5),
+    ("coatAffectColor", "ctac", "coat_affect_color", false, 0.0),
+    ("coatAffectRoughness", "ctar", "coat_affect_roughness", false, 0.0),
     ("thinFilmThickness", "tft", "thin_film_thickness", false, 0.0),
     ("thinFilmIOR", "tfior", "thin_film_IOR", false, 1.5),
     ("emission", "e", "emission", false, 0.0),
     ("emissionColor", "ec", "emission_color", true, 1.0),
     ("opacity", "op", "opacity", true, 1.0),
+];
+
+/// Short names Aztek's files used for the standard surface before they were the reference's: (long name, old short).
+const OLD_SHORT: &[(&str, &str)] = &[
+    ("specularRoughness", "sr2"),
+    ("subsurface", "sss"),
+    ("subsurfaceColor", "sssc"),
+    ("subsurfaceRadius", "sssr"),
+    ("subsurfaceScale", "ssss"),
+    ("subsurfaceAnisotropy", "sssa"),
+    ("coat", "c"),
+    ("coatColor", "cc"),
+    ("coatRoughness", "cr"),
+    ("coatAnisotropy", "ca"),
+    ("coatRotation", "crot"),
+    ("coatIOR", "cior"),
+    ("coatAffectColor", "cac"),
+    ("coatAffectRoughness", "car"),
+    ("transmissionColor", "tc"),
+    ("transmissionDispersion", "tdis"),
 ];
 
 /// The standard surface's attributes, camelCase (Maya's standardSurface) or snake_case (aiStandardSurface).
@@ -132,6 +152,16 @@ pub fn standard_attrs(snake: bool) -> Vec<AttrDef> {
                 a.child_short[k] = a.child_names[k].clone();
             }
         }
+        if !snake {
+            // The reference's own exception to its naming.
+            if camel == "specularColor" {
+                a.child_short[2] = "spb".into();
+            }
+            // Aztek's files wrote these under other short names before they were the reference's.
+            if let Some(old) = OLD_SHORT.iter().find(|o| o.0 == camel) {
+                a.file_alias = old.1.into();
+            }
+        }
         out.push(a);
     }
     if snake {
@@ -148,8 +178,13 @@ pub fn standard_attrs(snake: bool) -> Vec<AttrDef> {
     } else {
         out.push(b("thinWalled", "tw", false));
         out.push(v("normalCamera", "n", IN));
-        out.push(v("coatNormal", "cn", IN));
-        out.push(v("tangentUCamera", "tu", IN));
+        let mut coat_normal = v("coatNormal", "ctn", IN);
+        coat_normal.file_alias = "cn".into();
+        out.push(coat_normal);
+        let mut tangent = v("tangentUCamera", "utan", IN);
+        tangent.child_short = ["utnx".into(), "utny".into(), "utnz".into()];
+        tangent.file_alias = "tu".into();
+        out.push(tangent);
     }
     out.push(c("outColor", "oc", [0.0; 3], OUT));
     out.push(c("outTransparency", "ot", [0.0; 3], OUT));

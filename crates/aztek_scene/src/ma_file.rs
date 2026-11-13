@@ -211,6 +211,34 @@ struct Seg {
     range: Option<(i64, i64)>,
 }
 
+/// A setAttr as the file wrote it: the plug (`dli[1:5]`), and what follows the plug.
+fn kept_line(set: &SetAttr) -> (String, String) {
+    let key: Vec<String> = set
+        .path
+        .iter()
+        .map(|seg| match seg.range {
+            Some((a, b)) if a == b => format!("{}[{a}]", seg.name),
+            Some((a, b)) => format!("{}[{a}:{b}]", seg.name),
+            None => seg.name.clone(),
+        })
+        .collect();
+    let mut text = String::new();
+    if let Some(t) = &set.ty {
+        text.push_str(&format!("-type {}", quoted(t)));
+    }
+    for v in &set.values {
+        if !text.is_empty() {
+            text.push(' ');
+        }
+        match v {
+            Tok::Num(x) => text.push_str(&fmt_num(*x)),
+            Tok::Word(w) => text.push_str(w),
+            Tok::Str(s) => text.push_str(&quoted(s)),
+        }
+    }
+    (key.join("."), text)
+}
+
 /// Indices past this are not data; a bad file should not ask for that much memory.
 const MAX_INDEX: i64 = 1 << 28;
 
@@ -580,6 +608,15 @@ impl Doc {
                 continue;
             }
             if dn.trim_start_matches(':') == "lightList1" {
+                continue;
+            }
+            // Into the lists every scene has (renderPartition, defaultShaderList1, the layer managers): what they list
+            // is written again on saving.
+            let listing = |n: &str, attr: &str| {
+                let first = attr.split(['.', '[']).next().unwrap_or("");
+                crate::defaults::LISTS.iter().any(|&(ln, la)| ln == n.trim_start_matches(':') && la == first)
+            };
+            if listing(dn, da) || listing(sn, sa) {
                 continue;
             }
             // Plugs on default nodes the file never touched are of no interest: only nodes it knows connect.
@@ -1850,6 +1887,10 @@ impl Build<'_> {
             if (a.long == "Character" && self.s.graph.node(id).is_some_and(|x| x.ty().is_a("joint"))) || (n.ty == crate::hik::TYPE && a.long == "quickRigInfo") {
                 continue;
             }
+            // A default node of Aztek's may have it already (defaultRenderGlobals.defaultSurfaceShader).
+            if crate::defaults::is_scene_node(&n.name) && self.s.graph.node(id).is_some_and(|x| x.ty().attr_index(&a.long).is_some()) {
+                continue;
+            }
             let Some(def) = user_attr_def(a) else {
                 self.warnings.push(format!("{}.{}: attribute type {}{} skipped", n.name, a.long, a.at, a.dt));
                 continue;
@@ -1885,6 +1926,27 @@ impl Build<'_> {
         }
     }
 
+    /// Whether a setAttr names an attribute the node has, with a value Aztek reads.
+    fn models(&self, node_path: &str, set: &SetAttr) -> bool {
+        let text: Vec<String> = set
+            .path
+            .iter()
+            .map(|seg| match seg.range {
+                Some(r) => format!("{}[{}]", seg.name, r.0),
+                None => seg.name.clone(),
+            })
+            .collect();
+        let Ok(p) = self.s.graph.plug(&format!("{node_path}.{}", text.join("."))) else { return false };
+        let def = self.s.graph.attr(&p);
+        if !def.has(flags::INPUT) {
+            // An output a file saves (time1.outTime): computed here, nothing to keep.
+            return true;
+        }
+        let (lo, hi) = set.path.last().and_then(|s| s.range).or(set.path.first().and_then(|s| s.range)).unwrap_or((-1, -1));
+        let stride = (set.values.len() / (hi - lo + 1).max(1) as usize).max(1);
+        plug_value(def, p.component, &set.values[..stride.min(set.values.len())], 1.0).is_some()
+    }
+
     /// A utility node or expression: made as it is, its setAttrs applied by name. Attributes Aztek's node doesn't have
     /// (The reference's nodeState and the like) are passed over.
     fn create_plain(&mut self, i: usize) {
@@ -1906,8 +1968,14 @@ impl Build<'_> {
         };
         self.ids[i] = Some(id);
         let node_path = self.s.graph.path(id);
+        let keeps = crate::defaults::is_scene_node(&n.name);
         for set in &n.sets {
             if set.values.is_empty() {
+                continue;
+            }
+            if keeps && !self.models(&node_path, set) {
+                let (key, text) = kept_line(set);
+                self.s.graph.keep_default_line(&n.name, &key, &text);
                 continue;
             }
             // One range may hold several elements: .i[0:2] 1 2 3.
@@ -3730,6 +3798,16 @@ fn file_vec(unit: units::Unit, v: DVec3) -> DVec3 {
     DVec3::new(units::to_user(unit, v.x), units::to_user(unit, v.y), units::to_user(unit, v.z))
 }
 
+/// A default node's plug as the reference writes it, `:time1.o`.
+fn default_colon(plug: &str) -> String {
+    let node = plug.split(['.', '[']).next().unwrap_or("");
+    if crate::defaults::is_default_node(node) {
+        format!(":{plug}")
+    } else {
+        plug.to_string()
+    }
+}
+
 fn vec_text(v: DVec3) -> String {
     let n = |x: f64| if x == 0.0 { 0.0 } else { x };
     format!("{} {} {}", n(v.x), n(v.y), n(v.z))
@@ -3771,7 +3849,7 @@ impl Writer<'_> {
     }
 
     fn conn(&mut self, a: &str, b: &str) {
-        self.conns.push(format!("connectAttr {} {};", quoted(a), quoted(b)));
+        self.conns.push(format!("connectAttr {} {};", quoted(&default_colon(a)), quoted(&default_colon(b))));
     }
 
     /// The node's values that differ from their defaults, then its locks.
@@ -4562,6 +4640,87 @@ impl Writer<'_> {
         }
     }
 
+    /// The display and render layer managers and their default layers, as every file from the reference has them.
+    fn write_scene_nodes(&mut self) {
+        let g = &self.s.graph;
+        let layers: Vec<String> = crate::display_layers::all(g).into_iter().filter(|l| self.keep.contains(l)).map(|l| g.path(l)).collect();
+        let n = layers.len();
+        let _ = writeln!(self.out, "createNode lightLinker -s -n \"lightLinker1\";");
+        let _ = writeln!(self.out, "createNode displayLayerManager -n \"layerManager\";");
+        if n > 0 {
+            let ids: Vec<String> = (1..=n).map(|k| k.to_string()).collect();
+            let range = if n == 1 { "1".to_string() } else { format!("1:{n}") };
+            let _ = writeln!(self.out, "\tsetAttr -s {} \".dli[{range}]\"  {};", n + 1, ids.join(" "));
+            let _ = writeln!(self.out, "\tsetAttr -s {} \".dli\";", n + 1);
+        }
+        let _ = writeln!(self.out, "createNode displayLayer -n \"defaultLayer\";\n\tsetAttr \".ufem\" -type \"stringArray\" 0  ;");
+        let _ = writeln!(self.out, "createNode renderLayerManager -n \"renderLayerManager\";");
+        let _ = writeln!(self.out, "createNode renderLayer -n \"defaultRenderLayer\";\n\tsetAttr \".g\" yes;");
+        self.conn("layerManager.dli[0]", "defaultLayer.id");
+        self.conn("renderLayerManager.rlmi[0]", "defaultRenderLayer.rlid");
+        for (k, l) in layers.iter().enumerate() {
+            self.conn(&format!("layerManager.dli[{}]", k + 1), &format!("{l}.id"));
+        }
+        self.shading.push("connectAttr \"defaultRenderLayer.msg\" \":defaultRenderingList1.r\" -na;".into());
+    }
+
+    /// The default nodes, `select -ne :name` and what differs from a new scene's, in the reference's order: those its
+    /// files always name, and any other that something changed.
+    fn write_default_nodes(&mut self) {
+        let into = |w: &Self, plug: &str| w.shading.iter().chain(w.conns.iter()).filter(|l| l.contains(plug)).count();
+        let frame = anim::frame(&self.s.graph);
+        for &(name, _) in crate::defaults::DEFAULT_NODES {
+            // Written with the lights.
+            if matches!(name, "lightList1" | "defaultLightSet") {
+                continue;
+            }
+            let Ok(Some(id)) = self.s.graph.find(name) else { continue };
+            let mut lines = String::new();
+            let count = |lines: &mut String, attr: &str, n: usize| {
+                if n > 1 {
+                    let _ = writeln!(lines, "\tsetAttr -s {n} \".{attr}\";");
+                }
+            };
+            match name {
+                "time1" => {
+                    let _ = writeln!(lines, "\tsetAttr \".o\" {frame};\n\tsetAttr \".unw\" {frame};");
+                }
+                "renderPartition" => count(&mut lines, "st", 2 + into(self, ":renderPartition.st")),
+                "defaultShaderList1" => count(&mut lines, "s", 6 + into(self, ":defaultShaderList1.s")),
+                "postProcessList1" => count(&mut lines, "p", 2),
+                "defaultRenderUtilityList1" => count(&mut lines, "u", into(self, ":defaultRenderUtilityList1.u")),
+                "defaultTextureList1" => count(&mut lines, "tx", into(self, ":defaultTextureList1.tx")),
+                "initialShadingGroup" => {
+                    let n = into(self, ":initialShadingGroup.dsm");
+                    if n > 0 {
+                        let _ = writeln!(lines, "\tsetAttr -s {n} \".dsm\";");
+                    }
+                    let _ = writeln!(lines, "\tsetAttr \".ro\" yes;");
+                }
+                "initialParticleSE" => {
+                    let _ = writeln!(lines, "\tsetAttr \".ro\" yes;");
+                }
+                _ => {}
+            }
+            let n = self.s.graph.node(id).unwrap();
+            for a in n.ty().attrs.iter().filter(|a| a.has(flags::USER)) {
+                lines.push_str(&attr_add_lines(a));
+            }
+            let t = n.ty().clone();
+            if !t.is_a(crate::shading::SG_TYPE) && t.name != "materialInfo" && name != "time1" {
+                lines.push_str(&self.plain_attr_lines(id));
+            }
+            if let Some(kept) = self.s.graph.default_lines.get(name) {
+                for (attr, text) in kept {
+                    let _ = writeln!(lines, "\tsetAttr \".{attr}\" {text};");
+                }
+            }
+            if !lines.is_empty() || crate::defaults::ALWAYS_WRITTEN.contains(&name) {
+                let _ = write!(self.out, "select -ne :{name};\n{lines}");
+            }
+        }
+    }
+
     fn write_layer(&mut self, id: NodeId) {
         use crate::display_layers as dl;
         let g = &self.s.graph;
@@ -4577,6 +4736,7 @@ impl Writer<'_> {
         if dt != 0 {
             let _ = writeln!(body, "\tsetAttr \".dt\" {dt};");
         }
+        let _ = writeln!(body, "\tsetAttr \".ufem\" -type \"stringArray\" 0  ;");
         let _ = writeln!(body, "\tsetAttr \".do\" {};", n.data().int(dl::DISPLAY_ORDER));
         let lod = n.data().int(dl::LEVEL_OF_DETAIL);
         if lod != 0 {
@@ -4999,6 +5159,9 @@ fn closure(g: &Graph, roots: &[NodeId]) -> HashSet<NodeId> {
 /// The scene as .ma text. `only` limits it to some objects (export selected). Returns the text and warnings.
 pub fn write_text(s: &mut Session, file_name: &str, only: Option<&[NodeId]>) -> (String, Vec<String>) {
     register_types();
+    // Every scene has them; one that never needed them writes them too.
+    crate::shading::make_defaults(&mut s.graph);
+    crate::defaults::make(&mut s.graph);
     s.graph.evaluate();
     // Before anything's borrowed: this reads the scene against what the files gave.
     let (ref_head, ref_tail) = crate::references::ma_statements(s);
@@ -5044,11 +5207,16 @@ pub fn write_text(s: &mut Session, file_name: &str, only: Option<&[NodeId]>) -> 
     for r in roots {
         w.write_dag(r);
     }
+    w.write_scene_nodes();
 
     // The nodes hanging off the DAG, in creation order.
     let mut unwritten: BTreeMap<String, usize> = BTreeMap::new();
     for id in w.s.graph.nodes() {
         if !w.keep.contains(&id) {
+            continue;
+        }
+        // Every scene has these: written on their own, below.
+        if w.s.graph.node(id).is_some_and(|n| n.namespace().is_empty() && crate::defaults::is_scene_node(n.name())) {
             continue;
         }
         if w.s.graph.node(id).is_some() && !w.dag_written(id) && w.write_shading_node(id) {
@@ -5131,16 +5299,7 @@ pub fn write_text(s: &mut Session, file_name: &str, only: Option<&[NodeId]>) -> 
     let _ = writeln!(w.out, "\tsetAttr \".b\" -type \"string\" \"playbackOptions -min {} -max {} -ast {} -aet {} \";", r.min, r.max, r.anim_start, r.anim_end);
     let _ = writeln!(w.out, "\tsetAttr \".st\" 6;");
 
-    let frame = anim::frame(&w.s.graph);
-    let _ = writeln!(w.out, "select -ne :time1;");
-    let _ = writeln!(w.out, "\tsetAttr \".o\" {frame};");
-    let _ = writeln!(w.out, "\tsetAttr \".unw\" {frame};");
-    let shading_count = w.shading.iter().filter(|l| l.contains(":initialShadingGroup.dsm")).count();
-    if shading_count > 0 {
-        let _ = writeln!(w.out, "select -ne :initialShadingGroup;");
-        let _ = writeln!(w.out, "\tsetAttr -s {shading_count} \".dsm\";");
-        let _ = writeln!(w.out, "\tsetAttr \".ro\" yes;");
-    }
+    w.write_default_nodes();
 
     let links = std::mem::take(&mut w.links_text);
     w.out.push_str(&links);

@@ -250,6 +250,11 @@ fn table() -> Vec<Spec> {
         },
         text("colorSpace", "cs", "sRGB"),
         on("ignoreColorSpaceFileRules", "ifr", false),
+        // What defaultColorMgtGlobals passes every file texture, connected as the reference connects it.
+        base("colorManagementEnabled", "cme", PlugType::Bool, PlugValue::Bool(false), flags::INPUT | flags::HIDDEN),
+        base("colorManagementConfigFileEnabled", "cmcf", PlugType::Bool, PlugValue::Bool(false), flags::INPUT | flags::HIDDEN),
+        base("colorManagementConfigFilePath", "cmcp", PlugType::String, PlugValue::String(String::new()), flags::INPUT | flags::HIDDEN),
+        base("workingSpace", "ws", PlugType::String, PlugValue::String(String::new()), flags::INPUT | flags::HIDDEN),
         base("filterType", "ft", PlugType::Int, PlugValue::Int(3), STORE),
         fl("filter", "f", 1.0),
         fl("filterOffset", "fo", 0.0),
@@ -311,12 +316,12 @@ pub fn classification(type_name: &str) -> Option<&'static str> {
         "file" => Some("texture/2d"),
         "place2dTexture" | "bump2d" => Some("utility/general"),
         "materialInfo" => Some("utility/shading"),
-        _ => crate::harold_nodes::classification(type_name).or_else(|| crate::texture_nodes::classification(type_name)),
+        _ => crate::harold_nodes::classification(type_name).or_else(|| crate::texture_nodes::classification(type_name)).or_else(|| crate::defaults::classification(type_name)),
     }
 }
 
 pub fn is_material_type(t: &NodeType) -> bool {
-    t.is_a("lambert") || matches!(t.name.as_str(), "surfaceShader" | "standardSurface") || crate::harold_nodes::classification(&t.name) == Some("shader/surface")
+    t.is_a("lambert") || matches!(t.name.as_str(), "surfaceShader" | "standardSurface" | "openPBRSurface") || crate::harold_nodes::classification(&t.name) == Some("shader/surface")
 }
 
 /// Nodes whose attributes a texture can drive from the Attribute Editor: materials, textures, lights and the
@@ -408,7 +413,7 @@ pub fn make_defaults(g: &mut Graph) {
 
 /// Whether a node is one every scene has, which a file names but doesn't create and nothing may delete.
 pub fn is_default_node(name: &str) -> bool {
-    matches!(name, DEFAULT_MATERIAL | INITIAL_SG | INITIAL_INFO) || crate::harold_nodes::is_default_node(name)
+    matches!(name, DEFAULT_MATERIAL | INITIAL_SG | INITIAL_INFO) || crate::harold_nodes::is_default_node(name) || crate::defaults::is_scene_node(name)
 }
 
 pub(crate) fn plug_named(g: &Graph, id: NodeId, attr: &str) -> Option<PlugRef> {
@@ -1588,19 +1593,26 @@ pub fn register(c: &mut Commands<Session>) {
         });
     }
     extend(c, "delete", vec![], |s, a, prev| {
-        for name in a.named() {
-            let g = &s.graph;
-            if g.find(&name).ok().flatten().and_then(|id| g.node(id)).is_some_and(|n| is_default_node(n.name())) {
-                fail!("delete: {name} is a default node and can't be deleted");
+        // Named or selected: a node every scene has stays. History deletion leaves the nodes named alone.
+        if !a.bool("constructionHistory") {
+            let names = if a.named().is_empty() { s.graph.selection().iter().map(|&id| s.graph.path(id)).collect() } else { a.named() };
+            for name in names {
+                let g = &s.graph;
+                let refused = g.find(&name).ok().flatten().and_then(|id| crate::defaults::refusal(g, id, "delete"));
+                if let Some(why) = refused {
+                    fail!("{why}");
+                }
             }
         }
         prev(s, a)
     });
     extend(c, "rename", vec![], |s, a, prev| {
-        if let Some(name) = a.named().first() {
+        let names = a.named();
+        let target = if names.len() > 1 { names.first().cloned() } else { s.graph.selection().first().map(|&id| s.graph.path(id)) };
+        if let Some(name) = target {
             let g = &s.graph;
-            if a.named().len() > 1 && g.find(name).ok().flatten().and_then(|id| g.node(id)).is_some_and(|n| is_default_node(n.name())) {
-                fail!("rename: {name} is a default node and can't be renamed");
+            if let Some(why) = g.find(&name).ok().flatten().and_then(|id| crate::defaults::refusal(g, id, "rename")) {
+                fail!("{why}");
             }
         }
         prev(s, a)

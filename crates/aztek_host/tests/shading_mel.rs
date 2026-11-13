@@ -18,7 +18,7 @@ fn mel(c: &mut Core, src: &str) -> Value {
 fn a_material_from_start_to_finish() {
     let mut c = Core::new();
     mel(&mut c, "polyCube;");
-    assert_eq!(mel(&mut c, "ls -mat;"), json!(["lambert1"]));
+    assert_eq!(mel(&mut c, "ls -mat;"), json!(["lambert1", "standardSurface1", "openPBR_shader1", "particleCloud1"]));
     assert_eq!(mel(&mut c, "sets -q initialShadingGroup;"), json!(["pCubeShape1"]));
     assert_eq!(mel(&mut c, "shadingNode -asShader lambert;"), "lambert2");
     assert_eq!(mel(&mut c, "sets -renderable true -noSurfaceShader true -empty -name lambert2SG;"), "lambert2SG");

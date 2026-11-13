@@ -86,7 +86,8 @@ pub fn is_layer(n: &Node) -> bool {
 
 /// Every layer in display order (then name).
 pub fn all(g: &Graph) -> Vec<NodeId> {
-    let mut out: Vec<NodeId> = g.nodes().into_iter().filter(|&id| g.node(id).is_some_and(is_layer)).collect();
+    // defaultLayer holds what no layer does; it is no layer of the user's.
+    let mut out: Vec<NodeId> = g.nodes().into_iter().filter(|&id| g.node(id).is_some_and(|n| is_layer(n) && !(n.name() == DEFAULT_LAYER && n.namespace().is_empty()))).collect();
     out.sort_by(|&a, &b| {
         let (na, nb) = (g.node(a).unwrap(), g.node(b).unwrap());
         na.int(DISPLAY_ORDER).cmp(&nb.int(DISPLAY_ORDER)).then_with(|| na.name().cmp(nb.name()))

@@ -26,8 +26,9 @@ fn close(v: &Value, want: &[f64]) -> bool {
 fn default_scene_has_lambert1_and_new_meshes_join_it() {
     let mut s = scene();
     assert_eq!(run(&mut s, "ls", json!({"type": "lambert"})), json!(["lambert1"]));
-    assert_eq!(run(&mut s, "ls", json!({"materials": true})), json!(["lambert1"]));
-    assert_eq!(run(&mut s, "ls", json!({"type": "shadingEngine"})), json!(["initialShadingGroup"]));
+    // The materials every scene has.
+    assert_eq!(run(&mut s, "ls", json!({"materials": true})), json!(["lambert1", "standardSurface1", "openPBR_shader1", "particleCloud1"]));
+    assert_eq!(run(&mut s, "ls", json!({"type": "shadingEngine"})), json!(["initialShadingGroup", "initialParticleSE"]));
     assert_eq!(run(&mut s, "listConnections", json!({"args": ["initialShadingGroup.surfaceShader"]})), json!(["lambert1"]));
     cube(&mut s);
     assert_eq!(run(&mut s, "sets", json!({"args": ["initialShadingGroup"], "q": true})), json!(["pCubeShape1"]));
@@ -133,7 +134,7 @@ fn hyper_shade_assigns_and_selects() {
     // The shading group is made once.
     run(&mut s, "select", json!({"args": [format!("{d}.f[2]")]}));
     run(&mut s, "hyperShade", json!({"assign": "shiny"}));
-    assert_eq!(run(&mut s, "ls", json!({"type": "shadingEngine"})), json!(["initialShadingGroup", "shinySG"]));
+    assert_eq!(run(&mut s, "ls", json!({"type": "shadingEngine"})), json!(["initialShadingGroup", "initialParticleSE", "shinySG"]));
     assert_eq!(run(&mut s, "sets", json!({"args": ["shinySG"], "q": true})), json!(["pCubeShape1", "pCube2.f[2]"]));
     run(&mut s, "select", json!({"clear": true}));
     run(&mut s, "hyperShade", json!({"objects": "shiny"}));

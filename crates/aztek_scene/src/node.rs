@@ -338,6 +338,7 @@ pub mod types {
             crate::harold_nodes::register_types();
             crate::texture_nodes::register_types();
             crate::expression::register_types();
+            crate::defaults::register_types();
         });
     }
 }

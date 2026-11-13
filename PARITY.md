@@ -1819,5 +1819,39 @@ layouts made up from the other .mb files here, not against the file.
   stopping the program. `addAttr` refuses a minimum above the maximum.
 - The plug-in kit compared `MStatus::kSuccess != status` through `bool`, so every such check failed (mGear's spring:
   "API error detected in springNode.cpp at line 152"). Fixed.
-- Not done: Aztek has no `time1` node, so a plug-in node's time input connected to it is not connected; mGear's spring
-  reacts to its goal moving but not to playback.
+- Not done in this round: `time1` (done in the next, below).
+
+### The nodes every scene has (13/11/2026)
+
+Checked against the reference's saved files (twenty-one from its 2026 release and one from 2018 here, which name them
+with `select -ne`), two scripts that list them by name for the same purpose, and its node reference for each type's
+attributes. Not compared with a running copy of the reference.
+
+- A new scene has every default node the reference's has, with its type: `time1`, `sequenceManager1`,
+  `hardwareRenderingGlobals`, `renderPartition`, the render, shader, texture, utility, light and post-process lists,
+  `lambert1`, `standardSurface1`, `openPBR_shader1`, `particleCloud1`, `initialShadingGroup`, `initialParticleSE`,
+  `initialMaterialInfo`, `shaderGlow1`, `dof1`, the render globals, quality and resolution, `defaultLightSet`,
+  `defaultObjectSet`, the view and colour management nodes, both hardware render globals, `characterPartition`,
+  `ikSystem`, `hyperGraphInfo`, `hyperGraphLayout`, `globalCacheControl`, `strokeGlobals` and `dynController1`; and the
+  ones saved with every scene: `lightLinker1`, `layerManager`, `defaultLayer`, `renderLayerManager`,
+  `defaultRenderLayer`. File > New makes them again. 22 node types were added for them, with the attributes the node
+  reference lists; `dynController` and `dof` have none of their own (the reference lists none for `dof`, and its page for
+  `dynController` could not be fetched).
+- They start with the values an empty scene of the reference's saves (standardSurface1's grey and roughness, Viewport
+  2.0's float targets, the ACES colour management names).
+- None of them, nor the startup cameras, can be deleted or renamed, whether named or selected. `ls -defaultNodes`,
+  `-undeletable`, `-lockedNodes`, `-readOnly` and `-nodeTypes` are there.
+- `time1.outTime` follows the current frame and drives what is connected to it: mGear's spring now runs on playback.
+  An expression takes the `time1` connection the reference makes to it.
+- Files: what a file sets on a default node lands on the scene's own node; what Aztek doesn't model is kept as the file
+  wrote it and written back. Writing gives the reference's block: `select -ne` for the nodes its files always name,
+  in its order and with its counts, `lightLinker1` and the layer managers and default layers with their connections,
+  and default nodes' plugs as `:time1.o`. A file texture takes its colour management connections.
+- `defaultLayer` is listed as a display layer (`ls -type displayLayer`), as in the reference, but not in the Layer
+  Editor, nor counted among the scene's layers.
+- `ls -materials` lists the default materials, `particleCloud1` with them.
+- The standard surface's short names are now the reference's (`sr`, `ct`, `ctc`, `subc`, `trc` and the rest, and
+  `spb` for the blue of the specular colour). Files Aztek wrote with the old names read as before.
+- Not checked: whether the reference refuses deleting `lightLinker1` and the layer managers (Aztek does), and its
+  exact error wording.
+

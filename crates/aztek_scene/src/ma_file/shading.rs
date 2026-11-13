@@ -25,7 +25,7 @@ pub(super) fn short_plug(g: &Graph, p: &PlugRef) -> String {
 
 /// Whether a node's setAttr lines use short names, as the reference's do for these.
 pub(super) fn writes_short(g: &Graph, id: NodeId) -> bool {
-    g.node(id).is_some_and(|n| n.ty().is_a(SG_TYPE) || n.ty().is_a("light") || shading::classification(&n.ty().name).is_some() || n.ty().name == "animLayer" || n.ty().name.starts_with("animBlendNode"))
+    g.node(id).is_some_and(|n| n.ty().is_a(SG_TYPE) || crate::defaults::is_scene_node(n.name()) || n.ty().is_a("light") || shading::classification(&n.ty().name).is_some() || n.ty().name == "animLayer" || n.ty().name.starts_with("animBlendNode"))
 }
 
 fn node_ref(g: &Graph, id: NodeId) -> String {
@@ -83,6 +83,7 @@ impl Build<'_> {
     /// The defaults the file names, and its shading groups. Before the plain nodes, which would take a default's name.
     pub(super) fn create_shading_groups(&mut self, import: bool) {
         shading::make_defaults(&mut self.s.graph);
+        crate::defaults::make(&mut self.s.graph);
         let doc = self.doc;
         for i in 0..doc.nodes.len() {
             let n = &doc.nodes[i];
@@ -92,6 +93,7 @@ impl Build<'_> {
                 self.used[i] = true;
                 // What another scene changed on its own lambert1 stays there when it is imported.
                 if !import {
+                    self.add_user_attrs(i);
                     self.create_plain(i);
                 }
             } else if n.ty == SG_TYPE {
@@ -306,13 +308,10 @@ impl Writer<'_> {
 
     /// The lines that make the shading groups render, as every file from the reference has them.
     pub(super) fn write_light_links(&mut self) {
-        if self.needs_links.is_empty() {
-            return;
-        }
-        let _ = writeln!(self.out, "createNode lightLinker -s -n \"lightLinker1\";");
         let mut lines = String::new();
         for kind in ["link", "shadowLink"] {
             let _ = writeln!(lines, "relationship \"{kind}\" \":lightLinker1\" \":initialShadingGroup.message\" \":defaultLightSet.message\";");
+            let _ = writeln!(lines, "relationship \"{kind}\" \":lightLinker1\" \":initialParticleSE.message\" \":defaultLightSet.message\";");
             for p in &self.needs_links {
                 let _ = writeln!(lines, "relationship \"{kind}\" \":lightLinker1\" {} \":defaultLightSet.message\";", quoted(&format!("{p}.message")));
             }

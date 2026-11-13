@@ -221,7 +221,12 @@ fn ls(s: &mut Session, a: &aztek_ops::Args) -> CmdResult {
     let g = &mut s.graph;
     let mut comps: Vec<String> = Vec::new();
     let mut ids: Vec<NodeId> = Vec::new();
-    let filters = ["referencedNodes", "type", "exactType", "dag", "dagObjects", "shapes", "transforms", "geometry", "objectsOnly", "visible", "invisible", "cameras", "lights", "leaf", "assemblies", "noIntermediate", "intermediateObjects", "materials", "partition", "sets", "textures"];
+    if a.bool("nodeTypes") {
+        let mut names: Vec<String> = crate::node::types::all().iter().map(|t| t.name.clone()).collect();
+        names.sort();
+        return Ok(json!(names));
+    }
+    let filters = ["defaultNodes", "undeletable", "lockedNodes", "readOnly", "referencedNodes", "type", "exactType", "dag", "dagObjects", "shapes", "transforms", "geometry", "objectsOnly", "visible", "invisible", "cameras", "lights", "leaf", "assemblies", "noIntermediate", "intermediateObjects", "materials", "partition", "sets", "textures"];
     let filtered = filters.iter().any(|x| a.has(x) && a.get(x) != Some(&Value::Bool(false)));
     if a.bool("selection") || a.bool("orderedSelection") {
         if !a.bool("objectsOnly") {
@@ -296,7 +301,10 @@ fn ls(s: &mut Session, a: &aztek_ops::Args) -> CmdResult {
         (types.is_empty() || types.iter().any(|t| ty.is_a(t)))
             && (exact.is_empty() || exact.iter().any(|t| ty.name == *t))
             && (!a.bool("dag") || ty.dag)
-            && (!a.bool("referencedNodes") || (g.node(id).is_some_and(|n| n.reference_id() != 0) && ty.name != crate::references::REF_NODE_TYPE))
+            && (!(a.bool("referencedNodes") || a.bool("readOnly")) || (g.node(id).is_some_and(|n| n.reference_id() != 0) && ty.name != crate::references::REF_NODE_TYPE))
+            && (!a.bool("defaultNodes") || (n.namespace().is_empty() && crate::defaults::is_default_node(n.name())))
+            && (!a.bool("undeletable") || crate::defaults::undeletable(g, id))
+            && (!a.bool("lockedNodes") || n.is_locked())
             && (!a.bool("shapes") || is_shape(g, id))
             && (!a.bool("transforms") || (ty.is_a("transform") && !is_shape(g, id)))
             && (!a.bool("geometry") || is_mesh_like(g, id))
@@ -309,7 +317,7 @@ fn ls(s: &mut Session, a: &aztek_ops::Args) -> CmdResult {
             && (!a.bool("noIntermediate") || !is_intermediate(g, id))
             && (!a.bool("intermediateObjects") || is_intermediate(g, id))
             && (!a.bool("sets") || ty.is_a("objectSet"))
-            && (!a.bool("materials") || crate::shading::is_material_type(ty))
+            && (!a.bool("materials") || crate::shading::is_material_type(ty) || crate::shading::classification(&ty.name).is_some_and(|c| c.starts_with("shader/volume")))
             && (!a.bool("textures") || crate::shading::is_texture_type(ty))
     });
     if a.bool("selection") && !a.bool("objectsOnly") && comps.is_empty() && false {
@@ -363,6 +371,11 @@ pub fn register(c: &mut Commands<Session>) {
             .flag(f("exactType", "et", ArgType::Any, "Only nodes of exactly this type."))
             .flag(f("dag", "dag", ArgType::Bool, "Only DAG nodes."))
             .flag(f("referencedNodes", "rn", ArgType::Bool, "Only nodes from references."))
+            .flag(f("readOnly", "ro", ArgType::Bool, "Only nodes from references, which are read only (the older name for referencedNodes)."))
+            .flag(f("defaultNodes", "dn", ArgType::Bool, "Only default nodes: those every scene is made with and no file saves (time1, lambert1)."))
+            .flag(f("undeletable", "ud", ArgType::Bool, "Only nodes that can't be deleted or renamed: default nodes, startup cameras and locked nodes."))
+            .flag(f("lockedNodes", "ln", ArgType::Bool, "Only locked nodes, which can't be deleted or renamed until unlocked."))
+            .flag(f("nodeTypes", "nt", ArgType::Bool, "Every node type there is, instead of nodes."))
             .flag(f("dagObjects", "do", ArgType::Bool, "DAG nodes and everything below them."))
             .flag(f("shapes", "s", ArgType::Bool, "Only shapes."))
             .flag(f("transforms", "tr", ArgType::Bool, "Only transforms."))

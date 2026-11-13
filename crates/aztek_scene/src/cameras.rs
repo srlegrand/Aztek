@@ -201,6 +201,7 @@ fn turn_rotation(r: DVec3) -> DVec3 {
 pub fn make_defaults(g: &mut Graph) {
     crate::shading::make_defaults(g);
     if g.find("persp").ok().flatten().is_some() {
+        crate::defaults::make(g);
         return;
     }
     g.without_undo(|g| {
@@ -229,6 +230,7 @@ pub fn make_defaults(g: &mut Graph) {
         }
         g.select(&[], SelectMode::Replace);
     });
+    crate::defaults::make(g);
 }
 
 /// Whether a node is one of the four default cameras (or a shape of one).
