@@ -54,6 +54,9 @@ def _plain(v):
         return [_plain(x) for x in v]
     if isinstance(v, dict):
         return {k: _plain(x) for k, x in v.items()}
+    # A number first: MPlug's states are numbers that can also be called.
+    if isinstance(v, int) and not isinstance(v, bool) and type(v).__name__ == "_Flag":
+        return bool(v)
     if callable(v):
         return {"__pycb__": _keep_callable(v)}
     if v is None or isinstance(v, (str, bytes, bool, int, float)):

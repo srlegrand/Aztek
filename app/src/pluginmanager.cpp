@@ -168,7 +168,7 @@ void MainWindow::show_plugin_manager() {
             });
         }
         if (rows.isEmpty()) {
-            hint->setText("No plug-ins were found. They are looked for in the user folder's plug-ins folders (Preferences > User Folder), in the folders of AZTEK_PLUG_IN_PATH and MAYA_PLUG_IN_PATH, and in modules. Browse loads one from anywhere.");
+            hint->setText("No plug-ins were found. They are looked for in the user folder's plug-ins folders (Preferences > User Folder), in the folders of AZTEK_PLUG_IN_PATH and MAYA_PLUG_IN_PATH, in modules, and in the folder of those that come with Aztek. Browse loads one from anywhere.");
         } else if (foreign > 0) {
             hint->setText(QString("%1 plug-in%2 compiled for Maya can't load here: a compiled plug-in has to be rebuilt from its source with Aztek's plug-in kit. Python plug-ins load as they are.").arg(foreign).arg(foreign == 1 ? "" : "s"));
         } else {

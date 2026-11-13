@@ -1650,6 +1650,15 @@ struct FileDeformer {
     shape: NodeId,
 }
 
+/// Whether an objectSet in a file is one Aztek reads as a set of its own: not a deformer's set (one `usedBy` names) and
+/// not the scene's default sets.
+fn plain_object_set(doc: &Doc, i: usize) -> bool {
+    let n = &doc.nodes[i];
+    n.ty == crate::object_sets::TYPE_NAME
+        && !matches!(n.name.trim_start_matches(':'), "defaultLightSet" | "defaultObjectSet")
+        && !doc.conns.iter().any(|c| c.dst == i && matches!(plain_attr(&c.dst_attr).as_str(), "ub" | "usedBy"))
+}
+
 struct Build<'a> {
     deformers: Vec<FileDeformer>,
     s: &'a mut Session,
@@ -1664,6 +1673,94 @@ struct Build<'a> {
 impl Build<'_> {
     fn g(&mut self) -> &mut Graph {
         &mut self.s.graph
+    }
+
+    /// A plug-in's deformer on a curve, as the reference writes one: `deformer.og[k]` into the curve's create, and its
+    /// `ip[k].ig` fed by the original shape (an intermediate curve), maybe through the groupParts and tweak nodes the
+    /// reference puts between. Here the deformer keeps the original curve itself, so the original shape is removed.
+    fn curve_deformers(&mut self) {
+        let doc = self.doc;
+        let feeding = |node: usize, attrs: &[&str]| doc.conns.iter().find(|c| c.dst == node && attrs.contains(&plain_attr(&c.dst_attr).as_str())).map(|c| (c.src, plain_attr(&c.src_attr)));
+        for c in &doc.conns {
+            if !matches!(plain_attr(&c.src_attr).as_str(), "og" | "outputGeometry") || !matches!(plain_attr(&c.dst_attr).as_str(), "cr" | "create") {
+                continue;
+            }
+            let (Some(def), Some(shape)) = (self.id(c.src), self.id(c.dst)) else { continue };
+            let g = &self.s.graph;
+            let Some(dt) = g.node(def).map(|n| n.type_arc().clone()) else { continue };
+            if !crate::scripted::is_plugin_deformer(&dt.name) || g.node(shape).is_none_or(|n| n.ty().name != crate::curves::SHAPE_TYPE) {
+                continue;
+            }
+            let (Some(inp), Some(out)) = (dt.attr_index("inputCurve"), dt.attr_index("outputCurve")) else { continue };
+            // Up from the deformer's input to a curve shape, through groupParts and tweak nodes.
+            let mut at = feeding(c.src, &["ip.ig", "input.inputGeometry"]);
+            let mut orig = None;
+            for _ in 0..8 {
+                let Some((n, _)) = at else { break };
+                if doc.nodes[n].ty == crate::curves::SHAPE_TYPE {
+                    orig = Some(n);
+                    break;
+                }
+                at = feeding(n, &["ig", "inputGeometry", "ip.ig", "input.inputGeometry"]);
+            }
+            let Some(orig) = orig.and_then(|o| self.id(o)) else {
+                self.warnings.push(format!("{}: no original curve found for it", doc.nodes[c.src].name));
+                continue;
+            };
+            let g = &mut self.s.graph;
+            let Some(curve) = crate::curves::local_curve(g, orig) else { continue };
+            let done = g.set_value(PlugRef::new(def, inp as i32), crate::curves::to_value(curve)).and_then(|_| g.connect(&PlugRef::new(def, out as i32), &PlugRef::new(shape, crate::curves::CurveShape::CREATE as i32), true));
+            if let Err(e) = done {
+                self.warnings.push(format!("{}: {e}", doc.nodes[c.src].name));
+                continue;
+            }
+            if orig != shape && g.node(orig).is_some_and(|n| n.bool(DagNode::INTERMEDIATE_OBJECT)) && g.connections().iter().all(|(_, s)| s.node != orig) {
+                let _ = g.delete_node(orig);
+            }
+        }
+    }
+
+    /// The file's object sets and what each holds: objects through `dagSetMembers` (a DAG node's instObjGroups),
+    /// other nodes and sets through `dnSetMembers`. Made empty first, so a set can hold one written after it. A quick
+    /// select set is one annotated gCharacterSet, as the reference marks them.
+    fn read_object_sets(&mut self) {
+        let doc = self.doc;
+        for i in 0..doc.nodes.len() {
+            if self.ids[i].is_some() || !plain_object_set(doc, i) {
+                continue;
+            }
+            let quick = doc.nodes[i].text(&["an", "annotation"]) == Some("gCharacterSet");
+            match crate::object_sets::create(&mut self.s.graph, doc.nodes[i].name.trim_start_matches(':'), &[], quick) {
+                Ok(id) => {
+                    self.ids[i] = Some(id);
+                    self.used[i] = true;
+                }
+                Err(e) => self.warnings.push(format!("{}: {e}", doc.nodes[i].name)),
+            }
+        }
+        let mut held: BTreeMap<NodeId, Vec<crate::object_sets::Member>> = BTreeMap::new();
+        for c in &doc.conns {
+            if !plain_object_set(doc, c.dst) {
+                continue;
+            }
+            let into = plain_attr(&c.dst_attr);
+            if !matches!(into.as_str(), "dsm" | "dagSetMembers" | "dnsm" | "dnSetMembers") {
+                continue;
+            }
+            let (Some(set), Some(member)) = (self.id(c.dst), self.id(c.src)) else { continue };
+            if !self.s.graph.node(set).is_some_and(crate::object_sets::is_set) {
+                continue;
+            }
+            let list = held.entry(set).or_default();
+            if !list.iter().any(|m| m.node == member) {
+                list.push(crate::object_sets::Member::object(member));
+            }
+        }
+        for (set, list) in held {
+            if let Err(e) = crate::object_sets::add(&mut self.s.graph, set, &list) {
+                self.warnings.push(format!("{}: {e}", self.s.graph.path(set)));
+            }
+        }
     }
 
     fn id(&self, node: usize) -> Option<NodeId> {
@@ -2631,6 +2728,13 @@ impl Build<'_> {
             let (sn, sa) = self.real_source(c);
             let Some(src) = self.id(sn) else { continue };
             let st = self.s.graph.node(src).unwrap().type_arc().clone();
+            // A plug-in's deformer on a curve: read by `curve_deformers`.
+            if crate::scripted::is_plugin_deformer(&st.name) && dt.name == crate::curves::SHAPE_TYPE && matches!(plain_attr(&sa).as_str(), "og" | "outputGeometry") {
+                continue;
+            }
+            if crate::scripted::is_plugin_deformer(&dt.name) && matches!(plain_attr(&c.dst_attr).as_str(), "ip.ig" | "input.inputGeometry" | "ip.gi" | "input.groupId") {
+                continue;
+            }
             // These go through `deformer_connections`.
             if crate::deform::is_deformer(&dt.name) || crate::deform::is_deformer(&st.name) {
                 continue;
@@ -3231,6 +3335,8 @@ fn build(s: &mut Session, doc: &Doc, import: bool) -> Vec<String> {
     b.single_chain_rests();
     b.instances();
     b.read_shading_members();
+    b.read_object_sets();
+    b.curve_deformers();
     b.read_lights();
     b.reference_edits();
     for i in 0..count {
@@ -3275,8 +3381,30 @@ fn playback_from_script(s: &mut Session, script: &MaNode) {
     }
 }
 
+/// True while a scene file is being read: nodes may compute before all of their connections are made, which plug-ins
+/// can take as a failure that isn't one (a node reading arrays that are not filled yet).
+pub static READING: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+pub fn reading() -> bool {
+    READING.load(std::sync::atomic::Ordering::Relaxed) > 0
+}
+
+struct ReadingGuard;
+impl ReadingGuard {
+    fn on() -> Self {
+        READING.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        ReadingGuard
+    }
+}
+impl Drop for ReadingGuard {
+    fn drop(&mut self) {
+        READING.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
 /// Reads .ma text into the session. `import` adds to the scene; otherwise the scene should already be empty.
 pub fn read_text(s: &mut Session, text: &str, import: bool) -> Vec<String> {
+    let _reading = ReadingGuard::on();
     register_types();
     let mut doc = Doc::parse(text);
     let dyn_warnings = dynamics::translate(&mut doc);
@@ -3777,6 +3905,7 @@ impl Writer<'_> {
             if ty == "nurbsCurve" {
                 self.write_nurbs_curve(id);
                 self.write_nurbs_chain(id, crate::curves::CurveShape::CREATE);
+                self.write_curve_deformer_input(id, &name, parent);
             }
             if ty == "nurbsSurface" {
                 self.write_nurbs_surface(id);
@@ -3792,7 +3921,9 @@ impl Writer<'_> {
             if ty == "ikHandle" {
                 let _ = writeln!(self.out, "\tsetAttr \".roc\" yes;");
             }
-            if ty == "joint" && parent != NO_NODE && self.s.graph.node(parent).is_some_and(|n| n.ty().is_a("joint")) {
+            // The parent's scale into inverseScale, where the scene has it: a rig may take it away (mGear does).
+            let is_link = PlugRef::new(id, rig::Joint::INVERSE_SCALE as i32);
+            if ty == "joint" && parent != NO_NODE && self.s.graph.node(parent).is_some_and(|n| n.ty().is_a("joint")) && self.s.graph.source(&is_link).is_some_and(|s| s.node == parent) {
                 let (a, b) = (self.s.graph.path(parent), self.s.graph.path(id));
                 self.conn(&format!("{a}.s"), &format!("{b}.is"));
             }
@@ -3800,6 +3931,47 @@ impl Writer<'_> {
         for c in self.s.graph.children(id).to_vec() {
             self.write_dag(c);
         }
+    }
+
+    /// A plug-in's deformer on this curve, as the reference has one: the curve the deformer keeps written as the
+    /// shape's original (an intermediate curve beside it), into the deformer's input, and the deformer's output into
+    /// the shape.
+    fn write_curve_deformer_input(&mut self, shape: NodeId, name: &str, parent: NodeId) {
+        let g = &self.s.graph;
+        let Some(src) = g.source(&PlugRef::new(shape, crate::curves::CurveShape::CREATE as i32)) else { return };
+        let Some(dn) = g.node(src.node) else { return };
+        let dt = dn.type_arc().clone();
+        if !crate::scripted::is_plugin_deformer(&dt.name) || dt.attr_index("outputCurve") != Some(src.attr as usize) || !self.keep.contains(&src.node) {
+            return;
+        }
+        let Some(inp) = dt.attr_index("inputCurve") else { return };
+        let curve = match dn.data().value(inp) {
+            PlugValue::Data(Some(d)) => d.as_any().downcast_ref::<crate::curves::CurveData>().map(|c| c.0.clone()),
+            _ => None,
+        };
+        let Some(c) = curve else { return };
+        let orig = format!("{name}Orig");
+        let p = if parent == NO_NODE { String::new() } else { self.s.graph.path(parent) };
+        let (def, shape_path) = (self.s.graph.path(src.node), self.s.graph.path(shape));
+        let orig_path = if p.is_empty() { orig.clone() } else { format!("{p}|{orig}") };
+        if p.is_empty() {
+            let _ = writeln!(self.out, "createNode nurbsCurve -n {};", quoted(&orig));
+        } else {
+            let _ = writeln!(self.out, "createNode nurbsCurve -n {} -p {};", quoted(&orig), quoted(&p));
+        }
+        let _ = writeln!(self.out, "\tsetAttr -k off \".v\";");
+        let _ = writeln!(self.out, "\tsetAttr \".io\" yes;");
+        let _ = writeln!(self.out, "\tsetAttr \".cc\" -type \"nurbsCurve\" ");
+        let _ = writeln!(self.out, "\t\t{} {} {} no 3", c.degree, c.spans(), c.form.index());
+        let knots: Vec<String> = c.knots.iter().map(|k| fmt_num(*k)).collect();
+        let _ = writeln!(self.out, "\t\t{} {}", c.knots.len(), knots.join(" "));
+        let _ = writeln!(self.out, "\t\t{}", c.cvs.len());
+        for v in &c.cvs {
+            let _ = writeln!(self.out, "\t\t{} {} {}", fmt_num(v.x), fmt_num(v.y), fmt_num(v.z));
+        }
+        let _ = writeln!(self.out, "\t\t;");
+        self.conn(&format!("{orig_path}.ws"), &format!("{def}.ip[0].ig"));
+        self.conn(&format!("{def}.og[0]"), &format!("{shape_path}.cr"));
     }
 
     /// The curve as `.cc`: degree, spans, form, rational, dimension, knots, CVs.
@@ -4191,9 +4363,10 @@ impl Writer<'_> {
         }
         {
             let n = g.node(id).unwrap();
-            for (attr, short) in [("restTranslate", "rst"), ("restRotate", "rsrr")] {
+            // In the file's units, as the reader takes them: restRotate in degrees, restTranslate in its length unit.
+            for (attr, short, unit) in [("restTranslate", "rst", units::Unit::Linear), ("restRotate", "rsrr", units::Unit::Angle)] {
                 if let Some(i) = t.attr_index(attr) {
-                    let _ = writeln!(body, "\tsetAttr \".{short}\" -type \"double3\" {} ;", vec_text(n.data().vec3(i)));
+                    let _ = writeln!(body, "\tsetAttr \".{short}\" -type \"double3\" {} ;", vec_text(file_vec(unit, n.data().vec3(i))));
                 }
             }
             if let Some(i) = t.attr_index("enableRestPosition") {
@@ -4294,7 +4467,8 @@ impl Writer<'_> {
             let item = data.get(e as usize).cloned().unwrap_or(Value::Null);
             let (tr, r, s) = (v(&item, "t", 0.0), v(&item, "r", 0.0), v(&item, "s", 1.0));
             let jn = g.node(j).unwrap();
-            let jo = DQuat::from_mat4(&euler_to_matrix(jn.data().vec3(Joint::JOINT_ORIENT), RotateOrder::Xyz));
+            // A pose may hold transforms as well as joints (dagPose -save -selection): only a joint has an orient.
+            let jo = if jn.ty().is_a("joint") { DQuat::from_mat4(&euler_to_matrix(jn.data().vec3(Joint::JOINT_ORIENT), RotateOrder::Xyz)) } else { DQuat::IDENTITY };
             let ro = jn.data().int(Transform::ROTATE_ORDER);
             let rad = r;
             let _ = writeln!(
@@ -4373,6 +4547,48 @@ impl Writer<'_> {
         self.pending.push(body);
         for m in lines {
             self.conn(&format!("{name}.di"), &format!("{m}.do"));
+        }
+    }
+
+    /// An object set as the reference writes one: whole objects through their instObjGroups into `dagSetMembers`, other
+    /// nodes and sets through their message into `dnSetMembers`. A quick select set is annotated gCharacterSet. Members
+    /// that are components are left out, with a warning.
+    fn write_object_set(&mut self, id: NodeId) {
+        use crate::object_sets as os;
+        let g = &self.s.graph;
+        let n = g.node(id).unwrap();
+        let name = n.name().to_string();
+        let quick = n.bool(os::QUICK_SELECT);
+        let mut body = String::new();
+        let _ = writeln!(body, "createNode objectSet -n {};", quoted(&name));
+        let _ = writeln!(body, "\tsetAttr \".ihi\" 0;");
+        if quick {
+            let _ = writeln!(body, "\tsetAttr \".an\" -type \"string\" \"gCharacterSet\";");
+        }
+        let (mut dag, mut dg, mut parts) = (Vec::new(), Vec::new(), 0usize);
+        for m in os::members(g, id) {
+            if !self.keep.contains(&m.node) || g.node(m.node).is_none() {
+                continue;
+            }
+            if m.kind != crate::components::ComponentMode::Object {
+                parts += 1;
+                continue;
+            }
+            if g.node(m.node).is_some_and(|x| x.ty().dag) {
+                dag.push(g.path(m.node));
+            } else {
+                dg.push(g.path(m.node));
+            }
+        }
+        self.pending.push(body);
+        for (k, m) in dag.iter().enumerate() {
+            self.conn(&format!("{m}.iog"), &format!("{name}.dsm[{k}]"));
+        }
+        for (k, m) in dg.iter().enumerate() {
+            self.conn(&format!("{m}.msg"), &format!("{name}.dnsm[{k}]"));
+        }
+        if parts > 0 {
+            self.warnings.push(format!("{name}: {parts} component member(s) not written"));
         }
     }
 
@@ -4501,6 +4717,10 @@ impl Writer<'_> {
             let g = &self.s.graph;
             let (Some(dn), Some(sn)) = (g.node(dst.node), g.node(src.node)) else { continue };
             if !self.keep.contains(&dst.node) || !self.keep.contains(&src.node) {
+                continue;
+            }
+            // A plug-in's deformer into a curve: written with the curve, in the reference's form.
+            if crate::scripted::is_plugin_deformer(&sn.ty().name) && sn.ty().attr_index("outputCurve") == Some(src.attr as usize) && dn.ty().name == crate::curves::SHAPE_TYPE {
                 continue;
             }
             let deforms = crate::deform::is_deformer(&dn.ty().name) || crate::deform::is_deformer(&sn.ty().name);
@@ -4820,6 +5040,8 @@ pub fn write_text(s: &mut Session, file_name: &str, only: Option<&[NodeId]>) -> 
             }
         } else if crate::deform_sets::deformer_of_set(&w.s.graph, id).is_some() {
             // Goes with its deformer.
+        } else if ty == crate::object_sets::TYPE_NAME && !matches!(n.name(), "defaultLightSet" | "defaultObjectSet") {
+            w.write_object_set(id);
         } else if t.is_a("mesh") {
             // Intermediate shapes: geometry is baked.
         } else if matches!(ty, crate::nurbs_nodes::TO_POINTS | crate::nurbs_nodes::FROM_POINTS | "ikEffector" | "ikRPsolver" | "ikSCsolver" | "ikSplineSolver" | "ikSystem") || ty == crate::history::TWEAK_TYPE {

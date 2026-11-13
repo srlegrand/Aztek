@@ -383,18 +383,23 @@ impl NodeData {
     pub fn value(&self, attr: usize) -> &PlugValue {
         &self.values[attr]
     }
+    #[track_caller]
     pub fn bool(&self, attr: usize) -> bool {
         self.values[attr].as_bool()
     }
+    #[track_caller]
     pub fn int(&self, attr: usize) -> i64 {
         self.values[attr].as_int()
     }
+    #[track_caller]
     pub fn float(&self, attr: usize) -> f64 {
         self.values[attr].as_float()
     }
+    #[track_caller]
     pub fn vec3(&self, attr: usize) -> DVec3 {
         self.values[attr].as_vec3()
     }
+    #[track_caller]
     pub fn matrix(&self, attr: usize) -> DMat4 {
         self.values[attr].as_matrix()
     }
@@ -593,18 +598,23 @@ impl Node {
     pub fn value(&self, attr: usize) -> &PlugValue {
         &self.data.values[attr]
     }
+    #[track_caller]
     pub fn bool(&self, attr: usize) -> bool {
         self.data.bool(attr)
     }
+    #[track_caller]
     pub fn int(&self, attr: usize) -> i64 {
         self.data.int(attr)
     }
+    #[track_caller]
     pub fn float(&self, attr: usize) -> f64 {
         self.data.float(attr)
     }
+    #[track_caller]
     pub fn vec3(&self, attr: usize) -> DVec3 {
         self.data.vec3(attr)
     }
+    #[track_caller]
     pub fn matrix(&self, attr: usize) -> DMat4 {
         self.data.matrix(attr)
     }

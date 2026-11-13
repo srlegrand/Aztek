@@ -5631,6 +5631,7 @@ Arguments: joints or a dagPose (the selection when none)
 | `save` | `s` | Save a new pose. |
 | `bindPose` | `bp` | The bind pose. |
 | `global` | `g` | The whole pose, not only what's below the joints named. |
+| `selection` | `sl` | With -save, only the objects named or selected, not their hierarchies. |
 | `name` | `n` | Name of a saved pose. |
 | `edit` | `e` | Edit mode. |
 | `query` | `q` | Query mode. |
@@ -10461,6 +10462,9 @@ Arguments: objects
 | --- | --- | --- |
 | `type` | `typ` | Only nodes of this type or a type derived from it (geometryFilter for every deformer). |
 | `pruneDagObjects` | `pdo` | Leave out shapes and transforms: only the history nodes. |
+| `future` | `f` | The nodes downstream instead: what the object feeds. |
+| `allConnections` | `ac` | Walk every connection, through transforms as well. |
+| `levels` | `lv` | How many connections out to go; 0 for no limit. |
 
 ## listLights
 

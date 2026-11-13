@@ -70,6 +70,11 @@ if [ "$PACKAGE" = 1 ]; then
   done
   iconutil -c icns "$ICONS" -o "$APP/Contents/Resources/aztek.icns"
   "$QT/bin/macdeployqt" "$APP"
+  # The plug-ins that ship with Aztek (plugins/), where it looks for them inside the app.
+  if [ -d "$DIR/plug-ins" ]; then
+    mkdir -p "$APP/Contents/PlugIns/aztek"
+    cp "$DIR"/plug-ins/*.so "$APP/Contents/PlugIns/aztek/"
+  fi
   codesign --force --deep --sign - "$APP"
   codesign --verify --deep --strict "$APP"
 

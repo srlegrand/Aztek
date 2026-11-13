@@ -1164,6 +1164,10 @@ fn add_attr(s: &mut Session, a: &Args) -> CmdResult {
         ("intArray", (PlugType::Int, true)),
         ("vectorArray", (PlugType::Vec3, true)),
         ("pointArray", (PlugType::Vec3, true)),
+        ("char", (PlugType::Int, false)),
+        ("time", (PlugType::Float, false)),
+        // Carries a connection, not a value: kept as the .ma reader keeps one.
+        ("message", (PlugType::Int, false)),
     ]
     .into_iter()
     .collect();
@@ -1190,6 +1194,9 @@ fn add_attr(s: &mut Session, a: &Args) -> CmdResult {
         category: a.string("category", ""),
         ..Default::default()
     };
+    if kind == "message" {
+        def.flags = flags::INPUT | flags::USER | flags::MESSAGE;
+    }
     if array || a.bool("multi") {
         def.flags |= flags::ARRAY;
     }

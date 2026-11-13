@@ -22,7 +22,20 @@ fn search_path() -> Vec<PathBuf> {
             out.extend(std::env::split_paths(&v).filter(|p| !p.as_os_str().is_empty()));
         }
     }
+    // Last, the plug-ins that ship with Aztek: one of the same name on the path comes first.
+    for d in shipped_dirs() {
+        if !out.contains(&d) {
+            out.push(d);
+        }
+    }
     out
+}
+
+/// Where the plug-ins built with Aztek are (plugins/ in the source): plug-ins/ beside the program (a build, Windows),
+/// lib/aztek/plug-ins beside its bin/ (Linux installs, the AppImage), PlugIns/aztek in the Mac app. Those that exist.
+pub fn shipped_dirs() -> Vec<PathBuf> {
+    let Some(bin) = std::env::current_exe().ok().and_then(|e| e.canonicalize().ok()).and_then(|e| e.parent().map(Path::to_path_buf)) else { return Vec::new() };
+    [bin.join("plug-ins"), bin.join("../lib/aztek/plug-ins"), bin.join("../PlugIns/aztek")].into_iter().filter(|d| d.is_dir()).filter_map(|d| d.canonicalize().ok()).collect()
 }
 
 fn is_native(p: &Path) -> bool {
@@ -213,18 +226,23 @@ pub(crate) fn find_native(name: &str) -> Option<PathBuf> {
     if p.components().count() > 1 {
         return None;
     }
+    // The first one built with Aztek's kit: one built for the reference earlier on the path (an mGear install's own
+    // binaries, say) can't load, and the one Aztek ships with may come after it.
+    let mut first = None;
     for dir in search_path() {
-        if is_native(p) && dir.join(name).is_file() {
-            return Some(dir.join(name));
+        let mut candidates = Vec::new();
+        if is_native(p) {
+            candidates.push(dir.join(name));
         }
-        for ext in EXTENSIONS {
-            let f = dir.join(format!("{name}.{ext}"));
-            if f.is_file() {
+        candidates.extend(EXTENSIONS.iter().map(|ext| dir.join(format!("{name}.{ext}"))));
+        for f in candidates.into_iter().filter(|f| f.is_file()) {
+            if kind_of(&f) == Kind::Aztek {
                 return Some(f);
             }
+            first.get_or_insert(f);
         }
     }
-    None
+    first
 }
 
 /// Whether a Python plug-in by that name is there to load.

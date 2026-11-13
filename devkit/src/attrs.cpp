@@ -419,9 +419,8 @@ MStatus MFnNumericAttribute::getMax(double& v) const { AttrSpec* s = azSpec(); i
 MStatus MFnNumericAttribute::getSoftMin(double& v) const { AttrSpec* s = azSpec(); if (!s || !s->hasSoftMin) return MS::kFailure; v = s->softMin; return MS::kSuccess; }
 MStatus MFnNumericAttribute::getSoftMax(double& v) const { AttrSpec* s = azSpec(); if (!s || !s->hasSoftMax) return MS::kFailure; v = s->softMax; return MS::kSuccess; }
 
-// Units. The host holds angles in degrees, distances in centimetres and times in frames of the scene's rate.
-
-static const double kDeg = 180.0 / 3.14159265358979323846;
+// Units. The host holds angles in radians, as the reference does inside, distances in centimetres and times in frames
+// of the scene's rate. A data block reads and writes them as they are held.
 
 MFnUnitAttribute::MFnUnitAttribute() {}
 MFnUnitAttribute::MFnUnitAttribute(const MObject& o, MStatus* st) : MFnAttribute(o, st) {}
@@ -431,7 +430,7 @@ MObject MFnUnitAttribute::create(const MString& ln, const MString& sn, Type t, d
     AttrSpec* s = azSpec();
     s->unit = t == kAngle ? "angle" : t == kDistance ? "distance" : "time";
     s->numeric = MFnNumericData::kDouble;
-    s->def.assign(1, t == kAngle ? def * kDeg : def);
+    s->def.assign(1, def);
     return obj_;
 }
 MObject MFnUnitAttribute::create(const MString& ln, const MString& sn, const MAngle& d, MStatus* st) { return create(ln, sn, kAngle, d.asRadians(), st); }
@@ -442,11 +441,11 @@ MFnUnitAttribute::Type MFnUnitAttribute::unitType(MStatus* st) const {
     if (!s) return kInvalid;
     return s->unit == "angle" ? kAngle : s->unit == "distance" ? kDistance : s->unit == "time" ? kTime : kInvalid;
 }
-MStatus MFnUnitAttribute::setDefault(double v) { AttrSpec* s = azSpec(); if (!s) return MS::kInvalidParameter; s->def.assign(1, s->unit == "angle" ? v * kDeg : v); return MS::kSuccess; }
-MStatus MFnUnitAttribute::setDefault(const MAngle& v) { AttrSpec* s = azSpec(); if (!s) return MS::kInvalidParameter; s->def.assign(1, v.asDegrees()); return MS::kSuccess; }
+MStatus MFnUnitAttribute::setDefault(double v) { AttrSpec* s = azSpec(); if (!s) return MS::kInvalidParameter; s->def.assign(1, v); return MS::kSuccess; }
+MStatus MFnUnitAttribute::setDefault(const MAngle& v) { AttrSpec* s = azSpec(); if (!s) return MS::kInvalidParameter; s->def.assign(1, v.asRadians()); return MS::kSuccess; }
 MStatus MFnUnitAttribute::setDefault(const MDistance& v) { AttrSpec* s = azSpec(); if (!s) return MS::kInvalidParameter; s->def.assign(1, v.asCentimeters()); return MS::kSuccess; }
 MStatus MFnUnitAttribute::setDefault(const MTime& v) { AttrSpec* s = azSpec(); if (!s) return MS::kInvalidParameter; s->def.assign(1, v.as(MTime::uiUnit())); return MS::kSuccess; }
-static double inHost(AttrSpec* s, double v) { return s && s->unit == "angle" ? v * kDeg : v; }
+static double inHost(AttrSpec*, double v) { return v; }
 MStatus MFnUnitAttribute::setMin(double v) { return MFnAttribute::setMin(inHost(azSpec(), v)); }
 MStatus MFnUnitAttribute::setMax(double v) { return MFnAttribute::setMax(inHost(azSpec(), v)); }
 MStatus MFnUnitAttribute::setSoftMin(double v) { return MFnAttribute::setSoftMin(inHost(azSpec(), v)); }

@@ -67,6 +67,8 @@ if ($py) {
     $global:LASTEXITCODE = 0
 }
 if (Test-Path examples) { Copy-Item examples "$dist\examples" -Recurse -Force }
+# The plug-ins that ship with Aztek (plugins\), where Aztek looks for them: plug-ins\ beside the exe.
+if (Test-Path "$dir\plug-ins") { Copy-Item "$dir\plug-ins" "$dist\plug-ins" -Recurse -Force }
 Write-Host "Built $dist\aztek.exe"
 
 if ($Run) { & "$dist\aztek.exe" }

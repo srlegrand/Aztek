@@ -1896,7 +1896,7 @@ impl Graph {
             } else {
                 DMat4::IDENTITY
             };
-            Transform::set_local_matrix(self, child, &(parent_world.inverse() * world))?;
+            Transform::set_free_local_matrix(self, child, &(parent_world.inverse() * world))?;
         }
         Ok(())
     }

@@ -352,6 +352,8 @@ impl NodeBehavior for NativeNode {
                         crashed = Some(err);
                         break 'outs;
                     }
+                    // While a file is read a node may compute before its inputs are all connected.
+                    _ if aztek_scene::ma_file::reading() => {}
                     _ => {
                         let attr = block.d().ty().attrs[out_attr].name.clone();
                         self.report(format!("// Warning: {}.{attr}: compute failed{} //", self.name, if err.is_empty() { String::new() } else { format!(": {err}") }), LineKind::Warning);

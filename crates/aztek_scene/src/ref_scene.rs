@@ -259,9 +259,9 @@ fn select_cmd(s: &mut Session, a: &Args, prev: &aztek_ops::RunFn<Session>) -> Cm
         }
         let found = if name.contains('*') || name.contains('?') { matching_nodes(g, &name) } else { vec![node_of(g, &name, "select")?] };
         for id in found {
-            // A set stands for its members, unless -ne.
+            // A set stands for its members, and those of the sets it holds, unless -ne.
             if !a.bool("noExpand") && g.node(id).is_some_and(crate::object_sets::is_set) {
-                let list = crate::object_sets::members(g, id);
+                let list = crate::object_sets::flattened(g, id);
                 for m in crate::object_sets::format(g, &list) {
                     items.push(json!(m));
                 }
@@ -425,6 +425,38 @@ fn parent_cmd(s: &mut Session, a: &Args, prev: &aztek_ops::RunFn<Session>) -> Cm
             s.graph.delete_node(id)?;
         }
         return Ok(Value::Null);
+    }
+    if a.bool("addObject") && a.bool("shape") && objs.len() >= 2 {
+        // A shape added under another transform: the reference makes it one shape with two parents. Aztek has no
+        // shapes with two parents, so the shape itself moves under the new transform, as named, and its old transform
+        // keeps a copy. A script holding the shape (to rename it, as rigging tools do next) holds the one under the new
+        // transform.
+        let p = node_of(&s.graph, objs.last().unwrap(), "parent")?;
+        let mut out = Vec::new();
+        for n in &objs[..objs.len() - 1] {
+            let id = node_of(&s.graph, n, "parent")?;
+            let shapes = if crate::dag::is_shape(&s.graph, id) { vec![id] } else { crate::dag::shapes(&s.graph, id, true) };
+            for sh in shapes {
+                let old_parent = s.graph.parent(sh);
+                if old_parent != NO_NODE {
+                    let holder = s.graph.path(old_parent);
+                    let made = run(s, "duplicate", json!({"args": [holder]}))?;
+                    let copy_root = node_of(&s.graph, made[0].as_str().unwrap_or_default(), "parent")?;
+                    let short = s.graph.node(sh).map(|x| x.name().to_string()).unwrap_or_default();
+                    // The copy of this shape is the one of the same place among the copied transform's shapes.
+                    let place = crate::dag::shapes(&s.graph, old_parent, true).iter().position(|&x| x == sh);
+                    let copies = crate::dag::shapes(&s.graph, copy_root, true);
+                    if let Some(c) = place.and_then(|i| copies.get(i).copied()) {
+                        s.graph.set_parent(c, old_parent, false, usize::MAX)?;
+                        let _ = s.graph.rename(c, &format!("{short}Orig"));
+                    }
+                    s.graph.delete_node(copy_root)?;
+                }
+                s.graph.set_parent(sh, p, false, usize::MAX)?;
+                out.push(json!(s.graph.path(sh)));
+            }
+        }
+        return Ok(Value::Array(out));
     }
     if a.bool("addObject") && objs.len() >= 2 {
         let parent = objs.last().unwrap().clone();

@@ -1033,6 +1033,36 @@ class MPlug:
         return "aztek.api.OpenAztek.MPlug(%s)" % (self.name() if not self.isNull() else "")
 
 
+
+class _Flag(int):
+    """A plug state as API 2.0 gives it, a property (`plug.isChild`), that can still be called as API 1.0's method
+    is (`plug.isChild()`)."""
+
+    def __new__(cls, on):
+        return int.__new__(cls, bool(on))
+
+    def __call__(self):
+        return bool(self)
+
+    def __repr__(self):
+        return repr(bool(self))
+
+    __str__ = __repr__
+
+
+def _flag_property(fn):
+    return property(lambda self: _Flag(fn(self)), doc=fn.__doc__)
+
+
+# The reference's API 2.0 has these as properties of MPlug, API 1.0 as methods.
+for _n in ("isNull", "isArray", "isElement", "isCompound", "isChild", "isConnected", "isDestination", "isSource",
+           "isKeyable", "isChannelBox", "isLocked", "isDynamic", "isNetworked", "isFromReferencedFile"):
+    setattr(MPlug, _n, _flag_property(getattr(MPlug, _n)))
+MPlug.isProcedural = property(lambda self: _Flag(False))
+MPlug.isIgnoredWhenRendering = property(lambda self: _Flag(False))
+MPlug.isCaching = property(lambda self: _Flag(False))
+del _n
+
 class MPlugArray(_Array):
     _item = staticmethod(lambda x: MPlug(x))
     _blank = staticmethod(MPlug)

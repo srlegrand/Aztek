@@ -598,6 +598,14 @@ fn controller_cmd(s: &mut Session, a: &Args) -> CmdResult {
         if asked(a, "isController") {
             return Ok(json!(tag.is_some()));
         }
+        let plain = !asked(a, "parent") && !asked(a, "children");
+        // A plain query names the object's controller node, as the reference's does; nothing for an object without one.
+        if plain {
+            return Ok(match tag {
+                Some(t) => json!([g.path(t)]),
+                None => Value::Null,
+            });
+        }
         let Some(tag) = tag else { fail!("controller: {n} is not a controller") };
         if asked(a, "parent") {
             return Ok(match parent_tag(g, tag).and_then(|p| object_of_tag(g, p)) {
@@ -609,7 +617,6 @@ fn controller_cmd(s: &mut Session, a: &Args) -> CmdResult {
             let kids: Vec<Value> = g.nodes().into_iter().filter(|&c| is_type(g, c, "controller") && parent_tag(g, c) == Some(tag)).filter_map(|c| object_of_tag(g, c)).map(|o| json!(g.path(o))).collect();
             return Ok(Value::Array(kids));
         }
-        fail!("controller: query what?");
     }
     if a.bool("unparent") {
         for n in &names {

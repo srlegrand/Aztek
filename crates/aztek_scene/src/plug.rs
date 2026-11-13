@@ -143,30 +143,35 @@ impl From<String> for PlugValue {
 }
 
 impl PlugValue {
+    #[track_caller]
     pub fn as_bool(&self) -> bool {
         match self {
             PlugValue::Bool(v) => *v,
             other => panic!("expected bool, got {other:?}"),
         }
     }
+    #[track_caller]
     pub fn as_int(&self) -> i64 {
         match self {
             PlugValue::Int(v) => *v,
             other => panic!("expected int, got {other:?}"),
         }
     }
+    #[track_caller]
     pub fn as_float(&self) -> f64 {
         match self {
             PlugValue::Float(v) => *v,
             other => panic!("expected float, got {other:?}"),
         }
     }
+    #[track_caller]
     pub fn as_vec3(&self) -> DVec3 {
         match self {
             PlugValue::Vec3(v) => *v,
             other => panic!("expected vec3, got {other:?}"),
         }
     }
+    #[track_caller]
     pub fn as_matrix(&self) -> DMat4 {
         match self {
             PlugValue::Matrix(v) => *v,

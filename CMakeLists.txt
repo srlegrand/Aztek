@@ -175,6 +175,12 @@ else()
   target_link_options(aztek PRIVATE "LINKER:--as-needed")
 endif()
 
+# The plug-ins that ship with Aztek, built from their source with the plug-in kit (plugins/CMakeLists.txt).
+option(AZTEK_SHIPPED_PLUGINS "Build the plug-ins that ship with Aztek" ON)
+if(AZTEK_SHIPPED_PLUGINS)
+  add_subdirectory(plugins)
+endif()
+
 # Install: the binary, and on Linux its desktop entry and icon (cmake --install build --prefix ~/.local).
 install(TARGETS aztek RUNTIME DESTINATION bin BUNDLE DESTINATION .)
 if(UNIX AND NOT APPLE)

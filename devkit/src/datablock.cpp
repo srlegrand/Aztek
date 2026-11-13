@@ -7,7 +7,6 @@
 
 using namespace az;
 
-static const double kDeg = 180.0 / 3.14159265358979323846;
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Mesh data
@@ -107,14 +106,13 @@ double MDataHandle::number(int component) const {
     int i = index(&c);
     if (i < 0) return 0.0;
     double v = host->block_number(azBlock->block, i, hostElement(*this), component >= 0 ? component : c);
-    return azSpec->unit == "angle" ? v / kDeg : v;
+    return v;
 }
 
 void MDataHandle::setNumber(double v, int component) {
     int c = -1;
     int i = index(&c);
     if (i < 0) return;
-    if (azSpec->unit == "angle") v *= kDeg;
     host->block_set_number(azBlock->block, i, hostElement(*this), component >= 0 ? component : c, v);
 }
 
@@ -123,7 +121,6 @@ void MDataHandle::setVec(double a, double b, double c) {
     int i = index(&comp);
     if (i < 0) return;
     double v[3] = {a, b, c};
-    if (azSpec->unit == "angle") for (int k = 0; k < 3; ++k) v[k] *= kDeg;
     if (comp >= 0) {
         host->block_set_number(azBlock->block, i, hostElement(*this), comp, v[0]);
         return;
@@ -135,7 +132,6 @@ static void readVec(const MDataHandle& h, int i, double out[3]) {
     out[0] = out[1] = out[2] = 0;
     if (i < 0) return;
     host->block_vec3(h.azBlock->block, i, hostElement(h), out);
-    if (h.azSpec->unit == "angle") for (int k = 0; k < 3; ++k) out[k] /= kDeg;
 }
 
 bool MDataHandle::isNumeric() const { return azSpec && (azSpec->type == "float" || azSpec->type == "int" || azSpec->type == "bool" || azSpec->type == "enum"); }
@@ -165,7 +161,7 @@ float& MDataHandle::asFloat() const { BlockImpl& s = store(azBlock); s.f.push_ba
 double& MDataHandle::asDouble() const { BlockImpl& s = store(azBlock); s.d.push_back(number()); return s.d.back(); }
 double MDataHandle::asGenericDouble() const { return number(); }
 MDistance MDataHandle::asDistance() const { return MDistance(number(), MDistance::kCentimeters); }
-MAngle MDataHandle::asAngle() const { return MAngle(azSpec && azSpec->unit == "angle" ? number() : number() / kDeg, MAngle::kRadians); }
+MAngle MDataHandle::asAngle() const { return MAngle(number(), MAngle::kRadians); }
 MTime MDataHandle::asTime() const { return MTime(number(), MTime::uiUnit()); }
 
 #define AZ_VEC_AS(Method, Store, Type, Elem, N)                                                                        \
@@ -302,7 +298,7 @@ void MDataHandle::set(const MFloatMatrix& m) { set(MMatrix(m)); }
 void MDataHandle::set(const MVector& v) { setVec(v.x, v.y, v.z); }
 void MDataHandle::set(const MFloatVector& v) { setVec(v.x, v.y, v.z); }
 void MDataHandle::set(const MDistance& v) { setNumber(v.asCentimeters()); }
-void MDataHandle::set(const MAngle& v) { setNumber(azSpec && azSpec->unit == "angle" ? v.asRadians() : v.asDegrees()); }
+void MDataHandle::set(const MAngle& v) { setNumber(v.asRadians()); }
 void MDataHandle::set(const MTime& v) { setNumber(v.as(MTime::uiUnit())); }
 void MDataHandle::set(short a, short b) { setVec(a, b, 0); }
 void MDataHandle::set(int a, int b) { setVec(a, b, 0); }

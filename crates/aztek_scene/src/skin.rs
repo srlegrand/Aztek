@@ -1862,7 +1862,15 @@ pub fn register(c: &mut Commands<Session>) {
                 if a.bool("save") {
                     let name = a.string("name", "pose1");
                     let mut all = Vec::new();
+                    // -selection: only what's named, not the hierarchies below.
+                    let named_only = a.bool("selection");
                     for &j in &joints {
+                        if named_only {
+                            if !all.contains(&j) {
+                                all.push(j);
+                            }
+                            continue;
+                        }
                         for k in skeleton_of(g, j) {
                             if !all.contains(&k) {
                                 all.push(k);
@@ -1909,6 +1917,7 @@ pub fn register(c: &mut Commands<Session>) {
         .flag(f("save", "s", ArgType::Bool, "Save a new pose."))
         .flag(f("bindPose", "bp", ArgType::Bool, "The bind pose."))
         .flag(f("global", "g", ArgType::Bool, "The whole pose, not only what's below the joints named."))
+        .flag(f("selection", "sl", ArgType::Bool, "With -save, only the objects named or selected, not their hierarchies."))
         .flag(f("name", "n", ArgType::String, "Name of a saved pose.")),
     ));
 }

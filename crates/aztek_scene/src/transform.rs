@@ -693,6 +693,33 @@ impl Transform {
 
     /// Sets translate/rotate/scale (undoably) so the local matrix becomes `m`, keeping pivots. Shear is dropped.
     pub fn set_local_matrix(g: &mut Graph, id: NodeId, m: &DMat4) -> Result<()> {
+        Self::set_local_matrix_with(g, id, m, false)
+    }
+
+    /// As set_local_matrix, leaving alone the channels a connection drives (as the reference's parent does when it
+    /// keeps an object's place).
+    pub fn set_free_local_matrix(g: &mut Graph, id: NodeId, m: &DMat4) -> Result<()> {
+        // The shear first: what the rest is solved against, so a matrix that needs one (under a parent scaled
+        // unevenly) lands where it was, as xform -m does.
+        let is_transform = g.node(id).is_some_and(|n| n.ty().is_a("transform"));
+        if is_transform {
+            let (_, _, _, shear) = decompose_full(m);
+            let had = g.node(id).map(|n| n.vec3(Self::SHEAR)).unwrap_or(DVec3::ZERO);
+            if shear.abs().max_element() > 1e-12 || had != DVec3::ZERO {
+                let _ = g.set_value(PlugRef::new(id, Self::SHEAR as i32), shear.into());
+            }
+        }
+        Self::set_local_matrix_with(g, id, m, true)
+    }
+
+    fn set_local_matrix_with(g: &mut Graph, id: NodeId, m: &DMat4, skip_driven: bool) -> Result<()> {
+        // A channel that can't be set (driven by a connection) is left as it is when skip_driven.
+        let set = |g: &mut Graph, attr: usize, v: PlugValue| -> Result<()> {
+            match g.set_value(PlugRef::new(id, attr as i32), v) {
+                Err(_) if skip_driven => Ok(()),
+                r => r,
+            }
+        };
         let n = g
             .node(id)
             .ok_or_else(|| crate::error::GraphError::invalid("no such node"))?;
@@ -718,18 +745,15 @@ impl Transform {
             .unwrap_or(DMat3::IDENTITY);
         let euler = matrix_to_euler(&(pre.transpose() * rotation * axis.transpose()), order);
 
-        g.set_value(PlugRef::new(id, Self::ROTATE as i32), euler.into())?;
-        g.set_value(PlugRef::new(id, Self::SCALE as i32), scale.into())?;
+        set(g, Self::ROTATE, euler.into())?;
+        set(g, Self::SCALE, scale.into())?;
 
         // With pivots, translate is whatever makes the rest of the chain land on m's translation.
         let n = g.node(id).unwrap();
         let without_t = Self::local_matrix(n);
         let current = n.vec3(Self::TRANSLATE);
         let offset = without_t.w_axis.truncate() - current;
-        g.set_value(
-            PlugRef::new(id, Self::TRANSLATE as i32),
-            (translation - offset).into(),
-        )
+        set(g, Self::TRANSLATE, (translation - offset).into())
     }
 
     pub fn make_type(base: Arc<NodeType>) -> NodeType {

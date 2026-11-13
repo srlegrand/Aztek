@@ -14,6 +14,18 @@ export). They load at start, are listed in the Plug-in Manager under "Aztek (bui
 from loading there. `loadPlugin fbx`, `unloadPlugin fbx` and `pluginInfo -q -loaded fbx` work as for any other. File >
 Import and File > Export list a format while its plug-in is loaded.
 
+### Compiled plug-ins that ship with Aztek
+
+`plugins/` holds the source of compiled plug-ins other projects publish under licences that let them ship, built with
+the kit by the program's own build into `plug-ins/` beside the program (installed to `lib/aztek/plug-ins` on Linux,
+`plug-ins\` beside `aztek.exe` on Windows, `Contents/PlugIns/aztek` in the Mac app). Aztek looks there after the
+folders below, so a scene that requires one loads it with nothing else installed, and one of the same name on the path
+is used first. A file of that name built for the reference, earlier on the path, is passed over for the one Aztek ships.
+
+- `mgear_solvers`: mGear's solver nodes (`mgear_matrixConstraint`, `mgear_curveCns`, `mgear_rollSplineKine`,
+  `mgear_ikfk2Bone` and the rest), from mGear's source, unchanged. A rig built with mGear opens and works without mGear
+  installed. mGear's other plug-ins (`mGearWeightDriver`, `cvwrap`) are not shipped yet.
+
 ## The Plug-in Manager
 
 Windows > Settings/Preferences > Plug-in Manager lists every plug-in found, grouped by folder.
@@ -30,6 +42,7 @@ From script: `loadPlugin`, `unloadPlugin`, `pluginInfo` (`-q -listPlugins`, `-lo
 - The user folder's `plug-ins` (and the chosen version's `plug-ins`). See Preferences > User Folder.
 - The `plug-ins` folder of each module found (`.mod` files in the user folder's `modules`, and in `AZTEK_MODULE_PATH` and `MAYA_MODULE_PATH`).
 - The folders in `AZTEK_PLUG_IN_PATH` and `MAYA_PLUG_IN_PATH`.
+- Last, the folder of the compiled plug-ins that ship with Aztek.
 
 ## The user folder
 

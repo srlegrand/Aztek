@@ -645,6 +645,46 @@ fn upstream_of(g: &Graph, id: NodeId) -> Vec<NodeId> {
     out
 }
 
+/// listHistory's walk with -future, -allConnections or -levels: the node's shapes (or the node), then every node one
+/// connection further in turn, nearest first. Downstream with `future`. Transforms are listed but not walked through
+/// unless `all`. `levels` 0 is no limit.
+fn walk(g: &Graph, id: NodeId, future: bool, all: bool, levels: usize) -> Vec<NodeId> {
+    let is_transform = |n: NodeId| g.node(n).is_some_and(|x| x.ty().is_a("transform"));
+    let start: Vec<NodeId> = if is_transform(id) && !all {
+        let shapes = crate::dag::shapes(g, id, false);
+        if shapes.is_empty() { vec![id] } else { shapes }
+    } else {
+        vec![id]
+    };
+    let mut next: BTreeMap<NodeId, Vec<NodeId>> = BTreeMap::new();
+    for (dst, src) in g.connections() {
+        if src.node != dst.node {
+            let (from, to) = if future { (src.node, dst.node) } else { (dst.node, src.node) };
+            let l = next.entry(from).or_default();
+            if !l.contains(&to) {
+                l.push(to);
+            }
+        }
+    }
+    let mut out: Vec<NodeId> = Vec::new();
+    let mut queue: std::collections::VecDeque<(NodeId, usize)> = start.into_iter().map(|n| (n, 0)).collect();
+    while let Some((n, depth)) = queue.pop_front() {
+        if out.contains(&n) {
+            continue;
+        }
+        out.push(n);
+        if (is_transform(n) && n != id && !all) || (levels > 0 && depth >= levels) {
+            continue;
+        }
+        for &m in next.get(&n).into_iter().flatten() {
+            if !out.contains(&m) {
+                queue.push_back((m, depth + 1));
+            }
+        }
+    }
+    out
+}
+
 // ---------------------------------------------------------------------------------------------------------------------
 // Commands
 
@@ -713,8 +753,17 @@ pub fn register(c: &mut Commands<Session>) {
                 let prune = a.bool("pruneDagObjects");
                 let wanted = |id: NodeId| ty.is_none_or(|t| g.node(id).is_some_and(|n| n.ty().is_a(t))) && !(prune && g.node(id).is_some_and(|n| n.ty().dag));
                 let mut out = Vec::new();
+                let (future, all, levels) = (a.bool("future"), a.bool("allConnections"), a.get("levels").and_then(Value::as_u64).unwrap_or(0) as usize);
                 for name in objects(s, a) {
                     let Some(id) = g.find(&name)? else { aztek_ops::fail!("listHistory: no object named {name}") };
+                    if future || all || levels > 0 {
+                        for h in walk(g, id, future, all, levels) {
+                            if wanted(h) && !out.contains(&json!(g.path(h))) {
+                                out.push(json!(g.path(h)));
+                            }
+                        }
+                        continue;
+                    }
                     let Some(m) = components::as_mesh(g, id) else {
                         // Anything else, as the reference walks it: the object's shapes (or the node), then every node
                         // upstream of them through their inputs, nearest first. Transforms are listed but not walked
@@ -741,7 +790,10 @@ pub fn register(c: &mut Commands<Session>) {
         .undoable(false)
         .positional("objects")
         .flag(FlagDef::new("type", "typ", ArgType::String, Value::Null, "Only nodes of this type or a type derived from it (geometryFilter for every deformer)."))
-        .flag(FlagDef::new("pruneDagObjects", "pdo", ArgType::Bool, json!(false), "Leave out shapes and transforms: only the history nodes.")),
+        .flag(FlagDef::new("pruneDagObjects", "pdo", ArgType::Bool, json!(false), "Leave out shapes and transforms: only the history nodes."))
+        .flag(FlagDef::new("future", "f", ArgType::Bool, json!(false), "The nodes downstream instead: what the object feeds."))
+        .flag(FlagDef::new("allConnections", "ac", ArgType::Bool, json!(false), "Walk every connection, through transforms as well."))
+        .flag(FlagDef::new("levels", "lv", ArgType::Int, json!(0), "How many connections out to go; 0 for no limit.")),
     );
     register_types(c);
 }

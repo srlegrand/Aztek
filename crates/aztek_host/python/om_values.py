@@ -816,7 +816,8 @@ class MEulerRotation:
     @staticmethod
     def decompose(matrix, order=0):
         """The rotation of a pure rotation matrix, in the order."""
-        m = matrix
+        # The stored values, not indexing: a subclass may index by row (mGear's Matrix does).
+        m = matrix._m if isinstance(matrix, _MatrixBase) else [float(x) for x in matrix]
         names = _ORDERS[order]
         idx = {"x": 0, "y": 1, "z": 2}
         i, j, k = idx[names[0]], idx[names[1]], idx[names[2]]

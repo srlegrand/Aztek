@@ -843,6 +843,8 @@ class MFnTransform(MFnDagNode):
     def setTransformation(self, tm):
         _set_vec_attr(self._attr("translate"), tm._t)
         self.setScale(tm._s)
+        # Shear too: a matrix under a parent scaled unevenly needs it (rigs that flatten a twist rotator do this).
+        _set_vec_attr(self._attr("shear"), tm._sh)
         order = int(_cmds.getAttr(self._attr("rotateOrder")))
         q = tm._q * self._orient().inverse()
         self._set_euler(MEulerRotation.decompose(q.asMatrix(), order))

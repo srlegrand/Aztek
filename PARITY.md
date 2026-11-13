@@ -1755,3 +1755,42 @@ Harold background (issue 39):
   transforms. The background is one colour for the whole image: a textured background shader isn't evaluated per pixel.
 - Not reproduced: the background in bounces. Harold shows it to camera rays only. Arnold's `background_visibility`
   default was not confirmed from its documentation.
+
+### mGear rigs without mGear (13/11/2026)
+
+Checked by building mGear 5's biped template with mGear installed (Shifter, in batch), saving it, and opening the file
+in a session with no mGear: the rig's 124 joints come back where the building session had them (to 1e-11), every
+transform's world matrix matches, each of the 106 `mgear_matrixConstraint` nodes puts its joint on its driver, and the
+same thirteen control moves give the same joint moves in both. Not compared with the reference itself.
+
+- `mgear_solvers` ships with Aztek (plugins/, THIRD_PARTY.md) and is found by a file's `requires` line. A plug-in
+  built for the reference earlier on the path is passed over for it.
+- mGear's other two plug-ins are not shipped yet: `mGearWeightDriver` (RBF pose readers) needs locator nodes in the kit
+  and arrays inside arrays of compounds (`driverList[0].pose[2].poseInput[1]`), which Aztek's graph does not have;
+  `cvwrap` needs the same for its bind data. The biped's rig uses neither.
+- The plug-in kit read and wrote angles in degrees where the host holds radians: every plug-in's angle attribute was
+  57.3 times out (an `mgear_matrixConstraint`'s rotate). Fixed.
+- A plug-in deformer on a curve (mGear's `mgear_curveCns` on its spine and neck curves) is read as the reference writes
+  it, through the original shape, groupParts and tweak, and written the same way. Before, Aztek wrote its own attribute
+  names, which neither it nor the reference read back.
+- Object sets are written to and read from .ma files: members through `dagSetMembers` and `dnSetMembers`, quick select
+  sets by their `gCharacterSet` annotation. Before, plain object sets were left out of files. Component members are not
+  written (warned).
+- A set can hold sets, as the reference's can; selecting it selects what the sets in it hold. A set can't hold itself.
+- A constraint's rest rotation is written in degrees (it was written in radians and read as degrees). A joint's
+  `inverseScale` link to its parent is written only where the scene has it.
+- `parent` keeps the world matrix with a shear when the new parent is scaled unevenly (mGear flattens its twist
+  rotators), and leaves alone channels a connection drives.
+- A value set on a channel a constraint or pairBlend drives is taken without an error and the driver's value stays, as
+  the reference's passive outputs behave. Unverified against the reference: whether the value set shows until the
+  driver next computes.
+- `disconnectAttr` of one axis of a constraint connected whole (`crx` from `cr` into `rx` from `r`) leaves the other two
+  connected by axis, as the reference connects them.
+- `MFnTransform.setTransformation` sets the shear.
+- Commands: `addAttr -at message`; `controller -q obj` (its tag, or nothing); `listHistory -future -allConnections
+  -levels`; `dagPose -save -selection`; `parent -add -shape` (Aztek has no shape with two parents: the shape moves and
+  the first transform keeps a copy, named with `Orig`).
+- `MPlug.isChild`, `isArray`, `isConnected` and the other states are properties in API 2.0 and calls in API 1.0.
+- `MEulerRotation.decompose` reads the matrix's values rather than indexing it (mGear's Matrix indexes by row).
+- A compiled plug-in's failed compute is not reported while a file is being read, when nodes may compute before all
+  their inputs are connected.

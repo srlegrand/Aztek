@@ -51,7 +51,11 @@ fn membership_renames_undo() {
     run(&mut s, "selectSetMembers", json!({"args": ["Stuff"]}));
     assert_eq!(s.graph.selection().len(), 2);
 
-    assert!(s.run("addToSet", json!({"args": ["Stuff", "Pick"]})).is_err());
+    // A set may hold a set, as the reference's do, but not itself.
+    run(&mut s, "addToSet", json!({"args": ["Stuff", "Pick"]}));
+    assert_eq!(members(&mut s, "Stuff"), json!(["Crate", b, "Pick"]));
+    run(&mut s, "undo", json!({}));
+    assert!(s.run("addToSet", json!({"args": ["Stuff", "Stuff"]})).is_err());
     assert!(s.run("addToSet", json!({"args": ["Stuff", "nothing"]})).is_err());
 
     run(&mut s, "deleteSet", json!({"args": ["Pick"]}));

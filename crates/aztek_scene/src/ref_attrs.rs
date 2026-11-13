@@ -975,6 +975,17 @@ pub fn register(c: &mut Commands<Session>) {
                         let input = g.node(c)?.ty().attr_index("input")?;
                         g.source(&PlugRef::new(c, input as i32))
                     });
+                    // One axis of a connection made whole (crx to rx when cr drives r): the reference connects these by
+                    // axis, so the other two stay connected by axis.
+                    if g.source(&d) != Some(sp) && through != Some(sp) && d.component >= 0 && sp.component == d.component && g.source(&d.whole()) == Some(sp.whole()) {
+                        g.disconnect(&d.whole());
+                        for c in 0..3 {
+                            if c != d.component {
+                                g.connect(&PlugRef { component: c, ..sp }, &PlugRef { component: c, ..d }, false)?;
+                            }
+                        }
+                        return Ok(Value::Null);
+                    }
                     if g.source(&d) != Some(sp) && through != Some(sp) {
                         fail!("disconnectAttr: there is no connection from '{src}' to '{dst}'");
                     }

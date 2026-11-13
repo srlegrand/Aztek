@@ -338,9 +338,7 @@ pub fn parse(g: &Graph, items: &[String]) -> Result<Vec<Member>, String> {
     let mut out = Vec::new();
     for item in items {
         if let Ok(Some(n)) = g.find(item) {
-            if is_set(g.node(n).unwrap()) {
-                return Err(format!("{item} is a set; sets can't hold sets"));
-            }
+            // A set may hold sets, as the reference's do; selecting it selects what they hold.
             out.push(Member::object(n));
             continue;
         }
@@ -499,6 +497,11 @@ pub fn add(g: &mut Graph, set: NodeId, list: &[Member]) -> CmdResult<()> {
     if crate::shading::is_shading_group(g, set) {
         return crate::shading::assign(g, set, list);
     }
+    for m in list {
+        if m.kind == ComponentMode::Object && g.node(m.node).is_some_and(is_set) && (m.node == set || holds_set(g, m.node, set)) {
+            fail!("sets: {} would hold itself", g.path(set));
+        }
+    }
     let deformer = crate::deform_sets::deformer_of_set(g, set);
     let converted = if deformer.is_some() { crate::deform_sets::as_points(g, list) } else { Vec::new() };
     let list = if deformer.is_some() { &converted[..] } else { list };
@@ -601,6 +604,48 @@ pub fn remove(g: &mut Graph, set: NodeId, list: &[Member]) -> CmdResult<()> {
 }
 
 /// Selects the members of the sets: their nodes as objects, their components in component mode.
+/// Whether `outer` holds `inner`, directly or through sets it holds.
+fn holds_set(g: &Graph, outer: NodeId, inner: NodeId) -> bool {
+    let mut todo = vec![outer];
+    let mut seen = Vec::new();
+    while let Some(s) = todo.pop() {
+        if seen.contains(&s) {
+            continue;
+        }
+        seen.push(s);
+        for m in resolve(g, s) {
+            if m.kind == ComponentMode::Object && g.node(m.node).is_some_and(is_set) {
+                if m.node == inner {
+                    return true;
+                }
+                todo.push(m.node);
+            }
+        }
+    }
+    false
+}
+
+/// A set's members with the sets it holds opened up, as selecting it takes them.
+pub fn flattened(g: &Graph, set: NodeId) -> Vec<Member> {
+    let mut out = Vec::new();
+    let mut todo = vec![set];
+    let mut seen = Vec::new();
+    while let Some(s) = todo.pop() {
+        if seen.contains(&s) {
+            continue;
+        }
+        seen.push(s);
+        for m in resolve(g, s) {
+            if m.kind == ComponentMode::Object && g.node(m.node).is_some_and(is_set) {
+                todo.push(m.node);
+            } else {
+                out.push(m);
+            }
+        }
+    }
+    out
+}
+
 pub fn select(g: &mut Graph, sets: &[NodeId], add: bool) {
     let mut objects = if add { g.selection().to_vec() } else { Vec::new() };
     let mut picked: [BTreeMap<NodeId, Ids>; 3] = Default::default();
@@ -618,7 +663,7 @@ pub fn select(g: &mut Graph, sets: &[NodeId], add: bool) {
     };
     let mut first_kind = ComponentMode::Object;
     for &set in sets {
-        for m in resolve(g, set) {
+        for m in flattened(g, set) {
             // A component member selects the mesh's transform, as selecting components does.
             let obj = if m.kind == ComponentMode::Object { m.node } else { crate::dag::transform_of(g, m.node) };
             if !objects.contains(&obj) {

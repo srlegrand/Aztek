@@ -549,6 +549,9 @@ fn sync(g: &mut Graph, after: bool) {
 /// A set on a plug a rig node drives, routed to what the driver reads. None when the driver isn't a rig node.
 pub(crate) fn driven_scalar_set(g: &mut Graph, dst: &PlugRef, src: &PlugRef, v: f64) -> Option<DrivenEdit> {
     let driver = g.node(src.node)?.ty().name.clone();
+    if passive(&driver) {
+        return Some(DrivenEdit::Handled);
+    }
     if driver != "ikSolve" {
         return None;
     }
@@ -557,6 +560,13 @@ pub(crate) fn driven_scalar_set(g: &mut Graph, dst: &PlugRef, src: &PlugRef, v: 
         whole[dst.component as usize] = v;
     }
     Some(crate::ik::set_fk(g, src, whole))
+}
+
+/// Drivers whose outputs the reference makes passive: a set on what they drive is taken without an error, as the
+/// reference takes it, and what the driver gives stays (mGear sets a constrained scale this way, and builds on the
+/// constraint's value).
+fn passive(driver: &str) -> bool {
+    driver == "pairBlend" || CONSTRAINT_TYPES.contains(&driver)
 }
 
 /// Installs what keeps rig nodes in step with the scene. The delete hook is shared with instancing.
@@ -569,6 +579,9 @@ pub(crate) fn driven_vec_set(g: &mut Graph, dst: &PlugRef, src: &PlugRef, v: DVe
     let driver = g.node(src.node).map(|n| n.ty().name.clone())?;
     if driver == "ikSolve" {
         return Some(crate::ik::set_fk(g, src, v));
+    }
+    if passive(&driver) && driver != "geometryConstraint" {
+        return Some(DrivenEdit::Handled);
     }
     if driver == "geometryConstraint" && dst.attr as usize == Transform::TRANSLATE {
         return Some(crate::constraint::set_wanted_position(g, src.node, v));
