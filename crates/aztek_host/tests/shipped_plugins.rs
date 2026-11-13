@@ -76,4 +76,8 @@ fn mgear_solvers_ship_and_work() {
     mel(&mut c, "setAttr b.ty 7;");
     assert_eq!(nums(&mel(&mut c, "pointPosition crvShape.cv[1];")), vec![5.0, 7.0, 0.0]);
     let _ = std::fs::remove_file(&out);
+
+    // The source's status checks spell the code MStatus::kSuccess: a spring's goal reads, and the spring follows it.
+    mel(&mut c, "file -f -new; createNode transform -n goalT; createNode mgear_springNode -n spr; connectAttr goalT.t spr.goal; setAttr goalT.t 1 2 3;");
+    assert_eq!(nums(&mel(&mut c, "getAttr spr.output;")), vec![1.0, 2.0, 3.0]);
 }

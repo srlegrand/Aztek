@@ -433,6 +433,20 @@ connectAttr "joint1.bps" "bindPose1.wm[0]";
 connectAttr "joint2.bps" "bindPose1.wm[1]";
 "#;
 
+#[test]
+fn a_connected_bind_pre_matrix_stays_live() {
+    // A skin on a local rig: the influence's own world inverse as its bind pre-matrix, so moving it moves nothing.
+    let text = format!("{SKINNED}connectAttr \"joint2.wim\" \"skinCluster1.pm[1]\";\n");
+    let mut s = Session::new();
+    let w = read_text(&mut s, &text, false);
+    assert!(w.is_empty(), "{w:?}");
+    run(&mut s, "setAttr", json!({"args": ["joint2.ty", 1.0]}));
+    let m = mesh_of(&mut s, "bar");
+    assert!(near(&m.position(1).to_array(), &[2.0, 0.0, 0.0]), "{:?}", m.position(1));
+    let (out, _) = write_text(&mut s, "local.ma", None);
+    assert!(out.contains(r#"connectAttr "joint2.worldInverseMatrix" "skinCluster1.pm[1]";"#), "{out}");
+}
+
 fn weights(s: &Session, sk: &str) -> Vec<Vec<(u32, f64)>> {
     let id = s.graph.find(sk).unwrap().unwrap();
     skin::bind_of(&s.graph, id).unwrap().weights.clone()

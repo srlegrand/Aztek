@@ -367,6 +367,10 @@ impl AttrDef {
         }
         let lo = self.min_value.unwrap_or(f64::NEG_INFINITY);
         let hi = self.max_value.unwrap_or(f64::INFINITY);
+        // Limits that can't hold anything (a file's or a plug-in's, misread or wrong) hold nothing.
+        if lo.is_nan() || hi.is_nan() || lo > hi {
+            return;
+        }
         match v {
             PlugValue::Float(d) => *d = d.clamp(lo, hi),
             PlugValue::Int(i) => *i = (*i as f64).clamp(lo.ceil(), hi.floor()) as i64,

@@ -37,6 +37,7 @@ const SK_HEAT: usize = 10;
 pub(crate) const SK_BLEND: usize = 11;
 const SK_MOVE: usize = 12;
 const SK_BIND_METHOD: usize = 13;
+const SK_BIND_PRE: usize = 14;
 
 /// What a skinCluster stores: per influence (by matrix[] element) its bind pre-matrix and lock, per point its weights.
 #[derive(Debug, Clone, Default)]
@@ -215,7 +216,10 @@ impl NodeBehavior for SkinNode {
             .iter()
             .enumerate()
             .map(|(i, pre)| match d.element(SK_MATRIX, i as i32) {
-                Some(PlugValue::Matrix(m)) => Some(*m * *pre),
+                Some(PlugValue::Matrix(m)) => Some(*m * match d.element(SK_BIND_PRE, i as i32) {
+                    Some(PlugValue::Matrix(p)) => *p,
+                    _ => *pre,
+                }),
                 _ => None,
             })
             .collect();
@@ -333,6 +337,7 @@ fn register_types() {
                 data_attr("blendWeights", "bw", "Each point between linear (0) and dual quaternion (1), with skinningMethod 2."),
                 AttrDef { flags: flags::INPUT | flags::STORABLE, ..crate::attr_defs::bool_attr("moveJointsMode", false, "Joints move without moving the mesh.") },
                 int_attr("bindMethod", "bm", 0, "How the skin was bound: 0 closest distance, 1 closest in hierarchy, 2 heat map, 3 geodesic voxel."),
+                matrix_in("bindPreMatrix", "pm", true, "A connected bind pre-matrix for an influence; overrides the held one (a skin that moves with a local rig)."),
             ],
             create: Some(Arc::new(|| Box::new(SkinNode::default()))),
             ..Default::default()

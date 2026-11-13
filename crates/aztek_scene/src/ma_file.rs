@@ -1929,7 +1929,8 @@ impl Build<'_> {
                 };
                 let def = self.s.graph.attr(&p).clone();
                 // The reference saves what a layer's blend last put out; here it is computed.
-                if !def.has(flags::INPUT) && (n.ty == "animLayer" || n.ty.starts_with("animBlendNode") || n.ty.starts_with("HIK")) {
+                // The reference saves outputs' last values too (a composeMatrix's outputMatrix); here they are computed.
+                if !def.has(flags::INPUT) {
                     continue;
                 }
                 let Some(v) = plug_value(&def, p.component, chunk, 1.0) else { continue };
@@ -1957,6 +1958,10 @@ impl Build<'_> {
     }
 
     fn plain_connection(&mut self, c: &Conn, sn: usize, sa: &str, src: NodeId, dst: NodeId) {
+        // A nonlinear deformer's settings into its handle's shape, which here are one node: nothing to connect.
+        if src == dst && plain_attr(sa) == plain_attr(&c.dst_attr) {
+            return;
+        }
         // An extrude's profile and path are the first two of its curves here.
         let to = match (self.doc.nodes[c.dst].ty.as_str(), c.dst_attr.as_str()) {
             ("extrude", "pr" | "profile") => "ic[0]",
@@ -2308,6 +2313,21 @@ impl Build<'_> {
             };
             bind.locks[e as usize] = doc.nodes[src].truth(&["liw", "lockInfluenceWeights"]).unwrap_or(false);
         }
+        // A bind pre-matrix the file connects (a skin riding a local rig) stays live.
+        let pm = t.attr_index("bindPreMatrix").unwrap();
+        for c in doc.conns.iter().filter(|c| c.dst == sk && matches!(plain_attr(&c.dst_attr).as_str(), "pm" | "bindPreMatrix")) {
+            let (Some(e), Some(src)) = (first_index(&c.dst_attr).filter(|&e| e < 1 << 16), self.id(c.src)) else { continue };
+            let Ok(from) = self.s.graph.plug(&format!("{}.{}", self.s.graph.path(src), c.src_attr)) else {
+                self.warnings.push(format!("{}.{}: no such attribute for {}.pm[{e}]", doc.nodes[c.src].name, c.src_attr, n.name));
+                continue;
+            };
+            let _ = self.s.graph.connect(&from, &PlugRef::element(id, pm as i32, e as i32), false);
+            if let Ok(PlugValue::Matrix(m)) = self.s.graph.value(&from) {
+                if (e as usize) < bind.bind_pre.len() {
+                    bind.bind_pre[e as usize] = m;
+                }
+            }
+        }
         bind.weights = read_weights(n);
         for w in &mut bind.weights {
             w.retain(|x| x.1 != 0.0 && (x.0 as usize) < count);
@@ -2430,8 +2450,11 @@ impl Build<'_> {
                 }
             }
         }
+        // A pole vector constraint drives its handle, whose parent inverse it reads, even when its output goes through
+        // other nodes first (a blendColors switching between two pole vectors).
+        let pole_handle = (n.ty == "poleVectorConstraint").then(|| doc.input(i, &["cpim", "constraintParentInverseMatrix"]).map(|c| c.src)).flatten().filter(|&h| doc.nodes[h].ty == "ikHandle");
         // The driven object: where the outputs go, else what its parent matrix came from, else its DAG parent.
-        let driven = doc
+        let driven = pole_handle.or_else(|| doc
             .conns
             .iter()
             .find(|c| c.src == i && matches!(plain_attr(&c.src_attr).as_str(), "ctx" | "cty" | "ctz" | "ct" | "crx" | "cry" | "crz" | "cr" | "csx" | "csy" | "csz" | "cs"))
@@ -2439,7 +2462,7 @@ impl Build<'_> {
             // A constraint blended with animation goes through a pairBlend; what it drives is what that drives.
             .map(|d| if doc.nodes[d].ty == "pairBlend" { doc.conns.iter().find(|c| c.src == d && matches!(plain_attr(&c.src_attr).as_str(), "ot" | "otx" | "oty" | "otz" | "or" | "orx" | "ory" | "orz" | "outTranslate" | "outTranslateX" | "outTranslateY" | "outTranslateZ" | "outRotate" | "outRotateX" | "outRotateY" | "outRotateZ")).map_or(d, |c| c.dst) } else { d })
             .or_else(|| doc.input(i, &["cpim"]).map(|c| c.src))
-            .or(n.parent);
+            .or(n.parent));
         let Some(driven_id) = driven.and_then(|d| self.id(d)) else {
             self.warnings.push(format!("{}: {} drives nothing in the scene; skipped", n.name, n.ty));
             return;
@@ -2511,6 +2534,24 @@ impl Build<'_> {
         let Some(cname) = made.get(0).and_then(Value::as_str).map(str::to_string) else { return };
         let Ok(Some(c)) = self.s.graph.find(&cname) else { return };
         self.ids[i] = Some(c);
+        // The handle's pole vector comes from somewhere else in the file: the constraint's output goes where the file
+        // sends it, by the connections read later.
+        if let Some(h) = pole_handle {
+            let into_handle = doc.conns.iter().any(|x| x.src == i && x.dst == h);
+            if !into_handle {
+                let pv = PlugRef::new(driven_id, crate::ik::IkHandle::POLE_VECTOR as i32);
+                let g = &mut self.s.graph;
+                if g.source(&pv).is_some_and(|s| s.node == c) {
+                    g.disconnect(&pv);
+                }
+                for k in 0..3 {
+                    let pk = PlugRef { component: k, ..pv };
+                    if g.source(&pk).is_some_and(|s| s.node == c) {
+                        g.disconnect(&pk);
+                    }
+                }
+            }
+        }
         let t = self.s.graph.node(c).unwrap().type_arc().clone();
         let g = &mut self.s.graph;
         let set_vec = |g: &mut Graph, attr: &str, element: Option<i32>, v: DVec3| {
@@ -2807,6 +2848,10 @@ impl Build<'_> {
                     }
                 }
             };
+            // A nonlinear deformer's settings into its handle's shape, which here are one node.
+            if src_plug == dst_plug {
+                continue;
+            }
             if let Err(e) = self.s.graph.connect(&src_plug, &dst_plug, false) {
                 self.warnings.push(format!("{}.{} -> {}.{}: {e}", doc.nodes[sn].name, sa, doc.nodes[c.dst].name, c.dst_attr));
             }
@@ -4167,6 +4212,13 @@ impl Writer<'_> {
             self.conn(&format!("{jp}.wm"), &format!("{name}.ma[{e}]"));
             self.conn(&format!("{jp}.liw"), &format!("{name}.lw[{e}]"));
             self.conn(&format!("{jp}.obcc"), &format!("{name}.ifcl[{e}]"));
+        }
+        // Bind pre-matrices a connection drives (a skin on a local rig).
+        let pm = t.attr_index("bindPreMatrix").unwrap() as i32;
+        let into: Vec<(PlugRef, PlugRef)> = self.s.graph.connections().into_iter().filter(|(d, _)| d.node == sk && d.attr == pm).collect();
+        for (dst, src) in into {
+            let from = self.s.graph.plug_name(&src);
+            self.conn(&from, &format!("{name}.pm[{}]", dst.element));
         }
         o
     }

@@ -80,6 +80,8 @@ public:
     bool operator==(MS::MStatusCode code) const;
     bool operator!=(const MStatus& other) const;
     bool operator!=(MS::MStatusCode code) const;
+    bool operator==(MStatusCode code) const { return *this == MS::MStatusCode(code); }
+    bool operator!=(MStatusCode code) const { return *this != MS::MStatusCode(code); }
     operator bool() const;
     bool error() const;
     void clear();
@@ -98,6 +100,9 @@ private:
 // equalled a successful status (true).
 inline bool operator==(MS::MStatusCode code, const MStatus& s) { return s == code; }
 inline bool operator!=(MS::MStatusCode code, const MStatus& s) { return s != code; }
+// The same with the code spelled MStatus::kSuccess, as the reference's own check macros spell it.
+inline bool operator==(MStatus::MStatusCode code, const MStatus& s) { return s == code; }
+inline bool operator!=(MStatus::MStatusCode code, const MStatus& s) { return s != code; }
 
 std::ostream& operator<<(std::ostream& os, const MStatus& s);
 

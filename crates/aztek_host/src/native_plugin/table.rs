@@ -214,7 +214,7 @@ unsafe extern "C" fn curve_cvs(h: *const c_void, xyz: *mut f64) {
 unsafe extern "C" fn curve_eval(h: *const c_void, u: f64, point: *mut f64, tangent: *mut f64) {
     let Some(c) = curve_ref(h) else { return };
     let (a, b) = c.domain();
-    let u = u.clamp(a, b);
+    let u = if a <= b { u.clamp(a, b) } else { a };
     let (p, t) = (c.eval(u), c.tangent(u));
     for k in 0..3 {
         if !point.is_null() {
@@ -239,7 +239,7 @@ unsafe extern "C" fn curve_param_at_length(h: *const c_void, length: f64) -> f64
 unsafe extern "C" fn curve_length_at_param(h: *const c_void, u: f64) -> f64 {
     let Some(c) = curve_ref(h) else { return 0.0 };
     let (a, b) = c.domain();
-    let u = u.clamp(a, b);
+    let u = if a <= b { u.clamp(a, b) } else { a };
     // The same steps the whole length is measured in, as far as the parameter.
     let n = (c.spans() * 32).max(32);
     let step = (b - a) / n as f64;

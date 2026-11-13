@@ -1218,6 +1218,11 @@ fn add_attr(s: &mut Session, a: &Args) -> CmdResult {
     def.max_value = a.get("maxValue").and_then(Value::as_f64);
     def.soft_min = a.get("softMinValue").and_then(Value::as_f64);
     def.soft_max = a.get("softMaxValue").and_then(Value::as_f64);
+    if let (Some(lo), Some(hi)) = (def.min_value, def.max_value) {
+        if lo > hi {
+            fail!("addAttr: minValue {lo} is more than maxValue {hi}");
+        }
+    }
     // A script's numbers are in the current unit of what the attr measures.
     let k = aztek_ops::units::factor(def.unit);
     if k != 1.0 {

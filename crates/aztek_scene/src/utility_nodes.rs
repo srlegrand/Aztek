@@ -733,6 +733,15 @@ fn base_table() -> Vec<Spec> {
                 let o = mats(d, "matrixIn").into_iter().fold(DMat4::IDENTITY, |acc, x| x * acc);
                 set(d, "matrixSum", o);
             }),
+        // The reference's choice takes any kind of value; rigs use it to pick a space's matrix, which is what this one
+        // carries.
+        Spec("choice", "utility/general", "Passes on the input the selector names: input[selector].",
+            vec![iin("selector", "s", 0), multi(min_in("input", "i")), mout("output", "o")],
+            |d| {
+                let pick = i(d, "selector") as i32;
+                let o = d.elements(at(d, "input")).iter().find(|(k, _)| *k == pick).map_or(DMat4::IDENTITY, |(_, x)| x.as_matrix());
+                set(d, "output", o);
+            }),
         Spec("addMatrix", "utility/general", "Adds its matrices.",
             vec![multi(min_in("matrixIn", "i")), mout("matrixSum", "o")],
             |d| {

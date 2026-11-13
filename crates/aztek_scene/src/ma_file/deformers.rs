@@ -488,6 +488,10 @@ impl Build<'_> {
     fn connect_quietly(&mut self, a: &str, b: &str) {
         let g = &mut self.s.graph;
         if let (Ok(x), Ok(y)) = (g.plug(a), g.plug(b)) {
+            // A nonlinear's settings into its handle's shape, which here are the one node.
+            if x == y {
+                return;
+            }
             if let Err(e) = g.connect(&x, &y, true) {
                 self.warnings.push(format!("{a} -> {b}: {e}"));
             }

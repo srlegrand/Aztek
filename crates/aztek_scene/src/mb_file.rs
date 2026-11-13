@@ -186,6 +186,9 @@ fn type_table() -> &'static HashMap<[u8; 4], &'static str> {
                 }
             }
         }
+        // The matrix nodes' ids are numbers, not four letters.
+        m.insert([0x58, 0x00, 0x03, 0x00], "decomposeMatrix");
+        m.insert([0x58, 0x00, 0x03, 0x01], "composeMatrix");
         for (tag, name) in MORE_TYPE_IDS {
             if let Ok(t) = <[u8; 4]>::try_from(tag.as_bytes()) {
                 m.insert(t, *name);
@@ -612,6 +615,18 @@ impl Writer {
                     let _ = write!(vals, " {}", q(s));
                 });
             }
+            b"NRBC" => {
+                match nurbs_curve(c.take(c.left())) {
+                    Some(text) => {
+                        ty = Some("nurbsCurve");
+                        vals = text;
+                    }
+                    None => {
+                        *self.unknown_values.entry("NRBC (layout not recognised)".into()).or_default() += 1;
+                        return;
+                    }
+                }
+            }
             b"MESH" => {
                 if attr != "o" && attr != "ci" {
                     *self.unknown_values.entry(format!("MESH on .{attr}")).or_default() += 1;
@@ -635,63 +650,95 @@ impl Writer {
         let _ = writeln!(self.body, "{head} {plug}{typed}{vals};");
     }
 
-    /// addAttr: code, three flag bytes, a word, the data type, long and short names, a word, then the minimum,
-    /// maximum and default where the flags say so.
+    /// addAttr: a four-letter code, four flag bytes, a word, the data type, long and short names, an enum's
+    /// fields, a word, then the minimum, maximum and default where the flags say so.
     fn add_attr(&mut self, c: &mut Cursor) {
-        let code = c.str();
-        let f = c.take(3).to_vec();
+        let code = String::from_utf8_lossy(c.take(4)).into_owned();
+        let f = c.take(4).to_vec();
         c.u32();
         let data_tag = c.take(4).to_vec();
         let long = c.str();
         let short = c.str();
-        c.u32();
         if !c.ok || long.is_empty() {
             return;
         }
-        let (show, has) = (f.get(1).copied().unwrap_or(0), f.get(2).copied().unwrap_or(0));
+        let at = match code.as_str() {
+            "aTYP" => None,
+            "aBOL" => Some("bool"),
+            "aDBL" => Some("double"),
+            "aFLT" => Some("float"),
+            "aLI1" | "aLNG" => Some("long"),
+            "aSHT" => Some("short"),
+            "aBYT" => Some("byte"),
+            "aCHR" => Some("char"),
+            "aENM" => Some("enum"),
+            "aMSG" => Some("message"),
+            "aTIM" => Some("time"),
+            "aANG" => Some("doubleAngle"),
+            "aDIS" => Some("doubleLinear"),
+            other => {
+                self.warnings.push(format!("added attribute {long}: type code {} isn't known; left out", other.escape_debug()));
+                return;
+            }
+        };
+        let fields = if code == "aENM" { Some(c.str()) } else { None };
+        c.u32();
+        let (show, has) = (f.get(2).copied().unwrap_or(0), f.get(3).copied().unwrap_or(0));
         let mut line = String::from("\taddAttr -ci true");
-        if show & 0x40 != 0 {
+        if show & 0x40 != 0 && code != "aMSG" {
             line.push_str(" -k true");
         }
         if show & 0x20 != 0 {
             line.push_str(" -h true");
         }
         let _ = write!(line, " -sn {} -ln {}", q(&short), q(&long));
-        if has & 0x02 != 0 {
-            let _ = write!(line, " -min {}", num(c.f64()));
+        let finite = |x: f64| x.is_finite().then_some(x);
+        let min = if has & 0x02 != 0 && c.left() >= 8 { finite(c.f64()) } else { None };
+        let max = if has & 0x04 != 0 && c.left() >= 8 { finite(c.f64()) } else { None };
+        let dv = if has & 0x08 != 0 && c.left() >= 12 && c.take(4) == b"DBLE" { finite(c.f64()) } else { None };
+        // Limits only on a number, and only a pair that makes sense.
+        let numeric = !matches!(code.as_str(), "aTYP" | "aMSG" | "aENM" | "aBOL");
+        let (min, max) = match (min, max) {
+            (Some(a), Some(b)) if a > b => (None, None),
+            other => other,
+        };
+        if numeric {
+            if let Some(v) = min {
+                let _ = write!(line, " -min {}", num(v));
+            }
+            if let Some(v) = max {
+                let _ = write!(line, " -max {}", num(v));
+            }
         }
-        if has & 0x04 != 0 {
-            let _ = write!(line, " -max {}", num(c.f64()));
+        if let (Some(v), true) = (dv, code != "aMSG" && code != "aTYP") {
+            let _ = write!(line, " -dv {}", num(v));
         }
-        if has & 0x08 != 0 && c.left() >= 12 && c.take(4) == b"DBLE" {
-            let _ = write!(line, " -dv {}", num(c.f64()));
-        }
-        if code == "aTYP" {
-            let dt = match <[u8; 4]>::try_from(data_tag.as_slice()).unwrap_or_default() {
-                [b'S', b'T', b'R', b' '] => "string",
-                [b'S', b'T', b'R', b'#'] => "stringArray",
-                [b'M', b'A', b'T', b'R'] => "matrix",
-                [b'D', b'B', b'L', b'#'] => "doubleArray",
-                [b'I', b'3', b'2', b'#'] => "Int32Array",
-                [b'P', b'N', b'T', b'#'] => "pointArray",
-                [b'M', b'E', b'S', b'H'] => "mesh",
-                [b'C', b'M', b'P', b'#'] => "componentList",
-                other => {
-                    self.warnings.push(format!("added attribute {long}: data type {} isn't known; left out", tag_name(other)));
-                    return;
+        match at {
+            Some(at) => {
+                let _ = write!(line, " -at {}", q(at));
+                if let Some(en) = fields.filter(|e| !e.is_empty()) {
+                    let _ = write!(line, " -en {}", q(&en));
                 }
-            };
-            let _ = write!(line, " -dt {}", q(dt));
-        } else {
-            let at = match code.as_str() {
-                "aBOL" => "bool",
-                "aDBL" => "double",
-                other => {
-                    self.warnings.push(format!("added attribute {long}: type code {other} isn't known; left out"));
-                    return;
-                }
-            };
-            let _ = write!(line, " -at {}", q(at));
+            }
+            None => {
+                let dt = match <[u8; 4]>::try_from(data_tag.as_slice()).unwrap_or_default() {
+                    [b'S', b'T', b'R', b' '] => "string",
+                    [b'S', b'T', b'R', b'#'] => "stringArray",
+                    [b'M', b'A', b'T', b'R'] => "matrix",
+                    [b'D', b'B', b'L', b'#'] => "doubleArray",
+                    [b'I', b'3', b'2', b'#'] => "Int32Array",
+                    [b'P', b'N', b'T', b'#'] => "pointArray",
+                    [b'V', b'C', b'T', b'#'] => "vectorArray",
+                    [b'M', b'E', b'S', b'H'] => "mesh",
+                    [b'N', b'C', b'R', b'V'] => "nurbsCurve",
+                    [b'C', b'M', b'P', b'#'] => "componentList",
+                    other => {
+                        self.warnings.push(format!("added attribute {long}: data type {} isn't known; left out", tag_name(other)));
+                        return;
+                    }
+                };
+                let _ = write!(line, " -dt {}", q(dt));
+            }
         }
         let _ = writeln!(self.body, "{line};");
     }
@@ -787,6 +834,48 @@ fn xform(c: &mut Cursor) -> Option<String> {
 }
 
 /// A mesh's geometry chunk as the `.vt`, `.ed`, `.n` and `.fc` lines (and its uv and colour sets) of `.ma`.
+/// A curve's shape: degree, spans, form, rational, dimension, the knots, then the CVs, as the text has them.
+/// Read only when every count agrees and nothing is left over; otherwise None and the curve is left out.
+fn nurbs_curve(b: &[u8]) -> Option<String> {
+    // Where the rational flag is a byte or a word.
+    for rational_width in [4usize, 1] {
+        let mut c = Cursor::new(b);
+        let (degree, spans, form) = (c.u32() as usize, c.u32() as usize, c.u32());
+        let rational = if rational_width == 4 { c.u32() } else { u32::from(c.u8()) };
+        let dim = c.u32() as usize;
+        if !(1..=7).contains(&degree) || spans == 0 || spans > 1 << 20 || form > 2 || rational > 1 || !(2..=3).contains(&dim) {
+            continue;
+        }
+        let nk = c.count(8);
+        if !c.ok || nk != spans + 2 * degree - 1 {
+            continue;
+        }
+        let knots: Vec<f64> = (0..nk).map(|_| c.f64()).collect();
+        if knots.iter().any(|k| !k.is_finite()) || knots.windows(2).any(|w| w[1] < w[0]) {
+            continue;
+        }
+        let per = dim + rational as usize;
+        let ncv = c.count(8 * per);
+        if !c.ok || ncv != spans + degree || c.left() != ncv * per * 8 {
+            continue;
+        }
+        let cvs: Vec<f64> = (0..ncv * per).map(|_| c.f64()).collect();
+        if cvs.iter().any(|x| !x.is_finite()) {
+            continue;
+        }
+        let mut out = format!(" {degree} {spans} {form} {} {dim} {nk}", if rational == 1 { "yes" } else { "no" });
+        for k in &knots {
+            let _ = write!(out, " {}", num(*k));
+        }
+        let _ = write!(out, " {ncv}");
+        for x in &cvs {
+            let _ = write!(out, " {}", num(*x));
+        }
+        return Some(out);
+    }
+    None
+}
+
 fn mesh(c: &mut Cursor) -> Option<String> {
     let mut out = String::new();
     let nf = c.count(4);
@@ -1013,6 +1102,74 @@ mod tests {
         assert_eq!(double_or_ticks(2.5f64.to_bits(), per), 2.5);
         assert_eq!(double_or_ticks(0, per), 0.0);
         assert!(double_or_ticks((-0.0f64).to_bits(), per) == 0.0);
+    }
+
+    fn attr_record(code: &[u8; 4], flags: [u8; 4], name: &str, fields: Option<&str>, min: f64, max: f64, dv: f64) -> Vec<u8> {
+        let mut b = code.to_vec();
+        b.extend(flags);
+        b.extend([0, 0, 0, 1, 0, 0, 0, 0]);
+        for _ in 0..2 {
+            b.extend(name.as_bytes());
+            b.push(0);
+        }
+        if let Some(f) = fields {
+            b.extend(f.as_bytes());
+            b.push(0);
+        }
+        b.extend([0; 4]);
+        if flags[3] & 0x02 != 0 {
+            b.extend(min.to_be_bytes());
+        }
+        if flags[3] & 0x04 != 0 {
+            b.extend(max.to_be_bytes());
+        }
+        if flags[3] & 0x08 != 0 {
+            b.extend(b"DBLE");
+            b.extend(dv.to_be_bytes());
+        }
+        b
+    }
+
+    fn added(b: &[u8]) -> (String, Vec<String>) {
+        let mut w = Writer::default();
+        w.add_attr(&mut Cursor::new(b));
+        (w.body, w.warnings)
+    }
+
+    #[test]
+    fn added_attributes_of_every_kind() {
+        // The first flag byte set, as a rig's attributes have it: the code still ends after four letters.
+        let (body, warn) = added(&attr_record(b"aDBL", [0x01, 0xf8, 0xc0, 0x4e], "blend", None, 0.0, 1.0, 0.5));
+        assert!(warn.is_empty(), "{warn:?}");
+        assert_eq!(body, "\taddAttr -ci true -k true -sn \"blend\" -ln \"blend\" -min 0 -max 1 -dv 0.5 -at \"double\";\n");
+        let (body, _) = added(&attr_record(b"aENM", [0x00, 0xf8, 0x02, 0x4e], "space", Some("world:local"), 0.0, 1.0, 1.0));
+        assert_eq!(body, "\taddAttr -ci true -sn \"space\" -ln \"space\" -dv 1 -at \"enum\" -en \"world:local\";\n");
+        let (body, _) = added(&attr_record(b"aMSG", [0x00, 0xf8, 0x00, 0x00], "compRoot", None, 0.0, 0.0, 0.0));
+        assert_eq!(body, "\taddAttr -ci true -sn \"compRoot\" -ln \"compRoot\" -at \"message\";\n");
+        let (body, _) = added(&attr_record(b"aFLT", [0x00, 0xf8, 0x40, 0x08], "RBF_Multiplier", None, 0.0, 0.0, 2.0));
+        assert!(body.contains("-dv 2 -at \"float\""), "{body}");
+        // Limits that hold nothing are left off rather than read.
+        let (body, _) = added(&attr_record(b"aDBL", [0x00, 0xf8, 0x00, 0x06], "roll", None, 1.044e208, 0.0, 0.0));
+        assert!(!body.contains("-min") && !body.contains("-max"), "{body}");
+    }
+
+    #[test]
+    fn curve_shapes_read_only_when_they_add_up() {
+        let mut b = Vec::new();
+        for w in [3u32, 1, 0, 0, 3, 6] {
+            b.extend(w.to_be_bytes());
+        }
+        for k in [0.0f64, 0.0, 0.0, 1.0, 1.0, 1.0] {
+            b.extend(k.to_be_bytes());
+        }
+        b.extend(4u32.to_be_bytes());
+        for x in [0.0f64, 0.0, 0.0, 1.0, 0.0, 0.0, 2.0, 0.0, 0.0, 3.0, 0.0, 0.0] {
+            b.extend(x.to_be_bytes());
+        }
+        assert_eq!(nurbs_curve(&b).as_deref(), Some(" 3 1 0 no 3 6 0 0 0 1 1 1 4 0 0 0 1 0 0 2 0 0 3 0 0"));
+        b.push(0);
+        assert_eq!(nurbs_curve(&b), None);
+        assert_eq!(nurbs_curve(&[0xff, 0, 7]), None);
     }
 
     #[test]

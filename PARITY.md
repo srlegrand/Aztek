@@ -1794,3 +1794,30 @@ same thirteen control moves give the same joint moves in both. Not compared with
 - `MEulerRotation.decompose` reads the matrix's values rather than indexing it (mGear's Matrix indexes by row).
 - A compiled plug-in's failed compute is not reported while a file is being read, when nodes may compute before all
   their inputs are connected.
+
+### Rigs from user files, round two (13/11/2026)
+
+Checked against a non-mGear character rig (.ma) and the load log of an mGear rig saved as .mb; neither is compared
+with the reference. The .mb itself was not available, so its fixes are checked against the log and against byte
+layouts made up from the other .mb files here, not against the file.
+
+- A skinCluster's `bindPreMatrix` can be connected (a skin riding a local rig: `wim` of a group into `pm[i]`), and the
+  connection stays live and is saved. Before, the value was read once and the cloth on the character's arm stood
+  straight up.
+- `choice` is a node (an IK control's space switch picks its matrix through one). Before, the controls sat at the origin.
+- A pole vector constraint whose output goes through a blendColors into the handle (an IK/FK switch) is wired that way.
+- A nonlinear deformer's settings into its handle's shape are not reported as cycles: here they are one node.
+- A value set in a file on an attribute that is an output (`decomposeMatrix.omat`) is passed over without a warning.
+- .mb added attributes: the four letters of the type are read as four bytes (a set flag byte after them made every
+  double, bool and float attribute of an mGear rig unreadable), and message, enum (with its fields), float, long, short,
+  byte, char, time, angle and distance types are read. A minimum above the maximum is left off rather than kept.
+- .mb node types the table lacked: `controller`, `decomposeMatrix` and `composeMatrix` (numbered ids), the math nodes
+  and the rest the reference's 2026 node list has, from [maya-node-list](https://github.com/yamahigashi/maya-node-list).
+- .mb curve shapes (`NRBC`) are read when every count in them agrees; the layout is inferred from the .ma form and not
+  yet seen in a file. Otherwise the shape is left out, as before.
+- An attribute's limits that can't hold a value (minimum above maximum, or not a number) are ignored instead of
+  stopping the program. `addAttr` refuses a minimum above the maximum.
+- The plug-in kit compared `MStatus::kSuccess != status` through `bool`, so every such check failed (mGear's spring:
+  "API error detected in springNode.cpp at line 152"). Fixed.
+- Not done: Aztek has no `time1` node, so a plug-in node's time input connected to it is not connected; mGear's spring
+  reacts to its goal moving but not to playback.
