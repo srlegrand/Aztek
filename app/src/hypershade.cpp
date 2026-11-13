@@ -326,26 +326,33 @@ private:
         l->setSelectionMode(QAbstractItemView::ExtendedSelection);
         l->setContextMenuPolicy(Qt::CustomContextMenu);
         l->setObjectName("hypershadeSwatches");
-        // A swatch picked here is the node selected, which the Property Editor and the Material Viewer then show.
+        // A swatch picked here is the node selected, which the Property Editor and the Material Viewer then show. With Ctrl
+        // or Shift held the picks of the other tabs stay, as the reference keeps a selection across the Browser's tabs.
+        // Sets are picked as themselves, not as their members.
         connect(l, &QListWidget::itemSelectionChanged, this, [this, l] {
             if (filling_) return;
+            const bool keep = QApplication::keyboardModifiers() & (Qt::ControlModifier | Qt::ShiftModifier);
+            if (!keep && !l->selectedItems().isEmpty()) {
+                filling_ = true;
+                for (QListWidget* other : lists_)
+                    if (other != l) other->clearSelection();
+                filling_ = false;
+            }
             QJsonArray names;
-            for (QListWidgetItem* it : l->selectedItems()) names.append(it->text());
-            if (!names.isEmpty()) exec("select", QJsonObject{{"args", names}});
+            for (QListWidget* other : lists_) {
+                if (other != l && !keep) continue;
+                for (QListWidgetItem* it : other->selectedItems())
+                    if (!names.contains(it->text())) names.append(it->text());
+            }
+            if (!names.isEmpty()) exec("select", QJsonObject{{"args", names}, {"noExpand", true}});
         });
-        connect(l, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem* it) {
-            exec("select", one(it->text()));
-            graph(4);
-        });
+        connect(l, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem* it) { graph_node(it->text()); });
         connect(l, &QListWidget::customContextMenuRequested, this, [this, l, title](const QPoint& at) {
             QListWidgetItem* it = l->itemAt(at);
             if (!it) return;
             const QString n = it->text();
             QMenu m;
-            m.addAction("Graph Network", [this, n] {
-                exec("select", one(n));
-                graph(4);
-            });
+            m.addAction("Graph Network", [this, n] { graph_node(n); });
             if (title == "Materials") {
                 m.addSeparator();
                 m.addAction("Assign Material To Selection", [n] { exec("hyperShade", QJsonObject{{"assign", n}}); });
@@ -376,6 +383,15 @@ private:
 
     void graph(int depth) {
         if (NodeEditor* ed = editor()) ed->graph_selection(depth);
+    }
+
+    // Graph Network from the Browser: any node, a render setting, camera, light or shading group as well as a material.
+    // One that nothing is wired to shows all its attributes, so there is something to wire from.
+    void graph_node(const QString& n) {
+        exec("select", QJsonObject{{"args", QJsonArray{n}}, {"noExpand", true}});
+        graph(4);
+        if (NodeEditor* ed = editor())
+            if (!ed->wired(n)) ed->add_nodes({n}, 3);
     }
 
     void frame() {

@@ -50,7 +50,7 @@ fn shader_id(p: &Prim) -> String {
 
 /// The surface shader a Material's output reaches.
 fn surface_shader(c: &Ctx, mat: &Prim) -> Option<Prim> {
-    for name in ["outputs:surface", "outputs:displayColor:surface", "outputs:mtlx:surface"] {
+    for name in ["outputs:surface", "outputs:arnold:surface", "outputs:displayColor:surface", "outputs:mtlx:surface"] {
         if let Some((p, _)) = source_of(c, &mat.attribute(name)) {
             return Some(p);
         }
@@ -155,6 +155,12 @@ fn build_material(c: &mut Ctx, path: &sdf::Path) -> Result<Option<String>, Strin
         return Ok(Some(mat_name));
     }
     let Some(sh) = surface_shader(c, &mat) else { return Ok(None) };
+    if shader_id(&sh).starts_with("arnold:") {
+        let Some(shader_name) = arnold_node(c, &sh)? else { return Ok(None) };
+        let sg = make_group(c, &mat_name)?;
+        connect(c, &format!("{shader_name}.outColor"), &format!("{sg}.surfaceShader"))?;
+        return Ok(Some(sg));
+    }
     let ty = material_type(c, &sh);
     let name = node_name(sh.path().name().unwrap_or("surface"));
     let made = c.s.run("shadingNode", json!({"args": [ty.clone()], "asShader": true, "name": name})).map_err(|e| e.to_string())?;
@@ -217,6 +223,135 @@ fn build_material(c: &mut Ctx, path: &sdf::Path) -> Result<Option<String>, Strin
     Ok(Some(sg))
 }
 
+/// The node type for an Arnold shader id: arnold:flat is aiFlat, arnold:standard_surface aiStandardSurface, as the
+/// reference's Arnold plug-in names them.
+fn arnold_type(id: &str) -> Option<String> {
+    let id = id.strip_prefix("arnold:")?;
+    aztek_scene::harold_nodes::register_types();
+    let mut out = String::from("ai");
+    for part in id.split('_').filter(|p| !p.is_empty()) {
+        let mut ch = part.chars();
+        out.extend(ch.next().map(|f| f.to_ascii_uppercase()));
+        out.push_str(ch.as_str());
+    }
+    aztek_scene::types::find(&out).map(|_| out)
+}
+
+/// snake_case to camelCase, for the shaders whose attributes the reference's plug-in names that way (shadow_color is
+/// shadowColor on aiShadowMatte).
+fn camel(name: &str) -> String {
+    let mut out = String::new();
+    let mut up = false;
+    for ch in name.chars() {
+        if ch == '_' {
+            up = true;
+        } else if up {
+            out.push(ch.to_ascii_uppercase());
+            up = false;
+        } else {
+            out.push(ch);
+        }
+    }
+    out
+}
+
+/// An Arnold shader prim (info:id arnold:...) as its node, with its inputs set and the shaders it reads made and
+/// connected. Shared by every input that reads it. None for a shader with no node here.
+fn arnold_node(c: &mut Ctx, sh: &Prim) -> Result<Option<String>, String> {
+    let key = format!("arnold node {}", sh.path().as_str());
+    if let Some(Some(made)) = c.materials.get(&key) {
+        return Ok(Some(made.clone()));
+    }
+    let Some(ty) = arnold_type(&shader_id(sh)) else {
+        c.warnings.push(format!("{}: no node for the Arnold shader {}", sh.path(), shader_id(sh)));
+        return Ok(None);
+    };
+    let flag = match aztek_scene::harold_nodes::classification(&ty).unwrap_or_default() {
+        k if k.starts_with("texture") => "asTexture",
+        k if k.starts_with("shader") => "asShader",
+        _ => "asUtility",
+    };
+    let name = node_name(sh.path().name().unwrap_or("shader"));
+    let made = c.s.run("shadingNode", json!({"args": [ty], flag: true, "name": name})).map_err(|e| e.to_string())?;
+    let node_name_made = result_name(&made);
+    c.materials.insert(key, Some(node_name_made.clone()));
+    let Some(id) = find(c, &node_name_made) else { return Ok(None) };
+    for a in sh.authored_attributes().unwrap_or_default() {
+        let full = a.name().to_string();
+        let Some(input) = full.strip_prefix("inputs:") else { continue };
+        if input == "name" {
+            continue;
+        }
+        let attr = [input.to_string(), camel(input)].into_iter().find(|n| plug_of(&c.s.graph, id, n).is_some());
+        let Some(attr) = attr else { continue };
+        if let Some((src, out)) = source_of(c, &a) {
+            if shader_id(&src).starts_with("arnold:") {
+                if let Some(from) = arnold_node(c, &src)? {
+                    let colour = get_v3(&mut c.s.graph, id, &attr).is_some();
+                    let out = out.strip_prefix("outputs:").unwrap_or("out");
+                    let plug = match (out, colour) {
+                        ("out", true) => "outColor",
+                        ("out", false) => "outAlpha",
+                        ("r", _) => "outColorR",
+                        ("g", _) => "outColorG",
+                        ("b", _) => "outColorB",
+                        ("a", _) => "outAlpha",
+                        (o, _) => o,
+                    };
+                    if let Err(e) = connect(c, &format!("{from}.{plug}"), &format!("{node_name_made}.{attr}")) {
+                        c.warnings.push(format!("{}: {e}", a.path()));
+                    }
+                }
+            }
+            continue;
+        }
+        if let Ok(Some(asset)) = a.get_at::<AssetPath>(at(None)) {
+            let path = crate::mesh_read::asset_on_disk(asset.resolved_path().unwrap_or(asset.asset_path()));
+            set_attr(&mut c.s.graph, id, &attr, PlugValue::String(path));
+        } else if let Some(v) = crate::import::value_to_plug(&a) {
+            set_attr(&mut c.s.graph, id, &attr, v);
+        }
+    }
+    Ok(Some(node_name_made))
+}
+
+/// The options' background, as Arnold's USD writes it: a RenderSettings (or, from older writers, an ArnoldOptions) prim
+/// whose arnold:global:background names an ArnoldNodeGraph, whose outputs:background reads the shader. That shader is
+/// made and connected to defaultArnoldRenderOptions.background, as the reference's Arnold plug-in connects it.
+pub fn read_background(c: &mut Ctx) -> Result<(), String> {
+    let mut found = None;
+    let mut todo: Vec<Prim> = c.stage.root_prims().unwrap_or_default().iter().filter_map(|n| c.stage.prim(format!("/{}", n.as_str()).as_str()).ok()).collect();
+    while let Some(p) = todo.pop() {
+        let ty = p.type_name().ok().flatten().map(|t| t.as_str().to_string()).unwrap_or_default();
+        if matches!(ty.as_str(), "RenderSettings" | "ArnoldOptions") {
+            for name in ["arnold:global:background", "arnold:background", "background"] {
+                let a = p.attribute(name);
+                let target = a.get_at::<String>(at(None)).ok().flatten().or_else(|| a.connections().ok().and_then(|t| t.first().map(|x| x.prim_path().as_str().to_string())));
+                if let Some(t) = target.filter(|t| !t.is_empty()) {
+                    found = Some(t);
+                    break;
+                }
+            }
+            if found.is_some() {
+                break;
+            }
+        }
+        todo.extend(p.children().unwrap_or_default());
+    }
+    let Some(target) = found else { return Ok(()) };
+    let Ok(mut prim) = c.stage.prim(target.as_str()) else { return Ok(()) };
+    if !prim.is_valid().unwrap_or(false) {
+        return Ok(());
+    }
+    if prim.type_name().ok().flatten().is_some_and(|t| t.as_str() == "ArnoldNodeGraph") {
+        let Some((sh, _)) = source_of(c, &prim.attribute("outputs:background")) else { return Ok(()) };
+        prim = sh;
+    }
+    let Some(node) = arnold_node(c, &prim)? else { return Ok(()) };
+    c.s.graph.without_undo(aztek_scene::harold_nodes::make_defaults);
+    connect(c, &format!("{node}.outColor"), "defaultArnoldRenderOptions.background")
+}
+
 /// The material a prim is bound to, inherited down namespace.
 fn bound_material(prim: &Prim) -> Option<sdf::Path> {
     let mut p = Some(prim.clone());
@@ -253,6 +388,7 @@ fn assign(c: &mut Ctx, members: Vec<String>, sg: &str) -> Result<(), String> {
 }
 
 pub fn read_all(c: &mut Ctx) -> Result<(), String> {
+    read_background(c)?;
     let mut meshes: Vec<(String, NodeId, Vec<u32>)> = c.meshes.iter().map(|(k, v)| (k.clone(), v.0, v.1.clone())).collect();
     meshes.sort_by(|a, b| a.0.cmp(&b.0));
     for (path, shape, face_map) in meshes {

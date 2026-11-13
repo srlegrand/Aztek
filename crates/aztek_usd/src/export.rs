@@ -57,6 +57,10 @@ pub struct Opts {
     pub up_axis: String,
     pub out_dir: String,
     pub stages_as_refs: bool,
+    /// Aztek's: proxy shapes as payloads rather than references.
+    pub stages_as_payloads: bool,
+    /// Aztek's: the written stage composed into one layer.
+    pub flatten: bool,
 }
 
 /// One prim's attribute: its type and value over the frames, plus the fields written beside it.
@@ -218,6 +222,8 @@ fn opts_of(a: &Args, _s: &Session) -> CmdResult<Opts> {
         up_axis: match up.as_str() { "mayaPrefs" | "none" | "" => scene_up.to_string(), o => o.to_ascii_uppercase() },
         out_dir,
         stages_as_refs: flag("exportStagesAsRefs", true),
+        stages_as_payloads: flag("exportStagesAsPayloads", false),
+        flatten: flag("flatten", false),
     })
 }
 
@@ -641,7 +647,20 @@ fn export_inner(s: &mut Session, o: &Opts) -> Result<(), String> {
         out.layer_meta(openusd::sdf::FieldKey::CustomLayerData, Value::Dictionary(d));
     }
     out.finish()?;
-    out::write(&out.data, &o.file, &o.default_format)
+    if !o.flatten {
+        return out::write(&out.data, &o.file, &o.default_format);
+    }
+    // Flattened: written beside the file first, so the stages it references resolve as they will from there, then
+    // composed into one layer that takes the file's place.
+    let temp = format!("{}.flatten.usdc", o.file);
+    out::write(&out.data, &temp, "usdc")?;
+    let flat = (|| -> Result<openusd::sdf::Data, String> {
+        let stage = openusd::usd::Stage::open(&temp).map_err(|e| format!("{temp}: {e}"))?;
+        let layer = stage.flatten().map_err(|e| format!("flatten: {e}"))?;
+        openusd::sdf::Data::from_abstract(layer.data()).map_err(|e| format!("flatten: {e}"))
+    })();
+    let _ = std::fs::remove_file(&temp);
+    out::write(&flat?, &o.file, &o.default_format)
 }
 
 fn default_prim_name(o: &Opts, base: &str, items: &[Item]) -> Option<String> {
@@ -775,6 +794,8 @@ pub fn register(c: &mut Commands<Session>) {
         ("upAxis", "upa", "mayaPrefs, y or z."),
         ("unit", "unt", "Accepted: mayaPrefs."),
         ("exportStagesAsRefs", "sar", "Proxy shapes as references to their files (on)."),
+        ("exportStagesAsPayloads", "sap", "Aztek's: proxy shapes as payloads rather than references (off)."),
+        ("flatten", "flt", "Aztek's: the stage written composed into one layer, references and payloads resolved into it (off)."),
         ("melPerFrameCallback", "mfc", "Accepted, not run."),
         ("melPostCallback", "mpc", "MEL run when the export is done."),
         ("verbose", "v", "Accepted."),

@@ -69,7 +69,10 @@ scene holds is rendered by it; there is no choice of renderer.
   `aiDiffuse`, `aiSpecular`, `aiSss`, `aiVolume`, `aiTransmission`, `aiMaxBounces`; `aiAov` puts a light in a light
   group. Specular highlights are the standard surface's, not the viewport's blinn and phong shapes.
 - **Background.** Camera rays that meet nothing see the options' `background` colour (black by default) where there is
-  no sky dome. EXR keeps alpha; eight bit images are written opaque.
+  no sky dome; a shader connected to it (`aiFlat`, as the reference's Arnold plug-in connects one) gives its colour.
+  The background adds to the colour and leaves alpha clear, so the image is premultiplied. EXR keeps alpha; eight bit
+  images are written opaque. The render view shows the colour alone by default (View > RGB); View > Alpha shows the
+  alpha and View > RGBA Over Checker the image over a checker.
 - **Atmosphere.** A homogeneous fog over the scene's bounds from the `aiAtmosphereVolume` connected to the options'
   `atmosphere`: density, colour, anisotropy, lit by every light with shadows.
 - **Textures.** `file` and `aiImage`: PNG, JPEG, TGA, TIFF, BMP, HDR and EXR; sRGB, linear and raw by `colorSpace`;

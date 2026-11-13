@@ -1713,7 +1713,7 @@ void ScriptUi::build_group(Item* it, const QJsonObject& props) {
             auto* i = items_.value(path);
             if (!i) return;
             QColor now = color_of(i->prop("rgbValue"));
-            QColor c = QColorDialog::getColor(now.isValid() ? now : QColor(0, 0, 0), i->w, "Colour");
+            QColor c = QColorDialog::getColor(now.isValid() ? now : QColor(0, 0, 0), i->w->window(), "Colour");
             if (!c.isValid()) return;
             QJsonArray rgb{c.redF(), c.greenF(), c.blueF()};
             i->props.insert("rgbValue", rgb);

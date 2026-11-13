@@ -62,6 +62,12 @@ void NodeEditor::add_nodes(const QStringList& names, int mode) {
     refresh();
 }
 
+bool NodeEditor::wired(const QString& name) const {
+    for (const Edge& e : edges_)
+        if (e.src == name || e.dst == name) return true;
+    return false;
+}
+
 void NodeEditor::clear_graph() {
     roots_.clear();
     nodes_.clear();

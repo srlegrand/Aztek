@@ -59,23 +59,11 @@ void set_value(const QString& cmd, const QJsonValue& v) {
 }
 
 // A window of sections over the setting commands. Controls refresh from the plug-in when a preset changes them.
-class FbxOptions : public QDialog {
+class FbxOptions : public QWidget {
 public:
-    FbxOptions(QWidget* parent, const QString& title, bool import) : QDialog(parent), import_(import) {
-        setWindowTitle(title);
-        resize(460, 680);
-        auto* outer = new QVBoxLayout(this);
-        auto* scroll = new QScrollArea(this);
-        scroll->setWidgetResizable(true);
-        auto* body = new QWidget(scroll);
-        body_ = new QVBoxLayout(body);
-        scroll->setWidget(body);
-        outer->addWidget(scroll);
-        auto* b = new QDialogButtonBox(QDialogButtonBox::Close, this);
-        auto* reset = b->addButton("Reset Settings", QDialogButtonBox::ResetRole);
-        connect(reset, &QPushButton::clicked, this, [this] { pick_preset(0); });
-        connect(b, &QDialogButtonBox::rejected, this, &QDialog::reject);
-        outer->addWidget(b);
+    FbxOptions(QWidget* parent, bool import) : QWidget(parent), import_(import) {
+        body_ = new QVBoxLayout(this);
+        body_->setContentsMargins(0, 0, 0, 0);
 
         auto* presets = section("Presets");
         preset_ = new QComboBox(this);
@@ -94,6 +82,9 @@ public:
     }
 
     void finish() { body_->addStretch(1); }
+
+    // Back to the Autodesk Media & Entertainment preset.
+    void reset() { pick_preset(0); }
 
     QCheckBox* check(QFormLayout* f, const QString& label, const QString& cmd) {
         auto* c = new QCheckBox(label, this);
@@ -211,13 +202,10 @@ void fbx_apply_saved() {
     }
 }
 
-void fbx_import_options(QWidget* parent) {
-    if (!fbx_loaded()) {
-        log("// Error: the FBX options belong to the fbx plug-in, which is not loaded. Load it in Windows > Settings/Preferences > Plug-in Manager. //", 2);
-        return;
-    }
+FbxPanel fbx_import_panel(QWidget* parent) {
     fbx_apply_saved();
-    FbxOptions d(parent, "FBX Import Options", true);
+    auto* panel = new FbxOptions(parent, true);
+    FbxOptions& d = *panel;
     auto* include = d.section("Include");
     d.choice(include, "File content", "FBXImportMode", {"Add", "Add and update animation", "Update animation"}, {"add", "merge", "exmerge"});
     auto* geo = d.section("Geometry", include);
@@ -263,16 +251,13 @@ void fbx_import_options(QWidget* parent) {
     auto* perf = d.section("Performance", adv);
     d.check(perf, "Test meshes and remove bad polygons", "FBXImportRemoveBadPolysFromMesh");
     d.finish();
-    d.exec();
+    return {panel, [panel] { panel->reset(); }};
 }
 
-void fbx_export_options(QWidget* parent) {
-    if (!fbx_loaded()) {
-        log("// Error: the FBX options belong to the fbx plug-in, which is not loaded. Load it in Windows > Settings/Preferences > Plug-in Manager. //", 2);
-        return;
-    }
+FbxPanel fbx_export_panel(QWidget* parent) {
     fbx_apply_saved();
-    FbxOptions d(parent, "FBX Export Options", false);
+    auto* panel = new FbxOptions(parent, false);
+    FbxOptions& d = *panel;
     auto* include = d.section("Include");
     auto* geo = d.section("Geometry", include);
     d.check(geo, "Smoothing Groups", "FBXExportSmoothingGroups");
@@ -335,34 +320,7 @@ void fbx_export_options(QWidget* parent) {
     d.choice(format, "Version", "FBXExportFileVersion", {"FBX 2020", "FBX 2019", "FBX 2018", "FBX 2016/2017", "FBX 2014/2015", "FBX 2013", "FBX 2012", "FBX 2011", "FBX 2010", "FBX 2009", "FBX 2006"},
              {"FBX202000", "FBX201900", "FBX201800", "FBX201600", "FBX201400", "FBX201300", "FBX201200", "FBX201100", "FBX201000", "FBX200900", "FBX200611"});
     d.finish();
-    d.exec();
-}
-
-namespace {
-
-QString pick_type(QWidget* parent, const QString& key, const QString& title) {
-    QSettings s;
-    const QStringList types = {"FBX", "USD"};
-    bool ok = false;
-    const QString last = s.value(key, "FBX").toString();
-    const QString t = QInputDialog::getItem(parent, title, "File type:", types, qMax(0, types.indexOf(last)), false, &ok);
-    if (!ok) return QString();
-    s.setValue(key, t);
-    return t;
-}
-
-} // namespace
-
-void import_options(QWidget* parent) {
-    const QString t = pick_type(parent, "import/optionsType", "Import Options");
-    if (t == "FBX") fbx_import_options(parent);
-    else if (t == "USD") usd_import_options(parent);
-}
-
-void export_options(QWidget* parent) {
-    const QString t = pick_type(parent, "export/optionsType", "Export Options");
-    if (t == "FBX") fbx_export_options(parent);
-    else if (t == "USD") usd_export_options(parent);
+    return {panel, [panel] { panel->reset(); }};
 }
 
 } // namespace az

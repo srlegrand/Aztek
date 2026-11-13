@@ -1712,3 +1712,46 @@ Still not nodes, or not the reference's node:
 - detachCurve on a periodic curve opens it with a change of shape (as before); attachCurve's blend method joins as
   connect.
 - The C++ plug-in kit is unchanged: `aztek/kit` headers with the reference's `maya/` headers over them.
+
+### Issues 34 to 39 (13/11/2026)
+
+What the reference does was taken from its documentation where a page says it. Where it doesn't, the line says so.
+
+File > Import, Export All and Export Selection (issue 34): the option box opens one window per action with General
+Options (file type, and Default file extensions on exports) and the chosen type's own options below. Its buttons are
+the action, Apply and Close. The action button saves, closes and opens the file browser on the chosen type; Apply
+saves and opens it without closing. The FBX and USD options are these windows' sections rather than windows of their
+own. The menu label runs the action with the type last chosen. In a menu row with an option box, the box and the label
+light up apart, the box alone when the pointer is over it.
+
+Feedback (issue 35): pictures can be added from files (Add Picture..., several at once), pasted, or dropped on the
+canvas, and each is a tab; Crop is a tool beside the pens, and undo takes a crop back. Several pictures are saved as
+`aztek-picture-N.png`. The public-repository warning has "Don't ask again"; the red line on the window stays.
+
+USD export (issue 36): the reference exports a proxy shape's stage as a reference (`exportStagesAsRefs`) and has no
+payload choice nor a flatten flag (its only Flatten is for instances). Aztek adds both as its own flags:
+`exportStagesAsPayloads` (`sap`) writes payloads instead of references, `flatten` (`flt`) writes one layer with the
+composition baked in. The export options show them as "Proxy Shapes as Payloads" and "Flatten". Payloads at
+creation time were already there: the USD prim menu's Add Payload....
+
+Hypershade (issue 38): Graph Network and a double-click work on every Browser tab (render settings, cameras, lights,
+shading groups as well as materials). A node with no connections is graphed with its attributes open. Shading groups
+are selected as themselves, not their members. Ctrl or Shift keeps the selection of the other tabs, so nodes from
+several tabs can be selected and graphed together. Unverified against the reference: whether a plain click there
+keeps the other tabs' selection.
+
+Harold background (issue 39):
+
+- The render had the background colour in it (checked in the EXR: 1 0 0 with alpha 0). The render view drew the
+  image through its alpha, so the background vanished and showed only at partly covered edges. It now shows the
+  colour alone; Alpha and RGBA Over Checker are on the View menu.
+- The alpha is premultiplied, as Arnold's. The setting to change is how the image is shown, not the render.
+- A colour swatch's style sheet was taken by the colour dialog opened from it; the dialog is now the window's child.
+- Arnold USD: materials whose output is `outputs:arnold:surface` come in as the Arnold node types (`arnold:flat` as
+  aiFlat, `arnold:standard_surface` as aiStandardSurface, other `arnold:` ids as `ai` plus the name), their inputs set
+  and Arnold shaders feeding them connected. The background named by the RenderSettings' `arnold:global:background`
+  (or `arnold:background` on an ArnoldOptions prim), through its ArnoldNodeGraph, is made and connected to
+  `defaultArnoldRenderOptions.background`. RenderProduct, RenderVar and Arnold's own prims no longer come in as
+  transforms. The background is one colour for the whole image: a textured background shader isn't evaluated per pixel.
+- Not reproduced: the background in bounces. Harold shows it to camera rays only. Arnold's `background_visibility`
+  default was not confirmed from its documentation.

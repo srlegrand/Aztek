@@ -7,6 +7,7 @@
 #include "editors.h"
 #include "host.h"
 #include "fbxui.h"
+#include "fileoptions.h"
 #include "usdui.h"
 #include "icons.h"
 #include "markingmenu.h"
@@ -167,7 +168,8 @@ QMenu* MainWindow::file_menu() {
     });
     m->addAction("Optimize Scene Size", [] { exec("cleanUpScene"); });
     m->addSeparator();
-    auto do_import = [] {
+    // Import through the file browser, opened on the File type the Import Options were left on.
+    auto do_import = [](const QString& type) {
         // The formats plug-ins read are offered while their plug-ins are loaded, as the reference lists a translator's.
         const bool fbx = plugin_loaded("fbx"), gltf = plugin_loaded("gltf");
         QString every = "*.ma *.mb *.obj *.ply *.stl *.usd *.usda *.usdc *.usdz";
@@ -180,7 +182,8 @@ QMenu* MainWindow::file_menu() {
             every += " *.glb *.gltf";
             extra += ";;glTF 2.0 (*.glb *.gltf)";
         }
-        QString f = QFileDialog::getOpenFileName(nullptr, "Import", QString(), QString("Scenes and meshes (%1);;ASCII scenes (*.ma);;Binary scenes (*.mb);;%2%3;;Meshes (*.obj *.ply *.stl)").arg(every, kUsdFilter, extra));
+        QString selected = file_type_filter(type);
+        QString f = QFileDialog::getOpenFileName(nullptr, "Import", QString(), QString("Scenes and meshes (%1);;ASCII scenes (*.ma);;Binary scenes (*.mb);;%2%3;;OBJ (*.obj);;PLY (*.ply);;STL (*.stl)").arg(every, kUsdFilter, extra), &selected);
         if (f.isEmpty()) return;
         const bool is_fbx = f.endsWith(".fbx", Qt::CaseInsensitive);
         if (is_fbx || f.endsWith(".glb", Qt::CaseInsensitive) || f.endsWith(".gltf", Qt::CaseInsensitive)) {
@@ -208,7 +211,7 @@ QMenu* MainWindow::file_menu() {
         QString c = f.endsWith(".ply", Qt::CaseInsensitive) ? "importPly" : f.endsWith(".stl", Qt::CaseInsensitive) ? "importStl" : "importObj";
         exec(c, args(QJsonArray{f}));
     };
-    m->addAction(new OptionRow("Import...", QString(), do_import, [this] { import_options(this); }, m));
+    m->addAction(new OptionRow("Import...", QString(), [do_import] { do_import(chosen_file_type(FileAction::Import)); }, [this, do_import] { file_options_window(this, FileAction::Import, do_import); }, m));
     m->addSeparator();
     {
         auto* row = new OptionRow("Create Reference...", "Ctrl+R", [this] { create_reference_dialog(false); }, [this] { create_reference_dialog(true); }, m);
@@ -216,10 +219,15 @@ QMenu* MainWindow::file_menu() {
     }
     m->addAction("Reference Editor", this, &MainWindow::show_reference_editor);
     m->addSeparator();
-    auto do_export = [](bool all) {
-        QString f = QFileDialog::getSaveFileName(nullptr, all ? "Export All" : "Export Selection", "export.ma",
-                                                 QString("ASCII scenes (*.ma);;%1%2%3;;OBJ (*.obj);;PLY (*.ply);;STL (*.stl)").arg(kUsdFilter, plugin_loaded("fbx") ? ";;FBX (*.fbx)" : "", plugin_loaded("gltf") ? ";;glTF 2.0 (*.glb *.gltf)" : ""));
+    // Export through the file browser, opened on the File type the options were left on; with Default file extensions on,
+    // a name given without one gets the type's.
+    auto do_export = [](bool all, const QString& type) {
+        QString selected = file_type_filter(type);
+        const QString ext = file_type_extension(type);
+        QString f = QFileDialog::getSaveFileName(nullptr, all ? "Export All" : "Export Selection", ext.isEmpty() ? "export.ma" : "export." + ext,
+                                                 QString("ASCII scenes (*.ma);;%1%2%3;;OBJ (*.obj);;PLY (*.ply);;STL (*.stl)").arg(kUsdFilter, plugin_loaded("fbx") ? ";;FBX (*.fbx)" : "", plugin_loaded("gltf") ? ";;glTF 2.0 (*.glb *.gltf)" : ""), &selected);
         if (f.isEmpty()) return;
+        if (QFileInfo(f).suffix().isEmpty() && default_file_extensions() && !ext.isEmpty()) f += "." + ext;
         // The exporters are plug-ins: one that has been unloaded says so rather than failing on an unknown command.
         auto plugin_ready = [](const QString& plugin, const QString& what) {
             if (plugin_loaded(plugin)) return true;
@@ -272,8 +280,10 @@ QMenu* MainWindow::file_menu() {
             exec("select", a.isEmpty() ? QJsonObject{{"clear", true}} : args(a));
         }
     };
-    m->addAction(new OptionRow("Export All...", QString(), [do_export] { do_export(true); }, [this] { export_options(this); }, m));
-    m->addAction(new OptionRow("Export Selection...", QString(), [do_export] { do_export(false); }, [this] { export_options(this); }, m));
+    m->addAction(new OptionRow("Export All...", QString(), [do_export] { do_export(true, chosen_file_type(FileAction::ExportAll)); },
+                               [this, do_export] { file_options_window(this, FileAction::ExportAll, [do_export](const QString& t) { do_export(true, t); }); }, m));
+    m->addAction(new OptionRow("Export Selection...", QString(), [do_export] { do_export(false, chosen_file_type(FileAction::ExportSelection)); },
+                               [this, do_export] { file_options_window(this, FileAction::ExportSelection, [do_export](const QString& t) { do_export(false, t); }); }, m));
     m->addSeparator();
     QMenu* project = m->addMenu("Project");
     project->addAction("Project Window...", [this] {

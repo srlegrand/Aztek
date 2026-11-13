@@ -61,7 +61,7 @@ QPushButton* rgb_button(QColor* value, QWidget* parent) {
     b->setObjectName("colorSwatch");
     paint_swatch(b, *value, false);
     QObject::connect(b, &QPushButton::clicked, b, [b, value] {
-        QColor c = QColorDialog::getColor(*value, b, "Color");
+        QColor c = QColorDialog::getColor(*value, b->window(), "Color");
         if (!c.isValid()) return;
         *value = c;
         paint_swatch(b, c, false);

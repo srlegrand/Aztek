@@ -3,16 +3,19 @@
 // the window see the same settings. What was set is remembered for the next session.
 #pragma once
 #include <QWidget>
+#include <functional>
 
 namespace az {
 
-void fbx_import_options(QWidget* parent);
-void fbx_export_options(QWidget* parent);
+// The FBX sections of the Import and Export options windows, and what their Reset Settings does. The controls set the
+// plug-in's settings as they change, as the reference's do.
+struct FbxPanel {
+    QWidget* widget;
+    std::function<void()> reset;
+};
+FbxPanel fbx_import_panel(QWidget* parent);
+FbxPanel fbx_export_panel(QWidget* parent);
 // The settings remembered from earlier sessions, sent to the plug-in. Safe to call often.
 void fbx_apply_saved();
-
-// The option box of File > Import and of the two exports: asks which file type's options to show.
-void import_options(QWidget* parent);
-void export_options(QWidget* parent);
 
 } // namespace az

@@ -69,6 +69,7 @@ add_executable(aztek WIN32
   app/src/referenceeditor.cpp
   app/src/usdui.cpp
   app/src/fbxui.cpp
+  app/src/fileoptions.cpp
   app/src/materials.cpp
   app/src/userfolder.cpp
   app/src/rendernodes.cpp

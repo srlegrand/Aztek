@@ -4,6 +4,7 @@
 #include <QString>
 #include <QStringList>
 #include <QWidget>
+#include <functional>
 
 namespace az {
 
@@ -15,8 +16,14 @@ bool is_usd_file(const QString& path);
 void usd_import(const QString& path);
 // Export to a USD file with the remembered options: the whole scene, or the selection.
 void usd_export(const QString& path, bool selection);
-void usd_import_options(QWidget* parent);
-void usd_export_options(QWidget* parent);
+// The USD parts of the Import and Export options windows: the widget, what keeps its settings, and what forgets them.
+struct OptionsPanel {
+    QWidget* widget;
+    std::function<void()> save;
+    std::function<void()> reset;
+};
+OptionsPanel usd_import_panel(QWidget* parent);
+OptionsPanel usd_export_panel(QWidget* parent);
 
 // Windows > USD Layer Editor.
 void show_usd_layer_editor(QWidget* parent);

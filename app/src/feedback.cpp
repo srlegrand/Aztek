@@ -16,7 +16,12 @@
 #include <QDialog>
 #include <QDir>
 #include <QFile>
+#include <QFileDialog>
 #include <QFileInfo>
+#include <QMimeData>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QTabBar>
 #include <QHBoxLayout>
 #include <QImage>
 #include <QInputDialog>
@@ -111,7 +116,7 @@ QImage capture_app(QWidget* main_window) {
     return out;
 }
 
-enum class Tool { Pen, Arrow, Rectangle, Text };
+enum class Tool { Pen, Arrow, Rectangle, Text, Crop };
 
 struct Mark {
     Tool tool = Tool::Pen;
@@ -150,6 +155,14 @@ void draw_mark(QPainter& p, const Mark& m) {
         p.fillPath(tip, m.colour);
         break;
     }
+    case Tool::Crop: {
+        // Only while dragging: the part that will be kept.
+        QPen dash(QColor(255, 255, 255), 1, Qt::DashLine);
+        dash.setCosmetic(true);
+        p.setPen(dash);
+        p.drawRect(QRectF(a, b).normalized());
+        break;
+    }
     case Tool::Text: {
         QFont f = p.font();
         f.setPixelSize(12 + m.width * 3);
@@ -161,21 +174,34 @@ void draw_mark(QPainter& p, const Mark& m) {
     }
 }
 
-// The picture and what is drawn on it, in image coordinates, kept apart so undo is simple and lines are sharp at full size.
+// The pictures of a report and what is drawn on each, in image coordinates, kept apart so undo is simple and lines are
+// sharp at full size. base, marks and undo_steps are the picture being worked on; the others wait in `pictures`.
 class Annotation : public QObject {
     Q_OBJECT
 public:
+    struct Step {
+        QImage base;
+        std::vector<Mark> marks;
+    };
+    struct Picture {
+        QImage base;
+        std::vector<Mark> marks;
+        std::vector<Step> undo;
+    };
     QImage base;
     std::vector<Mark> marks;
-    std::vector<std::vector<Mark>> undo_steps;
+    std::vector<Step> undo_steps;
+    std::vector<Picture> pictures{Picture{}};
+    int current = 0;
     Tool tool = Tool::Pen;
     QColor colour = QColor(230, 30, 30);
     int width = 4;
 
-    void remember() { undo_steps.push_back(marks); }
+    void remember() { undo_steps.push_back({base, marks}); }
     void undo() {
         if (undo_steps.empty()) return;
-        marks = undo_steps.back();
+        base = undo_steps.back().base;
+        marks = undo_steps.back().marks;
         undo_steps.pop_back();
         emit changed();
     }
@@ -185,23 +211,98 @@ public:
         marks.clear();
         emit changed();
     }
+    // A fresh capture in place of the picture being worked on.
     void set_picture(const QImage& image) {
         base = image;
         marks.clear();
         undo_steps.clear();
         emit changed();
     }
-    QImage composite() const {
-        QImage out = base.convertToFormat(QImage::Format_RGB32);
-        QPainter p(&out);
-        p.setRenderHint(QPainter::Antialiasing);
-        for (const Mark& m : marks) draw_mark(p, m);
+    // Keeps only this part of the picture, and moves what is drawn with it.
+    void crop(QRectF r) {
+        const QRect keep = r.toAlignedRect().intersected(base.rect());
+        if (keep.width() < 4 || keep.height() < 4) return;
+        remember();
+        base = base.copy(keep);
+        for (Mark& m : marks)
+            for (QPointF& pt : m.points) pt -= keep.topLeft();
+        emit changed();
+    }
+    int count() const { return int(pictures.size()); }
+    void select(int i) {
+        if (i < 0 || i >= count() || i == current) return;
+        stash();
+        current = i;
+        base = pictures[i].base;
+        marks = pictures[i].marks;
+        undo_steps = pictures[i].undo;
+        emit changed();
+        emit pictures_changed();
+    }
+    // Another picture after the others, which becomes the one worked on.
+    void add(const QImage& image) {
+        if (image.isNull()) return;
+        stash();
+        pictures.push_back(Picture{image.convertToFormat(QImage::Format_RGB32), {}, {}});
+        current = -1;
+        select(count() - 1);
+    }
+    void remove_current() {
+        if (count() <= 1) {
+            set_picture(QImage());
+            emit pictures_changed();
+            return;
+        }
+        pictures.erase(pictures.begin() + current);
+        const int next = qMin(current, count() - 1);
+        current = -1;
+        base = pictures[next].base;
+        marks = pictures[next].marks;
+        undo_steps = pictures[next].undo;
+        current = next;
+        emit changed();
+        emit pictures_changed();
+    }
+    // Every picture with its drawing on, the empty ones left out.
+    QList<QImage> composites() {
+        stash();
+        QList<QImage> out;
+        for (const Picture& pic : pictures) {
+            if (pic.base.isNull()) continue;
+            QImage img = pic.base.convertToFormat(QImage::Format_RGB32);
+            QPainter p(&img);
+            p.setRenderHint(QPainter::Antialiasing);
+            for (const Mark& m : pic.marks) draw_mark(p, m);
+            out << img;
+        }
         return out;
     }
 signals:
     void changed();
     void settings_changed();
+    void pictures_changed();
+
+private:
+    void stash() {
+        if (current < 0 || current >= count()) return;
+        pictures[current] = Picture{base, marks, undo_steps};
+    }
 };
+
+// An image from a drop or the clipboard: image data, or the first file that reads as an image.
+QImage image_from(const QMimeData* d) {
+    if (!d) return QImage();
+    if (d->hasImage()) {
+        QImage img = qvariant_cast<QImage>(d->imageData());
+        if (!img.isNull()) return img;
+    }
+    for (const QUrl& u : d->urls()) {
+        if (!u.isLocalFile()) continue;
+        QImage img(u.toLocalFile());
+        if (!img.isNull()) return img;
+    }
+    return QImage();
+}
 
 // The picture scaled to fit, to draw on.
 class Canvas : public QWidget {
@@ -211,6 +312,8 @@ public:
         setMinimumSize(240, 150);
         setCursor(Qt::CrossCursor);
         setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+        setAcceptDrops(true);
+        setToolTip("Drop a picture here to add it to the report.");
         connect(doc_, &Annotation::changed, this, qOverload<>(&QWidget::update));
     }
 
@@ -218,7 +321,11 @@ protected:
     void paintEvent(QPaintEvent*) override {
         QPainter p(this);
         p.fillRect(rect(), QColor(30, 30, 30));
-        if (doc_->base.isNull()) return;
+        if (doc_->base.isNull()) {
+            p.setPen(QColor(150, 150, 150));
+            p.drawText(rect(), Qt::AlignCenter | Qt::TextWordWrap, "No picture.\nDrop one here, or use Add Picture or Paste.");
+            return;
+        }
         p.setRenderHint(QPainter::SmoothPixmapTransform);
         p.setRenderHint(QPainter::Antialiasing);
         const QRectF r = picture_rect();
@@ -257,9 +364,23 @@ protected:
         else current_.points = {current_.points.first(), at};
         update();
     }
+    void dragEnterEvent(QDragEnterEvent* e) override {
+        if (!image_from(e->mimeData()).isNull()) e->acceptProposedAction();
+    }
+    void dropEvent(QDropEvent* e) override {
+        const QImage img = image_from(e->mimeData());
+        if (img.isNull()) return;
+        doc_->add(img);
+        e->acceptProposedAction();
+    }
     void mouseReleaseEvent(QMouseEvent* e) override {
         if (e->button() != Qt::LeftButton || !drawing_) return;
         drawing_ = false;
+        if (current_.tool == Tool::Crop) {
+            doc_->crop(QRectF(current_.points.first(), current_.points.last()).normalized());
+            update();
+            return;
+        }
         doc_->remember();
         doc_->marks.push_back(current_);
         emit doc_->changed();
@@ -295,13 +416,14 @@ public:
         v->setContentsMargins(0, 0, 0, 0);
         auto* row = new QHBoxLayout;
         row->setSpacing(2);
-        const std::pair<const char*, Tool> tools[] = {{"Pen", Tool::Pen}, {"Arrow", Tool::Arrow}, {"Rectangle", Tool::Rectangle}, {"Text", Tool::Text}};
+        const std::pair<const char*, Tool> tools[] = {{"Pen", Tool::Pen}, {"Arrow", Tool::Arrow}, {"Rectangle", Tool::Rectangle}, {"Text", Tool::Text}, {"Crop", Tool::Crop}};
         for (const auto& [label, tool] : tools) {
             auto* b = new QToolButton(this);
             b->setText(label);
             b->setCheckable(true);
             b->setAutoExclusive(true);
             b->setChecked(doc_->tool == tool);
+            if (tool == Tool::Crop) b->setToolTip("Drag around the part of the picture to keep. Undo brings the rest back.");
             Tool t = tool;
             connect(b, &QToolButton::clicked, this, [this, t] {
                 doc_->tool = t;
@@ -396,8 +518,9 @@ bool open_link(const QString& url) {
 // What is left to do on the page, after the browser has been asked to open it.
 class NextSteps : public QDialog {
 public:
-    NextSteps(QWidget* parent, const QString& url, const QString& full_text, const QImage& picture, const QString& folder, const QString& file_to_show,
-              const QString& picture_note, bool shortened, bool opened, bool has_zip) : QDialog(parent), picture_(picture) {
+    NextSteps(QWidget* parent, const QString& url, const QString& full_text, const QList<QImage>& pictures, const QString& folder, const QString& file_to_show,
+              const QString& picture_note, bool shortened, bool opened, bool has_zip) : QDialog(parent), pictures_(pictures) {
+        const QImage picture = pictures.isEmpty() ? QImage() : pictures.first();
         setAttribute(Qt::WA_DeleteOnClose);
         setProperty(kOwnWindow, true);
         setObjectName("feedbackNextSteps");
@@ -408,7 +531,9 @@ public:
         steps << (opened ? "GitHub has opened in your browser with your report filled in." : "<b>The browser did not open.</b> Press Copy Link and paste it into your browser.");
         steps << "Sign in if GitHub asks you to.";
         if (shortened) steps << "Your text was too long for a link and has been shortened. Press Copy Full Text and paste it over the shortened text.";
-        if (!picture.isNull()) steps << "Click in the description box and press Ctrl+V to add the picture. It is on the clipboard. If that does nothing, drag the PNG in from the folder.";
+        if (pictures.size() == 1) steps << "Click in the description box and press Ctrl+V to add the picture. It is on the clipboard. If that does nothing, drag the PNG in from the folder.";
+        if (pictures.size() > 1)
+            steps << QString("Click in the description box and press Ctrl+V to add the first picture; it is on the clipboard. Copy each of the others with its button below and paste it the same way, or drag the %1 PNGs in from the folder.").arg(pictures.size());
         if (!picture_note.isEmpty()) steps << picture_note;
         if (has_zip) steps << "Drag <b>aztek-scene.zip</b> from the folder onto the description box.";
         steps << "Read it through, then press <b>Submit new issue</b>. Nothing is public until you do.";
@@ -427,7 +552,9 @@ public:
             connect(b, &QPushButton::clicked, this, fn);
             row->addWidget(b);
         };
-        if (!picture.isNull()) add("Copy Screenshot Again", [this] { QApplication::clipboard()->setImage(picture_); });
+        if (pictures_.size() == 1) add("Copy Screenshot Again", [this] { QApplication::clipboard()->setImage(pictures_.first()); });
+        for (int i = 0; pictures_.size() > 1 && i < pictures_.size(); ++i)
+            add(QString("Copy Picture %1").arg(i + 1), [this, i] { QApplication::clipboard()->setImage(pictures_[i]); });
         if (!folder.isEmpty()) add("Open Folder Again", [folder, file_to_show] {
             if (dry_run_file().isEmpty()) show_in_folder(folder, file_to_show);
         });
@@ -440,7 +567,7 @@ public:
     }
 
 private:
-    QImage picture_;
+    QList<QImage> pictures_;
 };
 
 class LargeDrawing : public QDialog {
@@ -542,9 +669,48 @@ public:
         picture_box_ = new QWidget(this);
         auto* right = new QVBoxLayout(picture_box_);
         right->setContentsMargins(0, 0, 0, 0);
-        auto* about_picture = new QLabel("Shows the main window and any editor windows that are open. Draw on it to point things out.", this);
+        auto* about_picture = new QLabel("Shows the main window and any editor windows that are open. Draw on it to point things out, crop it, "
+                                         "or add pictures of your own: drop them on it, Add Picture or Paste.", this);
         about_picture->setWordWrap(true);
         right->addWidget(about_picture);
+        // The report's pictures, one tab each.
+        auto* pictures_row = new QHBoxLayout;
+        tabs_ = new QTabBar(picture_box_);
+        tabs_->setObjectName("feedbackPictures");
+        tabs_->setExpanding(false);
+        tabs_->setDrawBase(false);
+        pictures_row->addWidget(tabs_, 1);
+        auto* add_file = new QPushButton("Add Picture...", picture_box_);
+        add_file->setAutoDefault(false);
+        connect(add_file, &QPushButton::clicked, this, [this] {
+            const QStringList files = QFileDialog::getOpenFileNames(this, "Add Picture", QString(), "Images (*.png *.jpg *.jpeg *.bmp *.gif *.webp)");
+            for (const QString& f : files) {
+                QImage img(f);
+                if (img.isNull()) QMessageBox::warning(this, "Can't Read the Picture", f);
+                else doc_->add(img);
+            }
+        });
+        auto* paste = new QPushButton("Paste", picture_box_);
+        paste->setAutoDefault(false);
+        paste->setToolTip("Adds the picture on the clipboard.");
+        connect(paste, &QPushButton::clicked, this, [this] {
+            const QImage img = image_from(QApplication::clipboard()->mimeData());
+            if (img.isNull()) QMessageBox::information(this, "Paste", "There is no picture on the clipboard.");
+            else doc_->add(img);
+        });
+        auto* remove = new QPushButton("Remove", picture_box_);
+        remove->setAutoDefault(false);
+        remove->setToolTip("Takes this picture out of the report.");
+        connect(remove, &QPushButton::clicked, doc_, &Annotation::remove_current);
+        pictures_row->addWidget(add_file);
+        pictures_row->addWidget(paste);
+        pictures_row->addWidget(remove);
+        right->addLayout(pictures_row);
+        connect(tabs_, &QTabBar::currentChanged, this, [this](int i) {
+            if (!syncing_) doc_->select(i);
+        });
+        connect(doc_, &Annotation::pictures_changed, this, &FeedbackDialog::sync_tabs);
+        sync_tabs();
         right->addWidget(new AnnotationView(doc_, picture_box_), 1);
         auto* picture_row = new QHBoxLayout;
         auto* larger = new QPushButton("Open Larger...", picture_box_);
@@ -556,7 +722,7 @@ public:
         });
         auto* retake = new QPushButton("Retake", picture_box_);
         retake->setAutoDefault(false);
-        retake->setToolTip("Hides this window and takes the screenshot again. What you have drawn is cleared.");
+        retake->setToolTip("Hides this window and takes the screenshot again, in place of the picture shown. What you have drawn on it is cleared.");
         connect(retake, &QPushButton::clicked, this, &FeedbackDialog::retake);
         picture_row->addWidget(larger);
         picture_row->addWidget(retake);
@@ -588,8 +754,19 @@ public:
     }
 
 private:
+    void sync_tabs() {
+        syncing_ = true;
+        while (tabs_->count() > doc_->count()) tabs_->removeTab(tabs_->count() - 1);
+        while (tabs_->count() < doc_->count()) tabs_->addTab(QString());
+        for (int i = 0; i < tabs_->count(); ++i) tabs_->setTabText(i, QString("Picture %1").arg(i + 1));
+        tabs_->setCurrentIndex(doc_->current);
+        syncing_ = false;
+    }
+
     void ticked(QCheckBox* box, bool on, bool scene) {
-        if (on) {
+        // The red warning stays on the window either way; this asks once more unless told not to.
+        const char* skip = "feedback/skipPublicWarning";
+        if (on && !QSettings().value(skip, false).toBool()) {
             QMessageBox ask(this);
             ask.setIcon(QMessageBox::Warning);
             ask.setWindowTitle(scene ? "Include Your Scene File?" : "Include a Screenshot?");
@@ -599,8 +776,11 @@ private:
             QPushButton* no = ask.addButton("Don't Include It", QMessageBox::RejectRole);
             ask.setDefaultButton(no);
             ask.setEscapeButton(no);
+            auto* never = new QCheckBox("Don't ask again", &ask);
+            ask.setCheckBox(never);
             ask.exec();
             if (ask.clickedButton() != yes) box->setChecked(false);
+            else if (never->isChecked()) QSettings().setValue(skip, true);
         }
         const bool shot = shot_tick_->isChecked();
         if (shot != picture_box_->isVisible()) {
@@ -632,7 +812,7 @@ private:
 
     QStringList ticked_attachments() const {
         QStringList out;
-        if (shot_tick_->isChecked()) out << "screenshot";
+        if (shot_tick_->isChecked()) out << (doc_->count() > 1 ? QString("%1 pictures").arg(doc_->count()) : QString("screenshot"));
         if (scene_tick_->isChecked()) out << "scene file (zip)";
         return out;
     }
@@ -716,23 +896,28 @@ private:
                 zip_name = "aztek-scene.zip";
             }
         }
-        QImage picture;
+        QList<QImage> pictures;
         QString picture_note, png_name;
         if (want_shot) {
-            picture = doc_->composite();
-            png_name = "aztek-screenshot.png";
-            const QString png_path = QDir(folder).filePath(png_name);
-            if (!picture.save(png_path, "PNG")) {
-                QMessageBox::warning(this, "Can't Save the Screenshot", "The screenshot could not be written:\n" + png_path);
-                return;
+            pictures = doc_->composites();
+            for (int i = 0; i < pictures.size(); ++i) {
+                const QString name = pictures.size() == 1 ? QString("aztek-screenshot.png") : QString("aztek-picture-%1.png").arg(i + 1);
+                if (i == 0) png_name = name;
+                const QString png_path = QDir(folder).filePath(name);
+                if (!pictures[i].save(png_path, "PNG")) {
+                    QMessageBox::warning(this, "Can't Save the Picture", "The picture could not be written:\n" + png_path);
+                    return;
+                }
+                const qint64 bytes = QFileInfo(png_path).size();
+                if (bytes > kImageLimit)
+                    picture_note += QString("%1 is %2. GitHub takes images up to 10 MB, so it may be refused: crop it, or retake it with a smaller window. ").arg(name, megabytes(bytes));
             }
-            const qint64 bytes = QFileInfo(png_path).size();
-            if (bytes > kImageLimit) picture_note = QString("The picture is %1. GitHub takes images up to 10 MB, so it may be refused: retake it with a smaller window if so.").arg(megabytes(bytes));
-            QApplication::clipboard()->setImage(picture);
+            if (!pictures.isEmpty()) QApplication::clipboard()->setImage(pictures.first());
         }
 
         QStringList attachments;
-        if (want_shot) attachments << "screenshot";
+        if (pictures.size() == 1) attachments << "screenshot";
+        if (pictures.size() > 1) attachments << QString("%1 pictures").arg(pictures.size());
         if (!zip_name.isEmpty()) attachments << "scene file (zip)";
         const QJsonObject report = build_report(attachments);
         const QString url = report["url"].toString();
@@ -750,7 +935,7 @@ private:
             show_in_folder(folder, show_file);
         }
         const bool opened = open_link(url);
-        auto* steps = new NextSteps(main_, url, report["fullBody"].toString(), picture, folder, show_file, picture_note, report["shortened"].toBool(), opened, !zip_name.isEmpty());
+        auto* steps = new NextSteps(main_, url, report["fullBody"].toString(), pictures, folder, show_file, picture_note, report["shortened"].toBool(), opened, !zip_name.isEmpty());
         steps->show();
         QDialog::accept();
     }
@@ -767,6 +952,8 @@ private:
     QPushButton* copy_full_;
     QPushButton* submit_;
     QWidget* picture_box_;
+    QTabBar* tabs_;
+    bool syncing_ = false;
     QPointer<LargeDrawing> large_;
     int narrow_width_ = 620;
     QJsonObject report_;

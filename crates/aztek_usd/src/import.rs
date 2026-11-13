@@ -415,7 +415,7 @@ fn read_custom(c: &mut Ctx, prim: &Prim, node: NodeId) {
     }
 }
 
-fn value_to_plug(a: &usd::Attribute) -> Option<PlugValue> {
+pub(crate) fn value_to_plug(a: &usd::Attribute) -> Option<PlugValue> {
     let v = a.get_at::<Value>(at(None)).ok().flatten()?;
     Some(match v {
         Value::Bool(b) => PlugValue::Bool(b),
@@ -432,7 +432,7 @@ fn value_to_plug(a: &usd::Attribute) -> Option<PlugValue> {
 }
 
 const GROUPING: [&str; 4] = ["", "Xform", "Scope", "SkelRoot"];
-const SKIP_SUBTREE: [&str; 8] = ["Material", "Shader", "NodeGraph", "Skeleton", "SkelAnimation", "BlendShape", "GeomSubset", "RenderSettings"];
+const SKIP_SUBTREE: [&str; 12] = ["Material", "Shader", "NodeGraph", "Skeleton", "SkelAnimation", "BlendShape", "GeomSubset", "RenderSettings", "RenderProduct", "RenderVar", "RenderPass", "ArnoldNodeGraph"];
 const GPRIMS: [&str; 6] = ["Cube", "Sphere", "Cylinder", "Cone", "Capsule", "Plane"];
 
 fn make_transform(c: &mut Ctx, name: &str, parent: NodeId) -> Result<NodeId, String> {
@@ -625,7 +625,9 @@ pub(crate) fn read_group(c: &mut Ctx, prim: &Prim, parent: NodeId) -> Result<Nod
 /// Reads a prim and what's below it.
 pub(crate) fn read_prim(c: &mut Ctx, prim: &Prim, parent: NodeId, proto: Option<(String, String)>) -> Result<Option<NodeId>, String> {
     let ty = prim.type_name().map_err(|e| e.to_string())?.map_or(String::new(), |t| t.as_str().to_string());
-    if SKIP_SUBTREE.contains(&ty.as_str()) {
+    // Render settings and Arnold's own prims (its options, drivers, filters, node graphs) are settings, not nodes in the
+    // outliner; the options' background is read with the shading.
+    if SKIP_SUBTREE.contains(&ty.as_str()) || (ty.starts_with("Arnold") && !ty.starts_with("ArnoldProcedural")) {
         return Ok(None);
     }
     let name = prim.path().name().unwrap_or("prim").to_string();

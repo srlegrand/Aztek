@@ -373,9 +373,17 @@ pub fn write_proxy(s: &mut Session, o: &Opts, it: &Item, out: &mut Out) -> Resul
     }
     let written = crate::export_mat::texture_path(o, &file);
     let prim = get_str(&mut s.graph, it.shape, "primPath").unwrap_or_default();
+    let target = if !prim.is_empty() && prim != "/" { Some(crate::out::p(&prim)?) } else { None };
+    if o.stages_as_payloads {
+        let mut r = openusd::sdf::Payload { asset_path: written, ..Default::default() };
+        if let Some(t) = target {
+            r.prim_path = t;
+        }
+        return out.prim_field(&it.path, FieldKey::Payload, Value::PayloadListOp(ListOp::prepended(vec![r])));
+    }
     let mut r = Reference { asset_path: written, ..Default::default() };
-    if !prim.is_empty() && prim != "/" {
-        r.prim_path = crate::out::p(&prim)?;
+    if let Some(t) = target {
+        r.prim_path = t;
     }
     out.prim_field(&it.path, FieldKey::References, Value::ReferenceListOp(ListOp::prepended(vec![r])))
 }

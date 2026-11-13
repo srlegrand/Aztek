@@ -8,6 +8,7 @@
 #include "panels.h"
 
 #include <QAction>
+#include <QActionGroup>
 #include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
@@ -36,6 +37,7 @@
 #include <QProgressBar>
 #include <QPushButton>
 #include <QSet>
+#include <QSettings>
 #include <QSpinBox>
 #include <QTemporaryDir>
 #include <QTimer>
@@ -99,6 +101,11 @@ public:
         setFocusPolicy(Qt::ClickFocus);
     }
     QImage a, b;
+    // How the image shows: its colour alone, opaque, as it was rendered (the default, so a background colour shows where
+    // nothing was hit); its alpha as grey; or its colour over a checker, the colour taken as premultiplied by its alpha as
+    // the renderer makes it.
+    enum Channels { Rgb, Alpha, OverChecker };
+    Channels channels = Rgb;
     bool wipe = false;
     double split = 0.5;
     bool region_mode = false;
@@ -118,6 +125,21 @@ public:
     }
 
 protected:
+    QImage shown(const QImage& img) const {
+        if (img.format() != QImage::Format_RGBA8888) return img;
+        if (channels != Alpha) {
+            QImage out = img.copy();
+            out.reinterpretAsFormat(channels == Rgb ? QImage::Format_RGBX8888 : QImage::Format_RGBA8888_Premultiplied);
+            return out;
+        }
+        QImage out(img.size(), QImage::Format_Grayscale8);
+        for (int y = 0; y < img.height(); ++y) {
+            const uchar* src = img.constScanLine(y);
+            uchar* dst = out.scanLine(y);
+            for (int x = 0; x < img.width(); ++x) dst[x] = src[x * 4 + 3];
+        }
+        return out;
+    }
     QSize image_size() const { return !a.isNull() ? a.size() : full; }
     double scale() const {
         QSize s = image_size();
@@ -152,14 +174,24 @@ protected:
         }
         QRectF t = target();
         p.setRenderHint(QPainter::SmoothPixmapTransform, scale() < 1.0);
-        // A checker under the image shows where it is transparent.
-        p.fillRect(t, QColor(60, 60, 60));
-        if (!a.isNull()) p.drawImage(t, a);
+        if (channels == OverChecker) {
+            // A checker under the image shows where it is transparent.
+            p.save();
+            p.setClipRect(t);
+            const int c = 8;
+            for (int y = 0; y * c < t.height(); ++y)
+                for (int x = 0; x * c < t.width(); ++x)
+                    p.fillRect(QRectF(t.left() + x * c, t.top() + y * c, c, c), (x + y) % 2 ? QColor(70, 70, 70) : QColor(100, 100, 100));
+            p.restore();
+        } else {
+            p.fillRect(t, Qt::black);
+        }
+        if (!a.isNull()) p.drawImage(t, shown(a));
         if (wipe && !b.isNull()) {
             double x = split_x();
             p.save();
             p.setClipRect(QRectF(x, t.top(), t.right() - x, t.height()));
-            p.drawImage(t, b);
+            p.drawImage(t, shown(b));
             p.restore();
             p.setPen(QPen(QColor(240, 240, 240), 1.5));
             p.drawLine(QPointF(x, t.top()), QPointF(x, t.bottom()));
@@ -287,6 +319,23 @@ public:
         view->addAction("Frame Image", [this] { view_->set_fit(); });
         view->addAction("Real Size", [this] { view_->set_one(); });
         view->addSeparator();
+        // Which channels show. The colour alone is the default, so a background colour shows; the alpha is the
+        // renderer's, premultiplied, and unchanged in the files written.
+        auto* channels = new QActionGroup(this);
+        const int saved = QSettings().value("renderView/channels", 0).toInt();
+        const std::pair<const char*, ImageView::Channels> modes[] = {{"RGB", ImageView::Rgb}, {"Alpha", ImageView::Alpha}, {"RGBA Over Checker", ImageView::OverChecker}};
+        for (const auto& [label, mode] : modes) {
+            QAction* act = view->addAction(label);
+            act->setCheckable(true);
+            act->setChecked(saved == int(mode));
+            channels->addAction(act);
+            connect(act, &QAction::triggered, this, [this, mode] {
+                view_->channels = mode;
+                QSettings().setValue("renderView/channels", int(mode));
+                view_->update();
+            });
+        }
+        view->addSeparator();
         view->addAction("Reset Exposure and Gamma", [this] {
             exposure_->setValue(0.0);
             gamma_->setValue(1.0);
@@ -358,6 +407,7 @@ public:
         v->addWidget(tb);
 
         view_ = new ImageView(this);
+        view_->channels = ImageView::Channels(qBound(0, QSettings().value("renderView/channels", 0).toInt(), 2));
         view_->on_region = [this](QRect) {
             if (!region_on_->isChecked()) return;
             if (ipr_->isChecked()) refresh_render();

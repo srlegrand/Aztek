@@ -11014,6 +11014,8 @@ Write the scene to a USD file: usda, usdc, usdz or usd by the file's extension. 
 | `upAxis` | `upa` | mayaPrefs, y or z. |
 | `unit` | `unt` | Accepted: mayaPrefs. |
 | `exportStagesAsRefs` | `sar` | Proxy shapes as references to their files (on). |
+| `exportStagesAsPayloads` | `sap` | Aztek's: proxy shapes as payloads rather than references (off). |
+| `flatten` | `flt` | Aztek's: the stage written composed into one layer, references and payloads resolved into it (off). |
 | `melPerFrameCallback` | `mfc` | Accepted, not run. |
 | `melPostCallback` | `mpc` | MEL run when the export is done. |
 | `verbose` | `v` | Accepted. |

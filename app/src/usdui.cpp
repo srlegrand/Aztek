@@ -54,22 +54,15 @@ void store(const char* key, const QJsonObject& o) {
 const char* const kImportKey = "usd/importOptions";
 const char* const kExportKey = "usd/exportOptions";
 
-// A dialog of switches and fields over a stored call. Apply stores it, Close leaves it.
-class Options : public QDialog {
+// Switches and fields over a stored call, the USD part of the Import and Export options windows. save() stores it,
+// as the window's action, Apply and Save Settings do.
+class Options : public QWidget {
 public:
-    Options(QWidget* parent, const QString& title, const char* key) : QDialog(parent), key_(key), call_(stored(key)) {
-        setWindowTitle(title);
-        form_ = new QFormLayout();
-        auto* v = new QVBoxLayout(this);
-        v->addLayout(form_);
-        auto* b = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Close, this);
-        connect(b, &QDialogButtonBox::accepted, this, [this] {
-            store(key_, call_);
-            accept();
-        });
-        connect(b, &QDialogButtonBox::rejected, this, &QDialog::reject);
-        v->addWidget(b);
+    Options(QWidget* parent, const char* key) : QWidget(parent), key_(key), call_(stored(key)) {
+        form_ = new QFormLayout(this);
+        form_->setContentsMargins(0, 0, 0, 0);
     }
+    void save() { store(key_, call_); }
     void check(const QString& label, const QString& flag, bool fallback) {
         auto* c = new QCheckBox(this);
         c->setChecked(call_.contains(flag) ? call_[flag].toBool() : fallback);
@@ -139,8 +132,9 @@ void usd_export(const QString& path, bool selection) {
     az::exec("mayaUSDExport", call);
 }
 
-void usd_import_options(QWidget* parent) {
-    Options d(parent, "USD Import Options", kImportKey);
+OptionsPanel usd_import_panel(QWidget* parent) {
+    auto* p = new Options(parent, kImportKey);
+    Options& d = *p;
     d.text("Prim Path", "primPath");
     d.check("Read Animation", "readAnimData", true);
     d.range("Frame Range");
@@ -149,11 +143,12 @@ void usd_import_options(QWidget* parent) {
     d.check("Change Up Axis", "upAxis", true);
     d.check("Change Units", "unit", true);
     d.choice("Axis and Unit Method", "axisAndUnitMethod", {"rotateScale", "overwritePrefs"});
-    d.exec();
+    return {p, [p] { p->save(); }, [] { store(kImportKey, QJsonObject()); }};
 }
 
-void usd_export_options(QWidget* parent) {
-    Options d(parent, "USD Export Options", kExportKey);
+OptionsPanel usd_export_panel(QWidget* parent) {
+    auto* p = new Options(parent, kExportKey);
+    Options& d = *p;
     d.choice("Format for .usd", "defaultUSDFormat", {"usdc", "usda"});
     d.range("Frame Range");
     d.check("UV Sets", "exportUVs", true);
@@ -170,10 +165,13 @@ void usd_export_options(QWidget* parent) {
     d.check("Euler Filter", "eulerFilter", false);
     d.check("World Space Roots", "worldspace", false);
     d.check("Proxy Shapes as References", "exportStagesAsRefs", true);
+    // Aztek's, which the reference doesn't have.
+    d.check("Proxy Shapes as Payloads", "exportStagesAsPayloads", false);
+    d.check("Flatten", "flatten", false);
     d.choice("Subdivision Scheme", "defaultMeshScheme", {"catmullClark", "loop", "bilinear", "none"});
     d.text("Root Prim", "rootPrim");
     d.text("Materials Scope", "materialsScopeName");
-    d.exec();
+    return {p, [p] { p->save(); }, [] { store(kExportKey, QJsonObject()); }};
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

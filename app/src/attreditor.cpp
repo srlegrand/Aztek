@@ -456,7 +456,8 @@ QWidget* color_field(const QJsonObject& a, QWidget* parent) {
     swatch->setEnabled(!ro);
     swatch->setObjectName("colorSwatch");
     QObject::connect(swatch, &QPushButton::clicked, swatch, [swatch, plug, shown, stored] {
-        QColor c = QColorDialog::getColor(shown, swatch, "Color");
+        // Owned by the window, not the swatch: the swatch's colour is a style sheet, which its children would take.
+        QColor c = QColorDialog::getColor(shown, swatch->window(), "Color");
         if (!c.isValid()) return;
         auto dec = [stored](int x) { return stored ? x / 255.0 : std::pow(x / 255.0, 2.2); };
         exec("setAttr", QJsonObject{{"args", QJsonArray{plug, dec(c.red()), dec(c.green()), dec(c.blue())}}, {"type", "double3"}});

@@ -133,3 +133,24 @@ fn session_and_dirty_layers_come_back_through_the_attributes() {
     assert_eq!(r, Some(7.0), "the session layer is stronger than the root");
     let _ = gf::vec3f(0.0, 0.0, 0.0);
 }
+
+/// A stage exported as a reference (the reference's way), as a payload, or flattened into the file (Aztek's two).
+#[test]
+fn stages_export_as_references_payloads_or_flattened() {
+    let mut s = session();
+    let _ = make(&mut s, "arcs_src.usda");
+    let read = |f: &str| std::fs::read_to_string(f).unwrap();
+    let as_ref = temp("arcs_ref.usda");
+    s.run("mayaUSDExport", json!({"file": as_ref})).unwrap();
+    assert!(read(&as_ref).contains("prepend references = @"), "{}", read(&as_ref));
+    let as_payload = temp("arcs_payload.usda");
+    s.run("mayaUSDExport", json!({"file": as_payload, "exportStagesAsPayloads": true})).unwrap();
+    let text = read(&as_payload);
+    assert!(text.contains("prepend payload = @") && !text.contains("references"), "{text}");
+    let flat = temp("arcs_flat.usda");
+    s.run("mayaUSDExport", json!({"file": flat, "flatten": true})).unwrap();
+    let text = read(&flat);
+    assert!(!text.contains("references") && !text.contains("payload"), "{text}");
+    assert!(text.contains("def Sphere \"ball\"") && text.contains("radius = 2"), "the stage's prims are in the file: {text}");
+    assert!(!std::path::Path::new(&format!("{flat}.flatten.usdc")).exists());
+}

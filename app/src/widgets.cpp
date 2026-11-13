@@ -333,7 +333,7 @@ public:
         setMouseTracking(true);
         setAttribute(Qt::WA_Hover);
         auto* h = new QHBoxLayout(this);
-        h->setContentsMargins(26, 2, 4, 2);
+        h->setContentsMargins(46, 2, 4, 2);
         h->setSpacing(6);
         auto* l = new QLabel(label, this);
         h->addWidget(l, 1);
@@ -356,7 +356,7 @@ protected:
             while (QWidget* p = QApplication::activePopupWidget()) p->close();
             return;
         }
-        bool box = box_->geometry().adjusted(-4, -4, 4, 4).contains(e->position().toPoint());
+        bool box = box_zone().contains(e->position().toPoint());
         // Close every open menu before running, as a normal item would.
         while (QWidget* p = QApplication::activePopupWidget()) p->close();
         if (box)
@@ -364,15 +364,37 @@ protected:
         else
             run_();
     }
+    // As the reference: the row lights up over its label, and only the box over the box, so it is plain which runs.
     void paintEvent(QPaintEvent*) override {
-        if (underMouse()) {
-            QPainter p(this);
-            p.fillRect(rect(), QColor(82, 133, 166));
+        if (!underMouse()) return;
+        QPainter p(this);
+        if (over_box_) {
+            const QRect r = box_zone();
+            p.fillRect(r, QColor(82, 133, 166));
+            p.setPen(QColor(150, 190, 215));
+            p.drawRect(r.adjusted(0, 0, -1, -1));
+        } else {
+            p.fillRect(rect().adjusted(0, 0, -box_zone().width() - 2, 0), QColor(82, 133, 166));
         }
     }
-    void enterEvent(QEnterEvent*) override { update(); }
-    void leaveEvent(QEvent*) override { update(); }
+    void mouseMoveEvent(QMouseEvent* e) override {
+        const bool over = box_zone().contains(e->position().toPoint());
+        if (over != over_box_) {
+            over_box_ = over;
+            update();
+        }
+    }
+    void enterEvent(QEnterEvent* e) override {
+        over_box_ = box_zone().contains(e->position().toPoint());
+        update();
+    }
+    void leaveEvent(QEvent*) override {
+        over_box_ = false;
+        update();
+    }
 private:
+    QRect box_zone() const { return QRect(box_->geometry().left() - 4, 0, box_->geometry().width() + 8, height()); }
+    bool over_box_ = false;
     std::function<void()> run_, options_;
     QLabel* box_;
 };

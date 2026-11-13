@@ -362,3 +362,71 @@ fn textures_and_placement_round_trip_and_usdz_textures_come_out() {
     assert!(std::path::Path::new(got).exists(), "{got}");
     assert_eq!(std::fs::read(got).unwrap().len(), 8);
 }
+
+/// Arnold's USD: materials of Arnold shaders (outputs:arnold:surface), and the options' background as its writer lays it
+/// out, a RenderSettings string naming an ArnoldNodeGraph that reads a flat shader.
+#[test]
+fn arnold_materials_and_the_background_come_in() {
+    let text = r#"#usda 1.0
+(
+    defaultPrim = "World"
+)
+def Xform "World"
+{
+    def Mesh "card" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        int[] faceVertexCounts = [3]
+        int[] faceVertexIndices = [0, 1, 2]
+        point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
+        rel material:binding = </mtl/backdrop>
+    }
+}
+def Scope "mtl"
+{
+    def Material "backdrop"
+    {
+        token outputs:arnold:surface.connect = </mtl/backdrop/backdropFlat.outputs:surface>
+        def Shader "backdropFlat"
+        {
+            uniform token info:id = "arnold:flat"
+            color3f inputs:color = (0.2, 0.4, 0.6)
+            token outputs:surface
+        }
+    }
+    def Scope "background"
+    {
+        def ArnoldNodeGraph "nodeGraph"
+        {
+            token outputs:background.connect = </mtl/background/nodeGraph/bgFlat.outputs:out>
+            def Shader "bgFlat"
+            {
+                uniform token info:id = "arnold:flat"
+                color3f inputs:color = (1, 0.5, 0.25)
+                token outputs:out
+            }
+        }
+    }
+}
+def Scope "Render"
+{
+    def RenderSettings "settings"
+    {
+        string arnold:global:background = "/mtl/background/nodeGraph"
+    }
+}
+"#;
+    let f = write("arnold.usda", text);
+    let mut s = session();
+    s.run("mayaUSDImport", json!({"file": f})).unwrap();
+    assert!((v3(&get(&mut s, "backdropFlat.color")) - DVec3::new(0.2, 0.4, 0.6)).length() < 1e-6);
+    let sg = s.run("listConnections", json!({"args": ["backdropFlat.outColor"], "destination": true})).unwrap();
+    assert_eq!(sg[0].as_str(), Some("backdrop"), "{sg}");
+    let members = s.run("sets", json!({"args": ["backdrop"], "query": true})).unwrap();
+    assert!(members.to_string().contains("card"), "{members}");
+    let bg = s.run("listConnections", json!({"args": ["defaultArnoldRenderOptions.background"], "source": true, "plugs": true})).unwrap();
+    assert_eq!(bg[0].as_str(), Some("bgFlat.outColor"), "{bg}");
+    assert!((v3(&get(&mut s, "bgFlat.color")) - DVec3::new(1.0, 0.5, 0.25)).length() < 1e-6);
+    assert!(s.graph.find("Render").unwrap().is_none() && s.graph.find("nodeGraph").unwrap().is_none(), "settings prims don't come in as transforms");
+}

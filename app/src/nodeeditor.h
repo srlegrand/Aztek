@@ -30,6 +30,8 @@ public:
     // `mode` is how much of each shows (1, 2 or 3); 0 leaves it as the editor would have it.
     void add_nodes(const QStringList& names, int mode = 0);
     void clear_graph();
+    // Whether the graph has a wire to or from this node.
+    bool wired(const QString& name) const;
     void refresh();
 protected:
     void paintEvent(QPaintEvent*) override;

@@ -30,11 +30,15 @@ What crosses:
 | blendShape deformers | `BlendShape` prims with inbetweens |
 | Keys | time samples, a sample per frame; reading makes linear keys |
 | lambert, blinn, phong, standardSurface, file, place2dTexture | `UsdPreviewSurface`, `UsdUVTexture`, `UsdPrimvarReader_float2`, `UsdTransform2d` |
+| Arnold shaders (`aiFlat`, `aiStandardSurface` ...), read only | `arnold:` shaders on `outputs:arnold:surface`; the RenderSettings' `arnold:global:background` to `defaultArnoldRenderOptions.background` |
 | Face assignments | `GeomSubset`s in the `materialBind` family |
 | Instanced shapes | instanceable prims on a hidden prototype; `PointInstancer` reads as instances |
 | Attributes tagged `USD_ATTR_x`, or listed in `USD_UserExportedAttributesJson` | custom attributes, `userProperties:` |
 
 Files in another up axis or unit come in under a group that turns and scales them. `-upAxis 0 -unit 0` turns that off.
+
+A USD proxy shape exports as a reference to its stage, as the reference's `exportStagesAsRefs`. Two flags are Aztek's own:
+`-exportStagesAsPayloads` writes payloads instead, and `-flatten` writes one layer with the composition baked in.
 
 Textures in a `.usdz` are copied out to a temporary directory to be read.
 
