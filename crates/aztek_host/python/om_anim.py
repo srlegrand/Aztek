@@ -427,3 +427,51 @@ def _math_plug_value(plug, value):
     import math
 
     return float(value)
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Joints
+
+from aztek.api.OpenAztek import MEulerRotation, MFnTransform, MQuaternion, _vec_attr, _set_vec_attr
+
+
+class MFnIkJoint(MFnTransform):
+    """A joint: a transform with an orientation (jointOrient) between its rotation and its parent."""
+
+    kXYZ = 0
+    kYZX = 1
+    kZXY = 2
+    kXZY = 3
+    kYXZ = 4
+    kZYX = 5
+    kNone = 0
+    kSmooth = 1
+    kRigid = 2
+
+    def _check(self, obj):
+        if not obj.hasFn(MFn.kJoint):
+            _fail()
+
+    def orientation(self):
+        v = _vec_attr(self._attr("jointOrient"))
+        return MEulerRotation(v[0], v[1], v[2]).asQuaternion()
+
+    def setOrientation(self, rot):
+        e = rot if isinstance(rot, MEulerRotation) else MQuaternion(rot).asEulerRotation()
+        if e.order != MEulerRotation.kXYZ:
+            e = e.reorder(MEulerRotation.kXYZ)
+        _set_vec_attr(self._attr("jointOrient"), (e.x, e.y, e.z))
+        return self
+
+    def scaleOrientation(self):
+        return self.rotateOrientation()
+
+    def segmentScale(self):
+        return tuple(_vec_attr(self._attr("scale")))
+
+    def preferredAngle(self):
+        return MEulerRotation(*_vec_attr(self._attr("preferredAngle")))
+
+    def setPreferredAngle(self, rot):
+        _set_vec_attr(self._attr("preferredAngle"), (rot.x, rot.y, rot.z))
+        return self

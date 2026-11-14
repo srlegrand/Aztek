@@ -99,7 +99,12 @@ struct Watch {
     node: i64,
     /// nodeAdded and nodeRemoved: the type, with the types derived from it.
     ty: String,
+    /// Python's (the 2.0 and 1.0 APIs): called through its hook, not a compiled plug-in's table.
+    python: bool,
 }
+
+/// Python's callback ids: apart from compiled plug-ins'.
+static NEXT_PYTHON: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(1 << 40);
 
 #[derive(Default)]
 struct State {
@@ -165,6 +170,7 @@ pub(crate) fn watch(s: &mut Session, a: &Value) -> Result<Value, String> {
         msg: int(a, "msg", -1),
         node: int(a, "node", -1),
         ty: a.get("type").and_then(Value::as_str).unwrap_or("").to_string(),
+        python: a.get("python").and_then(Value::as_bool).unwrap_or(false),
     };
     match w.kind.as_str() {
         "scene" | "time" | "nodeAdded" | "nodeRemoved" | "connection" | "preConnection" | "dag" | "attributeChanged"
@@ -186,6 +192,14 @@ pub(crate) fn watch(s: &mut Session, a: &Value) -> Result<Value, String> {
     WATCHES.with(|x| x.borrow_mut().insert(id, w));
     recount();
     Ok(json!(id))
+}
+
+/// `message.pywatch`: a Python callback, its id made here.
+pub(crate) fn watch_python(s: &mut Session, a: &Value) -> Result<Value, String> {
+    let mut a = a.clone();
+    a["callback"] = json!(NEXT_PYTHON.fetch_add(1, std::sync::atomic::Ordering::Relaxed));
+    a["python"] = json!(true);
+    watch(s, &a)
 }
 
 /// A callback removed, by the plug-in or with it.
@@ -227,15 +241,27 @@ fn any_watch(f: impl Fn(&Watch) -> bool) -> bool {
     WATCHES.with(|w| w.borrow().values().any(f))
 }
 
+/// One callback, a compiled plug-in's or Python's; what a check callback answered.
+fn call_one(s: &mut Session, id: i64, text: &str) -> Option<Value> {
+    let python = WATCHES.with(|w| w.borrow().get(&id).map(|x| x.python))?;
+    if python {
+        #[cfg(feature = "python")]
+        return crate::python::fire_message(s, id, text);
+        #[cfg(not(feature = "python"))]
+        return None;
+    }
+    STATE.with(|st| st.borrow_mut().reply = None);
+    if let Err(e) = fire_callback(s, id, text) {
+        super::defer(format!("// Warning: {e} //"), crate::core::LineKind::Warning);
+    }
+    STATE.with(|st| st.borrow_mut().reply.take())
+}
+
 fn send(s: &mut Session, ids: &[i64], payload: &Value) {
     let text = payload.to_string();
+    // One callback may remove another: call_one skips those gone.
     for &id in ids {
-        // One callback may remove another.
-        if WATCHES.with(|w| w.borrow().contains_key(&id)) {
-            if let Err(e) = fire_callback(s, id, &text) {
-                super::defer(format!("// Warning: {e} //"), crate::core::LineKind::Warning);
-            }
-        }
+        call_one(s, id, &text);
     }
 }
 
@@ -251,15 +277,7 @@ pub(crate) fn scene(s: &mut Session, msg: i64, payload: Value) -> (bool, Option<
     let mut payload = payload;
     let mut file = None;
     for id in ids {
-        if !WATCHES.with(|w| w.borrow().contains_key(&id)) {
-            continue;
-        }
-        STATE.with(|st| st.borrow_mut().reply = None);
-        if let Err(e) = fire_callback(s, id, &payload.to_string()) {
-            super::defer(format!("// Warning: {e} //"), crate::core::LineKind::Warning);
-        }
-        let r = STATE.with(|st| st.borrow_mut().reply.take());
-        if let Some(r) = r {
+        if let Some(r) = call_one(s, id, &payload.to_string()) {
             if let Some(f) = r.get("file").and_then(Value::as_str).filter(|f| !f.is_empty()) {
                 if payload.get("file").and_then(Value::as_str) != Some(f) {
                     file = Some(f.to_string());
@@ -477,7 +495,7 @@ fn after(s: &mut Session, name: &str, a: &Args, ok: bool) {
         if let Some(Value::Array(pair)) = a.flags.get("rename") {
             let (old, new) = (pair.first().and_then(Value::as_str).unwrap_or(""), pair.get(1).and_then(Value::as_str).unwrap_or(""));
             let ids = watches_where(|w| w.kind == "namespaceRenamed");
-            send(s, &ids, &json!({ "strings": [old, new] }));
+            send(s, &ids, &json!({ "strings": [new, old] }));
         }
         return;
     }

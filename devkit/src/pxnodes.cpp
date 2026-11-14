@@ -322,7 +322,13 @@ MPxTransform::MPxTransform(MPxTransformationMatrix* tm) : baseTransformationMatr
 MPxTransform::~MPxTransform() { delete baseTransformationMatrix; }
 MPxNode::Type MPxTransform::type() const { return kTransformNode; }
 void MPxTransform::postConstructor() {}
-MPxTransformationMatrix* MPxTransform::createTransformationMatrix() { return new MPxTransformationMatrix(); }
+// The matrix registerTransform named, or the plain one.
+MPxTransformationMatrix* MPxTransform::createTransformationMatrix() {
+    NodeClass* c = classOfNode(azNodeId_);
+    if (c && c->xformCreator) return c->xformCreator();
+    if (c && c->xformCreatorOld) return (MPxTransformationMatrix*)c->xformCreatorOld();
+    return new MPxTransformationMatrix();
+}
 bool MPxTransform::isBounded() const { return false; }
 MBoundingBox MPxTransform::boundingBox() const { return MBoundingBox(); }
 bool MPxTransform::treatAsTransform() const { return true; }
@@ -839,6 +845,45 @@ MStatus MFnPlugin::deregisterData(const MTypeId& id) {
 
 MStatus MFnPlugin::registerShape(const MString& name, const MTypeId& id, MCreatorFunction creator, MInitializeFunction init, MCreatorFunction, const MString* classification) {
     return registerNode(name, id, creator, init, MPxNode::kSurfaceShape, classification);
+}
+MStatus MFnPlugin::registerShape(const MString& name, const MTypeId& id, MCreatorFunction creator, MInitializeFunction init, const MString* classification) {
+    return registerNode(name, id, creator, init, MPxNode::kSurfaceShape, classification);
+}
+
+static MStatus transformRegistered(const MString& name, const MTypeId& id, MCreateXformMatrixFunction make, MCreatorFunction makeOld, const MTypeId& xformId,
+                                   MStatus st) {
+    if (!st) return st;
+    NodeClass* c = classOfId(id);
+    if (!c) return fail(MStatus::kFailure, std::string("registerTransform ") + name.asChar() + ": the node type didn't register");
+    c->xformCreator = make;
+    c->xformCreatorOld = makeOld;
+    c->xformId = xformId;
+    c->hasXform = true;
+    return st;
+}
+MStatus MFnPlugin::registerTransform(const MString& name, const MTypeId& id, MCreatorFunction creator, MInitializeFunction init, MCreateXformMatrixFunction xformCreator,
+                                     const MTypeId& xformId, const MString* classification) {
+    return transformRegistered(name, id, xformCreator, 0, xformId, registerNode(name, id, creator, init, MPxNode::kTransformNode, classification));
+}
+MStatus MFnPlugin::registerTransform(const MString& name, const MTypeId& id, MCreatorFunction creator, MInitializeFunction init, MCreatorFunction xformCreator,
+                                     const MTypeId& xformId, const MString* classification) {
+    return transformRegistered(name, id, 0, xformCreator, xformId, registerNode(name, id, creator, init, MPxNode::kTransformNode, classification));
+}
+MTypeId MFnPlugin::matrixTypeIdFromXformId(const MTypeId& xformTypeId, MStatus* st) {
+    NodeClass* c = classOfId(xformTypeId);
+    if (!c || !c->hasXform) {
+        if (st) *st = fail(MStatus::kInvalidParameter, "(kInvalidParameter): no transform of that id was registered with registerTransform");
+        return MPxTransformationMatrix::baseTransformationMatrixId;
+    }
+    ok(st);
+    return c->xformId;
+}
+
+MStatus MFnPlugin::registerIkSolver(const MString& name, MCreatorFunction) {
+    return fail(MStatus::kFailure, std::string("registerIkSolver ") + name.asChar() + ": obsolete in the reference; register the solver as a node with MPxNode::kIkSolverNode");
+}
+MStatus MFnPlugin::deregisterIkSolver(const MString& name) {
+    return fail(MStatus::kFailure, std::string("deregisterIkSolver ") + name.asChar() + ": obsolete in the reference; deregister the solver node");
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

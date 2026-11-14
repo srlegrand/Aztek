@@ -26,10 +26,26 @@ struct ScriptedNode {
     type_name: Arc<str>,
     id: NodeId,
     name: String,
+    kind: NativeKind,
 }
+
+impl crate::transform::TransformBehavior for ScriptedNode {}
 
 impl NodeBehavior for ScriptedNode {
     fn compute(&mut self, ctx: &EvalContext, data: &mut NodeData) {
+        use crate::transform::{Locator, Shape, Transform};
+        // What the type is built on first: the plug-in's compute may give a matrix or bounds in place of these.
+        match self.kind {
+            NativeKind::Transform | NativeKind::Constraint => {
+                let local = Transform::local_matrix_of(&*self, data);
+                let parent = data.matrix(Transform::PARENT_MATRIX);
+                data.set_output(Transform::MATRIX, local);
+                data.set_output(Transform::WORLD_MATRIX, parent * local);
+            }
+            NativeKind::Shape => Shape::compute_matrices(data),
+            NativeKind::Locator => Locator.compute(ctx, data),
+            _ => {}
+        }
         let hook = HOOK.read().unwrap().clone();
         if let Some(h) = hook {
             h(&self.type_name, self.id, &self.name, ctx.time, data);
@@ -43,8 +59,30 @@ impl NodeBehavior for ScriptedNode {
             self.name = name.to_string();
         }
     }
+    fn as_transform(&self) -> Option<&dyn crate::transform::TransformBehavior> {
+        matches!(self.kind, NativeKind::Transform | NativeKind::Constraint).then_some(self as &dyn crate::transform::TransformBehavior)
+    }
     fn as_any(&self) -> &dyn Any {
         self
+    }
+}
+
+/// What a script plug-in's compute gives back besides its outputs: a transform's local matrix (sixteen numbers, the
+/// reference's row order), a shape's bounds (min then max).
+pub fn apply_special_outputs(d: &mut NodeData, matrix: Option<&[f64]>, bounds: Option<&[f64]>) {
+    use crate::transform::{DagNode, Transform};
+    if let Some(m) = matrix.filter(|m| m.len() == 16) {
+        let local = DMat4::from_cols_slice(m);
+        let parent = d.matrix(Transform::PARENT_MATRIX);
+        d.set_output(Transform::MATRIX, local);
+        d.set_output(Transform::WORLD_MATRIX, parent * local);
+    }
+    if let Some(b) = bounds.filter(|b| b.len() == 6) {
+        let (lo, hi) = (DVec3::new(b[0], b[1], b[2]), DVec3::new(b[3], b[4], b[5]));
+        d.set_output(DagNode::BOUNDING_BOX_MIN, PlugValue::Vec3(lo));
+        d.set_output(DagNode::BOUNDING_BOX_MAX, PlugValue::Vec3(hi));
+        d.set_output(DagNode::BOUNDING_BOX_SIZE, PlugValue::Vec3(hi - lo));
+        d.set_output(DagNode::CENTER, PlugValue::Vec3((lo + hi) * 0.5));
     }
 }
 
@@ -180,22 +218,47 @@ pub fn attr_from_json(j: &Value) -> AttrDef {
 
 /// Adds a dependency node type whose attrs are described by JSON (see `attr_from_json`). Errors when the name is taken.
 pub fn register_type(name: &str, owner: &str, attrs: &[Value]) -> Result<()> {
+    register_script_type(name, owner, attrs, NativeKind::Depend)
+}
+
+/// A script plug-in's node type of a kind: a transform, constraint, shape or locator is built on the reference's type
+/// of that kind, whose matrices come first. Deformers are not available to scripts.
+pub fn register_script_type(name: &str, owner: &str, attrs: &[Value], kind: NativeKind) -> Result<()> {
     let type_name: Arc<str> = Arc::from(name);
+    let base = match kind {
+        NativeKind::Locator => types::find("locator"),
+        NativeKind::Transform | NativeKind::Constraint => types::find("transform"),
+        NativeKind::Shape => types::find("shape"),
+        _ => None,
+    };
+    let dag = base.is_some();
     types::register_type(NodeType {
         name: name.to_string(),
         owner: owner.to_string(),
-        doc: format!("A dependency node from the plug-in {owner}."),
+        dag,
+        icon: if kind == NativeKind::Locator { "crosshair".into() } else { String::new() },
+        base,
+        doc: format!("A node from the plug-in {owner}."),
         own_attrs: attrs.iter().map(attr_from_json).collect(),
-        create: Some(Arc::new(move || Box::new(ScriptedNode { type_name: type_name.clone(), id: NO_NODE, name: String::new() }))),
+        create: Some(Arc::new(move || Box::new(ScriptedNode { type_name: type_name.clone(), id: NO_NODE, name: String::new(), kind }))),
+        free_of_parent: kind == NativeKind::Constraint,
         ..Default::default()
     })?;
     TYPE_OWNERS.write().unwrap().insert(name.to_string(), owner.to_string());
+    if kind == NativeKind::Shape {
+        SHAPES.write().unwrap().insert(name.to_string());
+    }
+    if kind == NativeKind::IkSolver {
+        IK_SOLVERS.write().unwrap().insert(name.to_string());
+    }
     Ok(())
 }
 
 pub fn deregister_type(name: &str) {
     types::unregister_type(name);
     DEFORMERS.write().unwrap().remove(name);
+    SHAPES.write().unwrap().remove(name);
+    IK_SOLVERS.write().unwrap().remove(name);
     TYPE_OWNERS.write().unwrap().remove(name);
 }
 

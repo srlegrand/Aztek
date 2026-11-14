@@ -1676,6 +1676,36 @@ MDataBlock = _v1(_om2.MDataBlock)
 MDGContext = _v1(_om2.MDGContext)
 MFnPlugin = _v1(_om2.MFnPlugin)
 
+# Messages, files, UUIDs, plug-in data and NURBS surfaces.
+MFileObject = _v1(_om2.MFileObject)
+MUuid = _v1(_om2.MUuid)
+MCallbackIdArray = _v1(_om2.MCallbackIdArray, _array_body())
+MFnPluginData = _v1(_om2.MFnPluginData)
+MFnNurbsSurface = _v1(_om2.MFnNurbsSurface)
+
+
+def _mm_node_callbacks(node, ids=None):
+    got = _om2.MMessage.nodeCallbacks(node)
+    if ids is None:
+        return _to1(got)
+    _arr_fill(ids, got)
+
+
+MMessage = _om2._msg_v1(_om2.MMessage, "MMessage")
+MMessage.nodeCallbacks = staticmethod(_mm_node_callbacks)
+MSceneMessage = _om2._msg_v1(_om2.MSceneMessage, "MSceneMessage")
+MDGMessage = _om2._msg_v1(_om2.MDGMessage, "MDGMessage")
+MDagMessage = _om2._msg_v1(_om2.MDagMessage, "MDagMessage")
+MNodeMessage = _om2._msg_v1(_om2.MNodeMessage, "MNodeMessage")
+MEventMessage = _om2._msg_v1(_om2.MEventMessage, "MEventMessage")
+for _c in (MMessage, MSceneMessage, MDGMessage, MDagMessage, MNodeMessage, MEventMessage):
+    _c.__module__ = "aztek.OpenAztek"
+    _c.nodeCallbacks = staticmethod(_mm_node_callbacks)
+del _c
+# What 1.0 callbacks are given: 1.0 values, and a check callback's answer through a pointer.
+_om2._MSG_TO1[0] = _to1
+_om2._MSG_PTR[0] = lambda: _Ptr([True], _bool)
+
 # The reference's 1.0 module also holds these names.
 MStatus.kSuccess = 0
 MFn.kInvalid = getattr(MFn, "kInvalid", 0)

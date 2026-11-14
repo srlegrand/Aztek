@@ -524,6 +524,14 @@ static bool callableScript = false;
 void MMessage::setRegisteringCallableScript() { callableScript = true; }
 bool MMessage::registeringCallableScript() { return callableScript; }
 void MMessage::stopRegisteringCallableScript() { callableScript = false; }
+static MPluginCallableInfo* callableInfo = 0;
+void MMessage::setCallableInfo(MPluginCallableInfo* info) { callableInfo = info; }
+MPluginCallableInfo* MMessage::getCallableInfo() { return callableInfo; }
+MPluginCallableInfo* MMessage::stealCallableInfo() {
+    MPluginCallableInfo* i = callableInfo;
+    callableInfo = 0;
+    return i;
+}
 
 // MSceneMessage
 

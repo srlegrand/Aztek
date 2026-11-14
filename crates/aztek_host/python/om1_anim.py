@@ -100,4 +100,126 @@ MFnAnimCurve = _v1(
 )
 MFnAnimCurve.__module__ = "aztek.OpenAztekAnim"
 
-__all__ = ["MFnSkinCluster", "MAnimControl", "MFnAnimCurve"]
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# IK: joints, handles, effectors and the handle groups solvers are given.
+
+
+def _ik_check(fn):
+    def check(self, obj):
+        if not obj.hasFn(fn):
+            _om1._om2._fail()
+
+    return check
+
+
+def _ij_get_orientation(self, out=None):
+    q = _oma2.MFnIkJoint.orientation(self)
+    if out is None:
+        return _to1(q)
+    _copy(out, q.asEulerRotation() if isinstance(out, _om1._om2.MEulerRotation) else q)
+
+
+MFnIkJoint = type(
+    "MFnIkJoint",
+    (_om1.MFnTransform,),
+    {
+        "__module__": "aztek.OpenAztekAnim",
+        "_check": _ik_check(_om1.MFn.kJoint),
+        "getOrientation": _ij_get_orientation,
+        "setOrientation": lambda self, rot: _oma2.MFnIkJoint.setOrientation(self, rot),
+        "getScaleOrientation": lambda self, out=None: _out(out, _oma2.MFnIkJoint.scaleOrientation(self)),
+        "getSegmentScale": lambda self, ptr=None: _put(ptr, *_oma2.MFnIkJoint.segmentScale(self)),
+        "getPreferedAngle": lambda self, out=None: _out(out, _oma2.MFnIkJoint.preferredAngle(self)),
+        "setPreferedAngle": lambda self, rot: _oma2.MFnIkJoint.setPreferredAngle(self, rot),
+    },
+)
+
+
+def _ik_path(flag):
+    def get(self, out=None):
+        r = _om1._om2._cmds.ikHandle(self.fullPathName(), query=True, **{flag: True})
+        name = r[0] if isinstance(r, list) else r
+        got = _om1._om2.MSelectionList().add(name).getDagPath(0)
+        if out is None:
+            return _to1(got)
+        _copy(out, got)
+
+    return get
+
+
+def _ik_number(attr):
+    def get(self):
+        return float(_om1._om2._cmds.getAttr(self.fullPathName() + "." + attr))
+
+    return get
+
+
+def _ik_solver(self):
+    r = _om1._om2._cmds.ikHandle(self.fullPathName(), query=True, solver=True)
+    name = r[0] if isinstance(r, list) else r
+    return _to1(_om1._om2.MSelectionList().add(name).getDependNode(0))
+
+
+MFnIkHandle = type(
+    "MFnIkHandle",
+    (_om1.MFnTransform,),
+    {
+        "__module__": "aztek.OpenAztekAnim",
+        "_check": _ik_check(_om1.MFn.kIkHandle),
+        "getStartJoint": _ik_path("startJoint"),
+        "getEffector": _ik_path("endEffector"),
+        "solver": _ik_solver,
+        "priority": _ik_number("priority"),
+        "weight": _ik_number("weight"),
+        "poWeight": _ik_number("poWeight"),
+    },
+)
+
+MFnIkEffector = type("MFnIkEffector", (_om1.MFnTransform,), {"__module__": "aztek.OpenAztekAnim", "_check": _ik_check(_om1.MFn.kIkEffector)})
+
+
+class MIkHandleGroup(object):
+    """The handles a solver solves together: here, the one handle being solved."""
+
+    def __init__(self, handles=None):
+        self._handles = list(handles or [])
+        self._priority = 0
+        self._solver = 0
+
+    def priority(self):
+        return self._priority
+
+    def setPriority(self, p):
+        self._priority = int(p)
+
+    def solverID(self):
+        return self._solver
+
+    def setSolverID(self, i):
+        self._solver = int(i)
+
+    def solverPriority(self):
+        return self._priority
+
+    def handleCount(self):
+        return len(self._handles)
+
+    def handle(self, index):
+        return _to1(_om1._om2._node_object(self._handles[index]))
+
+    def dofCount(self):
+        return 0
+
+    def isUnderControl(self):
+        return True
+
+    def checkEffectorAtGoal(self):
+        return False
+
+    def solve(self):
+        return 0
+
+
+__all__ = ["MFnSkinCluster", "MAnimControl", "MFnAnimCurve", "MFnIkJoint", "MFnIkHandle", "MFnIkEffector", "MIkHandleGroup"]

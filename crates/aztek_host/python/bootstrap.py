@@ -244,7 +244,7 @@ __main__.cmds = cmds
 class _ApiImporter:
     """OpenAztek, Aztek's Python API, embedded in the host and loaded on first import.
 
-    aztek.api.OpenAztek and aztek.api.OpenAztekAnim are the 2.0 API; aztek.OpenAztek, aztek.OpenAztekAnim,
+    aztek.api.OpenAztek, aztek.api.OpenAztekAnim, aztek.api.OpenAztekUI and aztek.api.OpenAztekRender are the 2.0 API; aztek.OpenAztek, aztek.OpenAztekAnim,
     aztek.OpenAztekMPx and aztek.OpenAztekUI are the 1.0 API built on them. Scripts written for the reference import
     them under the reference's names (maya.api.OpenMaya, maya.OpenMaya, ...) and get the very same modules: one module
     object, whichever name is imported first. aztek.api.OpenMaya and aztek.api.OpenMayaAnim, Aztek's earlier names,
@@ -252,8 +252,10 @@ class _ApiImporter:
 
     # Canonical name: the embedded sources it is made of.
     SOURCES = {
-        "aztek.api.OpenAztek": ["om_values", "om_core", "om_fn", "om_iter", "om_plugin"],
+        "aztek.api.OpenAztek": ["om_values", "om_core", "om_fn", "om_iter", "om_plugin", "om_msg", "om_surface"],
         "aztek.api.OpenAztekAnim": ["om_anim"],
+        "aztek.api.OpenAztekUI": ["om_thin", "om2_ui"],
+        "aztek.api.OpenAztekRender": ["om_thin", "om2_render"],
         "aztek.OpenAztek": ["om1"],
         "aztek.OpenAztekAnim": ["om1_anim"],
         "aztek.OpenAztekMPx": ["om1_mpx"],
@@ -264,6 +266,8 @@ class _ApiImporter:
     ALIASES = {
         "maya.api.OpenMaya": "aztek.api.OpenAztek",
         "maya.api.OpenMayaAnim": "aztek.api.OpenAztekAnim",
+        "maya.api.OpenMayaUI": "aztek.api.OpenAztekUI",
+        "maya.api.OpenMayaRender": "aztek.api.OpenAztekRender",
         "aztek.api.OpenMaya": "aztek.api.OpenAztek",
         "aztek.api.OpenMayaAnim": "aztek.api.OpenAztekAnim",
         "maya.OpenMaya": "aztek.OpenAztek",

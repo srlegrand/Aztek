@@ -70,6 +70,8 @@ private:
 class MDGModifier;
 class MDagPath;
 
+class MPluginCallableInfo;
+
 class MMessage {
 public:
     enum Action { kDefaultAction, kDoNotDoAction, kDoAction };
@@ -116,6 +118,10 @@ public:
     static void setRegisteringCallableScript();
     static bool registeringCallableScript();
     static void stopRegisteringCallableScript();
+    // What a plug-in's callable scripts carry while they register (2020 and later). Held, not looked at.
+    static void setCallableInfo(MPluginCallableInfo* info);
+    static MPluginCallableInfo* getCallableInfo();
+    static MPluginCallableInfo* stealCallableInfo();
     static const char* className() { return "MMessage"; }
     // The kit's own: an id for a callback the host never calls.
     static MCallbackId azNewId();

@@ -171,7 +171,11 @@ pub fn read_query(g: &Graph, op: &str, a: &Value) -> Option<Result<Value, String
     let r = || -> Result<Value, String> {
         Ok(match op {
             "node.find" => json!(g.find(text_of(a, "name")?).map_err(|e| e.to_string())?),
-            "node.exists" => json!(g.node(id_of(a)?).is_some()),
+            // A node being removed is there while its messages are sent, as the reference's MObject is.
+            "node.exists" => {
+                let id = id_of(a)?;
+                json!(g.node(id).is_some() || crate::native_plugin::messages::departed_info(id).is_some())
+            }
             "node.all" => json!(g.nodes()),
             "node.roots" => json!(g.roots()),
             "node.info" => {
@@ -260,6 +264,11 @@ pub fn query(core: &mut Core, op: &str, a: &Value) -> Result<Value, String> {
     }
     match op {
         "message.watch" => return crate::native_plugin::messages::watch(&mut core.s, a),
+        "message.pywatch" => return crate::native_plugin::messages::watch_python(&mut core.s, a),
+        "message.unwatch" => {
+            crate::native_plugin::messages::unwatch(a.get("callback").and_then(Value::as_i64).unwrap_or(0));
+            return Ok(Value::Null);
+        }
         "message.nodeCallbacks" => return Ok(crate::native_plugin::messages::node_callbacks(id_of(a)?)),
         "message.reply" => {
             crate::native_plugin::messages::reply(a);

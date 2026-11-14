@@ -132,7 +132,6 @@ public:
         attributeAffects(rockX, MPxTransform::matrix);
         return MS::kSuccess;
     }
-    MPxTransformationMatrix* createTransformationMatrix() override { return new RockMatrix; }
     MStatus computeLocalTransformation(MPxTransformationMatrix* xform, MDataBlock& block) override {
         static_cast<RockMatrix*>(xform)->rock = block.inputValue(rockX).asDouble();
         return MPxTransform::computeLocalTransformation(xform, block);
@@ -251,8 +250,10 @@ MStatus initializePlugin(MObject obj) {
     MStatus st = plugin.registerData("azPoints", Points::id, Points::creator);
     if (st) st = plugin.registerNode("azMakePoints", MakePoints::id, MakePoints::creator, MakePoints::init);
     if (st) st = plugin.registerNode("azSumPoints", SumPoints::id, SumPoints::creator, SumPoints::init);
-    if (st) st = plugin.registerNode("azRockTransform", Rock::id, Rock::creator, Rock::init, MPxNode::kTransformNode);
-    if (st) st = plugin.registerShape("azBoxShape", BoxShape::id, BoxShape::creator, BoxShape::init, 0);
+    // The transform's matrix comes from the creator registered with it.
+    if (st) st = plugin.registerTransform("azRockTransform", Rock::id, Rock::creator, Rock::init, RockMatrix::creator, RockMatrix::id);
+    if (st && plugin.matrixTypeIdFromXformId(Rock::id) != RockMatrix::id) st = MS::kFailure;
+    if (st) st = plugin.registerShape("azBoxShape", BoxShape::id, BoxShape::creator, BoxShape::init);
     if (st) st = plugin.registerNode("azAvgConstraint", AvgConstraint::id, AvgConstraint::creator, AvgConstraint::init, MPxNode::kConstraintNode);
     if (st) st = plugin.registerConstraintCommand("azAvgConstraint", AvgCommand::creator);
     if (st) st = plugin.registerNode("azAimSolver", AimSolver::id, AimSolver::creator, AimSolver::init, MPxNode::kIkSolverNode);

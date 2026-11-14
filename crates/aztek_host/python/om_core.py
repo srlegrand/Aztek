@@ -14,6 +14,11 @@ class _StoredCmds:
     """aztek.cmds in stored units, centimetres and radians, as the API's values are in the reference."""
 
     def __getattr__(self, name):
+        # A compute or a solve answers what it can of its own node itself; the host can't be reached then, not even
+        # to look the command up.
+        ctx = getattr(_compute_local, "ctx", None)
+        if ctx is not None and "command" in ctx:
+            return lambda *args, **kwargs: ctx["command"](name, args, kwargs)
         fn = getattr(_script_cmds, name)
 
         def call(*args, **kwargs):
@@ -57,6 +62,8 @@ def _api(op, **kw):
 
 def _compute_answer(ctx, op, kw):
     """What a compute can ask about its own node: its name, type and attributes."""
+    if "query" in ctx:
+        return ctx["query"](op, kw)
     if op == "node.exists":
         return kw["id"] == ctx["id"]
     if op == "node.info" and kw["id"] == ctx["id"]:
@@ -147,6 +154,15 @@ class MFn:
     kMeshVtxFaceComponent = 554
     kMeshMapComponent = 555
     kPluginDependNode = 456
+    # Not checked against the reference's numbers: its 2027 documentation doesn't give them.
+    kPluginLocatorNode = 457
+    kPluginTransformNode = 2001
+    kPluginConstraintNode = 2002
+    kPluginShape = 2003
+    kPluginIkSolver = 2004
+    kPluginData = 2005
+    kIkEffector = 119
+    kNurbsSurface = 294
     kPluginManipContainer = 689
     kPluginNode = 456
     kSet = 464
@@ -199,6 +215,8 @@ _FN_OF_TYPE = {
     "locator": MFn.kLocator,
     "camera": MFn.kCamera,
     "ikHandle": MFn.kIkHandle,
+    "ikEffector": MFn.kIkEffector,
+    "nurbsSurface": MFn.kNurbsSurface,
     "skinCluster": MFn.kSkinClusterFilter,
     "blendShape": MFn.kBlendShape,
     "cluster": MFn.kCluster,
@@ -236,6 +254,8 @@ _FN_BASES = {
     MFn.kShape: [MFn.kDagNode, MFn.kEntity],
     MFn.kJoint: [MFn.kTransform, MFn.kDagNode, MFn.kEntity],
     MFn.kIkHandle: [MFn.kTransform, MFn.kDagNode, MFn.kEntity],
+    MFn.kIkEffector: [MFn.kTransform, MFn.kDagNode, MFn.kEntity],
+    MFn.kNurbsSurface: [MFn.kSurface, MFn.kGeometric, MFn.kShape, MFn.kDagNode, MFn.kEntity],
     MFn.kTransform: [MFn.kDagNode, MFn.kEntity],
     MFn.kDagNode: [MFn.kEntity],
     MFn.kSkinClusterFilter: [MFn.kGeometryFilt],
@@ -304,6 +324,20 @@ def _fn_chain(info):
                     fns.append(b)
     if info.get("owner"):
         fns.insert(0, MFn.kPluginDependNode)
+        # A plug-in's node is what its kind says, before what it is built on.
+        chain = info["chain"]
+        kind = _node_classes.get(chain[0], {}).get("kind") if chain else None
+        base = chain[1] if len(chain) > 1 else ""
+        if kind == 4:
+            fns.insert(0, MFn.kPluginConstraintNode)
+        elif kind == 6:
+            fns.insert(0, MFn.kPluginIkSolver)
+        elif base == "transform":
+            fns.insert(0, MFn.kPluginTransformNode)
+        elif base == "shape":
+            fns.insert(0, MFn.kPluginShape)
+        elif base == "locator":
+            fns.insert(0, MFn.kPluginLocatorNode)
     return fns
 
 

@@ -194,6 +194,11 @@ struct NodeClass {
     AzNodeClass cls;
     std::map<int64_t, MPxNode*> instances;
     std::mutex lock;  // instances
+    // A transform's: the transformation matrix its createTransformationMatrix makes (registerTransform).
+    MCreateXformMatrixFunction xformCreator = 0;
+    MCreatorFunction xformCreatorOld = 0;
+    MTypeId xformId;
+    bool hasXform = false;
 };
 
 std::vector<NodeClass*>& nodeClasses();

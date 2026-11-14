@@ -2047,3 +2047,55 @@ copy of the reference.
   preferred angles, as the built-in solvers do. Nothing else in the scene can be reached during the solve. Handle
   groups hold the one handle.
 - `MPxNode::Type` now has the reference's values in its order.
+
+### Python API: the kit's classes, OpenMayaUI and OpenMayaRender (14/11/2026)
+
+Step 4 of the 2027 parity order. Checked against the reference's 2027 Python and C++ API documentation for names,
+signatures and the values it gives; by a 2.0 and a 1.0 test plug-in used from Python and through a save and an open.
+Not compared with a running copy of the reference.
+
+- Where each class lives follows the reference's 2027 modules. Its 2.0 API has no `MPxTransform`, `MPxConstraint`,
+  `MPxConstraintCommand` or `MPxIkSolverNode`: those are in `maya.OpenMayaMPx` (1.0) only, as there.
+- `maya.api.OpenMaya` gains `MPxData`, `MFnPluginData`, `MPxSurfaceShape`, `MFnNurbsSurface`, `MFileObject`, `MUuid`,
+  `MCallbackIdArray` and the messages (`MMessage`, `MSceneMessage`, `MDGMessage`, `MDagMessage`, `MNodeMessage`,
+  `MEventMessage`). `MFnPlugin` gains `registerShape`, `registerData` and `deregisterData`, and `registerNode` takes
+  locators, transforms, constraints, shapes and IK solvers. `MFnTypedAttribute.create` takes a plug-in data type's id.
+  `MDataHandle` gains `asPluginData`, `data`, `setMPxData`, `setMObject`.
+- `MPxNode`'s kinds (`kDependNode` ... `kLast`) had Aztek's own numbers; they are the reference's now (2027:
+  `kTransformNode` 11, `kIkSolverNode` 8, `kConstraintNode` 17, `kLast` 26), with `kEvaluatedIndirectly`,
+  `kEvaluatedDirectly`, `kLeaveDirty`.
+- Plug-in data: values flow between nodes as the plug-in's objects. Files have them as the reference does,
+  `setAttr ".attr" -type "typeName" ...`, from `writeASCII()` (2.0 returns the text; 1.0 writes to a stream) and back
+  through `readASCII(args, last)`. Binary forms are not used.
+- Shapes and locators: the bounding box is `boundingBox()` when `isBounded()`. A locator is drawn as a locator;
+  `draw()` is not called.
+- Transforms (1.0 `registerTransform`, with the transformation matrix's creator and id, and `matrixTypeIdFromXformId`):
+  the matrix is `createTransformationMatrix()`, filled by `computeLocalTransformation`, then its `asMatrix()`.
+- Constraints (1.0): `registerConstraintCommand` gives the command the flags every constraint command has, then
+  `appendSyntax`'s; the command does what the kit's does. Array compounds are still not available on Python plug-in
+  nodes, so a constraint's targets are plain arrays.
+- IK solvers (1.0): `MPxIkSolverNode`, with `MFnIkHandle`, `MFnIkEffector`, `MFnIkJoint` and `MIkHandleGroup` in
+  `maya.OpenMayaAnim`. While `doSolve` runs, the handle, its effector and its joints answer from the solve, as in the
+  kit; nothing else in the scene can be reached. `registerIkSolver` fails: the reference's 2027 documentation calls it
+  obsolete.
+- `maya.api.OpenMayaAnim` gains `MFnIkJoint` (`orientation`, `setOrientation`, `scaleOrientation`, `segmentScale`,
+  `preferredAngle`).
+- Messages: callbacks are called as the reference's Python API calls them; a check callback returns False to stop what
+  is coming (2.0) or sets its first argument (1.0, through `MScriptUtil`). `MEventMessage` runs through a script job.
+  1.0 callbacks are given 1.0 values. A node being removed still answers while its messages are sent.
+- `maya.api.OpenMayaUI` and `maya.api.OpenMayaRender` are new, under the reference's names and as
+  `aztek.api.OpenAztekUI` and `aztek.api.OpenAztekRender`. Every class of the reference's 2027 modules is there.
+  `MPxLocatorNode` and `M3dView` (views by index or panel, the camera, size, refresh) work. The rest are thin: they
+  import, can be derived from and made, and plug-ins that register through them (`MDrawRegistry`'s register and
+  deregister calls) load; everything else they do raises NotImplementedError when called. `MRenderer.theRenderer`
+  and `setGeometryDrawDirty` work (Aztek redraws on its own). Constants of thin classes that aren't written out are
+  numbers of Aztek's, not the reference's.
+- `MFn` gains `kPluginLocatorNode`, `kPluginTransformNode`, `kPluginConstraintNode`, `kPluginShape`,
+  `kPluginIkSolver`, `kPluginData`, `kIkEffector` and `kNurbsSurface`, and plug-in nodes answer to them. Their numbers
+  are not checked against the reference: its 2027 documentation doesn't give them.
+- Kit (C++), from the 2027 documentation: `MFnPlugin::registerTransform` (both overloads; the one taking a plain
+  creator is deprecated there), `matrixTypeIdFromXformId`, `registerShape` without a UI creator, `registerIkSolver`
+  and `deregisterIkSolver` (fail: obsolete there), `MMessage::setCallableInfo`, `getCallableInfo`,
+  `stealCallableInfo`. `MPxTransform::createTransformationMatrix` makes the registered matrix. The namespace-renamed
+  callback was given the old name first; it gets the new one first, as the reference's
+  `MSceneMessage::addNamespaceRenamedCallback` documents.

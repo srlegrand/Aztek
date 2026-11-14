@@ -1821,6 +1821,13 @@ class MFnData:
 
 class MFnTypedAttribute(MFnAttribute):
     def create(self, longName, shortName, dataType, defaultValue=None):
+        if isinstance(dataType, MTypeId):
+            # A plug-in's own data type, by its id.
+            name = next((k for k, e in _data_classes.items() if e["id"] == dataType), None)
+            if name is None:
+                _fail(message="No plug-in data type has that id")
+            self._obj = _new_attr(MFn.kTypedAttribute, longName, shortName, "data", None, data=MFnData.kPlugin, dataType=name)
+            return self.object()
         t = {MFnData.kString: "string", MFnData.kMatrix: "matrix", MFnData.kMesh: "mesh"}.get(dataType)
         if t is None:
             _fail(status="kNotImplemented", message="Typed attributes of that data type aren't available")

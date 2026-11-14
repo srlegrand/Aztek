@@ -845,7 +845,14 @@ pub(crate) fn install_hooks() {
 }
 
 fn plugin_solve(ty: &str, input: &Value) -> Option<Vec<DVec3>> {
-    let (e, inst) = IK_SOLVERS.lock().unwrap_or_else(|x| x.into_inner()).get(ty).cloned()?;
+    let found = IK_SOLVERS.lock().unwrap_or_else(|x| x.into_inner()).get(ty).cloned();
+    let Some((e, inst)) = found else {
+        // A Python plug-in's solver.
+        #[cfg(feature = "python")]
+        return crate::python::ik_solve(ty, input);
+        #[cfg(not(feature = "python"))]
+        return None;
+    };
     let f = e.cls.ik_solve?;
     if e.crashed.load(Ordering::Relaxed) {
         return None;

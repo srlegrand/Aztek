@@ -1051,6 +1051,9 @@ public:
     static const char* className() { return "MPxData"; }
 };
 
+class MPxTransformationMatrix;
+typedef MPxTransformationMatrix* (*MCreateXformMatrixFunction)();
+
 class MFnPlugin : public MFnBase {
 public:
     MFnPlugin();
@@ -1070,9 +1073,22 @@ public:
     MStatus registerNode(const MString& name, const MTypeId& id, MCreatorFunction creator, MInitializeFunction init,
                          MPxNode::Type type = MPxNode::kDependNode, const MString* classification = 0);
     MStatus deregisterNode(const MTypeId& id);
+    // A transform and the transformation matrix its createTransformationMatrix makes by default.
+    MStatus registerTransform(const MString& typeName, const MTypeId& typeId, MCreatorFunction creatorFunction, MInitializeFunction initFunction,
+                              MCreateXformMatrixFunction xformCreatorFunction, const MTypeId& xformId, const MString* classification = 0);
+    // Deprecated in the reference since 2019: the matrix creator as a plain creator.
+    MStatus registerTransform(const MString& typeName, const MTypeId& typeId, MCreatorFunction creatorFunction, MInitializeFunction initFunction,
+                              MCreatorFunction xformCreatorFunction, const MTypeId& xformId, const MString* classification = 0);
+    MTypeId matrixTypeIdFromXformId(const MTypeId& xformTypeId, MStatus* ReturnStatus = 0);
+    MStatus registerShape(const MString& typeName, const MTypeId& typeId, MCreatorFunction creatorFunction, MInitializeFunction initFunction,
+                          const MString* classification = 0);
     // A shape and the object that would draw it in the reference's legacy viewport, which is kept and never called.
+    // The reference is retiring this overload for the one above.
     MStatus registerShape(const MString& name, const MTypeId& id, MCreatorFunction creator, MInitializeFunction init, MCreatorFunction uiCreator,
                           const MString* classification = 0);
+    // Obsolete in the reference: an IK solver is registered as a node (MPxNode::kIkSolverNode). These fail.
+    MStatus registerIkSolver(const MString& ikSolverName, MCreatorFunction creatorFunction);
+    MStatus deregisterIkSolver(const MString& ikSolverName);
     MStatus registerData(const MString& name, const MTypeId& id, MCreatorFunction creator, MPxData::Type type = MPxData::kData);
     MStatus deregisterData(const MTypeId& id);
     MStatus registerConstraintCommand(const MString& name, MCreatorFunction creator);

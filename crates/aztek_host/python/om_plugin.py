@@ -599,6 +599,41 @@ class MDataHandle:
     def copy(self, other):
         return self._write(other._v)
 
+    # A plug-in's data (MPxData): the object itself, handed across by the host.
+
+    def asPluginData(self):
+        v = self._v
+        if isinstance(v, MPxData):
+            return v
+        if isinstance(v, dict) and "$data" in v:
+            obj = _az.data_get(v["$data"])
+            if obj is not None:
+                self._v = obj
+            return obj
+        return None
+
+    def data(self):
+        d = self.asPluginData()
+        if d is None:
+            _fail(status="kFailure", message="The handle holds no plug-in data")
+        return _plugin_data_object(d)
+
+    def setMPxData(self, data):
+        if not isinstance(data, MPxData):
+            _fail()
+        return self._write(data)
+
+    def setMObject(self, obj):
+        if isinstance(obj, MObject) and obj._kind == "data" and isinstance(obj._data, MPxData):
+            return self._write(obj._data)
+        if isinstance(obj, MObject) and obj._kind == "data":
+            d = obj._data
+            return self._write(list(d) if isinstance(d, MMatrix) else d)
+        _fail()
+
+    def asMObject(self):
+        return self.data()
+
     def setClean(self):
         return self
 
@@ -744,6 +779,7 @@ class MDGContext:
 
 
 class MPxNode:
+    # The reference's node kinds, in its order.
     kDependNode = 0
     kLocatorNode = 1
     kDeformerNode = 2
@@ -751,20 +787,31 @@ class MPxNode:
     kSurfaceShape = 4
     kFieldNode = 5
     kEmitterNode = 6
-    kSkinCluster = 7
-    kGeometryFilter = 8
-    kBlendShape = 9
-    kHardwareShader = 10
-    kHwShaderNode = 11
-    kTransformNode = 12
-    kManipulatorNode = 13
-    kClientDeviceNode = 14
-    kThreadedDeviceNode = 15
-    kAssembly = 16
+    kSpringNode = 7
+    kIkSolverNode = 8
+    kHardwareShader = 9
+    kHwShaderNode = 10
+    kTransformNode = 11
+    kObjectSet = 12
+    kFluidEmitterNode = 13
+    kImagePlaneNode = 14
+    kParticleAttributeMapperNode = 15
+    kCameraSetNode = 16
     kConstraintNode = 17
-    kCameraSetNode = 18
-    kImagePlaneNode = 19
-    kLast = 20
+    kManipulatorNode = 18
+    kMotionPathNode = 19
+    kClientDeviceNode = 20
+    kThreadedDeviceNode = 21
+    kAssembly = 22
+    kSkinCluster = 23
+    kGeometryFilter = 24
+    kBlendShape = 25
+    kLast = 26
+    # What postEvaluation is told.
+    kEvaluatedIndirectly = 0
+    kEvaluatedDirectly = 1
+    kLeaveDirty = 2
+    kPostEvaluationTypeLast = 3
 
     _registering = None
 
@@ -851,8 +898,21 @@ def _flatten_attrs(attrs):
     return unique
 
 
-# type name -> {"cls", "creator", "id", "owner", "affects", "units", "children", "outputs"}
+# The host's numbers for the kinds a plug-in node can be (the kit's ABI): a dependency node, a locator, a transform,
+# a constraint, a shape, an IK solver.
+_HOST_KINDS = {
+    MPxNode.kDependNode: 0,
+    MPxNode.kLocatorNode: 2,
+    MPxNode.kTransformNode: 3,
+    MPxNode.kConstraintNode: 4,
+    MPxNode.kSurfaceShape: 5,
+    MPxNode.kIkSolverNode: 6,
+}
+
+# type name -> {"creator", "id", "owner", "units", "children", "outputs", "attrs", "kind"}
 _node_classes = {}
+# data type name -> {"creator", "id", "owner"}
+_data_classes = {}
 _node_instances = {}
 _command_classes = {}
 # plugin name -> {"path", "vendor", "version", "api", "module", "commands", "nodes", "object"}
@@ -941,8 +1001,36 @@ class MFnPlugin(MFnBase):
         return self
 
     def registerNode(self, name, typeId, creator, initialize=None, nodeType=MPxNode.kDependNode, classification=None):
-        if nodeType != MPxNode.kDependNode:
-            _fail(status="kNotImplemented", message="Only plain dependency nodes can come from plug-ins")
+        kind = _HOST_KINDS.get(nodeType)
+        if kind is None:
+            _fail(status="kNotImplemented", message="Plug-in nodes of that kind aren't available: %s" % (name,))
+        return self._register(name, typeId, creator, initialize, kind)
+
+    def registerShape(self, name, typeId, creator, initialize, uiCreator=None, classification=None):
+        """A shape. The reference's 2027 API also takes no UI creator; one given is kept and not used."""
+        return self._register(name, typeId, creator, initialize, _HOST_KINDS[MPxNode.kSurfaceShape])
+
+    def registerData(self, name, typeId, creator, dataType=0):
+        tid = MTypeId(typeId)
+        if name in _data_classes or any(e["id"] == tid for e in _data_classes.values()):
+            _fail(status="kFailure", message="A data type named %s or with that id already exists" % (name,))
+        _az.register_data(name)
+        _data_classes[name] = {"creator": creator, "id": tid, "owner": self._p["name"]}
+        self._p.setdefault("data", []).append(name)
+        return self
+
+    def deregisterData(self, typeId):
+        tid = MTypeId(typeId)
+        for name, e in list(_data_classes.items()):
+            if e["id"] == tid:
+                _az.deregister_data(name)
+                del _data_classes[name]
+                if name in self._p.get("data", []):
+                    self._p["data"].remove(name)
+                return self
+        _fail(status="kFailure", message="No plug-in data type has that id")
+
+    def _register(self, name, typeId, creator, initialize, kind, extra=None):
         reg = {"attrs": [], "affects": []}
         was = MPxNode._registering
         MPxNode._registering = reg
@@ -969,8 +1057,12 @@ class MFnPlugin(MFnBase):
             if s["type"] == "vec3":
                 kids = s.get("children") or [{"name": s["name"] + a, "short": s["short"] + a.lower()} for a in "XYZ"]
                 children[s["name"]] = [k["name"] for k in kids]
-        _az.register_node(name, self._p["name"], _json.dumps(attrs))
-        _node_classes[name] = {"creator": creator, "id": MTypeId(typeId), "owner": self._p["name"], "outputs": outputs, "units": units, "children": children, "attrs": attrs}
+        _az.register_node(name, self._p["name"], _json.dumps(attrs), kind)
+        _node_classes[name] = {
+            "creator": creator, "id": MTypeId(typeId), "owner": self._p["name"], "outputs": outputs, "units": units, "children": children,
+            "attrs": attrs, "kind": kind,
+        }
+        _node_classes[name].update(extra or {})
         self._p["nodes"].append(name)
         return self
 
@@ -1117,15 +1209,30 @@ class _Hooks:
 
     def compute(self, type_name, node_id, name, time, values):
         e = _node_classes.get(type_name)
-        if e is None or not e["outputs"]:
+        # Transforms, shapes and locators give their matrix and bounds even with no outputs of their own.
+        if e is None or not (e["outputs"] or e["kind"] in (2, 3, 4, 5)):
             return "{}"
-        _compute_local.ctx = {"id": node_id, "name": name, "type": type_name, "owner": e["owner"], "attrs": e["attrs"]}
+        vals = _json.loads(values)
+        ctx = {"id": node_id, "name": name, "type": type_name, "owner": e["owner"], "attrs": e["attrs"], "values": vals, "children": e["children"]}
+        ctx["command"] = lambda n, a, k: _compute_command(ctx, n, a, k)
+        _compute_local.ctx = ctx
         try:
             inst = _instance(type_name, node_id)
-            block = MDataBlock(_json.loads(values), e["units"], e["children"], time)
+            block = MDataBlock(vals, e["units"], e["children"], time)
             for out in e["outputs"]:
                 inst.compute(MPlug._of(node_id, out), block)
-            return _json.dumps(_host_outputs(block._out))
+            res = _host_outputs(block._out)
+            local = getattr(inst, "_az_local_matrix", None)
+            if local is not None:
+                m = local(block)
+                if m is not None:
+                    m = MMatrix(m)
+                    res["$matrix"] = [m[i] for i in range(16)]
+            if e["kind"] in (2, 5) and inst.isBounded():
+                b = inst.boundingBox()
+                lo, hi = b.min, b.max
+                res["$bbox"] = [lo.x, lo.y, lo.z, hi.x, hi.y, hi.z]
+            return _json.dumps(res)
         except Exception as ex:
             _show_traceback(ex)
             _az.write("# Error: %s: %s #" % (type(ex).__name__, ex), 2)
@@ -1134,11 +1241,271 @@ class _Hooks:
             _compute_local.ctx = None
             _sys.stdout.flush()
 
+    def data_write(self, obj):
+        """A plug-in data value as its type writes it to a file."""
+        try:
+            return _data_text(obj)
+        except Exception as ex:
+            _show_traceback(ex)
+            return ""
+
+    def data_read(self, kind, text):
+        """A plug-in data value read from a file; None when its type refuses it."""
+        e = _data_classes.get(kind)
+        if e is None:
+            return None
+        try:
+            obj = e["creator"]()
+            got = obj.readASCII(MArgList(_data_words(text)), 0)
+            return None if got is False else obj
+        except Exception as ex:
+            _show_traceback(ex)
+            return None
+
+
+def _compute_command(ctx, name, args, kwargs):
+    """The commands a compute can run: getAttr of its own node's values."""
+    if name == "getAttr" and args and not kwargs:
+        node, _, attr = str(args[0]).partition(".")
+        if node.split("|")[-1] == ctx["name"].split("|")[-1]:
+            vals = ctx["values"]
+            if attr in vals:
+                v = vals[attr]
+                return [tuple(v)] if isinstance(v, list) and len(v) == 3 and all(isinstance(x, (int, float)) for x in v) else v
+            for parent, kids in ctx["children"].items():
+                if attr in kids and isinstance(vals.get(parent), list):
+                    return vals[parent][kids.index(attr)]
+    raise RuntimeError("(kFailure): Commands cannot run inside compute")
+
+
+def _data_words(text):
+    """A data value's words as the reference's file reader gives them to readASCII: quoted strings whole."""
+    import shlex
+
+    try:
+        return shlex.split(text or "")
+    except ValueError:
+        return (text or "").split()
+
+
+class _AsciiOut:
+    """What a 1.0 writeASCII writes into."""
+
+    def __init__(self):
+        self.parts = []
+
+    def write(self, s):
+        self.parts.append(str(s))
+
+    def __lshift__(self, s):
+        self.write(s)
+        return self
+
+
+def _data_text(obj):
+    try:
+        out = obj.writeASCII()
+    except TypeError:
+        # 1.0: writeASCII(ostream).
+        o = _AsciiOut()
+        obj.writeASCII(o)
+        out = "".join(o.parts)
+    return "" if out is None else str(out)
+
+
+def _data_type_name(obj):
+    try:
+        tid = MTypeId(obj.typeId())
+        for name, e in _data_classes.items():
+            if e["id"] == tid:
+                return name
+    except Exception:
+        pass
+    return obj.name()
+
+
+def _plugin_data_object(d):
+    o = MObject()
+    o._kind, o._fn, o._data = "data", MFn.kPluginData, d
+    return o
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Plug-in data and shapes
+
+
+class MPxData:
+    """A plug-in's own data type: what flows through its attributes and is written to files."""
+
+    kData = 0
+    kGeometryData = 1
+    kLast = 2
+
+    def __init__(self):
+        pass
+
+    def copy(self, src):
+        _fail(status="kNotImplemented", message="MPxData.copy must be implemented by the data class")
+
+    def typeId(self):
+        _fail(status="kNotImplemented", message="MPxData.typeId must be implemented by the data class")
+
+    def name(self):
+        _fail(status="kNotImplemented", message="MPxData.name must be implemented by the data class")
+
+    def readASCII(self, argList, endOfTheLastParsedElement):
+        return endOfTheLastParsedElement
+
+    def writeASCII(self):
+        return ""
+
+    def readBinary(self, data, length):
+        return -1
+
+    def writeBinary(self):
+        return bytearray()
+
+
+class MFnPluginData(MFnBase):
+    def _check(self, obj):
+        if obj._kind != "data" or not isinstance(obj._data, MPxData):
+            _fail()
+
+    def create(self, typeId):
+        tid = MTypeId(typeId)
+        for e in _data_classes.values():
+            if e["id"] == tid:
+                self._obj = _plugin_data_object(e["creator"]())
+                return MObject(self._obj)
+        _fail(message="No plug-in data type has that id")
+
+    def data(self):
+        self._check(self._obj)
+        return self._obj._data
+
+    def typeId(self):
+        return MTypeId(self.data().typeId())
+
+
+def _builtin_attr(name):
+    """An attribute every node of a kind has, as the base classes' static members hold them."""
+    o = MObject()
+    o._kind, o._attr, o._fn = "attr", name, MFn.kAttribute
+    return o
+
+
+class MPxSurfaceShape(MPxNode):
+    """A shape of a plug-in's own: what it draws and selects is the plug-in's; here its bounds count."""
+
+    kObjectChanged = 0
+    kBoundingBoxChanged = 1
+    kMatchOk = 0
+    kMatchNone = 1
+    kMatchTooMany = 2
+    kMatchInvalidName = 3
+    kMatchInvalidAttribute = 4
+    kMatchInvalidAttributeIndex = 5
+    kMatchInvalidAttributeRange = 6
+    kMatchInvalidAttributeDim = 7
+    kNoPointCaching = 0
+    kSavePoints = 1
+    kRestorePoints = 2
+    kUpdatePoints = 3
+    kTransformOriginalPoints = 4
+    kNormal = 0
+    kUTangent = 1
+    kVTangent = 2
+    kUVNTriad = 3
+
+    def isBounded(self):
+        return False
+
+    def boundingBox(self):
+        return MBoundingBox()
+
+    def geometryData(self):
+        return MObject()
+
+    def localShapeInAttr(self):
+        return MObject()
+
+    def localShapeOutAttr(self):
+        return MObject()
+
+    def worldShapeOutAttr(self):
+        return MObject()
+
+    def cachedShapeAttr(self):
+        return MObject()
+
+    def childChanged(self, state=0):
+        pass
+
+    def deleteComponents(self, componentList, undoInfo):
+        return False
+
+    def undeleteComponents(self, componentList, undoInfo):
+        return False
+
+    def componentToPlugs(self, component, selectionList):
+        pass
+
+    def match(self, mask, componentList):
+        return False
+
+    def matchComponent(self, item, spec, list):
+        return MPxSurfaceShape.kMatchNone
+
+    def createFullVertexGroup(self):
+        return MObject()
+
+    def createFullRenderGroup(self):
+        return MObject()
+
+    def hasActiveComponents(self):
+        return False
+
+    def activeComponents(self):
+        return MObjectArray()
+
+    def acceptsGeometryIterator(self, *a):
+        return False
+
+    def excludeAsPluginShape(self):
+        return True
+
+    def canMakeLive(self):
+        return False
+
+    def getWorldMatrix(self, block, instance):
+        return MMatrix(_api("dag.matrices", id=self._node_id)["world"])
+
+
+for _n in (
+    "boundingBoxCenterX", "boundingBoxCenterY", "boundingBoxCenterZ", "center", "instObjGroups", "intermediateObject",
+    "inverseMatrix", "isTemplated", "matrix", "nodeBoundingBox", "nodeBoundingBoxMax", "nodeBoundingBoxMaxX",
+    "nodeBoundingBoxMaxY", "nodeBoundingBoxMaxZ", "nodeBoundingBoxMin", "nodeBoundingBoxMinX", "nodeBoundingBoxMinY",
+    "nodeBoundingBoxMinZ", "nodeBoundingBoxSize", "nodeBoundingBoxSizeX", "nodeBoundingBoxSizeY", "nodeBoundingBoxSizeZ",
+    "objectColor", "objectGroupColor", "objectGroupId", "objectGroups", "objectGrpCompList", "parentInverseMatrix",
+    "parentMatrix", "visibility", "worldInverseMatrix", "worldMatrix", "mControlPoints", "mControlValueX",
+    "mControlValueY", "mControlValueZ", "mHasHistoryOnCreate",
+):
+    # The reference's nodeBoundingBox members are the boundingBox attributes.
+    setattr(MPxSurfaceShape, _n, _builtin_attr(_n.replace("nodeBoundingBox", "boundingBox")))
+del _n
+
+
+def _host_value(v):
+    """An output as the host takes it: a plug-in's data object by the key the host keeps it under."""
+    if isinstance(v, MPxData):
+        return {"$data": _az.data_put(v, _data_type_name(v))}
+    return v
+
 
 def _host_outputs(out):
     res = {}
     for k, v in out.items():
-        res[k] = sorted([[i, x] for i, x in v.items()]) if isinstance(v, dict) else v
+        res[k] = sorted([[i, _host_value(x)] for i, x in v.items()]) if isinstance(v, dict) else _host_value(v)
     return res
 
 
@@ -1184,7 +1551,11 @@ def _take_back(p):
         if name in _node_classes:
             _az.deregister_node(name)
             del _node_classes[name]
-    p["commands"], p["nodes"] = [], []
+    for name in list(p.get("data", [])):
+        if name in _data_classes:
+            _az.deregister_data(name)
+            del _data_classes[name]
+    p["commands"], p["nodes"], p["data"] = [], [], []
 
 
 def _unload_one(name):
