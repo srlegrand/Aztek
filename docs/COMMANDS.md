@@ -3,7 +3,7 @@
 Generated from the command registry by `cargo run -p aztek_host --example gen_commands`; do not edit by hand.
 Commands take the reference's flags, long or short, in MEL and in Python (`aztek.cmds` or `maya.cmds`).
 
-1236 commands.
+1237 commands.
 
 ## AL_usdmaya_LayerCreateLayer
 
@@ -10591,6 +10591,11 @@ Arguments: names or patterns
 | `exactType` | `et` | Only nodes of exactly this type. |
 | `dag` | `dag` | Only DAG nodes. |
 | `referencedNodes` | `rn` | Only nodes from references. |
+| `readOnly` | `ro` | Only nodes from references, which are read only (the older name for referencedNodes). |
+| `defaultNodes` | `dn` | Only default nodes: those every scene is made with and no file saves (time1, lambert1). |
+| `undeletable` | `ud` | Only nodes that can't be deleted or renamed: default nodes, startup cameras and locked nodes. |
+| `lockedNodes` | `ln` | Only locked nodes, which can't be deleted or renamed until unlocked. |
+| `nodeTypes` | `nt` | Every node type there is, instead of nodes. |
 | `dagObjects` | `do` | DAG nodes and everything below them. |
 | `shapes` | `s` | Only shapes. |
 | `transforms` | `tr` | Only transforms. |
@@ -22745,6 +22750,18 @@ Arguments: bodies to act on
 | `frequency` | `f` | Turbulence: noise frequency. |
 | `minDistance` | `mnd` | Newton: least distance. |
 | `position` | `pos` | Where it is. |
+
+## unknownNode
+
+About an unknown node, one a file held for a plug-in that isn't here. -q -realClassName: the type the file gave it; -q -plugin: the plug-in that type comes from.
+
+Arguments: the unknown node
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `query` | `q` | Query mode. |
+| `realClassName` | `rcn` | Query: the node's type in the file. |
+| `plugin` | `p` | Query: the plug-in the file said that type comes from. |
 
 ## unloadPlugin
 

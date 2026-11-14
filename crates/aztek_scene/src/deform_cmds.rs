@@ -93,11 +93,12 @@ fn create_plugin(s: &mut Session, a: &Args, ty: &str) -> CmdResult {
 }
 
 fn create(s: &mut Session, a: &Args, ty: &str) -> CmdResult {
-    if crate::scripted::is_plugin_deformer(ty) {
+    // A plug-in's deformer, and tweak, which has no command of its own: one node inserted on each mesh.
+    if crate::scripted::is_plugin_deformer(ty) || ty == "tweak" {
         return create_plugin(s, a, ty);
     }
     let Some((cmd, kind)) = maker(ty) else {
-        fail!("deformer: can't make a {ty} (ffd, cluster, softMod, deltaMush, tension, wrap, wire, blendShape, sculpt, jiggle, shrinkWrap, morph, wrinkle, proximityWrap, solidify, pointOnCurve, textureDeformer, curveWarp or a nonlinear type)")
+        fail!("deformer: can't make a {ty} (ffd, cluster, softMod, deltaMush, tension, wrap, wire, blendShape, sculpt, jiggle, shrinkWrap, morph, wrinkle, proximityWrap, solidify, pointOnCurve, textureDeformer, curveWarp, tweak or a nonlinear type)")
     };
     let mut call = Map::new();
     let mut args: Vec<Value> = a.named().into_iter().map(Value::String).collect();

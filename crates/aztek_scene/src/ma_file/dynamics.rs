@@ -70,7 +70,7 @@ fn tok_text(t: &Tok) -> String {
 }
 
 /// A setAttr line as the file had it.
-fn set_line(s: &SetAttr) -> String {
+pub(super) fn set_line(s: &SetAttr) -> String {
     let path: Vec<String> = s
         .path
         .iter()
@@ -85,7 +85,7 @@ fn set_line(s: &SetAttr) -> String {
     format!("setAttr \".{}\"{ty} {};", path.join("."), values.join(" "))
 }
 
-fn string_set(short: &str, value: &str) -> SetAttr {
+pub(super) fn string_set(short: &str, value: &str) -> SetAttr {
     SetAttr { path: vec![Seg { name: short.into(), range: None }], lock: None, values: vec![Tok::Str(value.into())], ty: Some("string".into()) }
 }
 

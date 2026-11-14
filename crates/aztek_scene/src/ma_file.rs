@@ -15,6 +15,7 @@
 
 mod deformers;
 mod dynamics;
+mod unknown;
 mod lights;
 mod shading;
 mod nurbs;
@@ -405,6 +406,8 @@ struct Doc {
     /// Plug-ins the file's requires lines name.
     /// Plug-ins the file names, each with the node types it says come from it.
     requires: Vec<(String, Vec<String>)>,
+    /// The version each requires line gives its plug-in.
+    plugin_versions: HashMap<String, String>,
     nodes: Vec<MaNode>,
     by_name: HashMap<String, Vec<usize>>,
     conns: Vec<Conn>,
@@ -505,7 +508,7 @@ impl Doc {
 
     fn parse(text: &str) -> Doc {
         FILE_UNITS.with(|u| u.set((1.0, std::f64::consts::PI / 180.0)));
-        let mut d = Doc { light_set: Vec::new(), relationships: Vec::new(), nodes: Vec::new(), by_name: HashMap::new(), conns: Vec::new(), lin: 1.0, ang: std::f64::consts::PI / 180.0, fps: None, drop_frame: false, warnings: Vec::new(), refs: Vec::new(), ref_load: Vec::new(), instances: Vec::new(), ref_conns: Vec::new(), up_z: false, requires: Vec::new() };
+        let mut d = Doc { light_set: Vec::new(), relationships: Vec::new(), nodes: Vec::new(), by_name: HashMap::new(), conns: Vec::new(), lin: 1.0, ang: std::f64::consts::PI / 180.0, fps: None, drop_frame: false, warnings: Vec::new(), refs: Vec::new(), ref_load: Vec::new(), instances: Vec::new(), ref_conns: Vec::new(), up_z: false, requires: Vec::new(), plugin_versions: HashMap::new() };
         let mut lex = Lexer::new(text);
         let mut st = Vec::new();
         let mut current: Option<usize> = None;
@@ -518,6 +521,9 @@ impl Doc {
                     let plain = plain_args(&st, &[]);
                     if let Some(name) = plain.first().filter(|n| **n != "maya") {
                         let types: Vec<String> = st.windows(2).filter(|w| matches!(w[0].text(), Some("-nodeType") | Some("-nt"))).filter_map(|w| w[1].text().map(str::to_string)).collect();
+                        if let Some(v) = plain.get(1) {
+                            d.plugin_versions.insert(name.to_string(), v.to_string());
+                        }
                         d.requires.push((name.to_string(), types));
                     }
                 }
@@ -1239,7 +1245,7 @@ const DRAW_CHANNELS: &[&str] = &[
 ];
 
 /// Rigging and animation nodes that are all attributes and connections.
-const PLAIN_NODES: &[&str] = &["collider", "rigidBody", "dynamicConstraint", "heldNode", "blendWeighted", "makeNurbCircle", "makeNurbPlane", "makeNurbsSquare", "motionPath", "ramp", "extrude", "reverseSurface", "transformGeometry", "pointOnCurveInfo", "curveInfo", "nearestPointOnCurve", "container", "controller", "timeWarp", "hierarchyTreeNode", "curveFromMeshEdge", "characterMap", "keyingGroup"];
+const PLAIN_NODES: &[&str] = &["collider", "rigidBody", "dynamicConstraint", "heldNode", "unknown", "network", "blendWeighted", "makeNurbCircle", "makeNurbPlane", "makeNurbsSquare", "motionPath", "ramp", "extrude", "reverseSurface", "transformGeometry", "pointOnCurveInfo", "curveInfo", "nearestPointOnCurve", "container", "controller", "timeWarp", "hierarchyTreeNode", "curveFromMeshEdge", "characterMap", "keyingGroup"];
 /// The same under a transform.
 const PLAIN_SHAPES: &[&str] = &["solver", "particles", "field", "emitter", "follicle", "distanceDimShape", "paramDimension", "annotationShape", "dropoffLocator", "lattice", "baseLattice", "softModHandle", "mayaUsdProxyShape", "AL_usdmaya_ProxyShape", "ProxyUsdGeomCamera"];
 
@@ -1377,7 +1383,7 @@ fn plug_ref(id: NodeId, attr: usize, component: i32) -> PlugRef {
 // ---------------------------------------------------------------------------------------------------------------------
 // Curves not driven by time
 
-const DRIVEN_CURVES: &[&str] = &["animCurveUL", "animCurveUA", "animCurveUU"];
+const DRIVEN_CURVES: &[&str] = &["animCurveUL", "animCurveUA", "animCurveUU", "animCurveUT"];
 
 /// A curve whose input is a plug instead of time: a set driven key.
 struct DrivenCurve;
@@ -1512,6 +1518,8 @@ fn curve_keys(n: &MaNode, doc: &Doc, fps: f64) -> Keys {
         let mut out = HashMap::new();
         for (i, c) in n.elements(ys, 1) {
             let (Some(y), Some(&dx)) = (c[0].num(), x.get(&i)) else { continue };
+            // A time curve's value is in seconds too: frames here.
+            let y = if n.ty.ends_with('T') { y * fps } else { y };
             let per_second = if dx.abs() < 1e-12 { y.signum() * 1e6 } else { y / dx };
             out.insert(i, per_second / fps);
         }
@@ -1845,6 +1853,7 @@ impl Build<'_> {
         }
         match n.ty.as_str() {
             "transform" | "joint" | "locator" | "nurbsCurve" | "nurbsSurface" | "camera" => true,
+            crate::core_nodes::UNKNOWN_DAG | crate::core_nodes::UNKNOWN_TRANSFORM => true,
             ty if PLAIN_SHAPES.contains(&ty) || crate::lights::is_light_type(ty) => true,
             "mesh" => !n.truth(&["io", "intermediateObject"]).unwrap_or(false),
             // A plug-in's locator (mGearWeightDriver).
@@ -3507,6 +3516,7 @@ fn build(s: &mut Session, doc: &Doc, import: bool) -> Vec<String> {
         }
     }
     crate::hik::after_load(&mut b.s.graph);
+    b.hold_unused();
     b.report_unused();
     let warnings = std::mem::take(&mut b.warnings);
     let g = &mut s.graph;
@@ -3591,6 +3601,8 @@ pub fn read_text(s: &mut Session, text: &str, import: bool) -> Vec<String> {
             }
         }
     }
+    // With the plug-ins loaded: what is still of a type nobody knows is kept as an unknown node, as the reference keeps it.
+    before.extend(unknown::hold_dag(&mut doc));
     crate::references::begin_read(s, &doc.reference_edits_text(), &doc.ref_load, &mut before);
     for r in &doc.refs {
         if let Err(e) = crate::references::from_ma(s, r) {
@@ -4010,7 +4022,7 @@ impl Writer<'_> {
         if crate::cameras::is_default_camera(&self.s.graph, id) {
             return false;
         }
-        t.name == "transform" || t.name == "deformHandle" || t.is_a("joint") || t.is_a("locator") || t.is_a("ikHandle") || t.is_a("camera") || t.is_a("light") || PLAIN_SHAPES.contains(&t.name.as_str())
+        t.name == "transform" || t.name == "deformHandle" || matches!(t.name.as_str(), crate::core_nodes::UNKNOWN_DAG | crate::core_nodes::UNKNOWN_TRANSFORM) || t.is_a("joint") || t.is_a("locator") || t.is_a("ikHandle") || t.is_a("camera") || t.is_a("light") || PLAIN_SHAPES.contains(&t.name.as_str())
     }
 
     fn write_dag(&mut self, id: NodeId) {
@@ -4028,6 +4040,13 @@ impl Writer<'_> {
                     self.pending.push(format!("parent -s -nc -r -add {} {};\n", quoted(&a), quoted(&b)));
                     return;
                 }
+            }
+            if crate::core_nodes::is_unknown(&ty) {
+                self.write_unknown_dag(id, &name, parent);
+                for c in self.s.graph.children(id).to_vec() {
+                    self.write_dag(c);
+                }
+                return;
             }
             self.create_line(if ty == "deformHandle" { "transform" } else { &ty }, &name, parent);
             self.write_channels(id);
@@ -4378,9 +4397,9 @@ impl Writer<'_> {
             if keys.keys.iter().any(|k| k.breakdown) {
                 let _ = writeln!(self.out, "\tsetAttr -s {count} \".kbd[{last}]\"  {};", list(&|k| if k.breakdown { "yes".into() } else { "no".to_string() }));
             }
-            // Fixed slopes as vectors one frame long.
-            let unit = 1.0;
+            // Fixed slopes as vectors one frame long. A time curve's value goes in seconds.
             let dx = 1.0 / anim::fps();
+            let unit = if t.name.ends_with('T') { dx } else { 1.0 };
             for (i, k) in keys.keys.iter().enumerate() {
                 if k.itt == Tangent::Fixed {
                     let _ = writeln!(self.out, "\tsetAttr \".kix[{i}]\" {dx};");
@@ -4856,6 +4875,9 @@ impl Writer<'_> {
         if self.s.graph.node(id).is_some_and(|n| n.ty().name == "heldNode") {
             return self.write_held(id);
         }
+        if self.s.graph.node(id).is_some_and(|n| n.ty().name == crate::core_nodes::UNKNOWN) {
+            return self.write_unknown(id);
+        }
         let g = &self.s.graph;
         let n = g.node(id).unwrap();
         let mut text = format!("createNode {} -n {};\n", n.ty().name, quoted(&g.path(id)));
@@ -5251,8 +5273,15 @@ pub fn write_text(s: &mut Session, file_name: &str, only: Option<&[NodeId]>) -> 
             plugins.insert(p);
         }
     }
+    let mut unknown_plugins = unknown::plugins(w.s, &w.keep);
+    unknown_plugins.retain(|p, _| !plugins.contains(p));
     for p in plugins {
         let _ = writeln!(w.out, "requires {} {};", quoted(&p), quoted(&crate::scripted::plugin_version(&p)));
+    }
+    // The plug-ins of nodes kept as unknown, as the file they came from named them.
+    for (p, (v, tys)) in unknown_plugins {
+        let nt: String = tys.iter().map(|t| format!("-nodeType {} ", quoted(t))).collect();
+        let _ = writeln!(w.out, "requires {nt}{} {};", quoted(&p), quoted(&v));
     }
     let _ = writeln!(w.out, "currentUnit -l {} -a {} -t {};", units::linear_full_name(), units::angle_full_name(), time_unit_name(fps));
     let _ = writeln!(w.out, "fileInfo \"application\" \"aztek\";");

@@ -85,6 +85,7 @@ pub fn register_types() {
             ("animCurveUL", "Driven keys on a distance channel."),
             ("animCurveUA", "Driven keys on an angle channel."),
             ("animCurveUU", "Driven keys on a unitless channel."),
+            ("animCurveUT", "Driven keys on a time channel, in frames."),
         ] {
             types::register_type(NodeType {
                 name: name.into(),

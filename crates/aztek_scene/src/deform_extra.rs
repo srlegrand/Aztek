@@ -1061,6 +1061,51 @@ pub(crate) fn register_types(gf: Arc<NodeType>) {
         ],
         Arc::new(|| Box::new(CurveWarp)),
     );
+    // Not one of TYPES: the reference makes a tweak below every deformer stack, and files are read through it, as before.
+    reg(
+        "tweak",
+        "arrows-move",
+        "Moves points by offsets of their own, before the deformers above it: the reference keeps component moves here.",
+        false,
+        vec![
+            short(bool_attr("relativeTweak", true, "Offsets add to the points (on), or replace them (off)."), "rtw"),
+            data_attr("vlist", "vl", "Each point's offset, x y z in turn, object space."),
+        ],
+        Arc::new(|| Box::new(Tweak)),
+    );
+}
+
+const TW_RELATIVE: usize = BASE_COUNT;
+const TW_OFFSETS: usize = BASE_COUNT + 1;
+
+/// The reference's tweak node: per point offsets in object space, by weight and envelope.
+struct Tweak;
+
+impl NodeBehavior for Tweak {
+    fn compute(&mut self, _ctx: &EvalContext, d: &mut NodeData) {
+        let Some(input) = pass(d) else { return };
+        let Some(offsets) = floats_of(d, TW_OFFSETS).map(|o| unflat(&o.0)) else {
+            d.set_output(OUT, PlugValue::Mesh(Some(input)));
+            return;
+        };
+        let (env, relative) = (d.float(ENVELOPE), d.bool(TW_RELATIVE));
+        let weights = floats_of(d, WEIGHTS);
+        let mut m = (*input).clone();
+        for (p, off) in offsets.iter().enumerate() {
+            let p = p as u32;
+            if p >= m.point_capacity() || !m.point_valid(p) {
+                continue;
+            }
+            let k = weight_at(weights, p, env);
+            let rest = m.position(p);
+            let to = if relative { rest + *off } else { *off };
+            m.set_position(p, rest + (to - rest) * k);
+        }
+        d.set_output(OUT, PlugValue::Mesh(Some(Arc::new(m))));
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

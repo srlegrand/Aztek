@@ -551,6 +551,20 @@ fn base_table() -> Vec<Spec> {
                     other => set(d, "output", other.scalar().unwrap_or(0.0) * cf),
                 }
             }),
+        // The reference counts time inside these two in its own unit, 6000 to the second: a factor of 250 at 24 frames a
+        // second is one frame to one unit. Time here is in frames.
+        Spec("unitToTimeConversion", "utility/general", "A number into a time: input times conversionFactor, in the reference's internal time unit (6000 a second), read here as frames.",
+            vec![fin("input", "i", 0.0), fin("conversionFactor", "cf", 1.0), fout("output", "o")],
+            |d| {
+                let ticks = f(d, "input") * f(d, "conversionFactor");
+                set(d, "output", ticks * crate::anim::fps() / 6000.0);
+            }),
+        Spec("timeToUnitConversion", "utility/general", "A time into a number: the time in the reference's internal time unit (6000 a second) times conversionFactor.",
+            vec![fin("input", "i", 0.0), fin("conversionFactor", "cf", 1.0), fout("output", "o")],
+            |d| {
+                let ticks = f(d, "input") * 6000.0 / crate::anim::fps().max(1e-9);
+                set(d, "output", ticks * f(d, "conversionFactor"));
+            }),
         Spec("blendTwoAttr", "utility/general", "Blends input[current] toward input[current + 1] by attributesBlender.",
             vec![iin("current", "c", 0), multi(fin("input", "i", 0.0)), fin("attributesBlender", "ab", 0.0), fout("output", "o")],
             |d| {

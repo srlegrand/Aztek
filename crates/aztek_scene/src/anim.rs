@@ -574,7 +574,7 @@ pub(crate) fn infinity(i: i64) -> Infinity {
 // ---------------------------------------------------------------------------------------------------------------------
 // Curve nodes
 
-pub const CURVE_TYPES: &[&str] = &["animCurveTL", "animCurveTA", "animCurveTU"];
+pub const CURVE_TYPES: &[&str] = &["animCurveTL", "animCurveTA", "animCurveTU", "animCurveTT"];
 pub const KEYS: usize = 0;
 pub const PRE: usize = 1;
 pub const POST: usize = 2;
@@ -719,6 +719,7 @@ fn register_types_now() {
         ("animCurveTL", "Keys on a distance channel (translate)."),
         ("animCurveTA", "Keys on an angle channel (rotate), in degrees."),
         ("animCurveTU", "Keys on a unitless channel (scale, visibility, custom)."),
+        ("animCurveTT", "Keys on a time channel, in frames: time remapped by time, as a time warp."),
     ] {
         let t = NodeType {
             name: name.into(),

@@ -333,6 +333,7 @@ pub mod types {
             crate::split_rings_modifier::register_types();
             crate::auto_bevel::register_types();
             crate::utility_nodes::register_types();
+            crate::core_nodes::register_types();
             crate::shading::register_types();
             crate::lights::register_types();
             crate::harold_nodes::register_types();

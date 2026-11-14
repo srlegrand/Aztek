@@ -158,6 +158,7 @@ impl Session {
         // After the modules above: these replace or extend commands they registered.
         crate::mesh_edit::ref_poly::register(&mut s.commands);
         crate::ma_file::register(&mut s.commands);
+        crate::core_nodes::register(&mut s.commands);
         crate::expression::register(&mut s.commands);
         crate::script_node::register_types();
         crate::nurbs_nodes::register_types();

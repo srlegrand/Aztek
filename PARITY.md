@@ -1908,3 +1908,30 @@ Not compared with a running copy of the reference.
   read; only the whole offset (`.tg[0].tot`) was.
 - `addAttr -nn` in an `.ma` file is read.
 - FatMarine now opens in its bind pose. Its `weightDriver` nodes (brave rabbit's, not mGear's) are still not read.
+
+### Unknown nodes and the core node types (14/11/2026)
+
+Step 1 of the 2027 parity order. Checked by reading, saving and reading back FatMarine, Woody, Megaman,
+Kaneda (both), Aang and a test file; joint and mesh positions are the same as before in each. Not compared with a
+running copy of the reference.
+
+- A node whose type nobody here knows, a plug-in's that isn't loaded, is kept as the reference keeps it: as an
+  `unknown` node, an `unknownDag` (a shape) or an `unknownTransform` (one with children, or that sets translate, rotate
+  or scale). It keeps its type, its plug-in and that plug-in's version, its setAttr lines and its connections, and is
+  written back as it came, with the plug-in's `requires` line. It computes nothing. Before, it was dropped with a
+  warning, and an unknown transform's children were moved to its parent.
+- An unknown transform moves its children; its translate, rotate, scale, visibility and added attributes are read and
+  edited as any node's, and a connection into them from a node that is read is made. Added attributes on any unknown
+  node are made and can be read and set.
+- Its other connections are kept by the identity of the node at the other end, so renaming either node keeps them.
+  One to a node that isn't written is left out.
+- `unknownNode -q -realClassName` and `-q -plugin`.
+- FatMarine's `weightDriver` nodes, `dagContainer`s, `envBall`s; Megaman's ngSkinTools data and game exporter
+  nodes; Woody's `arcLengthDimension`s; the node editor's bookmarks: all kept now.
+- Left out, as before: what the reader takes apart itself (`groupParts`, `tweak`), renderers' nodes, and any node that
+  feeds a shape's geometry, which the shape holds baked.
+- New types: `network` (read, written and made, with `affects` and `affectedBy`), `groupId`, `groupParts`, `tweak`
+  (a deformer of per point offsets; `deformer -type tweak`), `animCurveTT`, `animCurveUT`, `unitToTimeConversion` and
+  `timeToUnitConversion`. The last two count time in the reference's internal unit, 6000 a second, as its files do.
+- Files are still read through `groupId`, `groupParts` and `tweak` nodes as before; one made with `createNode` is not
+  yet written to a file.
