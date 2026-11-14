@@ -977,7 +977,7 @@ MFnPlugin::MFnPlugin(MObject& obj, const char* vendor, const char* version, cons
     if (st) *st = MS::kSuccess;
 }
 MFnPlugin::~MFnPlugin() {}
-MFn::Type MFnPlugin::type() const { return MFn::kPluginObject; }
+MFn::Type MFnPlugin::type() const { return MFn::kPlugin; }
 MString MFnPlugin::vendor(MStatus* st) const { if (st) *st = MS::kSuccess; return MString(pluginVendor); }
 MString MFnPlugin::version(MStatus* st) const { if (st) *st = MS::kSuccess; return MString(pluginVersion); }
 MString MFnPlugin::apiVersion(MStatus* st) const { if (st) *st = MS::kSuccess; return MString(pluginApi); }
@@ -1009,7 +1009,7 @@ MStatus MFnPlugin::registerUIStrings(void (*proc)(), const MString&) {
 MObject MFnPlugin::findPlugin(const MString& name) {
     if (name == MString(pluginName())) {
         std::shared_ptr<ObjectData> d = std::make_shared<ObjectData>();
-        d->type = MFn::kPluginObject;
+        d->type = MFn::kPlugin;
         d->plugin = pluginToken;
         return MObject(d);
     }
@@ -1056,7 +1056,7 @@ struct EntryCall {
 
 static MObject pluginObject() {
     std::shared_ptr<ObjectData> d = std::make_shared<ObjectData>();
-    d->type = MFn::kPluginObject;
+    d->type = MFn::kPlugin;
     d->plugin = pluginToken;
     return MObject(d);
 }

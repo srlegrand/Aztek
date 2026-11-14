@@ -47,6 +47,9 @@ except NotImplementedError as e:
 import maya.OpenMayaMPx as mpx
 print(mpx.MPxTransform.__name__, mpx.MPxConstraint.__name__, mpx.MPxIkSolverNode.__name__, mpx.MPxSurfaceShape is om.MPxSurfaceShape)
 print(om.MPxNode.kTransformNode, om.MPxNode.kIkSolverNode, om.MPxNode.kConstraintNode, om.MPxNode.kLast)
+print(om.MFn.kPluginDependNode, om.MFn.kPluginTransformNode, om.MFn.kPluginShape, om.MFn.kTransform, om.MFn.kMeshVertComponent)
+o = om.MSelectionList().add(cmds.createNode("absoluteDL")).getDependNode(0)
+print(o.apiType() == om.MFn.kAbsolute, o.apiTypeStr, om.MSelectionList().add(cmds.createNode("addDL")).getDependNode(0).apiTypeStr)
 "#,
         &[
             "True MPxLocatorNode MPxDrawOverride MUIDrawManager",
@@ -54,6 +57,8 @@ print(om.MPxNode.kTransformNode, om.MPxNode.kIkSolverNode, om.MPxNode.kConstrain
             "MRenderer.setPresentOnScreen is not in Aztek yet",
             "MPxTransform MPxConstraint MPxIkSolverNode True",
             "11 8 17 26",
+            "459 914 712 110 554",
+            "True kAbsolute kAddDoubleLinear",
         ],
     );
 }

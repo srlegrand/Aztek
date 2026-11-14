@@ -2092,7 +2092,7 @@ Not compared with a running copy of the reference.
   numbers of Aztek's, not the reference's.
 - `MFn` gains `kPluginLocatorNode`, `kPluginTransformNode`, `kPluginConstraintNode`, `kPluginShape`,
   `kPluginIkSolver`, `kPluginData`, `kIkEffector` and `kNurbsSurface`, and plug-in nodes answer to them. Their numbers
-  are not checked against the reference: its 2027 documentation doesn't give them.
+  are the reference's since the next section.
 - Kit (C++), from the 2027 documentation: `MFnPlugin::registerTransform` (both overloads; the one taking a plain
   creator is deprecated there), `matrixTypeIdFromXformId`, `registerShape` without a UI creator, `registerIkSolver`
   and `deregisterIkSolver` (fail: obsolete there), `MMessage::setCallableInfo`, `getCallableInfo`,
@@ -2131,5 +2131,25 @@ running copy of the reference.
   atan2(input1, input2); `axisFromMatrix`'s output is not normalized; `rotationFromMatrix` is in XYZ order.
 - Scene files write utility nodes' attributes by their short names (`.i[1]`, `.ro`), as the reference does; this
   applies to every utility node, not only the math ones. Connections still use long names.
-- Not done: `timeFunction` and `sampler`, also in the reference's math classification but not in this family. The
-  reference's `MFn` types for these nodes (`kAbsolute` and the rest) are not in the Python API's `MFn`.
+- Not done: `timeFunction` and `sampler`, also in the reference's math classification but not in this family.
+
+### MFn: the reference's numbers (14/11/2026)
+
+The reference's 2027 Python reference ([OpenMaya.MFn](https://help.autodesk.com/cloudhelp/2027/ENU/MAYA-API-REF/py_ref/class_open_maya_1_1_m_fn.html))
+lists each kind's number; its C++ page does not, which is why step 4 missed them. pymel's API cache for the 2025 release
+([LumaPictures/pymel](https://github.com/LumaPictures/pymel), `pymel/cache/mayaApi2025.py`) has the whole table, taken
+from a running copy. The two agree on every value compared (about 80, the plug-in kinds, attributes, data, components,
+deformers, poly primitives and the math nodes among them); the 2027 table adds `kShotLabel` (1211). Not compared with a
+running copy of the 2027 release.
+
+- Python API: `MFn` has all 1215 kinds with these numbers. 52 of the 93 it had were wrong (the numbers of older
+  releases: `kPluginDependNode` was 456, it is 459; `kMeshVertComponent` 553, it is 554; `kSkinClusterFilter` 682, it
+  is 687), and three were not the reference's at all: `kEntity`, `kPluginNode`, `kPolyPlane` (a polyPlane is
+  `kPolyMesh`, 440). `kLast` is left out: the 2027 reference doesn't give it, and the 2025 value (1210) is below
+  `kShotLabel`.
+- Every node type now has the reference's kind (the cache's type table): `apiType`, `apiTypeStr` and `hasFn` answer
+  for all of them. The DL math nodes have their plain twin's (`absoluteDL` is `kAbsolute`); `addDL` and `multDL` are
+  `kAddDoubleLinear` and `kMultDoubleLinear`, as their 2027 pages say.
+- Plug-in kit: `MFn::Type` carries the reference's numbers for the 109 kinds it has. `kEntity` and `kLast` are gone,
+  `kPolyPlane` is `kPolyMesh` and `kPluginObject` is `kPlugin` (582), the reference's names. Checks that relied on
+  kinds being numbered in a row (components, poly primitives) name each kind instead.

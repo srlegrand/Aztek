@@ -426,7 +426,7 @@ static const FnOfType kFnOfType[] = {
     {"polySphere", MFn::kPolySphere},
     {"polyCylinder", MFn::kPolyCylinder},
     {"polyCone", MFn::kPolyCone},
-    {"polyPlane", MFn::kPolyPlane},
+    {"polyPlane", MFn::kPolyMesh},
     {"polyTorus", MFn::kPolyTorus},
     {"displayLayer", MFn::kDisplayLayer},
     {"time", MFn::kTime},
@@ -466,12 +466,13 @@ static void fnsOfNode(int64_t id, std::vector<MFn::Type>& out) {
         if (f == MFn::kNurbsCurve) { out.push_back(MFn::kCurve); out.push_back(MFn::kGeometric); }
         if (f == MFn::kNurbsSurface) { out.push_back(MFn::kSurface); out.push_back(MFn::kGeometric); }
         if (f >= MFn::kAnimCurveTimeToAngular && f <= MFn::kAnimCurveUnitlessToUnitless) out.push_back(MFn::kAnimCurve);
-        if (f >= MFn::kPolyCube && f <= MFn::kPolyTorus) out.push_back(MFn::kPolyPrimitive);
+        if (f == MFn::kPolyCube || f == MFn::kPolySphere || f == MFn::kPolyCylinder || f == MFn::kPolyCone || f == MFn::kPolyMesh || f == MFn::kPolyTorus)
+            out.push_back(MFn::kPolyPrimitive);
         if (f == MFn::kSkinClusterFilter || f == MFn::kCluster || f == MFn::kFFD || f == MFn::kWire || f == MFn::kNonLinear) out.push_back(MFn::kWeightGeometryFilt);
         // Every weighted deformer is a geometry filter, a skinCluster too, though Aztek's isn't one underneath.
         if (f == MFn::kWeightGeometryFilt && std::find(out.begin(), out.end(), MFn::kGeometryFilt) == out.end()) out.push_back(MFn::kGeometryFilt);
     }
-    if (info["dag"].truth()) { out.push_back(MFn::kDagNode); out.push_back(MFn::kEntity); }
+    if (info["dag"].truth()) out.push_back(MFn::kDagNode);
     out.push_back(MFn::kDependencyNode);
     out.push_back(MFn::kNamedObject);
     out.push_back(MFn::kBase);
@@ -496,7 +497,7 @@ bool nodeHasFn(int64_t id, MFn::Type t) {
 const char* fnName(MFn::Type t) {
     switch (t) {
         AZ_FN_NAME(kInvalid) AZ_FN_NAME(kBase) AZ_FN_NAME(kNamedObject) AZ_FN_NAME(kDependencyNode)
-        AZ_FN_NAME(kDagNode) AZ_FN_NAME(kEntity) AZ_FN_NAME(kTransform) AZ_FN_NAME(kJoint) AZ_FN_NAME(kIkHandle)
+        AZ_FN_NAME(kDagNode) AZ_FN_NAME(kTransform) AZ_FN_NAME(kJoint) AZ_FN_NAME(kIkHandle)
         AZ_FN_NAME(kIkEffector) AZ_FN_NAME(kShape) AZ_FN_NAME(kGeometric) AZ_FN_NAME(kSurface) AZ_FN_NAME(kMesh)
         AZ_FN_NAME(kCurve) AZ_FN_NAME(kNurbsCurve) AZ_FN_NAME(kNurbsSurface) AZ_FN_NAME(kLocator) AZ_FN_NAME(kCamera)
         AZ_FN_NAME(kLight) AZ_FN_NAME(kLattice) AZ_FN_NAME(kGeometryFilt) AZ_FN_NAME(kWeightGeometryFilt)
@@ -509,7 +510,7 @@ const char* fnName(MFn::Type t) {
         AZ_FN_NAME(kOrientConstraint) AZ_FN_NAME(kParentConstraint) AZ_FN_NAME(kPointConstraint)
         AZ_FN_NAME(kScaleConstraint) AZ_FN_NAME(kSet) AZ_FN_NAME(kShadingEngine) AZ_FN_NAME(kLambert)
         AZ_FN_NAME(kMultiplyDivide) AZ_FN_NAME(kPolyCreator) AZ_FN_NAME(kPolyPrimitive) AZ_FN_NAME(kPolyCube)
-        AZ_FN_NAME(kPolySphere) AZ_FN_NAME(kPolyCylinder) AZ_FN_NAME(kPolyCone) AZ_FN_NAME(kPolyPlane)
+        AZ_FN_NAME(kPolySphere) AZ_FN_NAME(kPolyCylinder) AZ_FN_NAME(kPolyCone) AZ_FN_NAME(kPolyMesh)
         AZ_FN_NAME(kPolyTorus) AZ_FN_NAME(kPluginDependNode) AZ_FN_NAME(kPluginDeformerNode)
         AZ_FN_NAME(kPluginLocatorNode) AZ_FN_NAME(kPluginTransformNode) AZ_FN_NAME(kPluginConstraintNode) AZ_FN_NAME(kPluginShape) AZ_FN_NAME(kPluginIkSolver) AZ_FN_NAME(kPluginData) AZ_FN_NAME(kDisplayLayer) AZ_FN_NAME(kTime) AZ_FN_NAME(kUnknown)
         AZ_FN_NAME(kAttribute) AZ_FN_NAME(kNumericAttribute) AZ_FN_NAME(kUnitAttribute) AZ_FN_NAME(kTypedAttribute)
@@ -521,7 +522,7 @@ const char* fnName(MFn::Type t) {
         AZ_FN_NAME(kSingleIndexedComponent) AZ_FN_NAME(kDoubleIndexedComponent) AZ_FN_NAME(kMeshComponent)
         AZ_FN_NAME(kMeshVertComponent) AZ_FN_NAME(kMeshEdgeComponent) AZ_FN_NAME(kMeshPolygonComponent)
         AZ_FN_NAME(kMeshMapComponent) AZ_FN_NAME(kMeshVtxFaceComponent) AZ_FN_NAME(kCurveCVComponent)
-        AZ_FN_NAME(kCurveEPComponent) AZ_FN_NAME(kPluginObject) AZ_FN_NAME(kWorld) AZ_FN_NAME(kLast)
+        AZ_FN_NAME(kCurveEPComponent) AZ_FN_NAME(kPlugin) AZ_FN_NAME(kWorld)
     }
     return "kInvalid";
 }
@@ -861,10 +862,17 @@ bool MObject::hasFn(MFn::Type t) const {
     switch (t) {
     case MFn::kData: return mine == MFn::kMeshData || mine == MFn::kNumericData || mine == MFn::kMatrixData || mine == MFn::kStringData;
     case MFn::kGeometryData: return mine == MFn::kMeshData;
-    case MFn::kComponent: return mine >= MFn::kSingleIndexedComponent && mine <= MFn::kCurveEPComponent;
-    case MFn::kMeshComponent: return mine >= MFn::kMeshVertComponent && mine <= MFn::kMeshVtxFaceComponent;
+    // The reference's numbers aren't in ranges by kind: each kind is named.
+    case MFn::kComponent:
+        return mine == MFn::kSingleIndexedComponent || mine == MFn::kDoubleIndexedComponent || mine == MFn::kMeshComponent || mine == MFn::kMeshVertComponent ||
+               mine == MFn::kMeshEdgeComponent || mine == MFn::kMeshPolygonComponent || mine == MFn::kMeshMapComponent || mine == MFn::kMeshVtxFaceComponent ||
+               mine == MFn::kCurveCVComponent || mine == MFn::kCurveEPComponent;
+    case MFn::kMeshComponent:
+        return mine == MFn::kMeshVertComponent || mine == MFn::kMeshEdgeComponent || mine == MFn::kMeshPolygonComponent || mine == MFn::kMeshMapComponent ||
+               mine == MFn::kMeshVtxFaceComponent;
     case MFn::kSingleIndexedComponent:
-        return (mine >= MFn::kMeshVertComponent && mine <= MFn::kMeshMapComponent) || mine == MFn::kCurveCVComponent || mine == MFn::kCurveEPComponent;
+        return mine == MFn::kMeshVertComponent || mine == MFn::kMeshEdgeComponent || mine == MFn::kMeshPolygonComponent || mine == MFn::kMeshMapComponent ||
+               mine == MFn::kCurveCVComponent || mine == MFn::kCurveEPComponent;
     case MFn::kDoubleIndexedComponent: return mine == MFn::kMeshVtxFaceComponent;
     default: return false;
     }
