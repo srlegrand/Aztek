@@ -1,4 +1,4 @@
-# Plug-ins the tests build: ones that misbehave on purpose.
+# Plug-ins the tests build: ones that misbehave on purpose, and one that reads the scene through the kit.
 cmake_minimum_required(VERSION 3.13)
 project(AztekTestPlugins LANGUAGES CXX)
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
@@ -6,3 +6,4 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 find_package(AztekDevkit REQUIRED CONFIG PATHS "${CMAKE_CURRENT_SOURCE_DIR}/../../../../devkit/cmake" NO_DEFAULT_PATH)
 aztek_add_plugin(crashNode SOURCES crashNode.cpp)
+aztek_add_plugin(apiProbe SOURCES apiProbe.cpp)

@@ -1,5 +1,6 @@
 // Aztek plug-in kit: JSON, calls to the host, MStatus, MString, MTypeId, MObject, units.
 #include "internal.h"
+#include <algorithm>
 
 #include <cmath>
 #include <cstdio>
@@ -444,6 +445,8 @@ static void fnsOfNode(int64_t id, std::vector<MFn::Type>& out) {
         if (f >= MFn::kAnimCurveTimeToAngular && f <= MFn::kAnimCurveUnitlessToUnitless) out.push_back(MFn::kAnimCurve);
         if (f >= MFn::kPolyCube && f <= MFn::kPolyTorus) out.push_back(MFn::kPolyPrimitive);
         if (f == MFn::kSkinClusterFilter || f == MFn::kCluster || f == MFn::kFFD || f == MFn::kWire || f == MFn::kNonLinear) out.push_back(MFn::kWeightGeometryFilt);
+        // Every weighted deformer is a geometry filter, a skinCluster too, though Aztek's isn't one underneath.
+        if (f == MFn::kWeightGeometryFilt && std::find(out.begin(), out.end(), MFn::kGeometryFilt) == out.end()) out.push_back(MFn::kGeometryFilt);
     }
     if (info["dag"].truth()) { out.push_back(MFn::kDagNode); out.push_back(MFn::kEntity); }
     out.push_back(MFn::kDependencyNode);

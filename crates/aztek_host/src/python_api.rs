@@ -341,6 +341,55 @@ pub fn query(core: &mut Core, op: &str, a: &Value) -> Result<Value, String> {
                 other => return Err(format!("(kInvalidParameter): {other}")),
             }
         }
+        "surface.data" => {
+            let id = id_of(a)?;
+            let shape = aztek_scene::surfaces::as_surface(g, id).ok_or("(kInvalidParameter): Object is incompatible with this method")?;
+            let Some(sf) = aztek_scene::surfaces::local_surface(g, shape) else { return Err("(kFailure): no surface data".into()) };
+            let ((u0, u1), (v0, v1)) = (sf.domain_u(), sf.domain_v());
+            json!({
+                "shape": shape,
+                "degreeU": sf.degree_u,
+                "degreeV": sf.degree_v,
+                "formU": sf.form_u.index(),
+                "formV": sf.form_v.index(),
+                "numU": sf.nu,
+                "numV": sf.nv,
+                "spansU": sf.spans_u(),
+                "spansV": sf.spans_v(),
+                // u-major: all of v for the first u, then the next.
+                "cvs": (0..sf.nu).flat_map(|u| (0..sf.nv).map(move |v| (u, v))).flat_map(|(u, v)| { let p = sf.cv(u, v); [p.x, p.y, p.z] }).collect::<Vec<f64>>(),
+                "knotsU": sf.knots_u,
+                "knotsV": sf.knots_v,
+                "domain": [u0, u1, v0, v1],
+                "trimmed": !sf.trim.is_empty(),
+            })
+        }
+        "surface.eval" => {
+            let id = id_of(a)?;
+            let shape = aztek_scene::surfaces::as_surface(g, id).ok_or("(kInvalidParameter): Object is incompatible with this method")?;
+            let Some(sf) = aztek_scene::surfaces::local_surface(g, shape) else { return Err("(kFailure): no surface data".into()) };
+            let (u, v) = (a.get("u").and_then(Value::as_f64).unwrap_or(0.0), a.get("v").and_then(Value::as_f64).unwrap_or(0.0));
+            let v3 = |p: DVec3| json!([p.x, p.y, p.z]);
+            match text_of(a, "what")? {
+                "point" => v3(sf.eval(u, v)),
+                "normal" => v3(sf.normal(u, v)),
+                "derivatives" => {
+                    let (p, du, dv) = sf.eval_ders(u, v);
+                    json!({"point": v3(p), "du": v3(du), "dv": v3(dv)})
+                }
+                "closest" => {
+                    let (cu, cv) = sf.closest_point(vec_of(a, "point"));
+                    json!({"u": cu, "v": cv, "point": v3(sf.eval(cu, cv))})
+                }
+                "area" => {
+                    let m = sf.tessellate(8, 8);
+                    let mut area = 0.0;
+                    triangles(&m, |_, _, [p, q, r]| area += (q - p).cross(r - p).length() * 0.5);
+                    json!(area)
+                }
+                other => return Err(format!("(kInvalidParameter): {other}")),
+            }
+        }
         "anim.eval" => {
             use aztek_scene::anim::{keys_of, Infinity};
             let t = a.get("frame").and_then(Value::as_f64).unwrap_or(0.0);

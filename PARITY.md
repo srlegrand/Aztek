@@ -1957,3 +1957,27 @@ running copy of the reference.
   Aztek wrote radians where the file said degrees; such a file reads its twist that much smaller.
 - Aztek's own scene files from before read as the new layout: a `bend` node becomes a nonLinear with its settings,
   a `deformHandle` a transform with its kind's shape.
+
+### Plug-in kit: iterators and function sets (14/11/2026)
+
+Step 3a of the 2027 parity order. Checked by a test plug-in that reads a cube, a group, keyed channels, a skinned cube
+and a NURBS plane through the new classes and compares with the scene's own answers. Not compared with a running copy
+of the reference.
+
+- `MItDag`: depth or breadth first, from the world or from a node, filtered by type; `depth`, `prune`, `reset`,
+  `getPath`, `partialPathName`, `fullPathName`.
+- `MItMeshPolygon`: every face or a component's faces; vertices, edges, connected faces and edges, normal, centre,
+  area, UVs, `setIndex`.
+- `MItMeshEdge`: every edge or a component's edges; its two points, length, connected faces and edges, `onBoundary`,
+  `setIndex`.
+- `MFnAnimCurve`: from a curve or the plug it drives; keys' times and values (internal units, radians on an angular
+  curve), `evaluate`, `find`, `addKey`, `remove`, `setValue`, `setTime`, tangent types, infinity. `MAnimCurveChange`
+  is taken and not used; the scene's undo undoes the edits.
+- `MFnSkinCluster`: `influenceObjects`, `indexForInfluenceObject`, `getWeights` and `setWeights` (every influence, one,
+  or a list), `getPointsAffectedByInfluence`. `getBlendWeights` gives 0 for each point; dual quaternion blend weights
+  are not kept.
+- `MFnNurbsSurface`: degrees, forms, CVs, knots, `getKnotDomain`, `getPointAtParam`, `normal`, `getDerivativesAtParm`,
+  `closestPoint`, `area`, `isTrimmedSurface`. Editing a surface's CVs through it is not done yet.
+- `MFnMesh` gains `getEdgeVertices`, `getPolygonNormal`, `numUVs`, `getUVs`, `getPolygonUV`, `getPolygonUVid`.
+- `MItMeshVertex::getConnectedEdges` gives the mesh's edge ids; it gave 0, 1, 2... for each vertex.
+- A skinCluster now answers `hasFn(MFn::kGeometryFilt)`, so `MFnGeometryFilter` takes it.

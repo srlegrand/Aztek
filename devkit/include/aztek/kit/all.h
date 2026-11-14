@@ -1,5 +1,6 @@
 // Every class of the kit.
 #pragma once
+#include "anim.h"
 #include "base.h"
 #include "geometry.h"
 #include "gpu.h"

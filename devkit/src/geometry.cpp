@@ -406,3 +406,274 @@ bool MFnMesh::closestIntersection(const MFloatPoint& src, const MFloatVector& di
     if (hitBary2) *hitBary2 = (float)bestU;
     return true;
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// MFnMesh: edges, face normals and UVs
+
+MStatus MFnMesh::getEdgeVertices(int edge, int2& out) const {
+    std::shared_ptr<MeshData> m = azMesh();
+    if (!m) return MS::kFailure;
+    const AzMeshArrays& a = m->get();
+    if (edge < 0 || (size_t)edge >= a.edge_count) return MS::kInvalidParameter;
+    out[0] = (int)a.edges[edge * 2];
+    out[1] = (int)a.edges[edge * 2 + 1];
+    return MS::kSuccess;
+}
+MStatus MFnMesh::azCornerEdges(MIntArray& out) const {
+    std::shared_ptr<MeshData> m = azMesh();
+    out.clear();
+    if (!m) return MS::kFailure;
+    const AzMeshArrays& a = m->get();
+    for (size_t c = 0; c < a.corner_count; ++c) out.append(a.corner_edges ? (int)a.corner_edges[c] : -1);
+    return MS::kSuccess;
+}
+// Newell's normal: right for any face, flat or not.
+MStatus MFnMesh::getPolygonNormal(int polygon, MVector& out, MSpace::Space space) const {
+    MIntArray vs;
+    MStatus st = getPolygonVertices(polygon, vs);
+    if (!st) return st;
+    if (vs.length() < 3) return MS::kFailure;
+    MVector n(0, 0, 0);
+    for (unsigned int i = 0; i < vs.length(); ++i) {
+        MPoint p, q;
+        getPoint(vs[i], p, space);
+        getPoint(vs[(i + 1) % vs.length()], q, space);
+        n.x += (p.y - q.y) * (p.z + q.z);
+        n.y += (p.z - q.z) * (p.x + q.x);
+        n.z += (p.x - q.x) * (p.y + q.y);
+    }
+    out = n.normal();
+    return MS::kSuccess;
+}
+int MFnMesh::numUVs(MStatus* st) const {
+    std::shared_ptr<MeshData> m = azMesh(st);
+    return m && m->get().has_uvs ? (int)m->get().map_count : 0;
+}
+int MFnMesh::numUVs(const MString&, MStatus* st) const { return numUVs(st); }
+MStatus MFnMesh::getUVs(MFloatArray& u, MFloatArray& v, const MString*) const {
+    std::shared_ptr<MeshData> m = azMesh();
+    u.clear();
+    v.clear();
+    if (!m) return MS::kFailure;
+    const AzMeshArrays& a = m->get();
+    if (!a.has_uvs) return MS::kSuccess;
+    for (size_t k = 0; k < a.map_count; ++k) {
+        u.append((float)a.map_uvs[k * 2]);
+        v.append((float)a.map_uvs[k * 2 + 1]);
+    }
+    return MS::kSuccess;
+}
+MStatus MFnMesh::getPolygonUVid(int polygon, int corner, int& uvId, const MString*) const {
+    std::shared_ptr<MeshData> m = azMesh();
+    if (!m) return MS::kFailure;
+    const AzMeshArrays& a = m->get();
+    if (!a.has_uvs || polygon < 0 || (size_t)polygon >= a.face_count) return MS::kFailure;
+    size_t start = 0;
+    for (int f = 0; f < polygon; ++f) start += (size_t)a.counts[f];
+    if (corner < 0 || corner >= (int)a.counts[polygon]) return MS::kInvalidParameter;
+    uvId = (int)a.corner_maps[start + corner];
+    return uvId >= 0 ? MS::kSuccess : MS::kFailure;
+}
+MStatus MFnMesh::getPolygonUV(int polygon, int corner, float& u, float& v, const MString* set) const {
+    int id = -1;
+    MStatus st = getPolygonUVid(polygon, corner, id, set);
+    if (!st) return st;
+    const AzMeshArrays& a = azMesh()->get();
+    u = (float)a.map_uvs[id * 2];
+    v = (float)a.map_uvs[id * 2 + 1];
+    return MS::kSuccess;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// MFnNurbsSurface: a shape in the scene, through the host's surface queries
+
+namespace {
+Json surfaceData(int64_t shape, MStatus* st) {
+    Json a = Json::object();
+    a.set("id", shape);
+    return query("surface.data", a, st);
+}
+Json surfaceEval(int64_t shape, const char* what, double u, double v, MStatus* st) {
+    Json a = Json::object();
+    a.set("id", shape);
+    a.set("what", what);
+    a.set("u", u);
+    a.set("v", v);
+    return query("surface.eval", a, st);
+}
+MPoint pointOf(const Json& j) { return MPoint(j[(size_t)0].num(), j[(size_t)1].num(), j[(size_t)2].num()); }
+MVector vectorOf(const Json& j) { return MVector(j[(size_t)0].num(), j[(size_t)1].num(), j[(size_t)2].num()); }
+MFnNurbsSurface::Form formOf(int64_t f) { return f == 2 ? MFnNurbsSurface::kPeriodic : f == 1 ? MFnNurbsSurface::kClosed : MFnNurbsSurface::kOpen; }
+}  // namespace
+
+MFnNurbsSurface::MFnNurbsSurface() {}
+MFnNurbsSurface::MFnNurbsSurface(const MObject& o, MStatus* st) : MFnDagNode(o, st) {
+    if (st && *st && !o.hasFn(MFn::kNurbsSurface)) *st = MS::kInvalidParameter;
+}
+MFnNurbsSurface::MFnNurbsSurface(const MDagPath& path, MStatus* st) {
+    MDagPath shape = path;
+    if (!shape.hasFn(MFn::kNurbsSurface)) shape.extendToShape();
+    *this = MFnNurbsSurface(shape.node(), st);
+}
+MFn::Type MFnNurbsSurface::type() const { return MFn::kNurbsSurface; }
+
+int64_t MFnNurbsSurface::azShape(MStatus* st) const {
+    int64_t id = nodeOf(obj_);
+    if (st) *st = id >= 0 ? MS::kSuccess : MS::kInvalidParameter;
+    return id;
+}
+
+namespace {
+// The matrix world space adds.
+bool surfaceWorld(int64_t shape, MSpace::Space space, MMatrix& w) {
+    if (space != MSpace::kWorld) return false;
+    w = MDagPath::azOf(shape).inclusiveMatrix();
+    return true;
+}
+}  // namespace
+
+int MFnNurbsSurface::numCVsInU(MStatus* st) const { return (int)surfaceData(azShape(st), st)["numU"].integer(); }
+int MFnNurbsSurface::numCVsInV(MStatus* st) const { return (int)surfaceData(azShape(st), st)["numV"].integer(); }
+int MFnNurbsSurface::numSpansInU(MStatus* st) const { return (int)surfaceData(azShape(st), st)["spansU"].integer(); }
+int MFnNurbsSurface::numSpansInV(MStatus* st) const { return (int)surfaceData(azShape(st), st)["spansV"].integer(); }
+int MFnNurbsSurface::degreeU(MStatus* st) const { return (int)surfaceData(azShape(st), st)["degreeU"].integer(); }
+int MFnNurbsSurface::degreeV(MStatus* st) const { return (int)surfaceData(azShape(st), st)["degreeV"].integer(); }
+MFnNurbsSurface::Form MFnNurbsSurface::formInU(MStatus* st) const { return formOf(surfaceData(azShape(st), st)["formU"].integer()); }
+MFnNurbsSurface::Form MFnNurbsSurface::formInV(MStatus* st) const { return formOf(surfaceData(azShape(st), st)["formV"].integer()); }
+int MFnNurbsSurface::numKnotsInU(MStatus* st) const { return (int)surfaceData(azShape(st), st)["knotsU"].size(); }
+int MFnNurbsSurface::numKnotsInV(MStatus* st) const { return (int)surfaceData(azShape(st), st)["knotsV"].size(); }
+MStatus MFnNurbsSurface::getKnotsInU(MDoubleArray& out) const {
+    MStatus st;
+    std::vector<double> k = numbers(surfaceData(azShape(&st), &st)["knotsU"]);
+    out.clear();
+    for (size_t i = 0; i < k.size(); ++i) out.append(k[i]);
+    return st;
+}
+MStatus MFnNurbsSurface::getKnotsInV(MDoubleArray& out) const {
+    MStatus st;
+    std::vector<double> k = numbers(surfaceData(azShape(&st), &st)["knotsV"]);
+    out.clear();
+    for (size_t i = 0; i < k.size(); ++i) out.append(k[i]);
+    return st;
+}
+MStatus MFnNurbsSurface::getKnotDomain(double& u0, double& u1, double& v0, double& v1) const {
+    MStatus st;
+    std::vector<double> d = numbers(surfaceData(azShape(&st), &st)["domain"]);
+    if (!st || d.size() < 4) return st ? MStatus(MS::kFailure) : st;
+    u0 = d[0];
+    u1 = d[1];
+    v0 = d[2];
+    v1 = d[3];
+    return MS::kSuccess;
+}
+bool MFnNurbsSurface::isTrimmedSurface(MStatus* st) const { return surfaceData(azShape(st), st)["trimmed"].truth(); }
+MStatus MFnNurbsSurface::getCVs(MPointArray& out, MSpace::Space space) const {
+    MStatus st;
+    int64_t shape = azShape(&st);
+    std::vector<double> c = numbers(surfaceData(shape, &st)["cvs"]);
+    out.clear();
+    if (!st) return st;
+    MMatrix w;
+    bool world = surfaceWorld(shape, space, w);
+    for (size_t i = 0; i + 2 < c.size(); i += 3) {
+        MPoint p(c[i], c[i + 1], c[i + 2]);
+        out.append(world ? p * w : p);
+    }
+    return MS::kSuccess;
+}
+MStatus MFnNurbsSurface::getCV(unsigned int u, unsigned int v, MPoint& out, MSpace::Space space) const {
+    MStatus st;
+    int64_t shape = azShape(&st);
+    Json d = surfaceData(shape, &st);
+    if (!st) return st;
+    unsigned int nu = (unsigned int)d["numU"].integer(), nv = (unsigned int)d["numV"].integer();
+    if (u >= nu || v >= nv) return MS::kInvalidParameter;
+    const Json& c = d["cvs"];
+    size_t k = ((size_t)u * nv + v) * 3;
+    out = MPoint(c[k].num(), c[k + 1].num(), c[k + 2].num());
+    MMatrix w;
+    if (surfaceWorld(shape, space, w)) out = out * w;
+    return MS::kSuccess;
+}
+MStatus MFnNurbsSurface::getPointAtParam(double u, double v, MPoint& out, MSpace::Space space) const {
+    MStatus st;
+    int64_t shape = azShape(&st);
+    Json p = surfaceEval(shape, "point", u, v, &st);
+    if (!st) return st;
+    out = pointOf(p);
+    MMatrix w;
+    if (surfaceWorld(shape, space, w)) out = out * w;
+    return MS::kSuccess;
+}
+MVector MFnNurbsSurface::normal(double u, double v, MSpace::Space space, MStatus* st) const {
+    int64_t shape = azShape(st);
+    MVector n = vectorOf(surfaceEval(shape, "normal", u, v, st));
+    MMatrix w;
+    if (surfaceWorld(shape, space, w)) n = (n * w.inverse().transpose()).normal();
+    return n;
+}
+MStatus MFnNurbsSurface::getDerivativesAtParm(double u, double v, MPoint& point, MVector& du, MVector& dv, MSpace::Space space, MVector* duu, MVector* dvv, MVector* duv) const {
+    MStatus st;
+    int64_t shape = azShape(&st);
+    Json d = surfaceEval(shape, "derivatives", u, v, &st);
+    if (!st) return st;
+    point = pointOf(d["point"]);
+    du = vectorOf(d["du"]);
+    dv = vectorOf(d["dv"]);
+    MMatrix w;
+    if (surfaceWorld(shape, space, w)) {
+        point = point * w;
+        du = du * w;
+        dv = dv * w;
+    }
+    // Second derivatives aren't given here.
+    if (duu) *duu = MVector(0, 0, 0);
+    if (dvv) *dvv = MVector(0, 0, 0);
+    if (duv) *duv = MVector(0, 0, 0);
+    return MS::kSuccess;
+}
+MStatus MFnNurbsSurface::getTangents(double u, double v, MVector& tu, MVector& tv, MSpace::Space space) const {
+    MPoint p;
+    MStatus st = getDerivativesAtParm(u, v, p, tu, tv, space);
+    if (!st) return st;
+    tu = tu.normal();
+    tv = tv.normal();
+    return MS::kSuccess;
+}
+MPoint MFnNurbsSurface::closestPoint(const MPoint& to, double* u, double* v, bool, double, MSpace::Space space, MStatus* st) const {
+    int64_t shape = azShape(st);
+    MMatrix w;
+    bool world = surfaceWorld(shape, space, w);
+    MPoint local = world ? to * w.inverse() : to;
+    Json a = Json::object();
+    a.set("id", shape);
+    a.set("what", "closest");
+    Json p = Json::array();
+    p.push(local.x);
+    p.push(local.y);
+    p.push(local.z);
+    a.set("point", p);
+    Json r = query("surface.eval", a, st);
+    if (u) *u = r["u"].num();
+    if (v) *v = r["v"].num();
+    MPoint out = pointOf(r["point"]);
+    return world ? out * w : out;
+}
+MStatus MFnNurbsSurface::getParamAtPoint(const MPoint& at, double& u, double& v, MSpace::Space space) {
+    return getParamAtPoint(at, u, v, false, space);
+}
+MStatus MFnNurbsSurface::getParamAtPoint(const MPoint& at, double& u, double& v, bool ignoreTrim, MSpace::Space space, double tolerance) {
+    MStatus st;
+    MPoint p = closestPoint(at, &u, &v, ignoreTrim, tolerance, space, &st);
+    if (!st) return st;
+    return p.distanceTo(at) <= std::max(tolerance, 1.0e-6) ? MStatus(MS::kSuccess) : MStatus(MS::kFailure);
+}
+bool MFnNurbsSurface::isPointOnSurface(const MPoint& at, double tolerance, MSpace::Space space, MStatus* st) {
+    double u, v;
+    MPoint p = closestPoint(at, &u, &v, false, tolerance, space, st);
+    return p.distanceTo(at) <= tolerance;
+}
+// In the surface's own space, from a tessellation: close, not exact.
+double MFnNurbsSurface::area(MSpace::Space, double, MStatus* st) const {
+    return surfaceEval(azShape(st), "area", 0, 0, st).num();
+}

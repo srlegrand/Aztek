@@ -91,11 +91,61 @@ public:
     // face is tried.
     bool closestIntersection(const MFloatPoint& raySource, const MFloatVector& rayDirection, const MIntArray* faceIds, const MIntArray* triIds, bool idsSorted, MSpace::Space space, float maxParam, bool testBothDirections, MMeshIsectAccelParams* accelParams, MFloatPoint& hitPoint, float* hitRayParam, int* hitFace, int* hitTriangle, float* hitBary1, float* hitBary2, float tolerance = 1.0e-6f, MStatus* status = 0);
 
+    MStatus getEdgeVertices(int edge, int2& vertices) const;
+    MStatus getPolygonNormal(int polygon, MVector& out, MSpace::Space space = MSpace::kObject) const;
+    int numUVs(MStatus* status = 0) const;
+    int numUVs(const MString& uvSet, MStatus* status = 0) const;
+    MStatus getUVs(MFloatArray& u, MFloatArray& v, const MString* uvSet = 0) const;
+    MStatus getPolygonUV(int polygon, int corner, float& u, float& v, const MString* uvSet = 0) const;
+    MStatus getPolygonUVid(int polygon, int corner, int& uvId, const MString* uvSet = 0) const;
+
     // The kit's own: the matrix world space adds, when the mesh is a shape's.
     bool azWorld(MMatrix& out) const;
+    // Each corner's edge, face by face: the edge from its point to the next.
+    MStatus azCornerEdges(MIntArray& out) const;
 
 private:
     std::shared_ptr<az::MeshData> azMesh(MStatus* status = 0) const;
     std::shared_ptr<az::MeshData> nodeMesh_;
     int64_t node_ = -1;
+};
+
+// A NURBS surface shape in the scene, read through the host. Parameters are the surface's own; CVs go along V first for
+// each U, as the reference orders them.
+class MFnNurbsSurface : public MFnDagNode {
+public:
+    enum Form { kInvalid = 0, kOpen, kClosed, kPeriodic, kLast };
+    MFnNurbsSurface();
+    MFnNurbsSurface(const MObject& o, MStatus* status = 0);
+    MFnNurbsSurface(const MDagPath& path, MStatus* status = 0);
+    virtual MFn::Type type() const;
+    static const char* className() { return "MFnNurbsSurface"; }
+    int numCVsInU(MStatus* status = 0) const;
+    int numCVsInV(MStatus* status = 0) const;
+    int numSpansInU(MStatus* status = 0) const;
+    int numSpansInV(MStatus* status = 0) const;
+    int degreeU(MStatus* status = 0) const;
+    int degreeV(MStatus* status = 0) const;
+    Form formInU(MStatus* status = 0) const;
+    Form formInV(MStatus* status = 0) const;
+    int numKnotsInU(MStatus* status = 0) const;
+    int numKnotsInV(MStatus* status = 0) const;
+    MStatus getKnotsInU(MDoubleArray& out) const;
+    MStatus getKnotsInV(MDoubleArray& out) const;
+    MStatus getKnotDomain(double& startU, double& endU, double& startV, double& endV) const;
+    bool isTrimmedSurface(MStatus* status = 0) const;
+    MStatus getCVs(MPointArray& out, MSpace::Space space = MSpace::kObject) const;
+    MStatus getCV(unsigned int u, unsigned int v, MPoint& out, MSpace::Space space = MSpace::kObject) const;
+    MStatus getPointAtParam(double u, double v, MPoint& out, MSpace::Space space = MSpace::kObject) const;
+    MVector normal(double u, double v, MSpace::Space space = MSpace::kObject, MStatus* status = 0) const;
+    MStatus getTangents(double u, double v, MVector& uTangent, MVector& vTangent, MSpace::Space space = MSpace::kObject) const;
+    MStatus getDerivativesAtParm(double u, double v, MPoint& point, MVector& dU, MVector& dV, MSpace::Space space = MSpace::kObject, MVector* dUU = 0, MVector* dVV = 0, MVector* dUV = 0) const;
+    MPoint closestPoint(const MPoint& to, double* u = 0, double* v = 0, bool ignoreTrimBoundaries = false, double tolerance = 1.0e-3, MSpace::Space space = MSpace::kObject, MStatus* status = 0) const;
+    MStatus getParamAtPoint(const MPoint& at, double& u, double& v, MSpace::Space space = MSpace::kObject);
+    MStatus getParamAtPoint(const MPoint& at, double& u, double& v, bool ignoreTrimBoundaries, MSpace::Space space = MSpace::kObject, double tolerance = 1.0e-3);
+    bool isPointOnSurface(const MPoint& at, double tolerance = 1.0e-3, MSpace::Space space = MSpace::kObject, MStatus* status = 0);
+    double area(MSpace::Space space = MSpace::kObject, double tolerance = 1.0e-3, MStatus* status = 0) const;
+
+private:
+    int64_t azShape(MStatus* status) const;
 };

@@ -372,6 +372,13 @@ void MItMeshVertex::azBuild() {
         c += (unsigned int)k;
     }
     for (int v = 0; v < n; ++v) neighbours_[v].assign(nb[v].begin(), nb[v].end());
+    // The mesh's own edge ids at each point.
+    for (int e = 0; e < mesh_.numEdges(); ++e) {
+        int2 ends;
+        if (!mesh_.getEdgeVertices(e, ends)) continue;
+        for (int k = 0; k < 2; ++k)
+            if (ends[k] >= 0 && ends[k] < n) edges_[ends[k]].push_back(e);
+    }
     ids_.clear();
     for (int v = 0; v < n; ++v) ids_.push_back(v);
 }
@@ -430,11 +437,10 @@ MStatus MItMeshVertex::getConnectedVertices(MIntArray& out) {
     return MS::kSuccess;
 }
 MStatus MItMeshVertex::getConnectedEdges(MIntArray& out) {
-    // Edges by the order their ends are found: a vertex's edges go to its neighbours.
     out.clear();
     int v = index();
     if (v < 0) return MS::kFailure;
-    for (size_t i = 0; i < neighbours_[v].size(); ++i) out.append((int)i);
+    for (size_t i = 0; i < edges_[v].size(); ++i) out.append(edges_[v][i]);
     return MS::kSuccess;
 }
 MStatus MItMeshVertex::numConnectedFaces(int& out) const {
@@ -698,4 +704,623 @@ MStatus MFnWeightGeometryFilter::setWeight(const MDagPath&, unsigned int index, 
         if (!st) return st;
     }
     return MS::kSuccess;
+}
+
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Mesh faces
+
+namespace {
+// The ids a component names, those in range, or none when it names none (all, then).
+std::vector<int> picked(const MObject& comp, size_t count) {
+    std::vector<int> out;
+    const std::shared_ptr<ObjectData>& d = comp.azData();
+    if (!d || d->complete || d->ids.empty()) return out;
+    for (size_t i = 0; i < d->ids.size(); ++i)
+        if (d->ids[i] >= 0 && (size_t)d->ids[i] < count) out.push_back(d->ids[i]);
+    return out;
+}
+std::vector<int> all(size_t n) {
+    std::vector<int> out(n);
+    for (size_t i = 0; i < n; ++i) out[i] = (int)i;
+    return out;
+}
+MObject oneComponent(MFn::Type t, int id, MStatus* st) {
+    MFnSingleIndexedComponent fn;
+    MObject o = fn.create(t, st);
+    fn.addElement(id);
+    return o;
+}
+void appendUnique(MIntArray& out, int v) {
+    for (unsigned int i = 0; i < out.length(); ++i)
+        if (out[i] == v) return;
+    out.append(v);
+}
+}  // namespace
+
+MItMeshPolygon::MItMeshPolygon(const MDagPath& path, const MObject& comp, MStatus* st) : mesh_(path, st), at_(0) {
+    azBuild();
+    azPick(comp);
+}
+MItMeshPolygon::MItMeshPolygon(const MObject& mesh, MStatus* st) : mesh_(mesh, st), at_(0) {
+    azBuild();
+    azPick(MObject());
+}
+MItMeshPolygon::~MItMeshPolygon() {}
+
+void MItMeshPolygon::azBuild() {
+    MIntArray counts, connects, ce;
+    mesh_.getVertices(counts, connects);
+    mesh_.azCornerEdges(ce);
+    counts_.assign(counts.length(), 0);
+    start_.assign(counts.length(), 0);
+    connects_.assign(connects.length(), 0);
+    cornerEdges_.assign(ce.length(), -1);
+    for (unsigned int i = 0; i < connects.length(); ++i) connects_[i] = connects[i];
+    for (unsigned int i = 0; i < ce.length(); ++i) cornerEdges_[i] = ce[i];
+    edgeFaces_.assign(mesh_.numEdges(), std::vector<int>());
+    pointFaces_.assign(mesh_.numVertices(), std::vector<int>());
+    int c = 0;
+    for (unsigned int f = 0; f < counts.length(); ++f) {
+        counts_[f] = counts[f];
+        start_[f] = c;
+        for (int k = 0; k < counts[f]; ++k) {
+            int e = (size_t)(c + k) < cornerEdges_.size() ? cornerEdges_[c + k] : -1;
+            if (e >= 0 && (size_t)e < edgeFaces_.size() && (edgeFaces_[e].empty() || edgeFaces_[e].back() != (int)f)) edgeFaces_[e].push_back((int)f);
+            int v = connects_[c + k];
+            if (v >= 0 && (size_t)v < pointFaces_.size() && (pointFaces_[v].empty() || pointFaces_[v].back() != (int)f)) pointFaces_[v].push_back((int)f);
+        }
+        c += counts[f];
+    }
+}
+void MItMeshPolygon::azPick(const MObject& comp) {
+    ids_ = picked(comp, counts_.size());
+    if (ids_.empty()) ids_ = all(counts_.size());
+    at_ = 0;
+}
+bool MItMeshPolygon::isDone(MStatus* st) {
+    if (st) *st = MS::kSuccess;
+    return at_ >= ids_.size();
+}
+MStatus MItMeshPolygon::next() {
+    ++at_;
+    return MS::kSuccess;
+}
+MStatus MItMeshPolygon::reset() {
+    at_ = 0;
+    return MS::kSuccess;
+}
+MStatus MItMeshPolygon::reset(const MDagPath& path, const MObject& comp) {
+    MStatus st;
+    mesh_ = MFnMesh(path, &st);
+    azBuild();
+    azPick(comp);
+    return st;
+}
+unsigned int MItMeshPolygon::count(MStatus* st) {
+    if (st) *st = MS::kSuccess;
+    return (unsigned int)counts_.size();
+}
+unsigned int MItMeshPolygon::index(MStatus* st) {
+    if (st) *st = at_ < ids_.size() ? MS::kSuccess : MS::kFailure;
+    return at_ < ids_.size() ? (unsigned int)ids_[at_] : 0;
+}
+MStatus MItMeshPolygon::setIndex(int i, int& prev) {
+    prev = at_ < ids_.size() ? ids_[at_] : -1;
+    if (i < 0 || (size_t)i >= counts_.size()) return MS::kInvalidParameter;
+    std::vector<int>::iterator it = std::find(ids_.begin(), ids_.end(), i);
+    if (it == ids_.end()) {
+        ids_.push_back(i);
+        at_ = ids_.size() - 1;
+    } else {
+        at_ = (size_t)(it - ids_.begin());
+    }
+    return MS::kSuccess;
+}
+unsigned int MItMeshPolygon::polygonVertexCount(MStatus* st) {
+    unsigned int f = index(st);
+    return f < counts_.size() ? (unsigned int)counts_[f] : 0;
+}
+int MItMeshPolygon::vertexIndex(int k, MStatus* st) {
+    unsigned int f = index(st);
+    if (f >= counts_.size() || k < 0 || k >= counts_[f]) {
+        if (st) *st = MS::kInvalidParameter;
+        return -1;
+    }
+    return connects_[start_[f] + k];
+}
+MStatus MItMeshPolygon::getVertices(MIntArray& out) {
+    out.clear();
+    MStatus st;
+    unsigned int f = index(&st);
+    if (!st) return st;
+    for (int k = 0; k < counts_[f]; ++k) out.append(connects_[start_[f] + k]);
+    return MS::kSuccess;
+}
+MStatus MItMeshPolygon::getEdges(MIntArray& out) {
+    out.clear();
+    MStatus st;
+    unsigned int f = index(&st);
+    if (!st) return st;
+    for (int k = 0; k < counts_[f]; ++k) out.append(cornerEdges_[start_[f] + k]);
+    return MS::kSuccess;
+}
+MStatus MItMeshPolygon::getConnectedFaces(MIntArray& out) {
+    // Faces sharing an edge with this one.
+    out.clear();
+    MIntArray es;
+    MStatus st = getEdges(es);
+    if (!st) return st;
+    int me = (int)index();
+    for (unsigned int i = 0; i < es.length(); ++i) {
+        if (es[i] < 0 || (size_t)es[i] >= edgeFaces_.size()) continue;
+        for (size_t j = 0; j < edgeFaces_[es[i]].size(); ++j)
+            if (edgeFaces_[es[i]][j] != me) appendUnique(out, edgeFaces_[es[i]][j]);
+    }
+    return MS::kSuccess;
+}
+MStatus MItMeshPolygon::getConnectedEdges(MIntArray& out) {
+    // Edges at this face's corners that aren't its own.
+    out.clear();
+    MIntArray vs, own;
+    getVertices(vs);
+    getEdges(own);
+    for (int e = 0; e < (int)edgeFaces_.size(); ++e) {
+        int2 ends;
+        if (!mesh_.getEdgeVertices(e, ends)) continue;
+        bool touches = false, mine = false;
+        for (unsigned int i = 0; i < vs.length(); ++i) touches = touches || vs[i] == ends[0] || vs[i] == ends[1];
+        for (unsigned int i = 0; i < own.length(); ++i) mine = mine || own[i] == e;
+        if (touches && !mine) out.append(e);
+    }
+    return MS::kSuccess;
+}
+MStatus MItMeshPolygon::getConnectedVertices(MIntArray& out) {
+    // Points of the faces at this face's corners, that aren't this face's.
+    out.clear();
+    MIntArray vs;
+    MStatus st = getVertices(vs);
+    if (!st) return st;
+    int me = (int)index();
+    for (unsigned int i = 0; i < vs.length(); ++i) {
+        const std::vector<int>& fs = pointFaces_[vs[i]];
+        for (size_t j = 0; j < fs.size(); ++j) {
+            if (fs[j] == me) continue;
+            for (int k = 0; k < counts_[fs[j]]; ++k) {
+                int v = connects_[start_[fs[j]] + k];
+                bool own = false;
+                for (unsigned int m = 0; m < vs.length(); ++m) own = own || vs[m] == v;
+                if (!own) appendUnique(out, v);
+            }
+        }
+    }
+    return MS::kSuccess;
+}
+MStatus MItMeshPolygon::numConnectedFaces(int& out) const {
+    MItMeshPolygon* self = const_cast<MItMeshPolygon*>(this);
+    MIntArray a;
+    MStatus st = self->getConnectedFaces(a);
+    out = (int)a.length();
+    return st;
+}
+MStatus MItMeshPolygon::numConnectedEdges(int& out) const {
+    MItMeshPolygon* self = const_cast<MItMeshPolygon*>(this);
+    MIntArray a;
+    MStatus st = self->getConnectedEdges(a);
+    out = (int)a.length();
+    return st;
+}
+MPoint MItMeshPolygon::point(int k, MSpace::Space space, MStatus* st) {
+    MPoint p;
+    int v = vertexIndex(k, st);
+    if (v >= 0) mesh_.getPoint(v, p, space);
+    return p;
+}
+MStatus MItMeshPolygon::getPoints(MPointArray& out, MSpace::Space space, MStatus*) {
+    out.clear();
+    MIntArray vs;
+    MStatus st = getVertices(vs);
+    for (unsigned int i = 0; i < vs.length(); ++i) {
+        MPoint p;
+        mesh_.getPoint(vs[i], p, space);
+        out.append(p);
+    }
+    return st;
+}
+MStatus MItMeshPolygon::setPoint(const MPoint& p, unsigned int k, MSpace::Space space) {
+    MStatus st;
+    int v = vertexIndex((int)k, &st);
+    if (!st) return st;
+    return mesh_.setPoint(v, p, space);
+}
+MPoint MItMeshPolygon::center(MSpace::Space space, MStatus* st) {
+    MPointArray pts;
+    MStatus s = getPoints(pts, space);
+    if (st) *st = s;
+    MPoint c(0, 0, 0);
+    for (unsigned int i = 0; i < pts.length(); ++i) {
+        c.x += pts[i].x;
+        c.y += pts[i].y;
+        c.z += pts[i].z;
+    }
+    if (pts.length()) {
+        c.x /= pts.length();
+        c.y /= pts.length();
+        c.z /= pts.length();
+    }
+    return c;
+}
+MStatus MItMeshPolygon::getNormal(MVector& out, MSpace::Space space) {
+    MStatus st;
+    unsigned int f = index(&st);
+    if (!st) return st;
+    return mesh_.getPolygonNormal((int)f, out, space);
+}
+MStatus MItMeshPolygon::getNormal(unsigned int k, MVector& out, MSpace::Space space) {
+    MStatus st;
+    unsigned int f = index(&st);
+    if (!st) return st;
+    if (k >= (unsigned int)counts_[f]) return MS::kInvalidParameter;
+    MFloatVectorArray ns;
+    st = mesh_.getNormals(ns, space);
+    if (!st || (size_t)(start_[f] + k) >= ns.length()) return mesh_.getPolygonNormal((int)f, out, space);
+    const MFloatVector& n = ns[start_[f] + k];
+    out = MVector(n.x, n.y, n.z);
+    return MS::kSuccess;
+}
+MStatus MItMeshPolygon::getArea(double& out, MSpace::Space space) {
+    MPointArray pts;
+    MStatus st = getPoints(pts, space);
+    out = 0.0;
+    for (unsigned int i = 1; i + 1 < pts.length(); ++i) out += ((pts[i] - pts[0]) ^ (pts[i + 1] - pts[0])).length() * 0.5;
+    return st;
+}
+bool MItMeshPolygon::hasValidTriangulation(MStatus* st) { return polygonVertexCount(st) >= 3; }
+MStatus MItMeshPolygon::numTriangles(int& out) {
+    MStatus st;
+    out = (int)polygonVertexCount(&st) - 2;
+    if (out < 0) out = 0;
+    return st;
+}
+// Each face as a fan from its first corner, as MFnMesh::getTriangles gives it.
+MStatus MItMeshPolygon::getTriangle(int t, MPointArray& points, MIntArray& vertices, MSpace::Space space) {
+    points.clear();
+    vertices.clear();
+    int n = 0;
+    numTriangles(n);
+    if (t < 0 || t >= n) return MS::kInvalidParameter;
+    int corners[3] = {0, t + 1, t + 2};
+    for (int k = 0; k < 3; ++k) {
+        vertices.append(vertexIndex(corners[k]));
+        points.append(point(corners[k], space));
+    }
+    return MS::kSuccess;
+}
+MStatus MItMeshPolygon::getTriangles(MPointArray& points, MIntArray& vertices, MSpace::Space space) {
+    points.clear();
+    vertices.clear();
+    int n = 0;
+    MStatus st = numTriangles(n);
+    for (int t = 0; t < n; ++t) {
+        MPointArray p;
+        MIntArray v;
+        getTriangle(t, p, v, space);
+        for (unsigned int k = 0; k < 3; ++k) {
+            points.append(p[k]);
+            vertices.append(v[k]);
+        }
+    }
+    return st;
+}
+bool MItMeshPolygon::hasUVs(MStatus* st) const { return mesh_.numUVs(st) > 0; }
+MStatus MItMeshPolygon::getUVIndex(int k, int& id, const MString* set) { return mesh_.getPolygonUVid((int)index(), k, id, set); }
+MStatus MItMeshPolygon::getUV(int k, float2& uv, const MString* set) { return mesh_.getPolygonUV((int)index(), k, uv[0], uv[1], set); }
+MStatus MItMeshPolygon::getUVs(MFloatArray& u, MFloatArray& v, const MString* set) {
+    u.clear();
+    v.clear();
+    unsigned int n = polygonVertexCount();
+    for (unsigned int k = 0; k < n; ++k) {
+        float a = 0, b = 0;
+        MStatus st = mesh_.getPolygonUV((int)index(), (int)k, a, b, set);
+        if (!st) return st;
+        u.append(a);
+        v.append(b);
+    }
+    return MS::kSuccess;
+}
+bool MItMeshPolygon::onBoundary(MStatus* st) {
+    MIntArray es;
+    if (st) *st = getEdges(es);
+    for (unsigned int i = 0; i < es.length(); ++i)
+        if (es[i] >= 0 && (size_t)es[i] < edgeFaces_.size() && edgeFaces_[es[i]].size() < 2) return true;
+    return false;
+}
+bool MItMeshPolygon::isConvex(MStatus* st) {
+    MPointArray pts;
+    if (st) *st = getPoints(pts);
+    MVector n;
+    getNormal(n);
+    unsigned int m = pts.length();
+    for (unsigned int i = 0; i < m; ++i) {
+        MVector a = pts[(i + 1) % m] - pts[i], b = pts[(i + 2) % m] - pts[(i + 1) % m];
+        if ((a ^ b) * n < -1e-12) return false;
+    }
+    return true;
+}
+bool MItMeshPolygon::zeroArea(MStatus* st) {
+    double a = 0;
+    MStatus s = getArea(a);
+    if (st) *st = s;
+    return a < 1e-12;
+}
+MObject MItMeshPolygon::currentItem(MStatus* st) { return oneComponent(MFn::kMeshPolygonComponent, (int)index(), st); }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Mesh edges
+
+MItMeshEdge::MItMeshEdge(const MDagPath& path, const MObject& comp, MStatus* st) : mesh_(path, st), at_(0) {
+    azBuild();
+    azPick(comp);
+}
+MItMeshEdge::MItMeshEdge(const MObject& mesh, MStatus* st) : mesh_(mesh, st), at_(0) {
+    azBuild();
+    azPick(MObject());
+}
+MItMeshEdge::~MItMeshEdge() {}
+
+void MItMeshEdge::azBuild() {
+    int n = mesh_.numEdges();
+    ends_.assign((size_t)n * 2, -1);
+    faces_.assign(n, std::vector<int>());
+    pointEdges_.assign(mesh_.numVertices(), std::vector<int>());
+    for (int e = 0; e < n; ++e) {
+        int2 v;
+        if (!mesh_.getEdgeVertices(e, v)) continue;
+        ends_[e * 2] = v[0];
+        ends_[e * 2 + 1] = v[1];
+        for (int k = 0; k < 2; ++k)
+            if (v[k] >= 0 && (size_t)v[k] < pointEdges_.size()) pointEdges_[v[k]].push_back(e);
+    }
+    MIntArray counts, connects, ce;
+    mesh_.getVertices(counts, connects);
+    mesh_.azCornerEdges(ce);
+    unsigned int c = 0;
+    for (unsigned int f = 0; f < counts.length(); ++f) {
+        for (int k = 0; k < counts[f]; ++k) {
+            int e = c + k < ce.length() ? ce[c + k] : -1;
+            if (e >= 0 && e < n && (faces_[e].empty() || faces_[e].back() != (int)f)) faces_[e].push_back((int)f);
+        }
+        c += (unsigned int)counts[f];
+    }
+}
+void MItMeshEdge::azPick(const MObject& comp) {
+    ids_ = picked(comp, faces_.size());
+    if (ids_.empty()) ids_ = all(faces_.size());
+    at_ = 0;
+}
+bool MItMeshEdge::isDone(MStatus* st) {
+    if (st) *st = MS::kSuccess;
+    return at_ >= ids_.size();
+}
+MStatus MItMeshEdge::next() {
+    ++at_;
+    return MS::kSuccess;
+}
+MStatus MItMeshEdge::reset() {
+    at_ = 0;
+    return MS::kSuccess;
+}
+MStatus MItMeshEdge::reset(const MDagPath& path, const MObject& comp) {
+    MStatus st;
+    mesh_ = MFnMesh(path, &st);
+    azBuild();
+    azPick(comp);
+    return st;
+}
+int MItMeshEdge::count(MStatus* st) {
+    if (st) *st = MS::kSuccess;
+    return (int)faces_.size();
+}
+int MItMeshEdge::index(MStatus* st) {
+    if (st) *st = at_ < ids_.size() ? MS::kSuccess : MS::kFailure;
+    return at_ < ids_.size() ? ids_[at_] : -1;
+}
+int MItMeshEdge::index(int end, MStatus* st) {
+    int e = index(st);
+    if (e < 0 || end < 0 || end > 1) {
+        if (st) *st = MS::kInvalidParameter;
+        return -1;
+    }
+    return ends_[e * 2 + end];
+}
+MStatus MItMeshEdge::setIndex(int i, int& prev) {
+    prev = index();
+    if (i < 0 || (size_t)i >= faces_.size()) return MS::kInvalidParameter;
+    std::vector<int>::iterator it = std::find(ids_.begin(), ids_.end(), i);
+    if (it == ids_.end()) {
+        ids_.push_back(i);
+        at_ = ids_.size() - 1;
+    } else {
+        at_ = (size_t)(it - ids_.begin());
+    }
+    return MS::kSuccess;
+}
+MPoint MItMeshEdge::point(int end, MSpace::Space space, MStatus* st) {
+    MPoint p;
+    int v = index(end, st);
+    if (v >= 0) mesh_.getPoint(v, p, space);
+    return p;
+}
+MPoint MItMeshEdge::center(MSpace::Space space, MStatus* st) {
+    MPoint a = point(0, space, st), b = point(1, space, st);
+    return MPoint((a.x + b.x) * 0.5, (a.y + b.y) * 0.5, (a.z + b.z) * 0.5);
+}
+MStatus MItMeshEdge::getLength(double& out, MSpace::Space space) {
+    MStatus st;
+    out = point(0, space, &st).distanceTo(point(1, space, &st));
+    return st;
+}
+MStatus MItMeshEdge::getConnectedFaces(MIntArray& out, MStatus* st) {
+    out.clear();
+    int e = index(st);
+    if (e < 0) return MS::kFailure;
+    for (size_t i = 0; i < faces_[e].size(); ++i) out.append(faces_[e][i]);
+    return MS::kSuccess;
+}
+MStatus MItMeshEdge::getConnectedEdges(MIntArray& out, MStatus* st) {
+    // Edges sharing an end with this one.
+    out.clear();
+    int e = index(st);
+    if (e < 0) return MS::kFailure;
+    for (int k = 0; k < 2; ++k) {
+        int v = ends_[e * 2 + k];
+        if (v < 0 || (size_t)v >= pointEdges_.size()) continue;
+        for (size_t i = 0; i < pointEdges_[v].size(); ++i)
+            if (pointEdges_[v][i] != e) appendUnique(out, pointEdges_[v][i]);
+    }
+    return MS::kSuccess;
+}
+int MItMeshEdge::numConnectedFaces(MStatus* st) {
+    int e = index(st);
+    return e < 0 ? 0 : (int)faces_[e].size();
+}
+int MItMeshEdge::numConnectedEdges(MStatus* st) {
+    MIntArray a;
+    getConnectedEdges(a, st);
+    return (int)a.length();
+}
+MStatus MItMeshEdge::numConnectedFaces(int& out) const {
+    out = at_ < ids_.size() ? (int)faces_[ids_[at_]].size() : 0;
+    return MS::kSuccess;
+}
+MStatus MItMeshEdge::numConnectedEdges(int& out) const {
+    out = const_cast<MItMeshEdge*>(this)->numConnectedEdges();
+    return MS::kSuccess;
+}
+bool MItMeshEdge::connectedToFace(int face, MStatus* st) {
+    int e = index(st);
+    return e >= 0 && std::find(faces_[e].begin(), faces_[e].end(), face) != faces_[e].end();
+}
+bool MItMeshEdge::connectedToEdge(int edge, MStatus* st) {
+    MIntArray a;
+    getConnectedEdges(a, st);
+    for (unsigned int i = 0; i < a.length(); ++i)
+        if (a[i] == edge) return true;
+    return false;
+}
+bool MItMeshEdge::onBoundary(MStatus* st) {
+    int e = index(st);
+    return e >= 0 && faces_[e].size() < 2;
+}
+MObject MItMeshEdge::currentItem(MStatus* st) { return oneComponent(MFn::kMeshEdgeComponent, index(), st); }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// DAG
+
+MItDag::MItDag(TraversalType t, MFn::Type filter, MStatus* st) : traversal_(t == kInvalidType ? kDepthFirst : t), filter_(filter), root_(-1), current_(-1), depth_(0) {
+    azStart();
+    if (st) *st = MS::kSuccess;
+}
+MItDag::~MItDag() {}
+
+// A node's children, in the host's order, after what is queued (breadth first) or before it (depth first).
+void MItDag::azExpand(int64_t node, unsigned int depth) {
+    std::vector<int64_t> kids;
+    if (node < 0) {
+        Json r = query("node.roots", Json::object());
+        for (size_t i = 0; i < r.size(); ++i) kids.push_back(r[i].integer());
+    } else {
+        MDagPath p = MDagPath::azOf(node);
+        unsigned int n = p.childCount();
+        for (unsigned int i = 0; i < n; ++i) kids.push_back(nodeOf(p.child(i)));
+    }
+    if (traversal_ == kBreadthFirst) {
+        for (size_t i = 0; i < kids.size(); ++i) queue_.push_back(std::make_pair(kids[i], depth));
+    } else {
+        for (size_t i = kids.size(); i-- > 0;) queue_.push_front(std::make_pair(kids[i], depth));
+    }
+}
+// From a root, or from the scene's top nodes, each at depth 1.
+void MItDag::azStart() {
+    queue_.clear();
+    current_ = -1;
+    if (root_ >= 0) {
+        queue_.push_back(std::make_pair(root_, 0u));
+    } else {
+        azExpand(-1, 1);
+    }
+    next();
+}
+MStatus MItDag::next() {
+    while (!queue_.empty()) {
+        std::pair<int64_t, unsigned int> it = queue_.front();
+        queue_.pop_front();
+        if (it.first < 0) continue;
+        azExpand(it.first, it.second + 1);
+        if (filter_ != MFn::kInvalid && !nodeHasFn(it.first, filter_)) continue;
+        current_ = it.first;
+        depth_ = it.second;
+        return MS::kSuccess;
+    }
+    current_ = -1;
+    return MS::kSuccess;
+}
+// The current node's children don't come: they were queued when it came, so take them out again.
+MStatus MItDag::prune() {
+    if (current_ < 0) return MS::kFailure;
+    MDagPath p = MDagPath::azOf(current_);
+    unsigned int n = p.childCount();
+    std::set<int64_t> kids;
+    for (unsigned int i = 0; i < n; ++i) kids.insert(nodeOf(p.child(i)));
+    std::deque<std::pair<int64_t, unsigned int> > kept;
+    for (size_t i = 0; i < queue_.size(); ++i)
+        if (!(kids.count(queue_[i].first) && queue_[i].second == depth_ + 1)) kept.push_back(queue_[i]);
+    queue_.swap(kept);
+    return MS::kSuccess;
+}
+MStatus MItDag::reset() {
+    azStart();
+    return MS::kSuccess;
+}
+MStatus MItDag::reset(const MObject& root, TraversalType t, MFn::Type filter) {
+    root_ = nodeOf(root);
+    traversal_ = t == kInvalidType ? kDepthFirst : t;
+    filter_ = filter;
+    azStart();
+    return root_ >= 0 || root.isNull() ? MS::kSuccess : MS::kInvalidParameter;
+}
+MStatus MItDag::reset(const MDagPath& root, TraversalType t, MFn::Type filter) { return reset(root.node(), t, filter); }
+bool MItDag::isDone(MStatus* st) const {
+    if (st) *st = MS::kSuccess;
+    return current_ < 0;
+}
+MObject MItDag::currentItem(MStatus* st) const {
+    if (st) *st = current_ >= 0 ? MS::kSuccess : MS::kFailure;
+    return current_ >= 0 ? nodeObject(current_) : MObject();
+}
+MObject MItDag::item(MStatus* st) const { return currentItem(st); }
+MStatus MItDag::getPath(MDagPath& out) const {
+    if (current_ < 0) return MS::kFailure;
+    out = MDagPath::azOf(current_);
+    return MS::kSuccess;
+}
+MString MItDag::fullPathName(MStatus* st) const { return MDagPath::azOf(current_).fullPathName(st); }
+MString MItDag::partialPathName(MStatus* st) const { return MDagPath::azOf(current_).partialPathName(st); }
+unsigned int MItDag::depth(MStatus* st) const {
+    if (st) *st = current_ >= 0 ? MS::kSuccess : MS::kFailure;
+    return depth_;
+}
+MObject MItDag::root(MStatus* st) {
+    if (st) *st = MS::kSuccess;
+    return root_ >= 0 ? nodeObject(root_) : MObject();
+}
+bool MItDag::isInstanced(bool indirect, MStatus* st) const { return MDagPath::azOf(current_).isInstanced(st) && indirect; }
+MItDag::TraversalType MItDag::getType(MStatus* st) const {
+    if (st) *st = MS::kSuccess;
+    return traversal_;
+}
+MStatus MItDag::setTraversalType(TraversalType t) {
+    if (t == kInvalidType) return MS::kInvalidParameter;
+    traversal_ = t;
+    return reset();
 }

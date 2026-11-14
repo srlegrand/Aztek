@@ -121,6 +121,42 @@ fn samples_load_and_work() {
     mel(&mut c, "unloadPlugin -f scaleNode;");
     assert_eq!(mel(&mut c, "pluginInfo -q -loaded scaleNode;"), json!(false));
 
+    // The kit's iterators and function sets, reading the scene: azProbe gives back name=value strings.
+    assert_eq!(mel(&mut c, "loadPlugin apiProbe;"), json!(["apiProbe"]));
+    let probe = |c: &mut Core, what: &str| -> std::collections::HashMap<String, String> {
+        let v = mel(c, &format!("azProbe {what};"));
+        v.as_array().unwrap_or_else(|| panic!("azProbe {what}: {v}")).iter().filter_map(|x| x.as_str()?.split_once('=').map(|(a, b)| (a.to_string(), b.to_string()))).collect()
+    };
+    let f = |m: &std::collections::HashMap<String, String>, k: &str| -> f64 { m.get(k).unwrap_or_else(|| panic!("no {k} in {m:?}")).parse().unwrap() };
+    mel(&mut c, "file -f -new; polyCube -n box;");
+    let m = probe(&mut c, "mesh");
+    for (k, want) in [("faces", 6.0), ("quads", 6.0), ("faceNeighbours4", 6.0), ("area", 6.0), ("face0Edges", 4.0), ("face0NormalLength", 1.0), ("face0CenterFromOrigin", 0.5), ("edges", 12.0), ("edgesWithTwoFaces", 12.0), ("edgesWithFourNeighbours", 12.0), ("unitEdges", 12.0), ("vertex0Edges", 3.0), ("vertex0EdgesEndingThere", 3.0), ("pickedVisited", 2.0)] {
+        assert!((f(&m, k) - want).abs() < 1e-6, "{k}: {m:?}");
+    }
+    mel(&mut c, "group -n grp box; spaceLocator -n loc; parent loc grp;");
+    let m = probe(&mut c, "dag");
+    assert_eq!(f(&m, "meshes"), 1.0, "{m:?}");
+    assert_eq!(f(&m, "boxShapeDepth"), 3.0, "{m:?}");
+    assert_eq!(m["underGrp"], "grp,box,loc,boxShape,locShape,", "{m:?}");
+    assert_eq!(f(&m, "pruned"), 1.0, "{m:?}");
+    mel(&mut c, "setKeyframe -t 1 -v 0 box.tx; setKeyframe -t 10 -v 5 box.tx; setKeyframe -t 1 -v 0 box.ry; setKeyframe -t 10 -v 90 box.ry;");
+    let m = probe(&mut c, "anim");
+    for (k, want) in [("txType", 1.0), ("txKeys", 2.0), ("txTime1", 10.0), ("txValue1", 5.0), ("txAt10", 5.0), ("ryValue1", std::f64::consts::FRAC_PI_2), ("ryAt10", std::f64::consts::FRAC_PI_2), ("ryValue0", 0.5), ("ryValue2", 1.0), ("txKeysAfterAdd", 3.0), ("found20", 2.0), ("outTangent20", 2.0), ("txValue0", 2.0), ("txKeysAfterRemove", 2.0)] {
+        assert!((f(&m, k) - want).abs() < 1e-6, "{k}: {m:?}");
+    }
+    mel(&mut c, "file -f -new; polyCube -n box -h 2 -sy 2; select -cl; joint -n j1 -p 0 -1 0; joint -n j2 -p 0 1 0; skinCluster -n skin1 j1 box;");
+    let m = probe(&mut c, "skin");
+    for (k, want) in [("influences", 2.0), ("weightCount", 24.0), ("perPoint", 2.0), ("point0Sum", 1.0), ("v0Influence1", 1.0), ("logicalOfJ2", 1.0)] {
+        assert!((f(&m, k) - want).abs() < 1e-6, "{k}: {m:?}");
+    }
+    assert_eq!(m["influence1"], "j2", "{m:?}");
+    mel(&mut c, "file -f -new; nurbsPlane -n surf -ax 0 1 0 -w 4 -u 2 -v 3 -d 3; move 0 2 0 surf;");
+    let m = probe(&mut c, "surface");
+    for (k, want) in [("cvsU", 5.0), ("cvsV", 6.0), ("degreeU", 3.0), ("midY", 2.0), ("normalLength", 1.0), ("closestY", 2.0), ("cvCount", 30.0)] {
+        assert!((f(&m, k) - want).abs() < 1e-6, "{k}: {m:?}");
+    }
+    assert!((f(&m, "area") - 16.0).abs() < 0.05, "{m:?}");
+
     // A plug-in that crashes in compute is reported, and its nodes stop computing; the process goes on.
     assert_eq!(mel(&mut c, "loadPlugin crashNode;"), json!(["crashNode"]));
     mel(&mut c, "createNode azCrash;");
