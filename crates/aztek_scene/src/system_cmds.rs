@@ -42,6 +42,8 @@ pub struct Extras {
     pub more: crate::general_cmds::MoreState,
     /// The renderer's running render, interactive state and kept images.
     pub harold: crate::harold::commands::State,
+    /// fileInfo's keyword and value pairs, in the order they were set.
+    pub file_info: Vec<(String, String)>,
 }
 
 /// What a query asks for: the first flag -q names.

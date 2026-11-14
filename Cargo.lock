@@ -115,6 +115,7 @@ dependencies = [
  "image",
  "libc",
  "libloading",
+ "libm",
  "log",
  "naga",
  "pyo3",

@@ -13,7 +13,7 @@ use super::value::Value;
 /// Every name `run` answers.
 pub const NAMES: &[&str] = &[
     "fopen", "fclose", "fprint", "fwrite", "fread", "fgetline", "fgetword", "feof", "fflush", "frewind", "popen", "pclose", "system", "date", "timerX", "filetest", "fileExtension",
-    "basenameEx", "trace", "format", "rehash", "gauss", "sphrand", "noise", "hermite", "rot", "stringArrayRemoveAtIndex", "stringAddPrefix", "stringRemovePrefix", "attributeExists",
+    "basenameEx", "trace", "format", "rehash", "gauss", "sphrand", "noise", "hermite", "rot", "stringArrayRemoveAtIndex", "stringAddPrefix", "stringRemovePrefix", "attributeExists", "listTransforms",
 ];
 
 /// An open file or pipe. Read handles hold the whole content and a position, which is all `fgetline`, `fgetword` and
@@ -569,6 +569,25 @@ pub fn run(it: &mut Interp, name: &str, a: &mut Vec<Value>) -> R<Value> {
             }
             let (t, prefix) = (text(0), text(1));
             Ok(Value::Str(t.strip_prefix(prefix.as_str()).unwrap_or(&t).to_string()))
+        }
+        // The parents of what `ls` with these flags lists, each once.
+        "listTransforms" => {
+            if n != 1 {
+                return Err(wrong(name));
+            }
+            let found = it.run_quiet(&format!("ls {}", text(0)), None)?;
+            let mut out: Vec<String> = Vec::new();
+            for o in found.elements() {
+                let o = o.to_text().replace('"', "\\\"");
+                let parents = it.run_quiet(&format!("listRelatives -parent \"{o}\""), None)?;
+                for p in parents.elements() {
+                    let p = p.to_text();
+                    if !out.contains(&p) {
+                        out.push(p);
+                    }
+                }
+            }
+            Ok(Value::StrArr(out))
         }
         "attributeExists" => {
             if n != 2 {

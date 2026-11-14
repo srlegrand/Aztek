@@ -97,7 +97,7 @@ for o in out: print(o)
             r#"('rotv', [(0.0, 1.0, 0.0)])"#,
             r#"('rfm', [(10.0, 20.0, 30.0)])"#,
             r#"('ab', 90.0, [(1.0, 0.0, 0.0)], [(0.0, 1.0, 0.0)])"#,
-            r#"('class', ['mathLinear/operation:drawdb/shader/operation/sum'], 50, 48)"#,
+            r#"('class', ['mathLinear/operation:drawdb/shader/operation/sum'], 52, 48)"#,
             r#"('meters', 5.0, 2.0, 2.0, 'doubleLinear')"#,
         ],
     );

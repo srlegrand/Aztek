@@ -373,6 +373,25 @@ fn scale_cmd(a: &Args, cmd: &str, pref: &str) -> CmdResult {
 
 pub fn register(s: &mut Session) {
     s.register(
+        Cmd::new(
+            "quit",
+            "Exit the application. -f quits without asking to save; -a also leaves the preferences unsaved; -ec is the exit code (0).",
+            |s, a| {
+                let code = a.int("exitCode", 0) as i32;
+                let force = a.bool("force") || a.bool("abort");
+                if aztek_core::batch_mode() {
+                    crate::native_plugin::messages::scene(s, crate::native_plugin::messages::MAYA_EXITING, json!({}));
+                    std::process::exit(code);
+                }
+                push_ui_request(format!("quit|{}", json!({"force": force, "abort": a.bool("abort"), "exitCode": code})));
+                Ok(Value::Null)
+            },
+        )
+        .flag(f("force", "f", B, "Quit without asking to save."))
+        .flag(f("abort", "a", B, "Quit without saving anything, preferences included."))
+        .flag(f("exitCode", "ec", I, "The exit code.")),
+    );
+    s.register(
         q_flags(Cmd::new(
             "condition",
             "A named condition isTrue and scriptJob -ct can read: -s the MEL script that gives its state, -d conditions it follows (checked at idle), -i run the script now, -st set the state, -delete remove it. -q -st reads it. Scripts run just after the command, or at idle when a dependency changes. Not undoable, and not saved.",

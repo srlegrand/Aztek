@@ -2254,3 +2254,36 @@ primitive, blend and subset falloffs, and saves and opens the scene. Not compare
   bind tags (`useBindTags`); `uniqueMatch`; `-groupId`, `-componentTagHistory` and the hashes of geometryAttrInfo;
   `input[0].componentTagExpression` by that path (it is `componentTagExpression` on the deformer); new deformers made
   with component tags instead of sets, as the reference's preference does; plug-in deformers seeing tags and falloffs.
+
+### Commands rig scripts call, MEL's math and string procedures, timeFunction and sampler (14/11/2026)
+
+Step 7 of the 2027 parity order. Each from its 2027 page in the reference's Commands or CommandsPython index (for
+example [crossProduct](https://help.autodesk.com/cloudhelp/2027/ENU/Maya-Tech-Docs/Commands/crossProduct.html),
+[alias](https://help.autodesk.com/cloudhelp/2027/ENU/Maya-Tech-Docs/Commands/alias.html),
+[fileInfo](https://help.autodesk.com/cloudhelp/2027/ENU/Maya-Tech-Docs/CommandsPython/fileInfo.html)), checked against
+the pages' examples by a test. Not compared with a running copy of the reference.
+
+- MEL math: constrainValue, crossProduct, dotProduct, equivalent, equivalentTol, floatEq, erf, erfc, gamma (ln|Γ|),
+  besselj0, besselj1, besseljn, bessely0, bessely1, besselyn, hsv_to_rgb, rgb_to_hsv, maxfloat, minfloat, maxint,
+  minint, normalize (in place), pointMatrixMult, randstate, delrandstr. rand and seed take a stream's name first.
+- MEL strings and arrays: containsMultibyte, copyArray, interToUI, nodeAttrJoin, stringArrayAddPrefix, stringArrayRemovePrefix, stringArrayDuplicates, stringArrayIntersection,
+  floatArrayRemoveAtIndex, intArrayRemoveAtIndex, listTransforms.
+- alias: read with the script, as the reference reads it; an alias's words go before the caller's, aliases nest, and
+  an alias of statements takes no arguments.
+- Commands, in MEL and Python as in the reference: sortStringArray (natural or alphabetic order, -ic, -rev, -ia),
+  sortCaseInsensitive, matrixUtil (from -t, -r in degrees, -s, -sh, -qt; -q of each, -iv, -tp, -rt), affects (-by, -type), fileInfo (set, -q, -rm; read from and written to scene files), requires (loads the
+  plug-in it names), quit (-f, -a, -ec), and the reference's MEL procedures isParentOf, lsType (ending "<done>"),
+  findRelatedDeformer, getChain, getAllChains, gotoBindPose, setConstraintRestPosition and moveIKtoFK. `maya.cmds` has
+  none of those procedures, as the reference's has none.
+- Nodes: timeFunction (input to a function of time) and sampler (value[k] from minimum to maximum by step), with the
+  2027 attributes.
+- Where the pages leave it open, what Aztek does: `affects` treats every input of a node as affecting every output,
+  since a node here computes as a whole (the reference keeps per-attribute dependencies); pointMatrixMult applies the
+  matrix's translation (w 1); equivalent's tolerance is 0.001, the reference's default linear tolerance, as `tolerance`
+  is not there yet; stringArrayDuplicates sorts its result, as the page's example shows; findRelatedDeformer returns
+  the deformers, nearest the shape first (the page says it returns nothing); a timeFunction's function is its input's
+  value at the time it was evaluated, so a sampler gives that value at every step; randstate's three numbers come from
+  Aztek's generator, not the reference's.
+- Not done: the `bessel` index entry as a call of its own (its page describes the six bessel functions above);
+  fileInfo -referenceNode (gives nothing); requires' -nodeType and -dataType outside files; quit -abort keeping the
+  window layout unsaved.

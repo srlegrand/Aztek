@@ -7,7 +7,7 @@ use std::sync::Arc;
 use serde_json::Value as J;
 
 use super::call::{self, flag_spelling, word_value, Tok};
-use super::parser::{parse_program, BinOp, CmdArg, Decl, Expr, Proc, Stmt, Top};
+use super::parser::{parse_program, Alias, BinOp, CmdArg, Decl, Expr, Proc, Stmt, Top};
 use super::value::{Ty, Value};
 use crate::core::{Core, LineKind};
 
@@ -73,6 +73,10 @@ pub struct MelState {
     /// The JSON the last command returned, kept whole for the host's return value and result line.
     last_raw: Option<J>,
     pub(super) rng: u64,
+    /// Named random streams (`rand "s" 1`), each its own state.
+    pub(super) streams: HashMap<String, u64>,
+    /// Aliases, by name: made when a script is read, as the reference does.
+    aliases: HashMap<String, Arc<Alias>>,
 }
 
 impl MelState {
@@ -97,6 +101,8 @@ impl Default for MelState {
             print_buf: String::new(),
             last_raw: None,
             rng: 0x2545_F491_4F6C_DD1D,
+            streams: HashMap::new(),
+            aliases: HashMap::new(),
         }
     }
 }
@@ -214,6 +220,8 @@ fn writes_back(name: &str, count: usize) -> Option<usize> {
         "clear" | "appendStringArray" => Some(0),
         "tokenize" if count >= 2 => Some(count - 1),
         "stringArrayInsertAtIndex" | "intArrayInsertAtIndex" | "floatArrayInsertAtIndex" | "stringArrayRemoveAtIndex" => Some(1),
+        "normalize" | "stringArrayAddPrefix" => Some(0),
+        "copyArray" | "floatArrayRemoveAtIndex" | "intArrayRemoveAtIndex" => Some(1),
         _ => None,
     }
 }
@@ -251,8 +259,12 @@ impl Interp<'_> {
     fn hoist(&mut self, prog: &[Top], file: Option<&str>) {
         let unit = self.frame().unit;
         for t in prog {
-            if let Stmt::Proc(p) = &t.stmt {
-                self.define(p, unit, file);
+            match &t.stmt {
+                Stmt::Proc(p) => self.define(p, unit, file),
+                Stmt::Alias(a) => {
+                    self.st().aliases.insert(a.name().to_string(), a.clone());
+                }
+                _ => {}
             }
         }
     }
@@ -556,6 +568,10 @@ impl Interp<'_> {
     fn exec_inner(&mut self, s: &Stmt) -> R<Value> {
         match s {
             Stmt::Empty | Stmt::Proc(_) => Ok(Value::Void),
+            Stmt::Alias(a) => {
+                self.st().aliases.insert(a.name().to_string(), a.clone());
+                Ok(Value::Void)
+            }
             Stmt::Expr(e) => self.eval(e),
             Stmt::Decl(global, ds) => {
                 let mut last = Value::Void;
@@ -950,6 +966,32 @@ impl Interp<'_> {
     }
 
     fn call_command(&mut self, name: &str, args: &[CmdArg]) -> R<Value> {
+        let parts: Vec<&CmdArg> = args.iter().collect();
+        self.call_command_parts(name, &parts, 0)
+    }
+
+    /// A command with its words; an alias puts its own words before the caller's, and may name another alias.
+    fn call_command_parts(&mut self, name: &str, args: &[&CmdArg], depth: usize) -> R<Value> {
+        if !self.is_proc(name) {
+            if let Some(a) = self.st().aliases.get(name).cloned() {
+                if depth > 64 {
+                    return err(format!("{name}: the alias refers to itself."));
+                }
+                return match &*a {
+                    Alias::Block(_, body) => {
+                        if !args.is_empty() {
+                            return err(format!("{name}: an alias of statements takes no arguments."));
+                        }
+                        self.exec_block(body)
+                    }
+                    Alias::Call(_, target, words) => {
+                        let mut all: Vec<&CmdArg> = words.iter().collect();
+                        all.extend(args.iter().copied());
+                        self.call_command_parts(target, &all, depth + 1)
+                    }
+                };
+            }
+        }
         let is_proc = self.is_proc(name);
         if !is_proc && matches!(name, "catch" | "catchQuiet") {
             let e = args.iter().find_map(|a| if let CmdArg::Expr(e) = a { Some(e) } else { None });

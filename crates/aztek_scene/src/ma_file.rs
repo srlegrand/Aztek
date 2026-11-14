@@ -408,6 +408,8 @@ struct Doc {
     requires: Vec<(String, Vec<String>)>,
     /// The version each requires line gives its plug-in.
     plugin_versions: HashMap<String, String>,
+    /// fileInfo lines, in order.
+    file_info: Vec<(String, String)>,
     nodes: Vec<MaNode>,
     by_name: HashMap<String, Vec<usize>>,
     conns: Vec<Conn>,
@@ -508,7 +510,7 @@ impl Doc {
 
     fn parse(text: &str) -> Doc {
         FILE_UNITS.with(|u| u.set((1.0, std::f64::consts::PI / 180.0)));
-        let mut d = Doc { light_set: Vec::new(), relationships: Vec::new(), nodes: Vec::new(), by_name: HashMap::new(), conns: Vec::new(), lin: 1.0, ang: std::f64::consts::PI / 180.0, fps: None, drop_frame: false, warnings: Vec::new(), refs: Vec::new(), ref_load: Vec::new(), instances: Vec::new(), ref_conns: Vec::new(), up_z: false, requires: Vec::new(), plugin_versions: HashMap::new() };
+        let mut d = Doc { light_set: Vec::new(), relationships: Vec::new(), nodes: Vec::new(), by_name: HashMap::new(), conns: Vec::new(), lin: 1.0, ang: std::f64::consts::PI / 180.0, fps: None, drop_frame: false, warnings: Vec::new(), refs: Vec::new(), ref_load: Vec::new(), instances: Vec::new(), ref_conns: Vec::new(), up_z: false, requires: Vec::new(), plugin_versions: HashMap::new(), file_info: Vec::new() };
         let mut lex = Lexer::new(text);
         let mut st = Vec::new();
         let mut current: Option<usize> = None;
@@ -525,6 +527,12 @@ impl Doc {
                             d.plugin_versions.insert(name.to_string(), v.to_string());
                         }
                         d.requires.push((name.to_string(), types));
+                    }
+                }
+                "fileInfo" => {
+                    let plain = plain_args(&st, &[]);
+                    if let [k, v, ..] = plain.as_slice() {
+                        d.file_info.push((k.to_string(), v.to_string()));
                     }
                 }
                 "relationship" => {
@@ -3600,6 +3608,9 @@ pub fn read_text(s: &mut Session, text: &str, import: bool) -> Vec<String> {
     let _reading = ReadingGuard::on();
     register_types();
     let mut doc = Doc::parse(text);
+    if !import {
+        s.extras.file_info = doc.file_info.clone();
+    }
     let dyn_warnings = dynamics::translate(&mut doc);
     doc.warnings.extend(dyn_warnings);
     let mut before = Vec::new();
@@ -5372,6 +5383,11 @@ pub fn write_text(s: &mut Session, file_name: &str, only: Option<&[NodeId]>) -> 
     let _ = writeln!(w.out, "currentUnit -l {} -a {} -t {};", units::linear_full_name(), units::angle_full_name(), time_unit_name(fps));
     let _ = writeln!(w.out, "fileInfo \"application\" \"aztek\";");
     let _ = writeln!(w.out, "fileInfo \"version\" \"{}\";", env!("CARGO_PKG_VERSION"));
+    for (k, v) in w.s.extras.file_info.clone() {
+        if k != "application" && k != "version" {
+            let _ = writeln!(w.out, "fileInfo {} {};", quoted(&k), quoted(&v));
+        }
+    }
     w.out.push_str(&ref_head);
 
     if only.is_none() {

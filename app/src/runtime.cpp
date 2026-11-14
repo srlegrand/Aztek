@@ -38,6 +38,7 @@
 #include <QPushButton>
 #include <QSettings>
 #include <QStatusBar>
+#include <QCoreApplication>
 #include <QTimer>
 #include <QTreeWidget>
 #include <QVBoxLayout>
@@ -704,6 +705,13 @@ void MainWindow::handle_ui_request(const QString& r) {
         mel(payload);
     } else if (name == "py") {
         python(payload);
+    } else if (name == "quit") {
+        QJsonObject o = parse(payload).toObject();
+        if (o["force"].toBool()) no_prompts_ = true;
+        int code = o["exitCode"].toInt();
+        QTimer::singleShot(0, this, [this, code] {
+            if (close()) QCoreApplication::exit(code);
+        });
     } else if (name == "setTool") {
         set_tool(payload);
     } else if (name == "ctxCompleted") {

@@ -151,6 +151,7 @@ impl Session {
         crate::deform_extra::register(&mut s.commands);
         crate::deform_sets::register(&mut s.commands);
         crate::component_tags::register(&mut s.commands);
+        crate::script_cmds::register(&mut s.commands);
         crate::deform_paint::register(&mut s.commands);
         crate::skin_extra::register(&mut s.commands);
         crate::deform_cmds::register(&mut s.commands);

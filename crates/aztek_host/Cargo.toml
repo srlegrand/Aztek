@@ -34,6 +34,7 @@ libloading = "0.8"
 # through the proxy the environment names unless NO_PROXY covers the host.
 ureq = { version = "2", default-features = false, features = ["tls", "native-certs"] }
 sha2 = "0.10"
+libm = "0.2"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

@@ -442,6 +442,68 @@ fn symmetry_attrs() -> Vec<AttrDef> {
     ]
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+// timeFunction and sampler: a value as a function of time, and samples of one.
+
+/// A function of time: here the value its timeFunction held when evaluated, the same at every time.
+#[derive(Debug, Clone)]
+pub struct TimeFunction(pub f64);
+
+impl crate::plug::Data for TimeFunction {
+    fn kind(&self) -> &str {
+        "function"
+    }
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({"kind": "function", "value": self.0})
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+fn time_function(d: &mut NodeData) {
+    let x = f(d, "input");
+    set(d, "output", PlugValue::Data(Some(std::sync::Arc::new(TimeFunction(x)))));
+}
+
+/// The function sampled from minimum to maximum by step (the other way with invert): its connected function, else
+/// function_Default.
+fn sampler(d: &mut NodeData) {
+    let value = match d.value(at(d, "function_Raw")) {
+        PlugValue::Data(Some(x)) => x.as_any().downcast_ref::<TimeFunction>().map(|t| t.0),
+        _ => None,
+    }
+    .unwrap_or_else(|| f(d, "function_Default"));
+    let (lo, hi, step) = (f(d, "minimum"), f(d, "maximum"), f(d, "step"));
+    let count = if step > 0.0 && hi >= lo { ((hi - lo) / step + 1e-9).floor() as usize + 1 } else { 1 };
+    let count = count.min(100_000);
+    let out = (0..count as i32).map(|k| (k, PlugValue::Float(value))).collect();
+    let a = at(d, "value");
+    d.set_output_elements(a, out);
+}
+
+fn function_attrs() -> Vec<AttrDef> {
+    let in_function = |mut a: AttrDef| {
+        a.category = "function".into();
+        a
+    };
+    let short = |name: &str, s: &str| with_flags(base(name, s, PlugType::Int, PlugValue::Int(0), STORE), STORE);
+    vec![
+        in_function(with_flags(fin("function_Default", "fd", 0.0), STORE)),
+        in_function(base("function_Hidden", "fh", PlugType::Data, PlugValue::Data(None), flags::HIDDEN)),
+        in_function(base("function_Raw", "fr", PlugType::Data, PlugValue::Data(None), flags::INPUT | flags::HIDDEN)),
+        kid("function_Inmap", "fi", short("function_InmapFrom", "fif")),
+        kid("function_Inmap", "fi", short("function_InmapTo", "fit")),
+        kid("function_Outmap", "fo", short("function_OutmapFrom", "fof")),
+        kid("function_Outmap", "fo", short("function_OutmapTo", "fot")),
+        with_flags(bin("invert", "i", false), STORE),
+        with_flags(fin("maximum", "max", 0.0), STORE),
+        with_flags(fin("minimum", "min", 0.0), STORE),
+        with_flags(fin("step", "s", 0.0), STORE),
+        multi(fout("value", "v")),
+    ]
+}
+
 pub(super) fn specs() -> Vec<Spec> {
     vec![
         Spec("parentMatrix", "animation", "Blends its targets, each with its offset, into the input matrix: a parent constraint as a matrix.",
@@ -499,6 +561,9 @@ pub(super) fn specs() -> Vec<Spec> {
             remap_attrs([("red", "r"), ("green", "g"), ("blue", "b")]), remap_color),
         Spec("remapHsv", "utility/color:drawdb/shader/operation/remapHsv", "Remaps hue, saturation and value, each through its own ramp.",
             remap_attrs([("hue", "h"), ("saturation", "s"), ("value", "v")]), remap_hsv),
+        Spec("timeFunction", "math/conversion", "Turns a number into a function of time, for constraints and expressions blended in clips.",
+            vec![with_flags(fin("input", "i", 0.0), STORE), base("output", "o", PlugType::Data, PlugValue::Data(None), OUT | flags::HIDDEN)], time_function),
+        Spec("sampler", "math/rounding", "Samples a function over an interval: value[k] at minimum + k step.", function_attrs(), sampler),
         Spec("symmetryConstraint", "animation", "Mirrors a joint: the target's place across the symmetry planes, its rotate as it is.",
             symmetry_attrs(), symmetry),
     ]

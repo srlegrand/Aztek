@@ -95,6 +95,23 @@ pub enum Stmt {
     Continue,
     Return(Option<Expr>),
     Proc(Arc<Proc>),
+    /// `alias name command args...;` or `alias name { statements };`, made when the script is read.
+    Alias(Arc<Alias>),
+}
+
+/// What an alias stands for: a command or procedure with the words given before the caller's, or a block of statements.
+#[derive(Debug)]
+pub enum Alias {
+    Call(String, String, Vec<CmdArg>),
+    Block(String, Vec<Stmt>),
+}
+
+impl Alias {
+    pub fn name(&self) -> &str {
+        match self {
+            Alias::Call(n, ..) | Alias::Block(n, _) => n,
+        }
+    }
 }
 
 /// A top-level statement and its source, for the echo.
@@ -278,6 +295,19 @@ impl Parser {
                     Ok(Stmt::Decl(true, d))
                 }
                 "proc" => self.proc_stmt(false, top),
+                "alias" if matches!(self.lx.token(self.pos).ok().map(|t| t.1).and_then(|e| self.lx.token(e).ok()).map(|t| t.0), Some(Token::Ident(_))) => {
+                    self.bump()?;
+                    let Token::Ident(name) = self.bump()? else { return self.syntax() };
+                    if self.is("{")? {
+                        let body = self.block()?;
+                        self.end_of_statement()?;
+                        return Ok(Stmt::Alias(Arc::new(Alias::Block(name, body))));
+                    }
+                    let Token::Ident(target) = self.bump()? else { return self.syntax() };
+                    let args = self.command_args()?;
+                    self.end_of_statement()?;
+                    Ok(Stmt::Alias(Arc::new(Alias::Call(name, target, args))))
+                }
                 "else" | "case" | "default" | "in" => self.syntax(),
                 _ if type_keyword(&w).is_some() => {
                     // string($x) as a statement is a cast; anything else declares.

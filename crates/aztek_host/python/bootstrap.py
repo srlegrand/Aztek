@@ -119,20 +119,24 @@ def _command(name):
     return run
 
 
+# Procedures the reference has only in MEL: its Python commands module has none of them.
+_MEL_ONLY = {"isParentOf", "lsType", "listTransforms", "findRelatedDeformer", "getChain", "getAllChains", "gotoBindPose", "setConstraintRestPosition", "moveIKtoFK"}
+
+
 class _Cmds(types.ModuleType):
     """aztek.cmds: every Aztek command as a function. Flags are keyword arguments, long or short names."""
 
     def __getattr__(self, name):
         if name.startswith("__"):
             raise AttributeError(name)
-        if not _aztek.exists(name):
+        if name in _MEL_ONLY or not _aztek.exists(name):
             raise AttributeError("aztek.cmds has no command %r" % name)
         f = _command(name)
         setattr(self, name, f)
         return f
 
     def __dir__(self):
-        return sorted(json.loads(_aztek.names()))
+        return sorted(n for n in json.loads(_aztek.names()) if n not in _MEL_ONLY)
 
 
 def _mel_eval(src):

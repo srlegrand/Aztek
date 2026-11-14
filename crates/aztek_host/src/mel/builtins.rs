@@ -18,7 +18,84 @@ pub const NAMES: &[&str] = &[
     "deg_to_rad", "rad_to_deg", "hypot", "mag", "cross", "dot", "unit", "angle", "linstep", "smoothstep", "sort", "clear", "appendStringArray", "intArrayFind", "floatArrayFind",
     "intArrayContains", "floatArrayContains", "intArrayCount", "floatArrayCount", "intArrayRemove", "floatArrayRemove", "intArrayRemoveDuplicates", "floatArrayRemoveDuplicates",
     "intArrayInsertAtIndex", "floatArrayInsertAtIndex", "intArrayToString", "floatArrayToString", "catch", "catchQuiet",
+    // The reference's Language: Math and Strings additions (step 7).
+    "constrainValue", "crossProduct", "dotProduct", "equivalent", "equivalentTol", "floatEq", "erf", "erfc", "gamma", "besselj0", "besselj1", "besseljn",
+    "bessely0", "bessely1", "besselyn", "hsv_to_rgb", "rgb_to_hsv", "maxfloat", "minfloat", "maxint", "minint", "normalize", "pointMatrixMult", "randstate",
+    "delrandstr", "containsMultibyte", "copyArray", "interToUI", "nodeAttrJoin", "stringArrayAddPrefix", "stringArrayRemovePrefix",
+    "stringArrayDuplicates", "stringArrayIntersection", "floatArrayRemoveAtIndex", "intArrayRemoveAtIndex",
 ];
+
+/// The linear tolerance `equivalent` compares by: the reference's default (its page's example, `tolerance -q -l`).
+const LINEAR_TOLERANCE: f64 = 0.001;
+
+/// HSV (each 0 to 1) to RGB.
+fn hsv_rgb(h: f64, s: f64, v: f64) -> [f64; 3] {
+    if s <= 0.0 {
+        return [v, v, v];
+    }
+    let h = (h.rem_euclid(1.0)) * 6.0;
+    let i = h.floor();
+    let f = h - i;
+    let (p, q, t) = (v * (1.0 - s), v * (1.0 - s * f), v * (1.0 - s * (1.0 - f)));
+    match i as i32 {
+        0 => [v, t, p],
+        1 => [q, v, p],
+        2 => [p, v, t],
+        3 => [p, q, v],
+        4 => [t, p, v],
+        _ => [v, p, q],
+    }
+}
+
+fn rgb_hsv(c: [f64; 3]) -> [f64; 3] {
+    let (hi, lo) = (c[0].max(c[1]).max(c[2]), c[0].min(c[1]).min(c[2]));
+    let d = hi - lo;
+    let s = if hi > 0.0 { d / hi } else { 0.0 };
+    if d <= 0.0 {
+        return [0.0, s, hi];
+    }
+    let h = if hi == c[0] {
+        (c[1] - c[2]) / d
+    } else if hi == c[1] {
+        2.0 + (c[2] - c[0]) / d
+    } else {
+        4.0 + (c[0] - c[1]) / d
+    };
+    [(h / 6.0).rem_euclid(1.0), s, hi]
+}
+
+/// interToUI: "graphEditor" to "Graph Editor": a space before each capital that follows a lower case letter, the first
+/// letter capitalised.
+fn inter_to_ui(t: &str) -> String {
+    let mut out = String::new();
+    let mut prev: Option<char> = None;
+    for c in t.chars() {
+        if c.is_uppercase() && prev.is_some_and(|p| p.is_lowercase() || p.is_ascii_digit()) {
+            out.push(' ');
+        }
+        if prev.is_none() {
+            out.extend(c.to_uppercase());
+        } else {
+            out.push(c);
+        }
+        prev = Some(c);
+    }
+    out
+}
+
+fn three(v: &Value) -> [f64; 3] {
+    let e: Vec<f64> = v.elements().iter().map(Value::to_float).collect();
+    [e.first().copied().unwrap_or(0.0), e.get(1).copied().unwrap_or(0.0), e.get(2).copied().unwrap_or(0.0)]
+}
+
+fn unit3(v: [f64; 3]) -> [f64; 3] {
+    let m = v_mag(v);
+    if m == 0.0 {
+        v
+    } else {
+        [v[0] / m, v[1] / m, v[2] / m]
+    }
+}
 
 fn wrong(name: &str) -> Flow {
     Flow::Error(format!("Wrong number of arguments on call to {name}."))
@@ -257,7 +334,7 @@ fn run(it: &mut Interp, name: &str, a: &mut Vec<Value>) -> R<Value> {
             if crate::core::UI_COMMANDS.iter().any(|(n, _)| *n == w) {
                 return Ok(Value::Str("Run Time Command".into()));
             }
-            if it.is_command(&w) || NAMES.contains(&w.as_str()) || super::builtins_sys::NAMES.contains(&w.as_str()) {
+            if it.is_command(&w) || NAMES.contains(&w.as_str()) || super::builtins_sys::NAMES.contains(&w.as_str()) || w == "alias" {
                 return Ok(Value::Str("Command".into()));
             }
             Ok(Value::Str(match find_script(&w) {
@@ -646,6 +723,18 @@ fn run(it: &mut Interp, name: &str, a: &mut Vec<Value>) -> R<Value> {
                 }
             })
         }
+        // A stream named first: rand "s" 1, seed "s" 4.
+        "rand" | "seed" if n >= 2 && matches!(a[0], Value::Str(_)) => {
+            let stream = s(&a.remove(0));
+            let st = &mut it.core.mel_state;
+            let own = *st.streams.entry(stream.clone()).or_insert(0x2545_F491_4F6C_DD1D);
+            let default = std::mem::replace(&mut st.rng, own);
+            let r = run(it, name, a);
+            let st = &mut it.core.mel_state;
+            let now = std::mem::replace(&mut st.rng, default);
+            st.streams.insert(stream, now);
+            r
+        }
         // rand(max), rand(min, max), rand(<<vector>>)
         "rand" => match n {
             1 => {
@@ -781,6 +870,186 @@ fn run(it: &mut Interp, name: &str, a: &mut Vec<Value>) -> R<Value> {
                 }
             }
             Ok(if name == "intArrayRemoveDuplicates" { Value::IntArr(kept.iter().map(Value::to_int).collect()) } else { Value::FloatArr(kept.iter().map(Value::to_float).collect()) })
+        }
+        "constrainValue" => {
+            need(4)?;
+            let (lo, hi, step, x) = (a[0].to_float(), a[1].to_float(), a[2].to_float(), a[3].to_float());
+            if x <= lo {
+                return Ok(Value::Float(lo));
+            }
+            if x >= hi {
+                return Ok(Value::Float(hi));
+            }
+            Ok(Value::Float(if step > 0.0 { (lo + ((x - lo) / step).floor() * step).min(hi) } else { x }))
+        }
+        "crossProduct" => {
+            need(4)?;
+            let (mut x, mut y) = (three(&a[0]), three(&a[1]));
+            if a[2].to_int() != 0 {
+                (x, y) = (unit3(x), unit3(y));
+            }
+            let mut c = [x[1] * y[2] - x[2] * y[1], x[2] * y[0] - x[0] * y[2], x[0] * y[1] - x[1] * y[0]];
+            if a[3].to_int() != 0 {
+                c = unit3(c);
+            }
+            Ok(Value::FloatArr(c.to_vec()))
+        }
+        "dotProduct" => {
+            need(3)?;
+            let (mut x, mut y) = (three(&a[0]), three(&a[1]));
+            if a[2].to_int() != 0 {
+                (x, y) = (unit3(x), unit3(y));
+            }
+            Ok(Value::Float(v_dot(x, y)))
+        }
+        "equivalent" => {
+            need(2)?;
+            Ok(Value::Int(((a[0].to_float() - a[1].to_float()).abs() <= LINEAR_TOLERANCE) as i32))
+        }
+        "equivalentTol" => {
+            need(3)?;
+            Ok(Value::Int(((a[0].to_float() - a[1].to_float()).abs() <= a[2].to_float().abs()) as i32))
+        }
+        "floatEq" => {
+            need(2)?;
+            Ok(Value::Int(((a[0].to_float() - a[1].to_float()).abs() <= 0.01) as i32))
+        }
+        "erf" | "erfc" | "gamma" | "besselj0" | "besselj1" | "bessely0" | "bessely1" => {
+            need(1)?;
+            let x = a[0].to_float();
+            Ok(Value::Float(match name {
+                "erf" => libm::erf(x),
+                "erfc" => libm::erfc(x),
+                // ln|Γ(x)|, as the reference's page says.
+                "gamma" => libm::lgamma(x),
+                "besselj0" => libm::j0(x),
+                "besselj1" => libm::j1(x),
+                "bessely0" => libm::y0(x),
+                _ => libm::y1(x),
+            }))
+        }
+        "besseljn" | "besselyn" => {
+            need(2)?;
+            let (order, x) = (a[0].to_int(), a[1].to_float());
+            Ok(Value::Float(if name == "besseljn" { libm::jn(order, x) } else { libm::yn(order, x) }))
+        }
+        "hsv_to_rgb" | "rgb_to_hsv" => {
+            need(1)?;
+            let v = a[0].to_vector();
+            Ok(Value::Vector(if name == "hsv_to_rgb" { hsv_rgb(v[0], v[1], v[2]) } else { rgb_hsv(v) }))
+        }
+        "maxfloat" => Ok(Value::Float(f64::MAX)),
+        "minfloat" => Ok(Value::Float(-f64::MAX)),
+        "maxint" => Ok(Value::Int(i32::MAX)),
+        "minint" => Ok(Value::Int(i32::MIN)),
+        // In place, as the reference's float[] argument is.
+        "normalize" => {
+            need(1)?;
+            let v = three(&a[0]);
+            if v_mag(v) == 0.0 {
+                return Ok(Value::Int(-1));
+            }
+            a[0] = Value::FloatArr(unit3(v).to_vec());
+            Ok(Value::Int(1))
+        }
+        // The point (w 1) times the row-major matrix: [1][0] is element 4.
+        "pointMatrixMult" => {
+            need(2)?;
+            let p = three(&a[0]);
+            let m: Vec<f64> = a[1].elements().iter().map(Value::to_float).collect();
+            if m.len() < 16 {
+                return err("pointMatrixMult: the matrix needs 16 values.");
+            }
+            Ok(Value::FloatArr((0..3).map(|c| p[0] * m[c] + p[1] * m[4 + c] + p[2] * m[8 + c] + m[12 + c]).collect()))
+        }
+        "randstate" => {
+            if n > 1 {
+                return Err(wrong(name));
+            }
+            let st = &it.core.mel_state;
+            let x = if n == 1 { st.streams.get(&s(&a[0])).copied().unwrap_or(st.rng) } else { st.rng };
+            Ok(Value::Vector([((x >> 43) & 0xF_FFFF) as f64, ((x >> 22) & 0xF_FFFF) as f64, ((x >> 1) & 0xF_FFFF) as f64]))
+        }
+        "delrandstr" => {
+            need(1)?;
+            let pattern = s(&a[0]);
+            let st = &mut it.core.mel_state;
+            let gone: Vec<String> = st.streams.keys().filter(|k| glob(&pattern, k)).cloned().collect();
+            for k in &gone {
+                st.streams.remove(k);
+            }
+            Ok(Value::Int(gone.len() as i32))
+        }
+        "containsMultibyte" => {
+            need(1)?;
+            Ok(Value::Int(!s(&a[0]).is_ascii() as i32))
+        }
+        // Copies into the second array, in place.
+        "copyArray" => {
+            need(3)?;
+            let src: Vec<f64> = a[0].elements().iter().map(Value::to_float).collect();
+            let mut dst: Vec<f64> = a[1].elements().iter().map(Value::to_float).collect();
+            let count = a[2].to_int().max(0) as usize;
+            if dst.len() < count {
+                dst.resize(count, 0.0);
+            }
+            for (i, d) in dst.iter_mut().enumerate().take(count) {
+                *d = src.get(i).copied().unwrap_or(0.0);
+            }
+            a[1] = Value::FloatArr(dst);
+            Ok(Value::Int(1))
+        }
+        "interToUI" => {
+            need(1)?;
+            Ok(Value::Str(inter_to_ui(&s(&a[0]))))
+        }
+        "nodeAttrJoin" => {
+            need(2)?;
+            let (node, attr) = (s(&a[0]), s(&a[1]));
+            Ok(Value::Str(if attr.starts_with('.') { format!("{node}{attr}") } else { format!("{node}.{attr}") }))
+        }
+        // The array changes as well as coming back, as the reference's third example shows.
+        "stringArrayAddPrefix" => {
+            need(2)?;
+            let p = s(&a[1]);
+            let o: Vec<String> = strs(&a[0]).into_iter().map(|x| format!("{p}{x}")).collect();
+            a[0] = vs(o.clone());
+            Ok(vs(o))
+        }
+        "stringArrayRemovePrefix" => {
+            need(2)?;
+            let p = s(&a[1]);
+            Ok(vs(strs(&a[0]).into_iter().map(|x| x.strip_prefix(p.as_str()).map(str::to_string).unwrap_or(x)).collect()))
+        }
+        "stringArrayDuplicates" => {
+            need(1)?;
+            let all = strs(&a[0]);
+            let mut o: Vec<String> = all.iter().filter(|x| all.iter().filter(|y| y == x).count() > 1).cloned().collect();
+            o.sort();
+            o.dedup();
+            Ok(vs(o))
+        }
+        "stringArrayIntersection" => {
+            need(2)?;
+            let other = strs(&a[1]);
+            let mut o: Vec<String> = Vec::new();
+            for x in strs(&a[0]) {
+                if other.contains(&x) && !o.contains(&x) {
+                    o.push(x);
+                }
+            }
+            Ok(vs(o))
+        }
+        "floatArrayRemoveAtIndex" | "intArrayRemoveAtIndex" => {
+            need(2)?;
+            let i = a[0].to_int();
+            let mut list = a[1].elements();
+            if i < 0 || i as usize >= list.len() {
+                return Ok(Value::Int(0));
+            }
+            list.remove(i as usize);
+            a[1] = if name == "intArrayRemoveAtIndex" { Value::IntArr(list.iter().map(Value::to_int).collect()) } else { Value::FloatArr(list.iter().map(Value::to_float).collect()) };
+            Ok(Value::Int(1))
         }
         _ => err(format!("Cannot find procedure \"{name}\".")),
     }

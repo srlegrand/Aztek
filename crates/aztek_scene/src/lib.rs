@@ -33,6 +33,7 @@ pub mod deform_mush;
 pub mod deform_paint;
 pub mod component_tags;
 pub mod deform_sets;
+pub mod script_cmds;
 pub mod falloff;
 pub mod deform_soft;
 pub mod deform_wire;
