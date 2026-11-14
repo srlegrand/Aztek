@@ -15,6 +15,22 @@ concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: false
 
+# Slow and sure: every build here runs two jobs at a time, so a runner never runs out of memory, and every download is
+# tried again before it fails. A step that still fails is run again (tools/ci/retry.sh) with one job at a time.
+env:
+  CARGO_BUILD_JOBS: 2
+  CMAKE_BUILD_PARALLEL_LEVEL: 2
+  RUST_TEST_THREADS: 2
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_DEV_DEBUG: 0
+  CARGO_PROFILE_TEST_DEBUG: 0
+  CARGO_NET_RETRY: 10
+  CARGO_HTTP_TIMEOUT: 300
+  CARGO_TERM_COLOR: never
+  PIP_RETRIES: 10
+  PIP_DEFAULT_TIMEOUT: 120
+  HOMEBREW_NO_AUTO_UPDATE: 1
+
 jobs:
   # Whether there's anything to build: only the hourly run can find nothing new.
   gate:
@@ -55,8 +71,12 @@ jobs:
     needs: gate
     if: needs.gate.outputs.go == 'true'
     runs-on: ubuntu-24.04
+    timeout-minutes: 340
     steps:
       - uses: actions/checkout@v4
+
+      - name: Free disk
+        run: tools/ci/free-disk.sh
 
       - name: Version
         shell: bash
@@ -64,8 +84,7 @@ jobs:
 
       - name: Dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential dpkg-dev cmake ninja-build qt6-base-dev libvulkan-dev python3-dev xvfb xdotool imagemagick openbox mesa-vulkan-drivers
+          tools/ci/retry.sh 5 bash -c 'sudo apt-get -o Acquire::Retries=10 update && sudo apt-get -o Acquire::Retries=10 install -y build-essential dpkg-dev cmake ninja-build qt6-base-dev libvulkan-dev python3-dev xvfb xdotool imagemagick openbox mesa-vulkan-drivers'
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -76,25 +95,25 @@ jobs:
             . -> build/cargo
 
       - name: Test
-        run: cargo test --workspace
+        run: tools/ci/retry.sh 2 cargo test --workspace
 
       - name: Build
-        run: ./build.sh
+        run: tools/ci/retry.sh 3 ./build.sh
 
       # The real binary with no display: exit statuses, then the basics end to end.
       - name: Batch
-        run: AZTEK_BIN="$PWD/build/aztek" cargo test -p aztek_host --test batch --test basics --test basics_python
+        run: AZTEK_BIN="$PWD/build/aztek" tools/ci/retry.sh 2 cargo test -p aztek_host --test batch --test basics --test basics_python
 
       - name: Examples
-        run: tools/check_examples.sh build/aztek
+        run: tools/ci/retry.sh 2 tools/check_examples.sh build/aztek
 
       - name: Channel Box under Xvfb
-        run: python3 tools/ui_checks/channel_box.py build/aztek
+        run: tools/ci/retry.sh 2 python3 tools/ui_checks/channel_box.py build/aztek
 
       - name: Package
         run: |
           tar -czf aztek-linux-x86_64.tar.gz -C build aztek -C .. examples
-          packaging/deb/build-deb.sh build dist
+          tools/ci/retry.sh 3 packaging/deb/build-deb.sh build dist
 
       - uses: actions/upload-artifact@v4
         with:
@@ -111,9 +130,23 @@ jobs:
     needs: gate
     if: needs.gate.outputs.go == 'true'
     runs-on: ubuntu-24.04
-    container: ubuntu:22.04
+    timeout-minutes: 340
+    container:
+      image: ubuntu:22.04
+      volumes:
+        - /usr/share/dotnet:/host/usr/share/dotnet
+        - /usr/local/lib/android:/host/usr/local/lib/android
+        - /opt/ghc:/host/opt/ghc
+        - /usr/local/.ghcup:/host/usr/local/.ghcup
+        - /opt/hostedtoolcache/CodeQL:/host/opt/hostedtoolcache/CodeQL
+        - /usr/local/share/powershell:/host/usr/local/share/powershell
+        - /usr/local/share/chromium:/host/usr/local/share/chromium
     steps:
       - uses: actions/checkout@v4
+
+      # The runner's unused SDKs, seen through the container's volumes: the build needs the room.
+      - name: Free disk
+        run: tools/ci/free-disk.sh /host
 
       - name: Version
         shell: bash
@@ -121,8 +154,11 @@ jobs:
 
       - name: Dependencies
         run: |
-          apt-get update
-          apt-get install -y build-essential dpkg-dev cmake ninja-build qt6-base-dev libgl-dev libvulkan-dev python3-dev ca-certificates curl file
+          for i in 1 2 3 4 5; do
+            apt-get -o Acquire::Retries=10 update && apt-get -o Acquire::Retries=10 install -y build-essential dpkg-dev cmake ninja-build qt6-base-dev libgl-dev libvulkan-dev python3-dev ca-certificates curl file && break
+            [ "$i" = 5 ] && exit 1
+            sleep $((i * 60))
+          done
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -133,10 +169,10 @@ jobs:
             . -> build/cargo
 
       - name: Test
-        run: cargo test --workspace
+        run: tools/ci/retry.sh 2 cargo test --workspace
 
       - name: Package
-        run: packaging/deb/build-deb.sh build dist
+        run: tools/ci/retry.sh 3 packaging/deb/build-deb.sh build dist
 
       - uses: actions/upload-artifact@v4
         with:
@@ -148,7 +184,17 @@ jobs:
     needs: gate
     if: needs.gate.outputs.go == 'true'
     runs-on: ubuntu-24.04
-    container: rockylinux:${{ matrix.el }}
+    timeout-minutes: 340
+    container:
+      image: rockylinux:${{ matrix.el }}
+      volumes:
+        - /usr/share/dotnet:/host/usr/share/dotnet
+        - /usr/local/lib/android:/host/usr/local/lib/android
+        - /opt/ghc:/host/opt/ghc
+        - /usr/local/.ghcup:/host/usr/local/.ghcup
+        - /opt/hostedtoolcache/CodeQL:/host/opt/hostedtoolcache/CodeQL
+        - /usr/local/share/powershell:/host/usr/local/share/powershell
+        - /usr/local/share/chromium:/host/usr/local/share/chromium
     strategy:
       fail-fast: false
       matrix:
@@ -158,12 +204,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The runner's unused SDKs, seen through the container's volumes: the build needs the room.
+      - name: Free disk
+        run: tools/ci/free-disk.sh /host
+
       - name: Version
         shell: bash
         run: sed -i 's/^version = ".*"/version = "${{ needs.gate.outputs.version }}"/' Cargo.toml
 
       - name: Dependencies
-        run: packaging/rpm/install-build-deps.sh
+        run: tools/ci/retry.sh 5 packaging/rpm/install-build-deps.sh
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -182,10 +232,10 @@ jobs:
           key: qt-6.8.3-el8
 
       - name: Test
-        run: cargo test --workspace
+        run: tools/ci/retry.sh 2 cargo test --workspace
 
       - name: RPM
-        run: packaging/rpm/build-rpm.sh build dist
+        run: tools/ci/retry.sh 3 packaging/rpm/build-rpm.sh build dist
 
       - uses: actions/upload-artifact@v4
         with:
@@ -200,7 +250,7 @@ jobs:
         shell: bash
         run: |
           set +u; . /opt/rh/gcc-toolset-13/enable; set -u
-          AZTEK_QT=/opt/qt/6.8.3/gcc_64 AZTEK_PYTHON=/usr/bin/python3.12 packaging/appimage/build-appimage.sh build appimage
+          AZTEK_QT=/opt/qt/6.8.3/gcc_64 AZTEK_PYTHON=/usr/bin/python3.12 tools/ci/retry.sh 3 packaging/appimage/build-appimage.sh build appimage
 
       - uses: actions/upload-artifact@v4
         if: matrix.el == 8
@@ -228,11 +278,15 @@ jobs:
       # Rocky 8 gets no EPEL here: its package must install from the base repositories alone.
       - name: Install
         run: |
-          if [ "${{ matrix.el }}" = 9 ]; then dnf -y --setopt=retries=10 install epel-release; fi
-          dnf -y --setopt=retries=10 install ./pkg/*.rpm xorg-x11-server-Xvfb xorg-x11-xauth which
+          for i in 1 2 3 4 5; do
+            { [ "${{ matrix.el }}" != 9 ] || dnf -y --setopt=retries=10 install epel-release; } \
+              && dnf -y --setopt=retries=10 install ./pkg/*.rpm xorg-x11-server-Xvfb xorg-x11-xauth which && break
+            [ "$i" = 5 ] && exit 1
+            dnf clean all; sleep $((i * 60))
+          done
 
       - name: Smoke test
-        run: packaging/linux/smoke-test.sh
+        run: tools/ci/retry.sh 2 packaging/linux/smoke-test.sh
 
   verify-deb:
     needs: [linux, ubuntu-2204]
@@ -252,11 +306,14 @@ jobs:
 
       - name: Install
         run: |
-          apt-get update
-          apt-get install -y ./pkg/*.deb xvfb xauth
+          for i in 1 2 3 4 5; do
+            apt-get -o Acquire::Retries=10 update && apt-get -o Acquire::Retries=10 install -y ./pkg/*.deb xvfb xauth && break
+            [ "$i" = 5 ] && exit 1
+            sleep $((i * 60))
+          done
 
       - name: Smoke test
-        run: packaging/linux/smoke-test.sh
+        run: tools/ci/retry.sh 2 packaging/linux/smoke-test.sh
 
   # The AppImage unpacked and started on systems newer than the one it was built on, with no Qt or Python of theirs.
   verify-appimage:
@@ -277,15 +334,18 @@ jobs:
 
       - name: Install what a desktop has
         run: |
-          apt-get update
-          apt-get install -y xvfb xauth file libvulkan1 libgl1 libegl1 libfontconfig1 libfreetype6 libx11-6 libx11-xcb1 libxcb1 libglib2.0-0 libdbus-1-3
+          for i in 1 2 3 4 5; do
+            apt-get -o Acquire::Retries=10 update && apt-get -o Acquire::Retries=10 install -y xvfb xauth file libvulkan1 libgl1 libegl1 libfontconfig1 libfreetype6 libx11-6 libx11-xcb1 libxcb1 libglib2.0-0 libdbus-1-3 && break
+            [ "$i" = 5 ] && exit 1
+            sleep $((i * 60))
+          done
 
       # Unpacked rather than mounted: a container has no FUSE.
       - name: Smoke test
         run: |
           chmod +x pkg/*.AppImage
           pkg/*.AppImage --appimage-extract >/dev/null
-          AZTEK_BIN="$PWD/squashfs-root/AppRun" packaging/linux/smoke-test.sh
+          AZTEK_BIN="$PWD/squashfs-root/AppRun" tools/ci/retry.sh 2 packaging/linux/smoke-test.sh
 
   # Flatpak: the AppImage that started in the clean systems, repacked. It can't fail the run or hold a release back:
   # one that does not build or start is left out of that release.
@@ -294,7 +354,7 @@ jobs:
     if: always() && needs.verify-appimage.result == 'success'
     continue-on-error: true
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 120
     container:
       image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-25.08
       options: --privileged
@@ -326,6 +386,7 @@ jobs:
     needs: gate
     if: needs.gate.outputs.go == 'true'
     runs-on: windows-2022
+    timeout-minutes: 340
     steps:
       - uses: actions/checkout@v4
 
@@ -338,7 +399,22 @@ jobs:
           python-version: "3.12"
 
       # setup-python off: left on, this action puts the newest Python first on PATH and the exe links that one.
-      - uses: jurplel/install-qt-action@v4
+      # Qt's servers drop downloads now and then: a second try after a pause.
+      - id: qt
+        continue-on-error: true
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.8.*"
+          arch: win64_msvc2022_64
+          cache: true
+          setup-python: false
+
+      - if: steps.qt.outcome == 'failure'
+        shell: pwsh
+        run: Start-Sleep -Seconds 120
+
+      - if: steps.qt.outcome == 'failure'
+        uses: jurplel/install-qt-action@v4
         with:
           version: "6.8.*"
           arch: win64_msvc2022_64
@@ -354,9 +430,25 @@ jobs:
         with:
           workspaces: ". -> build/cargo"
 
+      # Tried three times; after a failure, one job at a time.
       - name: Build
         shell: pwsh
-        run: .\build.ps1 -Qt $env:QT_ROOT_DIR
+        run: |
+          for ($i = 1; $i -le 3; $i++) {
+            $ok = $false
+            $global:LASTEXITCODE = 0
+            try {
+              .\build.ps1 -Qt $env:QT_ROOT_DIR
+              $ok = ($LASTEXITCODE -eq 0)
+            } catch {
+              Write-Host $_
+            }
+            if ($ok) { exit 0 }
+            if ($i -eq 3) { throw "build failed 3 times" }
+            Write-Host "::warning::build attempt $i failed; trying again with one job at a time"
+            $env:CARGO_BUILD_JOBS = "1"; $env:CMAKE_BUILD_PARALLEL_LEVEL = "1"
+            Start-Sleep -Seconds (60 * $i)
+          }
 
       # The real binary: a clean script exits 0, the basics pass, a failing script exits 1.
       - name: Batch
@@ -393,6 +485,7 @@ jobs:
     needs: gate
     if: needs.gate.outputs.go == 'true'
     runs-on: macos-15
+    timeout-minutes: 340
     # Without this the app would ask for the runner's own macOS.
     env:
       MACOSX_DEPLOYMENT_TARGET: "14.0"
@@ -403,9 +496,23 @@ jobs:
         run: sed -i '' 's/^version = ".*"/version = "${{ needs.gate.outputs.version }}"/' Cargo.toml
 
       - name: Dependencies
-        run: brew install ninja python@3.12 molten-vk
+        run: tools/ci/retry.sh 5 brew install ninja python@3.12 molten-vk
 
-      - uses: jurplel/install-qt-action@v4
+      - id: qt
+        continue-on-error: true
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.8.*"
+          host: mac
+          target: desktop
+          arch: clang_64
+          cache: true
+
+      - if: steps.qt.outcome == 'failure'
+        run: sleep 120
+
+      - if: steps.qt.outcome == 'failure'
+        uses: jurplel/install-qt-action@v4
         with:
           version: "6.8.*"
           host: mac
@@ -428,7 +535,7 @@ jobs:
       # The same script as on a Mac: Aztek.app with Qt and MoltenVK inside, signed ad hoc, zipped with the examples.
       # Python stays Homebrew's python@3.12. Qt is the one installed above, through QT_ROOT_DIR.
       - name: Build and package
-        run: ./build-macos.sh --package
+        run: tools/ci/retry.sh 3 ./build-macos.sh --package
 
       - name: Batch
         continue-on-error: true

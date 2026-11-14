@@ -4,6 +4,17 @@ Everything is built by `.github/workflows/build.yml` and attached to the `latest
 versioned releases (`v*` tags). The version comes from `Cargo.toml`, `[workspace.package]`. The scripts below also run
 by hand.
 
+The workflow trades speed for builds that finish (from 14/11/2026):
+
+- Two jobs at a time everywhere (`CARGO_BUILD_JOBS`, `CMAKE_BUILD_PARALLEL_LEVEL`, `RUST_TEST_THREADS`), no
+  incremental builds and no debug info in test builds, so a build stays within the runner's memory.
+- Every package download (apt, dnf, Homebrew, pip, Qt, crates) is tried again before it fails.
+- Build, test, package and smoke-test steps go through `tools/ci/retry.sh`: up to three tries, and after a failure one
+  job at a time, the least memory there is. Windows does the same in its build step.
+- The Linux jobs first remove the runner's unused SDKs (`tools/ci/free-disk.sh`), about 25 GB, through volumes in the
+  container jobs, so the two target directories, Qt and the packages fit.
+- Each job may take up to 340 minutes (Flatpak 120).
+
 | Package | Built on | Script | Qt | Python |
 | --- | --- | --- | --- | --- |
 | `aztek-<version>-1.el8.x86_64.rpm` | `rockylinux:8` container | `packaging/rpm/build-rpm.sh` | 6.8 bundled | 3.12 from AppStream |
