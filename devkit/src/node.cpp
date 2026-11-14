@@ -238,6 +238,51 @@ std::shared_ptr<AttrSpec> az::builtinAttr(const char* name) {
             all[vecs[k][0]] = v;
         }
         all["underWorldObject"] = makeBuiltin("underWorldObject", "uwo", "bool", "underWorldObject", false);
+        // A transform's own, as the host's transform has them.
+        struct Vec {
+            const char *name, *shortName, *kids[3], *kidShorts[3];
+        };
+        static const Vec xvecs[] = {
+            {"translate", "t", {"translateX", "translateY", "translateZ"}, {"tx", "ty", "tz"}},
+            {"rotate", "r", {"rotateX", "rotateY", "rotateZ"}, {"rx", "ry", "rz"}},
+            {"scale", "s", {"scaleX", "scaleY", "scaleZ"}, {"sx", "sy", "sz"}},
+            {"shear", "sh", {"shearXY", "shearXZ", "shearYZ"}, {"shxy", "shxz", "shyz"}},
+            {"rotatePivot", "rp", {"rotatePivotX", "rotatePivotY", "rotatePivotZ"}, {"rpx", "rpy", "rpz"}},
+            {"rotatePivotTranslate", "rpt", {"rotatePivotTranslateX", "rotatePivotTranslateY", "rotatePivotTranslateZ"}, {"rptx", "rpty", "rptz"}},
+            {"scalePivot", "sp", {"scalePivotX", "scalePivotY", "scalePivotZ"}, {"spx", "spy", "spz"}},
+            {"scalePivotTranslate", "spt", {"scalePivotTranslateX", "scalePivotTranslateY", "scalePivotTranslateZ"}, {"sptx", "spty", "sptz"}},
+            {"rotateAxis", "ra", {"rotateAxisX", "rotateAxisY", "rotateAxisZ"}, {"rax", "ray", "raz"}},
+            {"boundingBoxMin", "bbmn", {"boundingBoxMinX", "boundingBoxMinY", "boundingBoxMinZ"}, {"bbnx", "bbny", "bbnz"}},
+            {"boundingBoxMax", "bbmx", {"boundingBoxMaxX", "boundingBoxMaxY", "boundingBoxMaxZ"}, {"bbxx", "bbxy", "bbxz"}},
+            {"boundingBoxSize", "bbsi", {"boundingBoxSizeX", "boundingBoxSizeY", "boundingBoxSizeZ"}, {"bbsx", "bbsy", "bbsz"}},
+            {"center", "c", {"centerX", "centerY", "centerZ"}, {"cx", "cy", "cz"}},
+        };
+        for (size_t k = 0; k < sizeof xvecs / sizeof xvecs[0]; ++k) {
+            std::shared_ptr<AttrSpec> v = makeBuiltin(xvecs[k].name, xvecs[k].shortName, "vec3", xvecs[k].name, false);
+            v->components = 3;
+            v->fn = MFn::kAttribute3Double;
+            if (std::string(xvecs[k].name) == "rotate" || std::string(xvecs[k].name) == "rotateAxis") v->unit = "angle";
+            for (int c = 0; c < 3; ++c) {
+                std::shared_ptr<AttrSpec> ch = makeBuiltin(xvecs[k].kids[c], xvecs[k].kidShorts[c], "float", xvecs[k].name, false);
+                ch->unit = v->unit;
+                ch->parent = v.get();
+                v->children.push_back(ch);
+                all[xvecs[k].kids[c]] = ch;
+            }
+            all[xvecs[k].name] = v;
+        }
+        const char* scalars[][3] = {{"rotateOrder", "ro", "enum"}, {"inheritsTransform", "it", "bool"}, {"displayHandle", "dh", "bool"},
+                                    {"displayRotatePivot", "drp", "bool"}, {"displayScalePivot", "dsp", "bool"}, {"displayLocalAxis", "dla", "bool"},
+                                    {"visibility", "v", "bool"}, {"intermediateObject", "io", "bool"}};
+        for (size_t k = 0; k < sizeof scalars / sizeof scalars[0]; ++k) all[scalars[k][0]] = makeBuiltin(scalars[k][0], scalars[k][1], scalars[k][2], scalars[k][0], false);
+        const char* matrices[][2] = {{"matrix", "m"}, {"inverseMatrix", "im"}, {"worldMatrix", "wm"}, {"worldInverseMatrix", "wim"}, {"parentMatrix", "pm"},
+                                     {"parentInverseMatrix", "pim"}, {"xformMatrix", "xm"}, {"offsetParentMatrix", "opm"}};
+        for (size_t k = 0; k < sizeof matrices / sizeof matrices[0]; ++k) all[matrices[k][0]] = makeBuiltin(matrices[k][0], matrices[k][1], "matrix", matrices[k][0], false);
+        // What a transform's or shape's attribute is called on the reference's side but not here: kept, found nowhere.
+        const char* missing[][3] = {{"enableRestPosition", "erp", "bool"}, {"lockOutput", "lo", "bool"}, {"isRenderable", "rnd", "bool"},
+                                    {"controlPoints", "cp", "vec3"}, {"xValue", "xv", "float"}, {"yValue", "yv", "float"}, {"zValue", "zv", "float"},
+                                    {"hasHistoryOnCreate", "hhoc", "bool"}, {"nodeBoundingBox", "nbb", "compound"}};
+        for (size_t k = 0; k < sizeof missing / sizeof missing[0]; ++k) all[missing[k][0]] = makeBuiltin(missing[k][0], missing[k][1], missing[k][2], missing[k][0], false);
         all["boundingBox"] = makeBuiltin("boundingBox", "bb", "vec3", "boundingBox", false);
     }
     std::map<std::string, std::shared_ptr<AttrSpec> >::iterator it = all.find(name);
@@ -636,6 +681,11 @@ static void nodePostCreate(void*, void* inst) {
     if (!e.empty()) log("// Error: postConstructor: " + e + " //", 2);
 }
 
+// ABI 3: a transform's matrix, a shape's bounds and an IK solver's solve, in pxnodes.cpp.
+int nodeLocalMatrix(void* ctx, void* inst, AzBlock* block, double* out, char** error);
+int nodeBoundingBox(void* ctx, void* inst, AzBlock* block, double* out);
+int nodeIkSolve(void* ctx, void* inst, const char* input, char** output, char** error);
+
 static int nodeCompute(void* ctx, void* inst, int attr, int element, AzBlock* block, char** error) {
     NodeClass* cls = (NodeClass*)ctx;
     std::map<int, std::shared_ptr<AttrSpec> >::iterator it = cls->byIndex.find(attr);
@@ -701,6 +751,7 @@ static void hostAttrs(NodeClass* cls, const std::shared_ptr<AttrSpec>& s, const 
     }
     std::string type = s->type == "message" ? "bool" : s->type;
     j.set("type", type);
+    if (!s->pluginType.empty()) j.set("dataType", s->pluginType);
     bool output = affected.count(s.get()) || !s->writable || (s->parent && affected.count(s->parent));
     j.set("input", !output);
     j.set("storable", s->storable && !output);
@@ -756,12 +807,21 @@ static void hostAttrs(NodeClass* cls, const std::shared_ptr<AttrSpec>& s, const 
 MStatus MFnPlugin::registerNode(const MString& name, const MTypeId& id, MCreatorFunction creator, MInitializeFunction init, MPxNode::Type type, const MString* classification) {
     if (!host || !creator) return fail(MStatus::kInvalidParameter, "registerNode: no creator");
     int kind = AZ_NODE_DEPEND;
+    bool abi3 = host->abi_version >= 3;
     if (type == MPxNode::kDeformerNode || type == MPxNode::kGeometryFilter) {
         kind = AZ_NODE_DEFORMER;
     } else if (type == MPxNode::kLocatorNode) {
         kind = AZ_NODE_LOCATOR;
+    } else if (abi3 && type == MPxNode::kTransformNode) {
+        kind = AZ_NODE_TRANSFORM;
+    } else if (abi3 && type == MPxNode::kConstraintNode) {
+        kind = AZ_NODE_CONSTRAINT;
+    } else if (abi3 && type == MPxNode::kSurfaceShape) {
+        kind = AZ_NODE_SHAPE;
+    } else if (abi3 && type == MPxNode::kIkSolverNode) {
+        kind = AZ_NODE_IK_SOLVER;
     } else if (type != MPxNode::kDependNode) {
-        return fail(MStatus::kNotImplemented, std::string("registerNode ") + name.asChar() + ": only dependency nodes and deformers can come from plug-ins yet");
+        return fail(MStatus::kNotImplemented, std::string("registerNode ") + name.asChar() + ": nodes of that kind can't come from plug-ins yet; dependency nodes, deformers, locators, transforms, constraints, shapes and IK solvers can");
     }
     if (classOfId(id)) return fail(MStatus::kFailure, std::string("registerNode ") + name.asChar() + ": a node type with that id is already registered");
     NodeClass* c = new NodeClass();
@@ -818,6 +878,9 @@ MStatus MFnPlugin::registerNode(const MString& name, const MTypeId& id, MCreator
     c->cls.scheduling = nodeScheduling;
     c->cls.compute = nodeCompute;
     c->cls.post_create = nodePostCreate;
+    c->cls.local_matrix = kind == AZ_NODE_TRANSFORM ? nodeLocalMatrix : 0;
+    c->cls.bounding_box = kind == AZ_NODE_SHAPE ? nodeBoundingBox : 0;
+    c->cls.ik_solve = kind == AZ_NODE_IK_SOLVER ? nodeIkSolve : 0;
     std::string err = take(host->register_node(pluginToken, c->name.c_str(), id.id(), kind, attrs.dump().c_str(), outputs.dump().c_str(), &c->cls));
     if (!err.empty()) {
         delete c;
@@ -843,6 +906,25 @@ MStatus MFnPlugin::registerNode(const MString& name, const MTypeId& id, MCreator
             if (idx < 0) continue;
             c->index[s.get()] = idx;
             for (size_t n = 0; n < s->children.size(); ++n) {
+                c->index[s->children[n].get()] = idx;
+                c->component[s->children[n].get()] = (int)n;
+            }
+        }
+    }
+    if (kind == AZ_NODE_TRANSFORM || kind == AZ_NODE_CONSTRAINT || kind == AZ_NODE_SHAPE) {
+        // A transform's channels and matrices, a shape's bounds: read and written through the host's attributes.
+        const char* names[] = {"translate", "rotate", "scale", "shear", "rotatePivot", "rotatePivotTranslate", "scalePivot", "scalePivotTranslate",
+                               "rotateAxis", "boundingBoxMin", "boundingBoxMax", "boundingBoxSize", "center", "rotateOrder", "inheritsTransform",
+                               "displayHandle", "displayRotatePivot", "displayScalePivot", "displayLocalAxis", "visibility", "intermediateObject",
+                               "matrix", "inverseMatrix", "worldMatrix", "worldInverseMatrix", "parentMatrix", "parentInverseMatrix", "xformMatrix",
+                               "offsetParentMatrix"};
+        for (size_t k = 0; k < sizeof names / sizeof names[0]; ++k) {
+            std::shared_ptr<AttrSpec> s = builtinAttr(names[k]);
+            int idx = s ? host->attr_index(c->name.c_str(), names[k]) : -1;
+            if (idx < 0) continue;
+            c->index[s.get()] = idx;
+            c->byIndex[idx] = s;
+            for (size_t n = 0; n < s->children.size() && s->type == "vec3"; ++n) {
                 c->index[s->children[n].get()] = idx;
                 c->component[s->children[n].get()] = (int)n;
             }

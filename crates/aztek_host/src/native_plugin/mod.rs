@@ -10,7 +10,7 @@
 mod load;
 pub(crate) mod messages;
 mod nodes;
-pub(crate) use nodes::run_post_create;
+pub(crate) use nodes::{install_hooks, run_post_create};
 mod table;
 
 use std::cell::{Cell, RefCell};
@@ -26,7 +26,7 @@ use crate::core::{Core, LineKind};
 
 pub use load::{load_autoload, register_commands};
 
-pub const ABI_VERSION: u32 = 2;
+pub const ABI_VERSION: u32 = 3;
 
 pub const AZ_OK: i32 = 0;
 pub const AZ_UNKNOWN_PARAMETER: i32 = 1;
@@ -64,6 +64,8 @@ pub(crate) struct PluginState {
     pub lib: Arc<Lib>,
     pub commands: Vec<String>,
     pub nodes: Vec<String>,
+    /// Data types (MPxData) it registered.
+    pub data: Vec<String>,
     pub callbacks: Vec<i64>,
     pub unload: Option<unsafe extern "C" fn(*mut *mut c_char) -> i32>,
 }

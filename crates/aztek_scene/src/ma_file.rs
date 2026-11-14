@@ -3310,6 +3310,17 @@ fn plug_value(def: &AttrDef, comp: i32, values: &[Tok], _factor: f64) -> Option<
         }
         PlugType::String => PlugValue::String(f0.text()?.to_string()),
         PlugType::Matrix => PlugValue::Matrix(matrix_from(values)?),
+        // A plug-in's data: what its readASCII takes, the words after -type and its name.
+        PlugType::Data if def.category.starts_with(crate::scripted::PLUGIN_DATA) => {
+            let kind = &def.category[crate::scripted::PLUGIN_DATA.len()..];
+            let text: Vec<String> = values.iter().map(|t| match t {
+                Tok::Num(x) => fmt_num(*x),
+                Tok::Word(w) => w.clone(),
+                Tok::Str(w) => quoted(w),
+            }).collect();
+            let load = crate::plug::data::find(kind)?;
+            PlugValue::Data(Some(load(&json!({"kind": kind, "pluginData": true, "text": text.join(" ")})).ok()?))
+        }
         // Array data: the count, then the items.
         PlugType::Data => {
             let kind = crate::array_data::of(&def.default_value)?.kind.clone();
@@ -4969,6 +4980,8 @@ impl Writer<'_> {
                 v @ PlugValue::Data(_) => {
                     if let Some(d) = crate::array_data::of(v) {
                         let _ = writeln!(out, "\tsetAttr \".{attr}\" {};", crate::array_data::file_text(d, fmt_num, quoted));
+                    } else if let Some((kind, text)) = crate::scripted::plugin_data_text(v) {
+                        let _ = writeln!(out, "\tsetAttr \".{attr}\" -type {} {text};", quoted(&kind));
                     }
                 }
                 _ => {}

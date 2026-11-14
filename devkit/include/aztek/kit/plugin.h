@@ -3,6 +3,7 @@
 #define AZTEK_KIT_PLUGIN_H
 
 #include "scene.h"
+#include <iosfwd>
 
 namespace az {
 struct BlockImpl;
@@ -11,6 +12,7 @@ struct CommandClass;
 }
 
 class MDataBlock;
+class MPxData;
 class MItGeometry;
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -744,6 +746,9 @@ public:
     void set(double a, double b, double c);
     void set(const MString& v);
     MStatus set(const MObject& data);
+    // A plug-in data value: the one held (never change it), or one given to the host, which frees it.
+    MPxData* asPluginData() const;
+    MStatus set(MPxData* data);
     void setBool(bool v);
     void setChar(char v);
     void setShort(short v);
@@ -872,9 +877,8 @@ public:
         kSurfaceShape,
         kFieldNode,
         kEmitterNode,
-        kSkinCluster,
-        kGeometryFilter,
-        kBlendShape,
+        kSpringNode,
+        kIkSolverNode,
         kHardwareShader,
         kHwShaderNode,
         kTransformNode,
@@ -889,7 +893,9 @@ public:
         kClientDeviceNode,
         kThreadedDeviceNode,
         kAssembly,
-        kSubSceneOverride,
+        kSkinCluster,
+        kGeometryFilter,
+        kBlendShape,
         kLast
     };
     enum SchedulingType { kParallel, kSerial, kGloballySerial, kUntrusted, kDefaultScheduling = kUntrusted };
@@ -1028,6 +1034,23 @@ typedef void* (*MCreatorFunction)();
 typedef MSyntax (*MCreateSyntaxFunction)();
 typedef MStatus (*MInitializeFunction)();
 
+// A plug-in's own data type: its values flow through typed attributes made with its id. The host keeps each value it is
+// given and never changes it; writeASCII and readASCII carry it in a scene file.
+class MPxData {
+public:
+    enum Type { kData, kGeometryData, kLast };
+    MPxData();
+    virtual ~MPxData();
+    virtual MStatus readASCII(const MArgList& argList, unsigned int& endOfTheLastParsedElement);
+    virtual MStatus readBinary(std::istream& in, unsigned int length);
+    virtual MStatus writeASCII(std::ostream& out);
+    virtual MStatus writeBinary(std::ostream& out);
+    virtual void copy(const MPxData& src) = 0;
+    virtual MTypeId typeId() const = 0;
+    virtual MString name() const = 0;
+    static const char* className() { return "MPxData"; }
+};
+
 class MFnPlugin : public MFnBase {
 public:
     MFnPlugin();
@@ -1047,6 +1070,13 @@ public:
     MStatus registerNode(const MString& name, const MTypeId& id, MCreatorFunction creator, MInitializeFunction init,
                          MPxNode::Type type = MPxNode::kDependNode, const MString* classification = 0);
     MStatus deregisterNode(const MTypeId& id);
+    // A shape and the object that would draw it in the reference's legacy viewport, which is kept and never called.
+    MStatus registerShape(const MString& name, const MTypeId& id, MCreatorFunction creator, MInitializeFunction init, MCreatorFunction uiCreator,
+                          const MString* classification = 0);
+    MStatus registerData(const MString& name, const MTypeId& id, MCreatorFunction creator, MPxData::Type type = MPxData::kData);
+    MStatus deregisterData(const MTypeId& id);
+    MStatus registerConstraintCommand(const MString& name, MCreatorFunction creator);
+    MStatus deregisterConstraintCommand(const MString& name);
     MStatus registerUI(const MString& createProc, const MString& deleteProc, const MString& createBatchProc = "",
                        const MString& deleteBatchProc = "");
     MStatus registerUIStrings(void (*proc)(), const MString& stringResourceFile);

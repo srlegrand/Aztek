@@ -716,6 +716,49 @@ MStatus MFnPlugin::registerCommand(const MString& name, MCreatorFunction creator
     return MS::kSuccess;
 }
 
+// A constraint command: the flags every one has, then the plug-in's own (appendSyntax). Objects are names: the targets,
+// then what they drive.
+MStatus MFnPlugin::registerConstraintCommand(const MString& name, MCreatorFunction creator) {
+    if (!host || !creator) return fail(MStatus::kInvalidParameter, "registerConstraintCommand: no creator");
+    MSyntax syn;
+    syn.addFlag("-w", "-weight", MSyntax::kDouble);
+    syn.addFlag("-rm", "-remove");
+    syn.addFlag("-n", "-name", MSyntax::kString);
+    syn.addFlag("-tl", "-targetList");
+    syn.addFlag("-wal", "-weightAliasList");
+    syn.addFlag("-lck", "-lock", MSyntax::kBoolean);
+    syn.setObjectType(MSyntax::kStringObjects, 0);
+    syn.enableQuery(true);
+    syn.enableEdit(true);
+    MPxConstraintCommand* probe = dynamic_cast<MPxConstraintCommand*>((MPxCommand*)creator());
+    if (probe) {
+        probe->azSyntax = syn;
+        probe->appendSyntax();
+        syn = probe->azSyntax;
+        delete probe;
+    }
+    CommandClass* c = new CommandClass();
+    c->name = name.asChar();
+    c->creator = creator;
+    c->hasSyntax = true;
+    c->syntax = syn;
+    c->cls.ctx = c;
+    c->cls.create = cmdCreate;
+    c->cls.destroy = cmdDestroy;
+    c->cls.do_it = cmdDoIt;
+    c->cls.undo_it = cmdUndo;
+    c->cls.redo_it = cmdRedo;
+    std::string err = take(host->register_command(pluginToken, c->name.c_str(), c->syntax.azHostFlags().c_str(), 0, &c->cls));
+    if (!err.empty()) {
+        delete c;
+        return fail(MStatus::kFailure, err);
+    }
+    commandClasses().push_back(c);
+    return MS::kSuccess;
+}
+
+MStatus MFnPlugin::deregisterConstraintCommand(const MString& name) { return deregisterCommand(name); }
+
 MStatus MFnPlugin::deregisterCommand(const MString& name) {
     if (!host) return MS::kFailure;
     std::string err = take(host->deregister_command(pluginToken, name.asChar()));

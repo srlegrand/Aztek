@@ -145,6 +145,8 @@ pub fn attr_from_json(j: &Value) -> AttrDef {
                 "matrix" => (PlugType::Matrix, PlugValue::Matrix(DMat4::IDENTITY)),
                 "mesh" => (PlugType::Mesh, PlugValue::Mesh(None)),
                 "curve" => (PlugType::Data, PlugValue::Data(None)),
+                // A plug-in's own data type: its values flow as that type's objects.
+                "data" => (PlugType::Data, PlugValue::Data(None)),
                 _ => (PlugType::Float, PlugValue::Float(0.0)),
             };
             AttrDef {
@@ -167,6 +169,9 @@ pub fn attr_from_json(j: &Value) -> AttrDef {
     a.soft_min = num("softMin");
     a.soft_max = num("softMax");
     a.nice_name = text("nice");
+    if text("type") == "data" && !text("dataType").is_empty() {
+        a.category = format!("{PLUGIN_DATA}{}", text("dataType"));
+    }
     // Arrays inside arrays: which parts of the name are arrays (see AttrDef::nest).
     a.nest = j.get("nest").and_then(Value::as_u64).unwrap_or(0) as u8;
     a.enum_names = j.get("enum").and_then(Value::as_array).map(|e| e.iter().filter_map(|x| x.as_str().map(str::to_string)).collect()).unwrap_or_default();
@@ -233,6 +238,40 @@ pub enum NativeKind {
     Deformer,
     /// On locator: a shape in the DAG.
     Locator,
+    /// On transform: a transform whose matrix the plug-in may make.
+    Transform,
+    /// On transform: a constraint, in the DAG under what it drives.
+    Constraint,
+    /// On shape: geometry of the plug-in's own, with its bounding box.
+    Shape,
+    /// An IK solver: a handle names it with ikHandle -solver.
+    IkSolver,
+}
+
+/// The category an attribute of a plug-in data type has: this, then the type's name.
+pub const PLUGIN_DATA: &str = "pluginData:";
+
+static SHAPES: RwLock<BTreeSet<String>> = RwLock::new(BTreeSet::new());
+static IK_SOLVERS: RwLock<BTreeSet<String>> = RwLock::new(BTreeSet::new());
+
+/// A compiled plug-in's shape type: its bounds are its own.
+pub fn is_plugin_shape(name: &str) -> bool {
+    SHAPES.read().unwrap().contains(name)
+}
+
+/// A compiled plug-in's IK solver type.
+pub fn is_plugin_ik_solver(name: &str) -> bool {
+    IK_SOLVERS.read().unwrap().contains(name)
+}
+
+/// A plug-in data value as a scene file has it: the type's name and the text after -type.
+pub fn plugin_data_text(v: &PlugValue) -> Option<(String, String)> {
+    let PlugValue::Data(Some(d)) = v else { return None };
+    let j = d.to_json();
+    if j.get("pluginData").and_then(Value::as_bool) != Some(true) {
+        return None;
+    }
+    Some((d.kind().to_string(), j.get("text").and_then(Value::as_str).unwrap_or("").to_string()))
 }
 
 /// Adds a node type from a compiled plug-in, whose behaviour the host supplies: a deformer type goes on geometryFilter,
@@ -242,9 +281,11 @@ pub fn register_native_type(name: &str, owner: &str, attrs: &[Value], kind: Nati
     let base = match kind {
         NativeKind::Deformer => types::find("geometryFilter"),
         NativeKind::Locator => types::find("locator"),
-        NativeKind::Depend => None,
+        NativeKind::Transform | NativeKind::Constraint => types::find("transform"),
+        NativeKind::Shape => types::find("shape"),
+        NativeKind::Depend | NativeKind::IkSolver => None,
     };
-    let dag = kind == NativeKind::Locator;
+    let dag = matches!(kind, NativeKind::Locator | NativeKind::Transform | NativeKind::Constraint | NativeKind::Shape);
     types::register_type(NodeType {
         name: name.to_string(),
         owner: owner.to_string(),
@@ -263,11 +304,19 @@ pub fn register_native_type(name: &str, owner: &str, attrs: &[Value], kind: Nati
             own
         },
         create: Some(create),
+        // A constraint reads what it drives through its connections, not its parent's matrix, as the reference's do.
+        free_of_parent: kind == NativeKind::Constraint,
         ..Default::default()
     })?;
     TYPE_OWNERS.write().unwrap().insert(name.to_string(), owner.to_string());
     if deformer {
         DEFORMERS.write().unwrap().insert(name.to_string());
+    }
+    if kind == NativeKind::Shape {
+        SHAPES.write().unwrap().insert(name.to_string());
+    }
+    if kind == NativeKind::IkSolver {
+        IK_SOLVERS.write().unwrap().insert(name.to_string());
     }
     Ok(())
 }

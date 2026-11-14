@@ -39,6 +39,35 @@ pub(crate) struct AzNodeClass {
     pub compute: Option<unsafe extern "C" fn(*mut c_void, *mut c_void, i32, i32, *mut Block, *mut *mut c_char) -> i32>,
     /// ABI 2: the node's postConstructor, run once the scene can be reached (see `run_post_create`).
     pub post_create: Option<unsafe extern "C" fn(*mut c_void, *mut c_void)>,
+    /// ABI 3: a transform's local matrix, row by row as the reference writes it.
+    pub local_matrix: Option<unsafe extern "C" fn(*mut c_void, *mut c_void, *mut Block, *mut f64, *mut *mut c_char) -> i32>,
+    /// ABI 3: a shape's bounding box, min then max; 0 when it has none.
+    pub bounding_box: Option<unsafe extern "C" fn(*mut c_void, *mut c_void, *mut Block, *mut f64) -> i32>,
+    /// ABI 3: an IK solver's solve.
+    pub ik_solve: Option<unsafe extern "C" fn(*mut c_void, *mut c_void, *const c_char, *mut *mut c_char, *mut *mut c_char) -> i32>,
+}
+
+/// The class as a plug-in built with ABI 2 gives it.
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct AzNodeClassV2 {
+    ctx: *mut c_void,
+    create: Option<unsafe extern "C" fn(*mut c_void, i64, *mut *mut c_char) -> *mut c_void>,
+    destroy: Option<unsafe extern "C" fn(*mut c_void, *mut c_void)>,
+    scheduling: Option<unsafe extern "C" fn(*mut c_void, *mut c_void) -> i32>,
+    compute: Option<unsafe extern "C" fn(*mut c_void, *mut c_void, i32, i32, *mut Block, *mut *mut c_char) -> i32>,
+    post_create: Option<unsafe extern "C" fn(*mut c_void, *mut c_void)>,
+}
+
+/// A plug-in's data type (MPxData), ABI 3.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub(crate) struct AzDataClass {
+    pub ctx: *mut c_void,
+    pub create: Option<unsafe extern "C" fn(*mut c_void) -> *mut c_void>,
+    pub destroy: Option<unsafe extern "C" fn(*mut c_void, *mut c_void)>,
+    pub write_ascii: Option<unsafe extern "C" fn(*mut c_void, *mut c_void) -> *mut c_char>,
+    pub read_ascii: Option<unsafe extern "C" fn(*mut c_void, *mut c_void, *const c_char) -> i32>,
 }
 
 /// The class as a plug-in built with ABI 1 gives it, without post_create.
@@ -254,6 +283,12 @@ pub(crate) struct NodeEntry {
     deformer: bool,
     /// A locator: a shape, whose world matrix and position come first.
     locator: bool,
+    /// A transform or a constraint: its matrices come first, the plug-in's local matrix in place of the channels'.
+    transform: bool,
+    /// A shape of the plug-in's own: its world matrix first, its bounding box from the plug-in.
+    shape: bool,
+    /// An IK solver: its handles' chains come to it.
+    ik: bool,
     outputs: OnceLock<Vec<usize>>,
     /// For kSerial and kGloballySerial: one node of the type at a time.
     lock: Mutex<()>,
@@ -277,6 +312,12 @@ unsafe impl Sync for NativeNode {}
 
 impl Drop for NativeNode {
     fn drop(&mut self) {
+        if self.entry.ik && !self.inst.is_null() {
+            let mut solvers = IK_SOLVERS.lock().unwrap_or_else(|e| e.into_inner());
+            if solvers.get(&self.entry.name).is_some_and(|(_, i)| *i == self.inst as usize) {
+                solvers.remove(&self.entry.name);
+            }
+        }
         // After a crash the plug-in's memory can't be trusted: its objects are left as they are.
         if self.inst.is_null() || self.entry.crashed.load(Ordering::Relaxed) {
             return;
@@ -327,15 +368,31 @@ impl NativeNode {
             return;
         }
         self.sched = e.cls.scheduling.map_or(3, |f| unsafe { f(e.cls.ctx, self.inst) });
+        if e.ik {
+            IK_SOLVERS.lock().unwrap_or_else(|x| x.into_inner()).insert(e.name.clone(), (e.clone(), self.inst as usize));
+        }
         if let Some(func) = e.cls.post_create {
             PENDING_POST.with(|p| p.borrow_mut().push(PostCreate { func, ctx: e.cls.ctx, inst: self.inst, entry: e.clone() }));
         }
     }
 }
 
+impl aztek_scene::transform::TransformBehavior for NativeNode {}
+
 impl NodeBehavior for NativeNode {
     fn compute(&mut self, ctx: &EvalContext, d: &mut NodeData) {
         let e = self.entry.clone();
+        use aztek_scene::transform::{DagNode, Transform};
+        if e.transform {
+            // The channels' matrix first; the plug-in's, when it gives one, below.
+            let local = Transform::local_matrix_of(&*self, d);
+            let parent = d.matrix(Transform::PARENT_MATRIX);
+            d.set_output(Transform::MATRIX, local);
+            d.set_output(Transform::WORLD_MATRIX, parent * local);
+        }
+        if e.shape {
+            aztek_scene::transform::Shape::compute_matrices(d);
+        }
         if e.locator {
             aztek_scene::transform::Shape::compute_matrices(d);
             let (lp, wp) = (aztek_scene::transform::Locator::LOCAL_POSITION, aztek_scene::transform::Locator::WORLD_POSITION);
@@ -386,6 +443,35 @@ impl NodeBehavior for NativeNode {
         let outputs = e.outputs.get().cloned().unwrap_or_default();
         let mut block = Block { data: d, time: ctx.time, node: self.id, pending: BTreeMap::new(), strings: Vec::new(), stand_in: inp.zip(carrier.clone()) };
         let mut crashed = None;
+        if let (true, Some(f)) = (e.transform, e.cls.local_matrix) {
+            let mut m = [0.0f64; 16];
+            let mut err: *mut c_char = std::ptr::null_mut();
+            let rc = unsafe { f(e.cls.ctx, self.inst, &mut block, m.as_mut_ptr(), &mut err) };
+            let err = take(err);
+            match rc {
+                // Row by row with the translation last is glam's column order.
+                AZ_OK => {
+                    let local = DMat4::from_cols_array(&m);
+                    let parent = block.d().matrix(Transform::PARENT_MATRIX);
+                    block.dm().set_output(Transform::MATRIX, local);
+                    block.dm().set_output(Transform::WORLD_MATRIX, parent * local);
+                }
+                AZ_CRASHED => crashed = Some(err),
+                AZ_UNKNOWN_PARAMETER => {}
+                _ => self.report(format!("// Warning: {}: its matrix failed{} //", self.name, if err.is_empty() { String::new() } else { format!(": {err}") }), LineKind::Warning),
+            }
+        }
+        if let (true, Some(f), None) = (e.shape, e.cls.bounding_box, &crashed) {
+            let mut b = [0.0f64; 6];
+            if unsafe { f(e.cls.ctx, self.inst, &mut block, b.as_mut_ptr()) } != 0 {
+                let (lo, hi) = (DVec3::new(b[0], b[1], b[2]), DVec3::new(b[3], b[4], b[5]));
+                block.dm().set_output(DagNode::BOUNDING_BOX_MIN, PlugValue::Vec3(lo));
+                block.dm().set_output(DagNode::BOUNDING_BOX_MAX, PlugValue::Vec3(hi));
+                block.dm().set_output(DagNode::BOUNDING_BOX_SIZE, PlugValue::Vec3(hi - lo));
+                block.dm().set_output(DagNode::CENTER, PlugValue::Vec3((lo + hi) * 0.5));
+            }
+        }
+        let outputs = if crashed.is_some() { Vec::new() } else { outputs };
         'outs: for out_attr in outputs {
             let mut els: Vec<i32> = if block.d().ty().attrs[out_attr].is_array() { block.ids(out_attr) } else { Vec::new() };
             if els.is_empty() {
@@ -439,6 +525,9 @@ impl NodeBehavior for NativeNode {
         self.id = id;
         self.make();
     }
+    fn as_transform(&self) -> Option<&dyn aztek_scene::transform::TransformBehavior> {
+        self.entry.transform.then_some(self as &dyn aztek_scene::transform::TransformBehavior)
+    }
     fn set_node_name(&mut self, name: &str) {
         if self.name != name {
             self.name = name.to_string();
@@ -451,12 +540,15 @@ impl NodeBehavior for NativeNode {
 
 pub(crate) unsafe extern "C" fn register_node(plugin: *mut c_void, name: *const c_char, _type_id: u32, kind: i32, attrs: *const c_char, outputs: *const c_char, cls: *const AzNodeClass) -> *mut c_char {
     let (Some(p), false) = ((plugin as *mut PluginState).as_mut(), cls.is_null()) else { return give("registerNode: no plug-in") };
-    // A plug-in built with ABI 1 gives a shorter class.
-    let cls: AzNodeClass = if p.abi >= 2 {
+    // A plug-in built with an older ABI gives a shorter class.
+    let cls: AzNodeClass = if p.abi >= 3 {
         *cls
+    } else if p.abi == 2 {
+        let v2 = *(cls as *const AzNodeClassV2);
+        AzNodeClass { ctx: v2.ctx, create: v2.create, destroy: v2.destroy, scheduling: v2.scheduling, compute: v2.compute, post_create: v2.post_create, local_matrix: None, bounding_box: None, ik_solve: None }
     } else {
         let v1 = *(cls as *const AzNodeClassV1);
-        AzNodeClass { ctx: v1.ctx, create: v1.create, destroy: v1.destroy, scheduling: v1.scheduling, compute: v1.compute, post_create: None }
+        AzNodeClass { ctx: v1.ctx, create: v1.create, destroy: v1.destroy, scheduling: v1.scheduling, compute: v1.compute, post_create: None, local_matrix: None, bounding_box: None, ik_solve: None }
     };
     let cls = &cls;
     let name = text(name).to_string();
@@ -467,12 +559,16 @@ pub(crate) unsafe extern "C" fn register_node(plugin: *mut c_void, name: *const 
     let outs: Vec<String> = serde_json::from_str(text(outputs)).unwrap_or_default();
     let deformer = kind == 1;
     let locator = kind == 2;
+    let (transform, shape, ik) = (kind == 3 || kind == 4, kind == 5, kind == 6);
     let entry = Arc::new(NodeEntry {
         cls: *cls,
         name: name.clone(),
         owner: p.name.clone(),
         deformer,
         locator,
+        transform,
+        shape,
+        ik,
         outputs: OnceLock::new(),
         lock: Mutex::new(()),
         crashed: AtomicBool::new(false),
@@ -480,7 +576,15 @@ pub(crate) unsafe extern "C" fn register_node(plugin: *mut c_void, name: *const 
     });
     let e = entry.clone();
     let create: aztek_scene::node::CreateFn = Arc::new(move || Box::new(NativeNode { entry: e.clone(), inst: std::ptr::null_mut(), sched: 3, id: NO_NODE, name: String::new(), failed: false }));
-    let kind = if deformer { scripted::NativeKind::Deformer } else if locator { scripted::NativeKind::Locator } else { scripted::NativeKind::Depend };
+    let kind = match kind {
+        1 => scripted::NativeKind::Deformer,
+        2 => scripted::NativeKind::Locator,
+        3 => scripted::NativeKind::Transform,
+        4 => scripted::NativeKind::Constraint,
+        5 => scripted::NativeKind::Shape,
+        6 => scripted::NativeKind::IkSolver,
+        _ => scripted::NativeKind::Depend,
+    };
     if let Err(err) = scripted::register_native_type(&name, &p.name, &attrs, kind, create) {
         return give(&format!("(kFailure): {err}"));
     }
@@ -728,4 +832,182 @@ pub(crate) unsafe extern "C" fn block_weights(b: *mut Block, n: *mut usize) -> *
         }
         None => std::ptr::null(),
     }
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// IK solvers: each solver type's one node answers for the handles that name it.
+
+static IK_SOLVERS: Mutex<BTreeMap<String, (Arc<NodeEntry>, usize)>> = Mutex::new(BTreeMap::new());
+
+/// What the IK solve node calls for a plug-in's solver type.
+pub(crate) fn install_hooks() {
+    aztek_scene::ik::set_plugin_solve(Arc::new(plugin_solve));
+}
+
+fn plugin_solve(ty: &str, input: &Value) -> Option<Vec<DVec3>> {
+    let (e, inst) = IK_SOLVERS.lock().unwrap_or_else(|x| x.into_inner()).get(ty).cloned()?;
+    let f = e.cls.ik_solve?;
+    if e.crashed.load(Ordering::Relaxed) {
+        return None;
+    }
+    let _flag = ComputeFlag::on();
+    let _g = GLOBAL.lock().unwrap_or_else(|x| x.into_inner());
+    let text = CString::new(input.to_string()).unwrap_or_default();
+    let (mut out, mut err): (*mut c_char, *mut c_char) = (std::ptr::null_mut(), std::ptr::null_mut());
+    let rc = unsafe { f(e.cls.ctx, inst as *mut c_void, text.as_ptr(), &mut out, &mut err) };
+    let (out, err) = (take(out), take(err));
+    match rc {
+        AZ_OK => {}
+        AZ_CRASHED => {
+            if !e.crashed.swap(true, Ordering::Relaxed) {
+                defer(format!("// Error: {} The solver {} no longer solves. //", crash_text(&format!("{ty} doSolve"), &e.owner, &err), ty), LineKind::Error);
+            }
+            return None;
+        }
+        _ => {
+            if !err.is_empty() {
+                defer(format!("// Warning: {ty}: {err} //"), LineKind::Warning);
+            }
+            return None;
+        }
+    }
+    let v: Value = serde_json::from_str(&out).ok()?;
+    Some(
+        v.get("rotate")?
+            .as_array()?
+            .iter()
+            .map(|r| {
+                let n = |i: usize| r.get(i).and_then(Value::as_f64).unwrap_or(0.0);
+                DVec3::new(n(0), n(1), n(2))
+            })
+            .collect(),
+    )
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Data types: a value is the plug-in's object, freed by its class when the last plug lets it go.
+
+pub(crate) struct DataEntry {
+    cls: AzDataClass,
+    name: String,
+    _lib: Arc<Lib>,
+}
+unsafe impl Send for DataEntry {}
+unsafe impl Sync for DataEntry {}
+
+static DATA_TYPES: std::sync::RwLock<BTreeMap<String, Arc<DataEntry>>> = std::sync::RwLock::new(BTreeMap::new());
+
+struct PluginData {
+    entry: Arc<DataEntry>,
+    ptr: *mut c_void,
+}
+unsafe impl Send for PluginData {}
+unsafe impl Sync for PluginData {}
+
+impl std::fmt::Debug for PluginData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} data", self.entry.name)
+    }
+}
+
+impl Drop for PluginData {
+    fn drop(&mut self) {
+        if let (Some(d), false) = (self.entry.cls.destroy, self.ptr.is_null()) {
+            unsafe { d(self.entry.cls.ctx, self.ptr) };
+        }
+    }
+}
+
+impl PluginData {
+    fn text(&self) -> String {
+        match self.entry.cls.write_ascii {
+            Some(w) => take(unsafe { w(self.entry.cls.ctx, self.ptr) }),
+            None => String::new(),
+        }
+    }
+}
+
+impl aztek_scene::plug::Data for PluginData {
+    fn kind(&self) -> &str {
+        &self.entry.name
+    }
+    fn to_json(&self) -> Value {
+        json!({"kind": self.entry.name, "pluginData": true, "text": self.text()})
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+/// A value of the type read back from its text.
+fn data_from_text(entry: &Arc<DataEntry>, text: &str) -> Option<PluginData> {
+    let create = entry.cls.create?;
+    let ptr = unsafe { create(entry.cls.ctx) };
+    if ptr.is_null() {
+        return None;
+    }
+    let d = PluginData { entry: entry.clone(), ptr };
+    if let Some(r) = entry.cls.read_ascii {
+        let t = CString::new(text).unwrap_or_default();
+        if unsafe { r(entry.cls.ctx, ptr, t.as_ptr()) } != AZ_OK {
+            return None;
+        }
+    }
+    Some(d)
+}
+
+pub(crate) unsafe extern "C" fn register_data(plugin: *mut c_void, name: *const c_char, _type_id: u32, cls: *const AzDataClass) -> *mut c_char {
+    let (Some(p), Some(cls)) = ((plugin as *mut PluginState).as_mut(), cls.as_ref()) else { return give("registerData: no plug-in") };
+    let name = text(name).to_string();
+    if DATA_TYPES.read().unwrap().contains_key(&name) || types::find(&name).is_some() {
+        return give(&format!("(kFailure): A data type named {name} already exists"));
+    }
+    let entry = Arc::new(DataEntry { cls: *cls, name: name.clone(), _lib: p.lib.clone() });
+    DATA_TYPES.write().unwrap().insert(name.clone(), entry.clone());
+    let e = entry.clone();
+    aztek_scene::plug::data::register_kind(
+        &name,
+        Arc::new(move |j: &Value| {
+            let t = j.get("text").and_then(Value::as_str).unwrap_or("");
+            data_from_text(&e, t).map(|d| Arc::new(d) as aztek_scene::plug::DataPtr).ok_or_else(|| aztek_scene::error::GraphError::invalid(format!("{}: its readASCII refused the value", e.name)))
+        }),
+    );
+    p.data.push(name);
+    std::ptr::null_mut()
+}
+
+pub(crate) unsafe extern "C" fn deregister_data(plugin: *mut c_void, name: *const c_char) -> *mut c_char {
+    let Some(p) = (plugin as *mut PluginState).as_mut() else { return give("deregisterData: no plug-in") };
+    let name = text(name).to_string();
+    if !p.data.contains(&name) {
+        return give(&format!("(kFailure): No plug-in data type named {name}"));
+    }
+    forget_data(&name);
+    p.data.retain(|x| *x != name);
+    std::ptr::null_mut()
+}
+
+/// Values already made keep their type; no new ones are made or read.
+pub(crate) fn forget_data(name: &str) {
+    DATA_TYPES.write().unwrap().remove(name);
+    aztek_scene::plug::data::remove(name);
+}
+
+pub(crate) unsafe extern "C" fn block_data(b: *mut Block, attr: i32, el: i32) -> *mut c_void {
+    let Some(b) = b.as_ref() else { return std::ptr::null_mut() };
+    match b.attr(attr).map(|a| b.read(a, el)) {
+        Some(PlugValue::Data(Some(d))) => d.as_any().downcast_ref::<PluginData>().map_or(std::ptr::null_mut(), |x| x.ptr),
+        _ => std::ptr::null_mut(),
+    }
+}
+
+pub(crate) unsafe extern "C" fn block_set_data(b: *mut Block, attr: i32, el: i32, type_name: *const c_char, data: *mut c_void) {
+    let Some(b) = b.as_mut() else { return };
+    let Some(a) = b.attr(attr) else { return };
+    if data.is_null() {
+        b.write(a, el, PlugValue::Data(None));
+        return;
+    }
+    let Some(entry) = DATA_TYPES.read().unwrap().get(text(type_name)).cloned() else { return };
+    b.write(a, el, PlugValue::Data(Some(Arc::new(PluginData { entry, ptr: data }))));
 }

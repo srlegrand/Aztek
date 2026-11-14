@@ -24,6 +24,19 @@ pub fn object_bounds(g: &mut Graph, id: NodeId) -> Bounds {
         return b;
     }
     let Some(n) = g.node(id) else { return b };
+    // A plug-in's shape says its own bounds.
+    if crate::scripted::is_plugin_shape(&n.ty().name) {
+        use crate::transform::DagNode;
+        let at = |a: usize| crate::plug::PlugRef::new(id, a as i32);
+        let (lo, hi) = (g.value(&at(DagNode::BOUNDING_BOX_MIN)).map(|v| v.as_vec3()), g.value(&at(DagNode::BOUNDING_BOX_MAX)).map(|v| v.as_vec3()));
+        if let (Ok(lo), Ok(hi)) = (lo, hi) {
+            if lo.cmple(hi).all() && lo != hi {
+                b.extend(lo);
+                b.extend(hi);
+            }
+        }
+        return b;
+    }
     if let Some(points) = components::point_provider(n).and_then(|pp| pp.points) {
         for (_, p) in points(g, id) {
             b.extend(p);

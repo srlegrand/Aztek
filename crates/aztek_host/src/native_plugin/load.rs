@@ -304,6 +304,7 @@ fn load_native(s: &mut Session, key: &str, path: &Path) -> Result<(), String> {
         lib,
         commands: Vec::new(),
         nodes: Vec::new(),
+        data: Vec::new(),
         callbacks: Vec::new(),
         unload,
     });
@@ -336,6 +337,9 @@ fn take_back(s: &mut Session, p: *mut PluginState) {
     keep_commands(s);
     for name in std::mem::take(&mut p.nodes) {
         aztek_scene::scripted::deregister_type(&name);
+    }
+    for name in std::mem::take(&mut p.data) {
+        super::nodes::forget_data(&name);
     }
     for id in std::mem::take(&mut p.callbacks) {
         CALLBACKS.with(|c| c.borrow_mut().remove(&id));

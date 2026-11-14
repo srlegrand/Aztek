@@ -235,6 +235,48 @@ fn samples_load_and_work() {
     mel(&mut c, "azMsg stop;");
     assert!(heard(&mut c, "createNode transform -n quiet; currentTime 3; file -f -new;").is_empty());
 
+    // A plug-in's own node kinds: a data type passed between two nodes, a transform whose matrix it makes, a shape with
+    // its bounds, a constraint and its command, an IK solver.
+    assert_eq!(mel(&mut c, "loadPlugin pxProbe;"), json!(["pxProbe"]));
+    mel(&mut c, "file -f -new;");
+    assert_eq!(mel(&mut c, "createNode azMakePoints -n mk; setAttr mk.count 4; createNode azSumPoints -n sm; connectAttr mk.points sm.points; getAttr sm.sum;"), json!(3.0));
+    // The rocking transform: its rotation about X before the channels' matrix.
+    let m = mel(&mut c, "createNode azRockTransform -n rock; setAttr rock.rockX 0.5; setAttr rock.ty 1; getAttr rock.matrix;");
+    let m: Vec<f64> = m.as_array().unwrap().iter().map(num).collect();
+    assert!((m[5] - 0.5f64.cos()).abs() < 1e-9 && (m[6] - 0.5f64.sin()).abs() < 1e-9 && (m[13] - 1.0).abs() < 1e-9, "{m:?}");
+    assert_eq!(mel(&mut c, "nodeType -inherited rock;"), json!(["dagNode", "transform", "azRockTransform"]));
+    // The shape's bounds, and its transform's.
+    assert_eq!(mel(&mut c, "createNode transform -n boxT; createNode azBoxShape -n box -p boxT; setAttr box.size 3; getAttr box.boundingBoxMax;"), json!([1.5, 1.5, 1.5]));
+    assert_eq!(mel(&mut c, "getAttr boxT.boundingBoxMin;"), json!([-1.5, -1.5, -1.5]));
+    // The constraint command: targets, then the object; the constraint under it, the average its translate.
+    mel(&mut c, "createNode transform -n ta; setAttr ta.t 2 0 0; createNode transform -n tb; setAttr tb.t 0 4 0; createNode transform -n obj;");
+    assert_eq!(mel(&mut c, "azAvgConstraint ta tb obj;"), json!("obj_azAvgConstraint1"));
+    assert_eq!(mel(&mut c, "listRelatives -c obj;"), json!(["obj_azAvgConstraint1"]));
+    assert_eq!(mel(&mut c, "getAttr obj.t;"), json!([1.0, 2.0, 0.0]));
+    assert_eq!(mel(&mut c, "setAttr ta.tx 4; getAttr obj.t;"), json!([2.0, 2.0, 0.0]));
+    // Undone and redone as one step.
+    mel(&mut c, "setAttr ta.tx 2;");
+    mel(&mut c, "azAvgConstraint ta tb obj;");
+    assert_eq!(mel(&mut c, "undo; objExists obj_azAvgConstraint2;"), json!(false));
+    assert_eq!(mel(&mut c, "redo; objExists obj_azAvgConstraint2;"), json!(true));
+    // The solver turns the start joint so the chain's end reaches the handle.
+    mel(&mut c, "select -cl; joint -p 0 0 0; joint -p 2 0 0; joint -p 4 0 0;");
+    assert_eq!(mel(&mut c, "ikHandle -sj joint1 -ee joint3 -sol azAimSolver;"), json!(["ikHandle1", "effector1"]));
+    for (to, want) in [("0 4 0", [0.0, 4.0, 0.0]), ("-4 0 0", [-4.0, 0.0, 0.0]), ("0 0 8", [0.0, 0.0, 4.0])] {
+        let p = mel(&mut c, &format!("move -a {to} ikHandle1; xform -q -ws -t joint3;"));
+        let p: Vec<f64> = p.as_array().unwrap().iter().map(num).collect();
+        assert!((0..3).all(|k| (p[k] - want[k]).abs() < 1e-9), "{to}: {p:?}");
+    }
+    // A data value kept, written to a file with its type, read back.
+    mel(&mut c, "disconnectAttr mk.points sm.points;");
+    let file = std::env::temp_dir().join("azpx.ma").to_string_lossy().replace('\\', "/");
+    mel(&mut c, &format!("file -rename \"{file}\"; file -f -save;"));
+    let text = std::fs::read_to_string(&file).unwrap();
+    assert!(text.lines().any(|l| l.trim() == "setAttr \".pts\" -type \"azPoints\" 4 0 0.5 1 1.5;"), "{text}");
+    mel(&mut c, &format!("file -f -o \"{file}\";"));
+    assert_eq!(mel(&mut c, "getAttr sm.sum;"), json!(3.0));
+    mel(&mut c, "file -f -new; unloadPlugin pxProbe;");
+
     // A plug-in that crashes in compute is reported, and its nodes stop computing; the process goes on.
     assert_eq!(mel(&mut c, "loadPlugin crashNode;"), json!(["crashNode"]));
     mel(&mut c, "createNode azCrash;");

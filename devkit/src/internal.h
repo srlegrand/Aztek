@@ -111,6 +111,8 @@ struct AttrSpec {
     AttrSpec* parent = 0;
     // A static attribute every deformer has: the host's name for it.
     std::string builtin;
+    // A typed attribute of a plug-in data type: the type's name.
+    std::string pluginType;
 };
 
 struct ObjectData {
@@ -127,7 +129,26 @@ struct ObjectData {
     std::vector<int> ids2;        // second indices of a double-indexed component
     bool complete = false;        // a component standing for all
     void* plugin = 0;
+    std::shared_ptr<struct PluginDataBox> pxData;  // a plug-in data value
 };
+
+// A plug-in data value: the plug-in's object, freed with the box unless the host took it or holds it.
+struct PluginDataBox {
+    MPxData* data = 0;
+    std::string typeName;
+    bool owned = true;
+    ~PluginDataBox();
+};
+struct PluginDataType {
+    std::string name;
+    MTypeId id;
+    MCreatorFunction creator = 0;
+    int type = 0;
+    AzDataClass cls;
+};
+std::vector<PluginDataType*>& pluginDataTypes();
+PluginDataType* pluginDataTypeOfId(const MTypeId& id);
+PluginDataType* pluginDataTypeNamed(const std::string& name);
 
 MObject nodeObject(int64_t id);
 std::shared_ptr<MeshData> meshOfNode(int64_t node, MStatus* status);  // a mesh shape's output mesh
@@ -190,6 +211,10 @@ int arrayDepth(const AttrSpec* s);
 // Every number in a value, flattened; a one-argument list.
 std::vector<double> numbers(const Json& v);
 Json args1(const std::string& a);
+// While set, what answers query and command in place of the host: true when it answered. An IK solver's solve sees
+// its handle and chain this way.
+typedef bool (*SceneStandIn)(bool isQuery, const char* name, const Json& args, const Json& flags, Json& out, MStatus* status);
+SceneStandIn& sceneStandIn();
 // Draw overrides by draw classification: the registrant id and the creator.
 std::map<std::string, std::pair<std::string, MHWRender::DrawOverrideCreator> >& drawOverrides();
 std::vector<const AttrSpec*> arrayAncestors(const AttrSpec* s);

@@ -2014,3 +2014,36 @@ of the reference.
   nodes hear about-to-delete and pre-removal while they are there. The reference sends each one as the change happens.
 - Nothing is noted while no callback is registered.
 - The Python API's message classes are not in this step.
+
+### Plug-in kit: base classes for transforms, constraints, shapes, data and IK solvers (14/11/2026)
+
+Step 3c of the 2027 parity order. The plug-in interface goes to ABI 3. The host still reads the shorter node class a
+plug-in built with ABI 1 or 2 gives; no plug-in that old was loaded to check it. Checked by a test plug-in with one of each, used from MEL and through a save and an open. Not compared with a running
+copy of the reference.
+
+- `MPxTransform` (`kTransformNode`) with `MPxTransformationMatrix`: a transform whose matrix the plug-in makes. The
+  channels go into the transformation matrix (`computeLocalTransformation`), and its `asMatrix` is the node's matrix
+  and, with the parent's, its world matrix. The parts are put together as the reference does:
+  [Sp]^-1 [S] [Sh] [Sp] [St] [Rp]^-1 [Ra] [R] [Rp] [Rt] [T]. Not done: `validateAndSetValue` and the limit functions
+  are taken and never called; `xform` and the manipulators still work from the channels alone.
+- `MPxConstraint` (`kConstraintNode`) and `MPxConstraintCommand` (`registerConstraintCommand`): the node is a transform
+  under what it drives, and, like the reference's constraints, its outputs don't wait on its parent, so connecting
+  them back is no cycle. The command takes the targets then the object (or the selection), makes the node, connects
+  each target's attribute (`constraintTargetInstancedAttribute`) to the node's (`constraintTargetAttribute`, an element
+  per target), sets each weight to 1 and connects the output (`constraintOutputAttribute`) to the object's
+  (`objectAttribute`), with the plug-in's own flags (`appendSyntax`). Its edits undo as one step. Weight aliases, -query
+  and -edit, and offsets are not done.
+- `MPxSurfaceShape` (`registerShape`): a shape whose bounding box is the plug-in's (`isBounded`, `boundingBox`); the
+  bounding box attributes and its transform's answer from it. Nothing draws it: `MPxSurfaceShapeUI` is taken and never
+  called, and `MPxGeometryOverride` isn't in the kit. Components, selection and tweaks are not done.
+- `MPxData` (`registerData`) with `MFnPluginData`: values of a plug-in's type flow through typed attributes made with
+  its id (`MFnTypedAttribute::create(name, short, id)`), read with `MDataHandle::asPluginData` or `data()`, set with
+  `set`. Values are shared, never changed once given. A scene file has them as the reference does,
+  `setAttr ".attr" -type "typeName" ...` from `writeASCII`, read back with `readASCII`. Binary forms are not used.
+- `MPxIkSolverNode` (`kIkSolverNode`): `ikHandle -solver` takes the solver's type or node. While it solves, the handle,
+  its effector and its joints answer through the usual classes (`MFnIkHandle`, `MFnIkEffector`, `MFnIkJoint`,
+  `MFnTransform`, `MDagPath`, their plugs) from what the host sent: channels, matrices, world positions, the handle's
+  pole vector, twist and roll. The joints' rotations it sets come back as the chain's pose; each solve starts from the
+  preferred angles, as the built-in solvers do. Nothing else in the scene can be reached during the solve. Handle
+  groups hold the one handle.
+- `MPxNode::Type` now has the reference's values in its order.

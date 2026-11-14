@@ -99,6 +99,10 @@ pub(crate) struct AzHost {
     pub curve_closest_param: unsafe extern "C" fn(*const c_void, *const f64) -> f64,
     pub curve_with_cvs: unsafe extern "C" fn(*const c_void, *const f64, usize) -> *mut c_void,
     pub block_set_curve: unsafe extern "C" fn(*mut Block, i32, i32, *const c_void),
+    pub register_data: unsafe extern "C" fn(*mut c_void, *const c_char, u32, *const AzDataClass) -> *mut c_char,
+    pub deregister_data: unsafe extern "C" fn(*mut c_void, *const c_char) -> *mut c_char,
+    pub block_data: unsafe extern "C" fn(*mut Block, i32, i32) -> *mut c_void,
+    pub block_set_data: unsafe extern "C" fn(*mut Block, i32, i32, *const c_char, *mut c_void),
 }
 
 pub(crate) static TABLE: AzHost = AzHost {
@@ -156,6 +160,10 @@ pub(crate) static TABLE: AzHost = AzHost {
     curve_closest_param,
     curve_with_cvs,
     block_set_curve,
+    register_data,
+    deregister_data,
+    block_data,
+    block_set_data,
 };
 
 // ---------------------------------------------------------------------------------------------------------------------

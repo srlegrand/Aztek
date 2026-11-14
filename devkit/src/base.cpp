@@ -288,7 +288,16 @@ static Json answer(char* raw, MStatus* status) {
     return j["ok"];
 }
 
+SceneStandIn& sceneStandIn() {
+    static thread_local SceneStandIn s = 0;
+    return s;
+}
+
 Json query(const char* op, const Json& args, MStatus* status) {
+    if (SceneStandIn s = sceneStandIn()) {
+        Json out;
+        if (s(true, op, args, Json(), out, status)) return out;
+    }
     if (!host) { if (status) *status = fail(MStatus::kFailure, "not loaded"); return Json(); }
     return answer(host->query(op, args.dump().c_str()), status);
 }
@@ -297,6 +306,10 @@ Json command(const char* name, const Json& args, const Json& flags, MStatus* sta
     if (!host) { if (status) *status = fail(MStatus::kFailure, "not loaded"); return Json(); }
     Json a = args.isArray() ? args : Json::array();
     if (!args.isArray() && !args.isNull()) a.push(args);
+    if (SceneStandIn s = sceneStandIn()) {
+        Json out;
+        if (s(false, name, a, flags, out, status)) return out;
+    }
     return answer(host->command(name, a.dump().c_str(), flags.isObject() ? flags.dump().c_str() : "{}"), status);
 }
 
@@ -435,6 +448,16 @@ static void fnsOfNode(int64_t id, std::vector<MFn::Type>& out) {
         }
         if (t.compare(0, 4, "poly") == 0 && t != "polyTweak") out.push_back(MFn::kPolyCreator);
         if (t == "geometryFilter" && !info["owner"].str().empty()) out.insert(out.begin(), MFn::kPluginDeformerNode);
+        // A plug-in's transform, constraint or shape is what its kind says, before what it is built on.
+        if (i == 0 && !info["owner"].str().empty()) {
+            std::string base = chain.size() > 1 ? chain[(size_t)1].str() : std::string();
+            NodeClass* c = classNamed(t);
+            int kind = c ? c->kind : -1;
+            if (kind == AZ_NODE_CONSTRAINT) out.insert(out.begin(), MFn::kPluginConstraintNode);
+            else if (kind == AZ_NODE_IK_SOLVER) out.insert(out.begin(), MFn::kPluginIkSolver);
+            else if (base == "transform") out.insert(out.begin(), MFn::kPluginTransformNode);
+            else if (base == "shape") out.insert(out.begin(), MFn::kPluginShape);
+        }
         if (t.size() > 10 && t.compare(t.size() - 10, 10, "Constraint") == 0) out.push_back(MFn::kConstraint);
     }
     for (size_t i = 0; i < out.size(); ++i) {
@@ -488,7 +511,7 @@ const char* fnName(MFn::Type t) {
         AZ_FN_NAME(kMultiplyDivide) AZ_FN_NAME(kPolyCreator) AZ_FN_NAME(kPolyPrimitive) AZ_FN_NAME(kPolyCube)
         AZ_FN_NAME(kPolySphere) AZ_FN_NAME(kPolyCylinder) AZ_FN_NAME(kPolyCone) AZ_FN_NAME(kPolyPlane)
         AZ_FN_NAME(kPolyTorus) AZ_FN_NAME(kPluginDependNode) AZ_FN_NAME(kPluginDeformerNode)
-        AZ_FN_NAME(kPluginLocatorNode) AZ_FN_NAME(kDisplayLayer) AZ_FN_NAME(kTime) AZ_FN_NAME(kUnknown)
+        AZ_FN_NAME(kPluginLocatorNode) AZ_FN_NAME(kPluginTransformNode) AZ_FN_NAME(kPluginConstraintNode) AZ_FN_NAME(kPluginShape) AZ_FN_NAME(kPluginIkSolver) AZ_FN_NAME(kPluginData) AZ_FN_NAME(kDisplayLayer) AZ_FN_NAME(kTime) AZ_FN_NAME(kUnknown)
         AZ_FN_NAME(kAttribute) AZ_FN_NAME(kNumericAttribute) AZ_FN_NAME(kUnitAttribute) AZ_FN_NAME(kTypedAttribute)
         AZ_FN_NAME(kEnumAttribute) AZ_FN_NAME(kCompoundAttribute) AZ_FN_NAME(kMatrixAttribute)
         AZ_FN_NAME(kMessageAttribute) AZ_FN_NAME(kGenericAttribute) AZ_FN_NAME(kAttribute3Double)

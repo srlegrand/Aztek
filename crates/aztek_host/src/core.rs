@@ -111,6 +111,7 @@ impl Core {
         crate::python::register_commands(&mut c.s);
         crate::native_plugin::register_commands(&mut c.s);
         crate::native_plugin::messages::install();
+        crate::native_plugin::install_hooks();
         // The features kept as plug-ins: there from the start unless turned off.
         crate::builtin_plugins::load_defaults(&mut c.s);
         crate::user_folder::register_commands(&mut c.s);

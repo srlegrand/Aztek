@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 
-#define AZTEK_ABI_VERSION 2
+#define AZTEK_ABI_VERSION 3
 
 typedef struct AzBlock AzBlock;
 typedef struct AzMesh AzMesh;
@@ -28,6 +28,9 @@ enum { AZ_SCHED_PARALLEL = 0, AZ_SCHED_SERIAL = 1, AZ_SCHED_GLOBALLY_SERIAL = 2,
 
 // Node kinds a plug-in can register.
 enum { AZ_NODE_DEPEND = 0, AZ_NODE_DEFORMER = 1, AZ_NODE_LOCATOR = 2 };
+// ABI 3: a transform, a constraint (a transform in the DAG that drives another's channels), a shape with geometry of its
+// own, an IK solver.
+enum { AZ_NODE_TRANSFORM = 3, AZ_NODE_CONSTRAINT = 4, AZ_NODE_SHAPE = 5, AZ_NODE_IK_SOLVER = 6 };
 
 typedef struct AzMeshArrays {
     int64_t shape;
@@ -67,7 +70,26 @@ typedef struct AzNodeClass {
     // ABI 2: called once the node is in the scene and the scene can be reached, before anything else is set on it:
     // the node's postConstructor.
     void (*post_create)(void* ctx, void* inst);
+    // ABI 3. A transform's or constraint's local matrix, sixteen numbers row by row as the reference writes them
+    // (translation in the last row); AZ_UNKNOWN_PARAMETER keeps the host's own.
+    int (*local_matrix)(void* ctx, void* inst, AzBlock* block, double* out, char** error);
+    // A shape's bounding box in object space: min xyz then max xyz. 0 when it has none.
+    int (*bounding_box)(void* ctx, void* inst, AzBlock* block, double* out);
+    // An IK solver's solve. input_json holds the handle, its chain and their state; output_json gives back each joint's
+    // rotate in radians: {"rotate": [[x, y, z], ...]}.
+    int (*ik_solve)(void* ctx, void* inst, const char* input_json, char** output_json, char** error);
 } AzNodeClass;
+
+// ABI 3: a plug-in's data type (MPxData). Values flow through plugs as objects the host holds and frees with destroy;
+// they are never changed once given to the host.
+typedef struct AzDataClass {
+    void* ctx;
+    void* (*create)(void* ctx);
+    void (*destroy)(void* ctx, void* data);
+    // What the value is in a scene file, and back. read_ascii returns AZ_OK when it took the text.
+    char* (*write_ascii)(void* ctx, void* data);
+    int (*read_ascii)(void* ctx, void* data, const char* text);
+} AzDataClass;
 
 typedef struct AzCommandClass {
     void* ctx;
@@ -158,6 +180,13 @@ typedef struct AzHost {
     double (*curve_closest_param)(const AzCurve* curve, const double* point);
     AzCurve* (*curve_with_cvs)(const AzCurve* curve, const double* xyz, size_t cv_count);
     void (*block_set_curve)(AzBlock* block, int attr, int element, const AzCurve* curve);
+
+    // ABI 3: plug-in data types, and their values in a compute. block_data's value stays the host's; block_set_data
+    // takes the one given.
+    char* (*register_data)(void* plugin, const char* name, uint32_t type_id, const AzDataClass* cls);
+    char* (*deregister_data)(void* plugin, const char* name);
+    void* (*block_data)(AzBlock* block, int attr, int element);
+    void (*block_set_data)(AzBlock* block, int attr, int element, const char* type_name, void* data);
 } AzHost;
 
 // What every plug-in exports. Written by the kit's entry source, not by hand.

@@ -726,8 +726,16 @@ MObject MFnTypedAttribute::create(const MString& ln, const MString& sn, MFnData:
     return obj_;
 }
 MObject MFnTypedAttribute::create(const MString& ln, const MString& sn, MFnData::Type t, MStatus* st) { return create(ln, sn, t, MObject::kNullObj, st); }
-MObject MFnTypedAttribute::create(const MString& ln, const MString& sn, const MTypeId&, const MObject& def, MStatus* st) {
-    return create(ln, sn, MFnData::kPlugin, def, st);
+MObject MFnTypedAttribute::create(const MString& ln, const MString& sn, const MTypeId& id, const MObject& def, MStatus* st) {
+    // A plug-in data type registered before: its values flow through the attribute.
+    PluginDataType* t = pluginDataTypeOfId(id);
+    if (!t) return create(ln, sn, MFnData::kPlugin, def, st);
+    azNew(MFn::kTypedAttribute, ln, sn, "data", st);
+    AttrSpec* s = azSpec();
+    s->dataType = t->type == MPxData::kGeometryData ? MFnData::kPluginGeometry : MFnData::kPlugin;
+    s->pluginType = t->name;
+    s->def.clear();
+    return obj_;
 }
 MFnData::Type MFnTypedAttribute::attrType(MStatus* st) const { AttrSpec* s = azSpec(st); return s ? (MFnData::Type)s->dataType : MFnData::kInvalid; }
 MStatus MFnTypedAttribute::setDefault(const MObject& data) {

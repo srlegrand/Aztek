@@ -30,6 +30,8 @@ enum SolverKind {
     RotationPlane,
     SingleChain,
     Spline,
+    /// A compiled plug-in's solver (MPxIkSolverNode): the chain goes to it, it gives back each joint's rotate.
+    Plugin,
 }
 
 impl SolverKind {
@@ -37,9 +39,23 @@ impl SolverKind {
         match i {
             1 => Self::SingleChain,
             2 => Self::Spline,
+            PLUGIN_SOLVER => Self::Plugin,
             _ => Self::RotationPlane,
         }
     }
+}
+
+/// The handle's solverType for a plug-in's solver, past the reference's three.
+const PLUGIN_SOLVER: i64 = 3;
+
+/// Solves for a plug-in's solver type: the solver's type name and the chain as `plugin_input` writes it; each joint's
+/// rotate, or None when the solver gave nothing.
+pub type PluginSolve = Arc<dyn Fn(&str, &Value) -> Option<Vec<DVec3>> + Send + Sync>;
+
+static PLUGIN_SOLVE: std::sync::RwLock<Option<PluginSolve>> = std::sync::RwLock::new(None);
+
+pub fn set_plugin_solve(f: PluginSolve) {
+    *PLUGIN_SOLVE.write().unwrap() = Some(f);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -527,7 +543,7 @@ fn apply_limits(input: &SolveInput, solved: Vec<DVec3>) -> Vec<DVec3> {
 /// The rotates for a chain: where each solver plugs in.
 fn solve(input: &SolveInput) -> Vec<DVec3> {
     match input.kind {
-        SolverKind::RotationPlane | SolverKind::SingleChain => apply_limits(input, solve_plane(input)),
+        SolverKind::RotationPlane | SolverKind::SingleChain | SolverKind::Plugin => apply_limits(input, solve_plane(input)),
         SolverKind::Spline => apply_limits(input, solve_spline(input).0),
     }
 }
@@ -635,7 +651,19 @@ impl NodeBehavior for IkSolve {
         };
         let root_on_curve = chain.get("rootOnCurve").and_then(Value::as_bool).unwrap_or(false);
         let mut root_at = None;
-        let solved = if weight > 0.0 {
+        let plugin = SolverKind::from_index(d.int(IK_TYPE)) == SolverKind::Plugin;
+        let solved = if weight > 0.0 && plugin {
+            let hook = PLUGIN_SOLVE.read().unwrap().clone();
+            let solver = chain.get("solver").and_then(Value::as_str).unwrap_or("").to_string();
+            let mut input = chain.clone();
+            let m = |a: usize| json!(d.matrix(a).to_cols_array().to_vec());
+            input["handleMatrix"] = m(IK_HANDLE);
+            input["parentMatrix"] = m(IK_PARENT);
+            input["poleVector"] = vec3_json(d.vec3(IK_POLE));
+            input["twist"] = json!(d.float(IK_TWIST));
+            input["roll"] = json!(d.float(IK_ROLL));
+            hook.and_then(|h| h(&solver, &input)).unwrap_or_default()
+        } else if weight > 0.0 {
             let input = SolveInput {
                 parent: d.matrix(IK_PARENT),
                 handle: d.matrix(IK_HANDLE),
@@ -922,6 +950,19 @@ pub(crate) fn sync_handle(g: &mut Graph, handle: NodeId, after: bool) -> bool {
     }
     let end_t = g.node(end).unwrap().data().vec3(Transform::TRANSLATE);
     let mut chain = json!({"valid": valid, "joints": joints.iter().map(|&j| joint_json(g, j)).collect::<Vec<_>>(), "end": vec3_json(end_t)});
+    // A plug-in's solver is told which nodes these are, to answer for them while it solves.
+    if g.node(handle).is_some_and(|n| n.int(IkHandle::SOLVER_TYPE) == PLUGIN_SOLVER) {
+        let named = g.node(handle).map(|n| n.value(IkHandle::IK_SOLVER).as_str().to_string()).unwrap_or_default();
+        let ty = g.find(&named).ok().flatten().and_then(|s| g.node(s)).map(|n| n.ty().name.clone()).unwrap_or_default();
+        let node = |id: NodeId| json!({"id": id, "path": g.path(id), "full": g.full_path(id), "name": g.node(id).map(|n| n.name.clone()).unwrap_or_default(), "parent": g.parent(id)});
+        chain["solver"] = json!(ty);
+        chain["nodes"] = json!({
+            "joints": joints.iter().map(|&j| node(j)).collect::<Vec<_>>(),
+            "end": node(end),
+            "handle": node(handle),
+            "effector": effector_of(g, handle).map(node).unwrap_or(Value::Null),
+        });
+    }
     // Set once by the command; everything else here follows the joints.
     if let Some(r) = json_of(g.node(solver).unwrap().data(), IK_CHAIN).get("rootOnCurve").cloned() {
         chain["rootOnCurve"] = r;
@@ -1034,6 +1075,14 @@ fn resolve_solver(g: &mut Graph, name: &str) -> CmdResult<(usize, NodeId)> {
     });
     if let Some(found) = by_node {
         return Ok(found);
+    }
+    // A plug-in's solver, by its type or its node.
+    let plugin_node = g.find(name).ok().flatten().filter(|&id| g.node(id).is_some_and(|n| crate::scripted::is_plugin_ik_solver(&n.ty().name)));
+    if let Some(id) = plugin_node {
+        return Ok((PLUGIN_SOLVER as usize, id));
+    }
+    if crate::scripted::is_plugin_ik_solver(name) {
+        return Ok((PLUGIN_SOLVER as usize, ensure_solver_node(g, name)?));
     }
     match SOLVER_TYPES.iter().position(|t| *t == name) {
         Some(k) => Ok((k, ensure_solver_node(g, name)?)),

@@ -10,3 +10,4 @@
 #include "plugin.h"
 #include "scene.h"
 #include "viewport.h"
+#include "pxnodes.h"

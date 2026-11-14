@@ -9,3 +9,4 @@ find_package(AztekDevkit REQUIRED CONFIG PATHS "${CMAKE_CURRENT_SOURCE_DIR}/../.
 aztek_add_plugin(crashNode SOURCES crashNode.cpp)
 aztek_add_plugin(apiProbe SOURCES apiProbe.cpp)
 aztek_add_plugin(msgProbe SOURCES msgProbe.cpp)
+aztek_add_plugin(pxProbe SOURCES pxProbe.cpp)

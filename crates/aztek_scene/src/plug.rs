@@ -852,6 +852,11 @@ pub mod data {
         before - k.len()
     }
 
+    /// Forgets one kind: a plug-in's data type gone with it.
+    pub fn remove(kind: &str) {
+        kinds().write().unwrap().remove(kind);
+    }
+
     pub fn find(kind: &str) -> Option<FromJson> {
         kinds().read().unwrap().get(kind).map(|k| k.load.clone())
     }

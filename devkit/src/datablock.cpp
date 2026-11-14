@@ -289,6 +289,18 @@ MObject MDataHandle::data() const {
     }
     if (azSpec->type == "mesh") return asMesh();
     if (azSpec->type == "curve") return asNurbsCurve();
+    if (!azSpec->pluginType.empty()) {
+        // The host's value: read, never freed or changed here.
+        int i = index(0);
+        void* p = (i >= 0 && azBlock && azBlock->block && host->abi_version >= 3) ? host->block_data(azBlock->block, i, hostElement(*this)) : 0;
+        if (!p) return MObject();
+        MObject o = newData(MFn::kPluginData);
+        o.azData()->pxData = std::make_shared<PluginDataBox>();
+        o.azData()->pxData->data = (MPxData*)p;
+        o.azData()->pxData->typeName = azSpec->pluginType;
+        o.azData()->pxData->owned = false;
+        return o;
+    }
     if (azSpec->type == "matrix") {
         MFnMatrixData f;
         return f.create(asMatrix());
@@ -358,10 +370,38 @@ void MDataHandle::set(const MString& v) {
     int i = index(0);
     if (i >= 0) host->block_set_string(azBlock->block, i, hostElement(*this), v.asChar());
 }
+MPxData* MDataHandle::asPluginData() const {
+    MObject o = data();
+    return o.azData() && o.azData()->pxData ? o.azData()->pxData->data : 0;
+}
+
+MStatus MDataHandle::set(MPxData* value) {
+    int i = index(0);
+    if (i < 0 || !azSpec || azSpec->pluginType.empty() || host->abi_version < 3) return MS::kInvalidParameter;
+    // The host takes the value given.
+    host->block_set_data(azBlock->block, i, hostElement(*this), azSpec->pluginType.c_str(), value);
+    return MS::kSuccess;
+}
+
 MStatus MDataHandle::set(const MObject& data) {
     const std::shared_ptr<ObjectData>& d = data.azData();
     int i = index(0);
     if (i < 0) return MS::kInvalidParameter;
+    if (d && d->pxData && d->pxData->data) {
+        if (!azSpec || azSpec->pluginType.empty() || host->abi_version < 3) return MS::kInvalidParameter;
+        // The host's from here: a value made by MFnPluginData is handed over; one read from a plug is copied.
+        MPxData* give = d->pxData->data;
+        if (!d->pxData->owned) {
+            PluginDataType* t = pluginDataTypeNamed(d->pxData->typeName);
+            give = t && t->creator ? (MPxData*)t->creator() : 0;
+            if (!give) return MS::kFailure;
+            give->copy(*d->pxData->data);
+        } else {
+            d->pxData->owned = false;
+        }
+        host->block_set_data(azBlock->block, i, hostElement(*this), d->pxData->typeName.c_str(), give);
+        return MS::kSuccess;
+    }
     if (!d) {
         if (azSpec->type == "mesh") host->block_set_mesh(azBlock->block, i, hostElement(*this), 0);
         return MS::kSuccess;
