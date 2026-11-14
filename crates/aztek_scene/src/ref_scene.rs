@@ -1351,7 +1351,7 @@ pub fn register(c: &mut Commands<Session>) {
     c.register(
         Cmd::new("getClassification", "A node type's classification strings: utility/general, and so on.", |_s, a| {
             let Some(ty) = a.pos_str(0) else { fail!("getClassification: name a node type") };
-            let classes: Vec<String> = crate::utility_nodes::classification(ty).map(str::to_string).into_iter().collect();
+            let classes: Vec<String> = crate::utility_nodes::classification(ty).filter(|c| !c.is_empty()).map(str::to_string).into_iter().collect();
             if let Some(want) = a.get("satisfies").and_then(Value::as_str) {
                 return Ok(json!(classes.iter().flat_map(|x| x.split(':')).any(|x| x == want || x.starts_with(&format!("{want}/")))));
             }

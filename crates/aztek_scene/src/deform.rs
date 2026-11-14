@@ -97,7 +97,11 @@ pub(crate) const WEIGHTS: usize = 5;
 pub(crate) const GEOM: usize = 6;
 /// Connected from the deformer's set (cluster1Set).
 pub(crate) const DEFORMER_SET: usize = 7;
-pub(crate) const BASE_COUNT: usize = 8;
+/// input[].componentTagExpression: the points it names are the deformer's (empty: its set decides).
+pub(crate) const COMPONENT_TAGS: usize = 8;
+/// weightFunction: a falloff's weights, times the painted ones.
+pub(crate) const WEIGHT_FUNCTION: usize = 9;
+pub(crate) const BASE_COUNT: usize = 10;
 
 /// The kinds of the reference's nonlinear deformer, as `nonLinear -type` names them.
 pub const NONLINEAR: &[&str] = &["bend", "twist", "squash", "flare", "sine", "wave"];
@@ -214,6 +218,37 @@ pub(crate) fn unflat(v: &[f64]) -> Vec<DVec3> {
     v.chunks_exact(3).map(|c| DVec3::new(c[0], c[1], c[2])).collect()
 }
 
+/// A deformer's weight per point: its painted weights, limited to the points its componentTagExpression names, times
+/// its weightFunction's. Borrowed as they are when neither is set.
+pub(crate) fn weights_of<'a>(d: &'a NodeData, m: &Mesh) -> Option<std::borrow::Cow<'a, Floats>> {
+    let base = floats_of(d, WEIGHTS);
+    let expr = match d.value(COMPONENT_TAGS) {
+        PlugValue::String(s) => s.as_str(),
+        _ => "",
+    };
+    let members = crate::component_tags::points(m, expr);
+    let function = crate::falloff::function_of(d.value(WEIGHT_FUNCTION));
+    if members.is_none() && function.is_none() {
+        return base.map(std::borrow::Cow::Borrowed);
+    }
+    let n = m.point_capacity() as usize;
+    let mut w: Vec<f64> = (0..n).map(|p| base.map_or(1.0, |b| b.0.get(p).copied().unwrap_or(0.0))).collect();
+    if let Some(on) = &members {
+        for (p, x) in w.iter_mut().enumerate() {
+            if !on.get(p).copied().unwrap_or(false) {
+                *x = 0.0;
+            }
+        }
+    }
+    if let Some(f) = function {
+        let cx = crate::falloff::Cx { mesh: m, geom: d.matrix(GEOM), members: members.as_deref() };
+        for (x, y) in w.iter_mut().zip(f.weights(&cx)) {
+            *x *= y;
+        }
+    }
+    Some(std::borrow::Cow::Owned(Floats(w)))
+}
+
 /// A point's weight: its entry times the envelope.
 pub(crate) fn weight_at(weights: Option<&Floats>, p: u32, env: f64) -> f64 {
     weights.map_or(1.0, |w| w.0.get(p as usize).copied().unwrap_or(0.0)) * env
@@ -327,7 +362,8 @@ impl NodeBehavior for NonLinear {
             _ => (get("amplitude", 0.0), get("wavelength", 1.0), get("offset", 0.0), 0.0, 0.0, get("minRadius", 0.0), get("maxRadius", 1.0)),
         };
         let mut m = (*input).clone();
-        through_handle(&mut m, &geom, &handle, d.float(ENVELOPE), floats_of(d, WEIGHTS), |p| nonlinear(kind, a, b, c, dd, ee, lo, hi, p));
+        let weights_owned = weights_of(d, &input);
+        through_handle(&mut m, &geom, &handle, d.float(ENVELOPE), weights_owned.as_deref(), |p| nonlinear(kind, a, b, c, dd, ee, lo, hi, p));
         d.set_output(OUT, PlugValue::Mesh(Some(Arc::new(m))));
     }
     fn as_any(&self) -> &dyn Any {
@@ -346,7 +382,8 @@ impl NodeBehavior for Cluster {
         let data = json_of(d, DATA);
         let geom = mat_from(data.get("geom").unwrap_or(&Value::Null));
         let bind = mat_from(data.get("bindPre").unwrap_or(&Value::Null));
-        let weights = floats_of(d, WEIGHTS);
+        let weights_owned = weights_of(d, &input);
+        let weights = weights_owned.as_deref();
         // Files from before weightList keep the weights in deformerData.
         let old: Vec<f64> = data.get("weights").and_then(Value::as_array).map(|a| a.iter().map(|x| x.as_f64().unwrap_or(0.0)).collect()).unwrap_or_default();
         let h = d.matrix(HANDLE) * bind;
@@ -457,6 +494,24 @@ pub fn register_types() {
                 data_attr("weightList", "wl", "Each point's weight (percent)."),
                 matrix_in("geomMatrix", "gm", "World matrix of the deformed mesh."),
                 AttrDef { flags: flags::INPUT | flags::HIDDEN, ..float_attr_short("deformerSet", "dfs", 0.0, "The deformer's set of points, connected from it.", None, None) },
+                AttrDef {
+                    name: "componentTagExpression".into(),
+                    short_name: "gtg".into(),
+                    ty: PlugType::String,
+                    default_value: PlugValue::String(String::new()),
+                    flags: STORED_FLAGS | flags::HIDDEN,
+                    doc: "The component tags the deformer acts on (*, tagA+tagB, !tagC...); empty: its set's points.".into(),
+                    ..Default::default()
+                },
+                AttrDef {
+                    name: "weightFunction".into(),
+                    short_name: "wfl".into(),
+                    ty: PlugType::Data,
+                    default_value: PlugValue::Data(None),
+                    flags: flags::INPUT | flags::HIDDEN,
+                    doc: "A falloff's weights, from its outputWeightFunction; they multiply the painted weights.".into(),
+                    ..Default::default()
+                },
             ];
             v.extend(extra);
             v
@@ -643,7 +698,7 @@ pub(crate) fn add_geometry(g: &mut Graph, leader: NodeId, mesh: NodeId, pts: &Op
     link_follower(g, leader, n)?;
     let attrs: Vec<(usize, AttrDef)> = g.node(leader).unwrap().ty().attrs.iter().cloned().enumerate().collect();
     for (i, a) in attrs {
-        if matches!(i, IN | OUT | GEOM | WEIGHTS) || !a.has(flags::INPUT) {
+        if matches!(i, IN | OUT | GEOM | WEIGHTS | COMPONENT_TAGS | WEIGHT_FUNCTION) || !a.has(flags::INPUT) {
             continue;
         }
         if a.is_array() {

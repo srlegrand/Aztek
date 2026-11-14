@@ -13,7 +13,7 @@ use serde_json::{json, Value};
 
 use crate::attr_defs::{bool_attr, enum_attr, float_attr_short};
 use crate::components::{self, ComponentMode};
-use crate::deform::{self, data_attr, f, floats_of, insert_at, json_of, mat_from, mat_json, matrix_in, plug, set_data, set_floats, weight_at, Cmd, Place, BASE_COUNT, DATA, ENVELOPE, GEOM, HANDLE, IN, OUT, WEIGHTS};
+use crate::deform::{self, data_attr, f, floats_of, insert_at, json_of, mat_from, mat_json, matrix_in, plug, set_data, set_floats, weight_at, Cmd, Place, BASE_COUNT, DATA, ENVELOPE, GEOM, HANDLE, IN, OUT};
 use crate::graph::{Graph, SelectMode};
 use crate::node::{types, vec3_attr, EvalContext, NodeBehavior, NodeData, NodeType, IN_STORE};
 use crate::plug::{flags, AttrDef, NodeId, PlugRef, PlugType, PlugValue, NO_NODE};
@@ -203,7 +203,8 @@ impl NodeBehavior for SoftMod {
         };
         let gi = geom.inverse();
         let env = d.float(ENVELOPE);
-        let weights = floats_of(d, WEIGHTS);
+        let weights_owned = crate::deform::weights_of(d, &input);
+        let weights = weights_owned.as_deref();
         let mut m = (*input).clone();
         for p in 0..m.point_capacity() {
             let w = self.falloff[p as usize] * weight_at(weights, p, env);

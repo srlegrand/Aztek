@@ -16,7 +16,7 @@ use serde_json::{json, Value};
 
 use crate::attr_defs::{bool_attr, enum_attr, float_attr_short, mesh_attr};
 use crate::components;
-use crate::deform::{self, f, floats_of, input_mesh, json_of, plug, weight_at, Cmd, Place, BASE_COUNT, DATA, ENVELOPE, GEOM, IN, OUT, WEIGHTS};
+use crate::deform::{self, f, input_mesh, json_of, plug, weight_at, Cmd, Place, BASE_COUNT, DATA, ENVELOPE, GEOM, IN, OUT};
 use crate::graph::Graph;
 use crate::mesh_nodes::MeshNode;
 use crate::node::{types, EvalContext, NodeBehavior, NodeData, NodeType};
@@ -276,7 +276,8 @@ impl NodeBehavior for BlendNode {
                 }
             }
         }
-        let base = floats_of(d, WEIGHTS);
+        let base_owned = crate::deform::weights_of(d, &m);
+        let base = base_owned.as_deref();
         for p in 0..cap as u32 {
             let dv = total[p as usize];
             if dv != DVec3::ZERO && m.point_valid(p) {

@@ -2272,6 +2272,10 @@ impl Build<'_> {
             this.used[base] = true;
             let mut warnings = Vec::new();
             let mut m = this.meshes[&base].build(&doc.nodes[base].name, &mut warnings);
+            apply_file_tags(&doc.nodes[base], &mut m);
+            if base != i {
+                apply_file_tags(&doc.nodes[i], &mut m);
+            }
             this.warnings.append(&mut warnings);
             apply_tweaks(doc, &mut m, tweaks);
             for &t in tweaks {
@@ -3691,6 +3695,33 @@ struct Stored {
     /// The sets' names, in the order of `uv_sets`, and the current one's.
     uv_names: Vec<String>,
     uv_current: String,
+    /// The geometry's component tags: (name, components as written).
+    tags: Vec<(String, Vec<String>)>,
+}
+
+/// A mesh node's componentTags as the file sets them: `.gtag[0].gtagnm` and `.gtag[0].gtagcmp`, into the geometry.
+fn apply_file_tags(n: &MaNode, m: &mut Mesh) {
+    let mut tags: BTreeMap<i64, (String, String)> = BTreeMap::new();
+    for set in &n.sets {
+        let [g, field] = set.path.as_slice() else { continue };
+        if !matches!(g.name.as_str(), "gtag" | "componentTags") {
+            continue;
+        }
+        let Some((k, _)) = g.range else { continue };
+        let e = tags.entry(k).or_default();
+        match field.name.as_str() {
+            "gtagnm" | "componentTagName" => e.0 = set.values.first().and_then(Tok::text).unwrap_or_default().to_string(),
+            "gtagcmp" | "componentTagContents" => e.1 = set.values.iter().filter_map(|v| if let Tok::Str(x) = v { Some(x.as_str()) } else { None }).collect::<Vec<_>>().join(" "),
+            _ => {}
+        }
+    }
+    for (_, (name, contents)) in tags {
+        if name.is_empty() {
+            continue;
+        }
+        let sel = crate::component_tags::parse(m, &contents).unwrap_or_else(|| crate::component_tags::Sel { cat: crate::component_tags::Cat::V, on: vec![false; m.point_capacity() as usize] });
+        crate::component_tags::set(m, &name, &sel);
+    }
 }
 
 fn stored_mesh(m: &Mesh) -> Stored {
@@ -3792,10 +3823,44 @@ fn stored_mesh(m: &Mesh) -> Stored {
         let uvs: Vec<Vec<i64>> = corner_uv.iter().map(|map| cs.iter().map(|&c| map[c as usize]).collect()).collect();
         faces.push((signed, uvs));
     }
-    Stored { points, point_of, edges, faces, corners, uv_sets, uv_names, uv_current }
+    let mut face_of = vec![-1i64; m.face_capacity() as usize];
+    let mut k = 0;
+    for f in 0..m.face_capacity() {
+        if m.face_valid(f) {
+            face_of[f as usize] = k;
+            k += 1;
+        }
+    }
+    let tags = crate::component_tags::names(m)
+        .into_iter()
+        .filter_map(|name| {
+            let sel = crate::component_tags::get(m, &name)?;
+            let map = match sel.cat {
+                crate::component_tags::Cat::E => &edge_of,
+                crate::component_tags::Cat::F => &face_of,
+                _ => &point_of,
+            };
+            let mut on = vec![false; map.iter().filter(|&&x| x >= 0).count()];
+            for i in sel.indices() {
+                if let Some(&d) = map.get(i as usize).filter(|d| **d >= 0) {
+                    on[d as usize] = true;
+                }
+            }
+            Some((name, crate::component_tags::text(&crate::component_tags::Sel { cat: sel.cat, on })))
+        })
+        .collect();
+    Stored { points, point_of, edges, faces, corners, uv_sets, uv_names, uv_current, tags }
 }
 
 fn write_stored(out: &mut String, m: &Stored) {
+    if !m.tags.is_empty() {
+        let _ = writeln!(out, "\tsetAttr -s {} \".gtag\";", m.tags.len());
+        for (k, (name, comps)) in m.tags.iter().enumerate() {
+            let _ = writeln!(out, "\tsetAttr \".gtag[{k}].gtagnm\" -type \"string\" {};", quoted(name));
+            let list: Vec<String> = comps.iter().map(|c| quoted(c)).collect();
+            let _ = writeln!(out, "\tsetAttr \".gtag[{k}].gtagcmp\" -type \"componentList\" {} {};", list.len(), list.join(" "));
+        }
+    }
     let _ = writeln!(out, "\tsetAttr \".vir\" yes;");
     let _ = writeln!(out, "\tsetAttr \".vif\" yes;");
     if m.uv_sets.is_empty() {

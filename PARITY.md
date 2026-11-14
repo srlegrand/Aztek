@@ -2211,3 +2211,46 @@ constraint, and saves and opens a scene. Not compared with a running copy of the
 - As Aztek's other constraints, the node is not under the joint it drives; a file that parents it there opens.
 - Not done: `xChildAxis`..`zChildAxis` and `targetChildTranslate` (a child mirrored on other axes than its parent);
   the pink display of driven joints; the joint tool's interactive symmetry option.
+
+### Component tags and deformer falloffs (14/11/2026)
+
+Step 6c of the 2027 parity order, which completes step 6. Attributes are the 2027 release's
+([maya-node-list](https://github.com/yamahigashi/maya-node-list)); behaviour from the reference's pages on
+[component tag expressions](https://help.autodesk.com/cloudhelp/ENU/MayaCRE-CharacterAnimation/files/GUID-237E61B3-CA0A-4C35-A3E7-E0D2004A898E.htm),
+[deformer falloffs](https://help.autodesk.com/cloudhelp/ENU/MayaCRE-CharacterAnimation/files/GUID-9924DC3A-A65B-4FC3-8AF6-53C914D5B5D6.htm),
+the 2027 node pages ([primitiveFalloff](https://help.autodesk.com/cloudhelp/2027/ENU/Maya-Tech-Docs/Nodes/primitiveFalloff.html),
+[proximityFalloff](https://help.autodesk.com/cloudhelp/2027/ENU/Maya-Tech-Docs/Nodes/proximityFalloff.html),
+[subsetFalloff](https://help.autodesk.com/cloudhelp/2027/ENU/Maya-Tech-Docs/Nodes/subsetFalloff.html),
+[componentFalloff](https://help.autodesk.com/cloudhelp/2027/ENU/Maya-Tech-Docs/Nodes/componentFalloff.html)) and the 2027
+[componentTag](https://help.autodesk.com/cloudhelp/2027/ENU/Maya-Tech-Docs/CommandsPython/componentTag.html) and
+[geometryAttrInfo](https://help.autodesk.com/cloudhelp/2027/ENU/Maya-Tech-Docs/CommandsPython/geometryAttrInfo.html)
+pages. Checked by a test that tags a cube, evaluates expressions, limits a cluster by a tag, weighs it by uniform,
+primitive, blend and subset falloffs, and saves and opens the scene. Not compared with a running copy of the reference.
+
+- Tags: a mesh shape's `componentTags` (gtag: `componentTagName`, `componentTagContents`) are added to the geometry
+  that passes through it, and travel with it through history and deformers. A deformer's original shape takes the
+  shape's tags when it is made. Files read and write them as the reference does (`.gtag[0].gtagnm`, `.gtagcmp` as a
+  componentList), on the original shape of a deformed mesh.
+- Expressions: names with `*` and `?` wildcards, `+` union, `-` subtract, `^` intersection, `!` invert, brackets, `,`
+  or a space as union, and `v()`, `e()`, `f()` casts. The page gives no precedence beyond brackets; Aztek evaluates left
+  to right. Mixing kinds works in vertices. Casting vertices to edges or faces keeps those wholly inside.
+- Deformers: `componentTagExpression` (written `.ip[0].gtg`) limits every deformer to the points it names; empty leaves
+  the deformer set to decide, as files from before tags have it. `weightFunction` (`.wfl[0]`) multiplies the painted
+  weights by a falloff's.
+- Falloffs: `uniformFalloff`, `primitiveFalloff` (a transform: sphere by its positive and negative sizes, or plane
+  along its Y), `proximityFalloff` (distance to the geometry; Inside or Outside counts the volume as 0;
+  `proximitySubset` limits its faces), `subsetFalloff` (connectivity hops or distance, from the subset outward, or from
+  its edge inward with `withinBoundary`), `blendFalloff` (each target's operation blended in by its weight, in order),
+  `transferFalloff` (by nearest point of `weightedGeometry`) and `componentFalloff`. From `start` to `end` a falloff
+  takes its ramp's value, or falls from 1 to 0 when it has no ramp points.
+- `componentTagBase` adds its own tags to the geometry passing through; `componentMatch` gives each point its tag
+  expression names the nearest point of `targetGeometry`.
+- Commands (from step 7): `componentTag` (-cr, -d, -rn, -m replace/add/remove/clear, -tn with wildcards, -ntn, -utn);
+  `geometryAttrInfo` (-cnm, -cex, -cmp, -ccy, -ec, -pc, -pi, -pnt, -bb, -sbs, -ctv/-cte/-ctf, -nch, -dch, -og, -mtx).
+- Where the pages leave it open, what Aztek does: tag names list alphabetically; `uniformWeight` defaults to 0 and is a
+  distance, as the 2027 table has it; `useOriginalGeometry` reads the deformer's input; a plane falloff measures along
+  its Y.
+- Not done: `componentFalloff`'s painted weight tables (each layer gives its default weight); `falloffEval`'s outputs;
+  bind tags (`useBindTags`); `uniqueMatch`; `-groupId`, `-componentTagHistory` and the hashes of geometryAttrInfo;
+  `input[0].componentTagExpression` by that path (it is `componentTagExpression` on the deformer); new deformers made
+  with component tags instead of sets, as the reference's preference does; plug-in deformers seeing tags and falloffs.

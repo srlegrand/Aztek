@@ -410,6 +410,7 @@ fn table() -> Vec<Spec> {
     let mut t = base_table();
     t.extend(math::specs());
     t.extend(rig::specs());
+    t.extend(falloffs::specs());
     t
 }
 
@@ -417,6 +418,21 @@ fn table() -> Vec<Spec> {
 mod math;
 #[path = "rig_nodes.rs"]
 mod rig;
+#[path = "falloff_nodes.rs"]
+mod falloffs;
+pub(crate) use falloffs::ramp_attrs;
+
+/// A ramp's value at t, for other modules.
+pub(crate) fn ramp_value(pts: &[(f64, DVec3, i64)], t: f64) -> Option<DVec3> {
+    ramp_at(pts, t)
+}
+/// A ramp's points from a node, for other modules.
+pub(crate) fn ramp_points(d: &NodeData, pos: &str, val: &str, interp: &str) -> Vec<(f64, DVec3, i64)> {
+    ramp(d, pos, val, interp)
+}
+pub(crate) fn closest_on_tri(p: DVec3, a: DVec3, b: DVec3, c: DVec3) -> DVec3 {
+    closest_on_triangle(p, a, b, c)
+}
 
 fn base_table() -> Vec<Spec> {
     vec![
@@ -1101,6 +1117,7 @@ pub fn classification(type_name: &str) -> Option<&'static str> {
 }
 
 pub fn register_types() {
+    crate::falloff::register_types();
     for Spec(name, _, doc, own_attrs, compute) in table() {
         if types::find(name).is_some() {
             continue;

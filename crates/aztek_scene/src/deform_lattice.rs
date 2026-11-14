@@ -12,7 +12,7 @@ use serde_json::{json, Value};
 
 use crate::attr_defs::{bool_attr, enum_attr, float_attr_short};
 use crate::components::{self, ComponentMode, PointProvider};
-use crate::deform::{self, data_attr, f, flat, floats_of, input_mesh, insert_at, int_attr, matrix_in, plug, set_floats, unflat, weight_at, Cmd, Place, BASE_COUNT, ENVELOPE, GEOM, IN, OUT, WEIGHTS};
+use crate::deform::{self, data_attr, f, flat, floats_of, input_mesh, insert_at, int_attr, matrix_in, plug, set_floats, unflat, weight_at, Cmd, Place, BASE_COUNT, ENVELOPE, GEOM, IN, OUT};
 use crate::graph::{Graph, SelectMode};
 use crate::node::{types, EvalContext, NodeBehavior, NodeData, NodeType};
 use crate::plug::{flags, AttrDef, Data, NodeId, PlugType, PlugValue, NO_NODE};
@@ -230,7 +230,8 @@ impl NodeBehavior for Ffd {
         let from_base = geom_inv * base;
         let from_lattice = geom_inv * d.matrix(DLM);
         let frozen = if d.bool(FREEZE) { floats_of(d, STU) } else { None };
-        let weights = floats_of(d, WEIGHTS);
+        let weights_owned = crate::deform::weights_of(d, &input);
+        let weights = weights_owned.as_deref();
         let mut m = (*input).clone();
         for p in 0..m.point_capacity() {
             let w = weight_at(weights, p, env);

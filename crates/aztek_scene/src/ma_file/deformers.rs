@@ -283,6 +283,16 @@ impl Build<'_> {
             let _ = deform::link_follower(&mut self.s.graph, l, id);
         }
 
+        // The component tags it acts on: `.ip[k].gtg` for its geometry.
+        for set in &n.sets {
+            if let [ip, gtg] = set.path.as_slice() {
+                if matches!(ip.name.as_str(), "ip" | "input") && ip.range.map(|r| r.0) == Some(d.geometry) && matches!(gtg.name.as_str(), "gtg" | "componentTagExpression") {
+                    if let Some(x) = set.values.first().and_then(Tok::text) {
+                        let _ = self.s.graph.set_value(deform::plug(id, deform::COMPONENT_TAGS), PlugValue::String(x.to_string()));
+                    }
+                }
+            }
+        }
         let capacity = self.s.graph.value(&deform::plug(id, IN)).ok().and_then(|v| v.as_mesh().map(|m| m.point_capacity())).unwrap_or(0);
         let members = self.read_members(&d, capacity);
         self.read_weights(&d, capacity, members.as_deref());
@@ -530,6 +540,14 @@ impl Build<'_> {
                     }
                     continue;
                 }
+                // A falloff: each geometry's own, and one per node here.
+                if matches!(plain_dst.as_str(), "wfl" | "weightFunction") {
+                    let k = first_index(&c.dst_attr).unwrap_or(0);
+                    if self.deformers.iter().any(|d| d.id == id && d.geometry == k) {
+                        self.connect_quietly(&from, &format!("{path}.weightFunction"));
+                    }
+                    continue;
+                }
                 let attr = if matches!(plain_dst.as_str(), "ma" | "matrix") { "handleMatrix" } else { c.dst_attr.as_str() };
                 // A wrap's driver may be a curve.
                 let from = if matches!(plain_dst.as_str(), "dp" | "driverPoints") { self.target_source(src, from.clone()) } else { from.clone() };
@@ -762,6 +780,11 @@ impl Writer<'_> {
             }
         }
         o.push_str(&self.attr_lines(d, |_, a| !a.has(flags::HIDDEN)));
+        if let Some(PlugValue::String(x)) = self.s.graph.node(d).map(|n| n.value(deform::COMPONENT_TAGS).clone()) {
+            if !x.is_empty() {
+                let _ = writeln!(o, "\tsetAttr \".ip[0].gtg\" -type \"string\" {};", quoted(&x));
+            }
+        }
 
         // Weights per written point.
         let weights = self.s.graph.node(d).and_then(|n| deform::floats_of(n.data(), WEIGHTS)).map(|f: &Floats| f.0.clone());
@@ -914,6 +937,8 @@ impl Writer<'_> {
             format!("{dp}.it[0].itg[{i}].iti[{iti}].igt")
         } else if is_def(&dt) && dst.attr as usize == HANDLE {
             format!("{dp}.ma")
+        } else if is_def(&dt) && dst.attr as usize == deform::WEIGHT_FUNCTION {
+            format!("{dp}.wfl[0]")
         } else {
             name(&dst)
         };

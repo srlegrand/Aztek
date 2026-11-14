@@ -249,6 +249,7 @@ impl MeshNode {
             .into_iter()
             .chain(crate::harold_nodes::shape_render_attrs())
             .chain(smooth_mesh_attrs())
+            .chain(crate::component_tags::shape_attrs())
             .collect(),
             create: Some(Arc::new(|| Box::new(MeshNode))),
             ..Default::default()
@@ -259,7 +260,7 @@ impl MeshNode {
 impl NodeBehavior for MeshNode {
     fn compute(&mut self, _ctx: &EvalContext, d: &mut NodeData) {
         Shape::compute_matrices(d);
-        let m = d.mesh(Self::IN_MESH).cloned();
+        let m = crate::component_tags::with_node_tags(d, d.mesh(Self::IN_MESH).cloned());
         // In world space only for what reads it: most meshes have nothing on worldMesh, and a copy of each would cost.
         let read: Vec<i32> = d.elements(Self::WORLD_MESH).iter().map(|(i, _)| *i).collect();
         if !read.is_empty() {

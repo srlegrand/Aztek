@@ -136,7 +136,7 @@ impl Writer<'_> {
         };
         let Some(orig) = g.source(&PlugRef::new(to, 0)) else { return };
         let count = g.node(to).and_then(|n| n.data().value(1).as_mesh().map(|m| m.point_capacity())).unwrap_or(0) as usize;
-        let stored = Stored { points: vec![DVec3::ZERO; count], point_of: (0..count as i64).collect(), edges: Vec::new(), faces: Vec::new(), corners: 0, uv_sets: Vec::new(), uv_names: Vec::new(), uv_current: String::new() };
+        let stored = Stored { points: vec![DVec3::ZERO; count], point_of: (0..count as i64).collect(), edges: Vec::new(), faces: Vec::new(), corners: 0, uv_sets: Vec::new(), uv_names: Vec::new(), uv_current: String::new(), tags: Vec::new() };
         let (first, shape_path) = (format!("{}.ws", g.path(orig.node)), g.path(shape));
         let last = self.write_chain_from(&chain, &shape_path, first, &stored, true);
         self.conn(&last, &format!("{shape_path}.cr"));

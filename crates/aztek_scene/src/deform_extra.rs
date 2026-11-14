@@ -71,7 +71,8 @@ fn deform_world(d: &mut NodeData, input: &Mesh, f: impl Fn(u32, DVec3) -> Option
     let geom = d.matrix(GEOM);
     let gi = geom.inverse();
     let env = d.float(ENVELOPE);
-    let weights = floats_of(d, WEIGHTS);
+    let weights_owned = crate::deform::weights_of(d, input);
+    let weights = weights_owned.as_deref();
     let mut m = input.clone();
     for p in 0..m.point_capacity() {
         if !m.point_valid(p) {
@@ -1089,7 +1090,8 @@ impl NodeBehavior for Tweak {
             return;
         };
         let (env, relative) = (d.float(ENVELOPE), d.bool(TW_RELATIVE));
-        let weights = floats_of(d, WEIGHTS);
+        let weights_owned = crate::deform::weights_of(d, &input);
+        let weights = weights_owned.as_deref();
         let mut m = (*input).clone();
         for (p, off) in offsets.iter().enumerate() {
             let p = p as u32;

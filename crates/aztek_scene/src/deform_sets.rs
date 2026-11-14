@@ -47,6 +47,7 @@ pub(crate) fn orig_source(g: &mut Graph, mesh: NodeId, src: PlugRef) -> CmdResul
     let wanted = format!("{}Orig", g.node(mesh).map(|n| n.name().to_string()).unwrap_or_default());
     if is_intermediate(g, src.node) {
         g.rename(src.node, &wanted)?;
+        crate::component_tags::move_node_tags(g, mesh, src.node)?;
         return Ok(src);
     }
     let xf = crate::dag::transform_of(g, mesh);
@@ -54,6 +55,7 @@ pub(crate) fn orig_source(g: &mut Graph, mesh: NodeId, src: PlugRef) -> CmdResul
     let orig = g.create_node(&t, &wanted, if xf == mesh { crate::plug::NO_NODE } else { xf }, false)?;
     g.set_value(plug(orig, DagNode::INTERMEDIATE_OBJECT), PlugValue::Bool(true))?;
     g.connect(&src, &plug(orig, MeshNode::IN_MESH), false)?;
+    crate::component_tags::move_node_tags(g, mesh, orig)?;
     Ok(plug(orig, MeshNode::OUT_MESH))
 }
 

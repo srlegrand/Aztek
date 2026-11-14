@@ -13,7 +13,7 @@ use rayon::prelude::*;
 use serde_json::json;
 
 use crate::attr_defs::{bool_attr, float_attr_short};
-use crate::deform::{self, data_attr, f, flat, floats_of, input_mesh, insert_at, int_attr, set_floats, unflat, weight_at, Cmd, Place, BASE_COUNT, ENVELOPE, IN, OUT, WEIGHTS};
+use crate::deform::{self, data_attr, f, flat, floats_of, input_mesh, insert_at, int_attr, set_floats, unflat, weight_at, Cmd, Place, BASE_COUNT, ENVELOPE, IN, OUT};
 use crate::graph::Graph;
 use crate::node::{EvalContext, NodeBehavior, NodeData, NodeType};
 use crate::plug::{AttrDef, NodeId, PlugValue};
@@ -157,7 +157,8 @@ impl NodeBehavior for DeltaMush {
         let frames = self.topo.frames(&smooth);
         let normals = self.topo.normals(input.positions());
         let (env, displacement, inward, outward) = (d.float(ENVELOPE), d.float(EXTRA_A), d.float(INWARD), d.float(OUTWARD));
-        let weights = floats_of(d, WEIGHTS);
+        let weights_owned = crate::deform::weights_of(d, &input);
+        let weights = weights_owned.as_deref();
         let mut m = (*input).clone();
         for p in 0..m.point_capacity() {
             let w = weight_at(weights, p, env);
@@ -222,7 +223,8 @@ impl NodeBehavior for Tension {
         }
         let normals = topo.normals(input.positions());
         let (env, inward, outward) = (d.float(ENVELOPE), d.float(INWARD), d.float(OUTWARD));
-        let weights = floats_of(d, WEIGHTS);
+        let weights_owned = crate::deform::weights_of(d, &input);
+        let weights = weights_owned.as_deref();
         let mut m = (*input).clone();
         for p in 0..m.point_capacity() {
             let w = weight_at(weights, p, env);
