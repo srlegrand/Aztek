@@ -370,6 +370,7 @@ unsafe extern "C" fn callback_add(plugin: *mut c_void, func: Option<CallbackFn>,
 
 unsafe extern "C" fn callback_remove(id: i64) {
     CALLBACKS.with(|c| c.borrow_mut().remove(&id));
+    super::messages::unwatch(id);
 }
 
 /// Runs a plug-in's callback: what aztekPluginCallback does.

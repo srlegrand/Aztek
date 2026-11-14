@@ -155,5 +155,7 @@ fn run_with(args: &[String], user_folder: bool) -> i32 {
 #[no_mangle]
 pub extern "C" fn aztek_batch(argc: i32, argv: *const *const c_char) -> i32 {
     let args: Vec<String> = (0..argc.max(0) as usize).map(|i| crate::cstr(unsafe { *argv.add(i) })).collect();
-    run_with(&args, true)
+    let rc = run_with(&args, true);
+    crate::aztek_exiting();
+    rc
 }

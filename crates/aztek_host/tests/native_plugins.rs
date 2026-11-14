@@ -157,6 +157,84 @@ fn samples_load_and_work() {
     }
     assert!((f(&m, "area") - 16.0).abs() < 0.05, "{m:?}");
 
+    // Messages: what a plug-in's callbacks hear. azMsg log gives back one line per call, and forgets them.
+    assert_eq!(mel(&mut c, "loadPlugin msgProbe;"), json!(["msgProbe"]));
+    let heard = |c: &mut Core, src: &str| -> Vec<String> {
+        if !src.is_empty() {
+            mel(c, src);
+        }
+        let v = mel(c, "azMsg log;");
+        v.as_array().map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect()).unwrap_or_default()
+    };
+    mel(&mut c, "file -f -new; createNode transform -n a; azMsg start; azMsg watch a;");
+    for (src, want) in [
+        ("createNode transform -n b -p a;", vec!["added b transform", "dag 0 b a", "dag 2 b a"]),
+        // setAttr: kAttributeSet with kIncomingDirection, the node dirty, its matrix's translateX.
+        ("setAttr a.tx 2;", vec!["attr 2056 a.translateX", "dirty a", "matrix a 512"]),
+        ("rename a aa;", vec!["name aa was a"]),
+        ("connectAttr aa.tx b.ty;", vec!["conn aa.translateX b.translateY made", "attr 1 aa.translateX b.translateY"]),
+        ("disconnectAttr aa.tx b.ty;", vec!["conn aa.translateX b.translateY broken", "attr 2 aa.translateX b.translateY"]),
+        ("addAttr -ln extra -at double aa;", vec!["attr 64 aa.extra", "attrAddRemove 64 extra"]),
+        ("setAttr -l 1 aa.tz;", vec!["attr 16 aa.translateZ"]),
+        ("parent -w b;", vec!["dag 1 b aa", "dag 3 b aa", "dag 0 b world", "dag 2 b world"]),
+        ("currentTime 12;", vec!["time 12"]),
+        // Told before it goes, its name and type still there; then removed.
+        ("delete aa;", vec!["aboutToDelete aa transform", "preRemoval aa transform", "dag 1 aa world", "dag 3 aa world", "removed aa transform"]),
+        ("undo;", vec!["added aa transform", "dag 0 aa world", "dag 2 aa world"]),
+    ] {
+        assert_eq!(heard(&mut c, src), want, "{src}");
+    }
+    assert_eq!(mel(&mut c, "azMsg nodeCallbacks aa;"), json!(7));
+    // Event messages come with the idle loop, as script jobs do.
+    mel(&mut c, "select -r b;");
+    c.idle();
+    assert_eq!(heard(&mut c, ""), vec!["event"]);
+    // A file open: the check may pick another file; the old scene's nodes go, the file's arrive, then the after messages.
+    let dir = std::env::temp_dir();
+    let (fa, fb) = (dir.join("azmsg_a.ma").to_string_lossy().replace('\\', "/"), dir.join("azmsg_b.ma").to_string_lossy().replace('\\', "/"));
+    let h = heard(&mut c, &format!("file -rename \"{fa}\"; file -f -save;"));
+    assert_eq!(h.iter().filter(|l| l.starts_with("scene")).collect::<Vec<_>>(), ["scene 12", "scene 13"], "{h:?}");
+    heard(&mut c, &format!("createNode transform -n onlyInB; file -rename \"{fb}\"; file -f -save; azMsg redirect \"{fa}\";"));
+    let h = heard(&mut c, &format!("file -f -o \"{fb}\";"));
+    assert_eq!(h[..3], ["check open azmsg_b.ma", "scene 5", "scene 7"], "{h:?}");
+    assert!(h.contains(&"removed onlyInB transform".to_string()) && h.contains(&"added aa transform".to_string()), "{h:?}");
+    assert_eq!(h[h.len() - 4..], ["scene 8", "scene 6", "scene 9", "scene 0"], "{h:?}");
+    assert_eq!(mel(&mut c, "objExists onlyInB;"), json!(false));
+    mel(&mut c, "azMsg redirect;");
+    // An import, and a reference made, unloaded and removed: each with the reference's messages around it.
+    let h = heard(&mut c, &format!("file -i -ns imp \"{fb}\";"));
+    assert_eq!(h[..2], ["scene 3", "scene 7"], "{h:?}");
+    assert_eq!(h[h.len() - 3..], ["scene 8", "scene 4", "scene 9"], "{h:?}");
+    let h = heard(&mut c, &format!("file -r -ns ref \"{fb}\";"));
+    assert_eq!(h[..6], ["scene 14", "scene 44", "scene 49", "scene 36", "scene 47", "scene 7"], "{h:?}");
+    assert_eq!(h[h.len() - 8..], ["scene 8", "scene 15", "scene 45", "scene 50", "scene 37", "scene 48", "scene 9", "scene 0"], "{h:?}");
+    let h = heard(&mut c, &format!("file -ur \"{fb}\";"));
+    assert_eq!(h[..1], ["scene 22"], "{h:?}");
+    assert_eq!(h[h.len() - 2..], ["scene 23", "scene 0"], "{h:?}");
+    let h = heard(&mut c, &format!("file -rr \"{fb}\";"));
+    assert_eq!(h[..1], ["scene 16"], "{h:?}");
+    assert_eq!(h[h.len() - 2..], ["scene 17", "scene 0"], "{h:?}");
+    // A new scene: once, with its check, every node removed, then after new and scene update.
+    let h = heard(&mut c, "file -f -new;");
+    assert_eq!(h[..2], ["check new".to_string(), "scene 1".to_string()], "{h:?}");
+    assert_eq!(h.iter().filter(|l| *l == "scene 1").count(), 1, "{h:?}");
+    assert!(h.contains(&"removed b transform".to_string()), "{h:?}");
+    assert_eq!(h[h.len() - 2..], ["scene 2".to_string(), "scene 0".to_string()], "{h:?}");
+    // A check callback that says no stops the new scene.
+    mel(&mut c, "createNode transform -n keep; azMsg refuse 1;");
+    assert!(mel_err(&mut c, "file -f -new;").contains("File operation cancelled by user supplied callback."));
+    assert_eq!(mel(&mut c, "objExists keep;"), json!(true));
+    mel(&mut c, "azMsg refuse 0; azMsg log;");
+    // A callback that removes itself hears once.
+    let h = heard(&mut c, "azMsg once; createNode transform -n x1; createNode transform -n x2;");
+    assert!(h.contains(&"once x1".to_string()) && !h.contains(&"once x2".to_string()), "{h:?}");
+    // Plug-ins loaded: the file, then the name.
+    let h = heard(&mut c, "unloadPlugin apiProbe; loadPlugin apiProbe;");
+    assert!(h.iter().any(|l| l.starts_with("plugin ") && l.contains("apiProbe") && l.ends_with("|apiProbe")), "{h:?}");
+    // Removed, nothing is heard.
+    mel(&mut c, "azMsg stop;");
+    assert!(heard(&mut c, "createNode transform -n quiet; currentTime 3; file -f -new;").is_empty());
+
     // A plug-in that crashes in compute is reported, and its nodes stop computing; the process goes on.
     assert_eq!(mel(&mut c, "loadPlugin crashNode;"), json!(["crashNode"]));
     mel(&mut c, "createNode azCrash;");

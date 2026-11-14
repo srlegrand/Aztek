@@ -237,12 +237,14 @@ impl Session {
     pub fn undo(&mut self) -> bool {
         let r = self.graph.undo();
         crate::last_op::sync(self);
+        crate::messages::flush(self);
         r
     }
 
     pub fn redo(&mut self) -> bool {
         let r = self.graph.redo();
         crate::last_op::sync(self);
+        crate::messages::flush(self);
         r
     }
 
@@ -287,6 +289,12 @@ impl CommandHost for Session {
     fn top_level_started(&mut self, name: &str, call: &Value, _source: CallSource) {
         crate::components::command_started(&mut self.graph);
         crate::last_op::command_started(self, name, call);
+    }
+    fn command_starting(&mut self, name: &str, args: &mut aztek_ops::Args) -> Result<(), CommandError> {
+        crate::messages::before(self, name, args)
+    }
+    fn command_ended(&mut self, name: &str, args: &aztek_ops::Args, ok: bool) {
+        crate::messages::after(self, name, args, ok);
     }
     fn top_level_finished(&mut self, name: &str, call: &Value, source: CallSource, ok: bool) {
         crate::components::command_finished(&mut self.graph, name, source, ok);

@@ -835,6 +835,8 @@ impl Default for MoveOptions {
 }
 
 pub struct Graph {
+    /// Tells this graph's message notes from another's (see messages.rs).
+    serial: u64,
     /// While a file is read: evaluating as each node arrives costs a pass per constraint and nothing reads the results.
     pub(crate) evaluation_suspended: bool,
     /// The evaluation pass rig nodes were last brought in step with the scene at (see rig.rs).
@@ -966,6 +968,7 @@ type IdMap<V> = HashMap<NodeId, V, std::hash::BuildHasherDefault<IdHasher>>;
 impl Graph {
     pub fn new() -> Self {
         Self {
+            serial: next_structure(),
             rig_synced_pass: u64::MAX,
             evaluation_suspended: false,
             nodes: Default::default(),
@@ -1183,6 +1186,17 @@ impl Graph {
     }
 
     pub fn clear(&mut self) {
+        // Every node leaves: those watching hear of each, children before parents.
+        if crate::messages::wants(crate::messages::NOTE_NODES) {
+            let mut order: Vec<NodeId> = self.nodes.keys().copied().collect();
+            order.sort_unstable_by(|a, b| b.cmp(a));
+            for id in order {
+                if let Some(mut d) = self.departed(id) {
+                    d.cleared = true;
+                    crate::messages::note(self.serial, crate::messages::Event::Removed(d));
+                }
+            }
+        }
         self.restructured();
         self.default_lines.clear();
         self.nodes.clear();
@@ -1396,10 +1410,16 @@ impl Graph {
         self.nodes.insert(id, n);
         self.wiring += 1;
         self.components.node_created(id);
+        self.note(crate::messages::NOTE_NODES, |_| crate::messages::Event::Added(id));
         self.changed(Change::Created, id, None);
     }
 
     fn detach(&mut self, id: NodeId) -> Option<(Box<Node>, usize)> {
+        if crate::messages::wants(crate::messages::NOTE_NODES) {
+            if let Some(d) = self.departed(id) {
+                crate::messages::note(self.serial, crate::messages::Event::Removed(d));
+            }
+        }
         self.wiring += 1;
         let n = self.nodes.remove(&id)?;
         self.restructured();
@@ -1518,7 +1538,10 @@ impl Graph {
 
     pub fn set_uuid(&mut self, id: NodeId, uuid: &str) {
         if let Some(n) = self.nodes.get_mut(&id) {
-            n.uuid = uuid.to_string();
+            if n.uuid != uuid {
+                n.uuid = uuid.to_string();
+                self.note(crate::messages::NOTE_UUIDS, |_| crate::messages::Event::Uuid(id));
+            }
         }
     }
 
@@ -1747,6 +1770,7 @@ impl Graph {
             .map(|c| name[..c].to_string())
             .unwrap_or_default();
         self.names.entry(name.to_string()).or_default().push(id);
+        self.note(crate::messages::NOTE_NAMES, |_| crate::messages::Event::Renamed { id, old });
         self.changed(Change::Renamed, id, None);
     }
 
@@ -1808,7 +1832,9 @@ impl Graph {
         let key = (p.attr, p.component);
         let id = p.node;
         let old = self.node(id).and_then(|n| n.channels.get(&key).copied());
+        let plug = *p;
         let apply = move |g: &mut Graph, v: Option<(bool, bool)>| {
+            let was = g.channel_state(&plug).0;
             let n = g.node_mut(id);
             match v {
                 Some(s) => {
@@ -1817,6 +1843,10 @@ impl Graph {
                 None => {
                     n.channels.remove(&key);
                 }
+            }
+            let keyable = g.channel_state(&plug).0;
+            if keyable != was {
+                g.note(crate::messages::NOTE_PLUGS, |_| crate::messages::Event::Keyable { plug, keyable });
             }
             g.changed(Change::Attrs, id, None);
         };
@@ -1898,6 +1928,7 @@ impl Graph {
         let at = index.min(sib.len());
         sib.insert(at, child);
         self.mark_dirty(child);
+        self.note(crate::messages::NOTE_DAG, |_| crate::messages::Event::Reparented { id: child, old_parent, new_parent });
         self.changed(Change::Reparented, child, None);
     }
 
@@ -2263,6 +2294,7 @@ impl Graph {
         }
         n.data.elements[p.attr as usize].retain(|(i, _)| *i != p.element);
         self.mark_dirty(p.node);
+        self.note(crate::messages::NOTE_PLUGS, |_| crate::messages::Event::ElementRemoved(*p));
         self.changed(Change::Value, p.node, Some(*p));
     }
 
@@ -2274,6 +2306,7 @@ impl Graph {
         }
         n.data.elements[array.attr as usize] = elements.to_vec();
         self.mark_dirty(array.node);
+        self.note(crate::messages::NOTE_PLUGS, |_| crate::messages::Event::Set(*array));
         self.changed(Change::Value, array.node, Some(*array));
     }
 
@@ -2298,6 +2331,7 @@ impl Graph {
             }
         }
         self.mark_dirty(p.node);
+        self.note(crate::messages::NOTE_PLUGS, |_| crate::messages::Event::Set(*p));
         self.changed(Change::Value, p.node, Some(*p));
     }
 
@@ -2354,7 +2388,16 @@ impl Graph {
             let len = n.data.ty.attrs.len().max(attr + 1);
             n.locks.resize(len, 0);
         }
-        n.locks[attr] = mask;
+        let was = std::mem::replace(&mut n.locks[attr], mask);
+        let flipped = was ^ mask;
+        if flipped != 0 {
+            // One component of a Vec3, or the whole attribute.
+            let mut plug = PlugRef::new(id, attr as i32);
+            if flipped.count_ones() == 1 && n.data.ty.attrs[attr].ty == PlugType::Vec3 {
+                plug.component = flipped.trailing_zeros() as i32;
+            }
+            self.note(crate::messages::NOTE_PLUGS, |_| crate::messages::Event::Locked { plug, locked: mask & flipped != 0 });
+        }
         self.changed(Change::Value, id, Some(PlugRef::new(id, attr as i32)));
     }
 
@@ -2640,6 +2683,7 @@ impl Graph {
         }
         self.mark_dirty(dst.node);
         self.held.insert(*dst);
+        self.note(crate::messages::NOTE_PLUGS, |_| crate::messages::Event::Set(*dst));
         self.changed(Change::Value, dst.node, Some(*dst));
     }
 
@@ -2756,6 +2800,7 @@ impl Graph {
         self.inputs.insert(*dst, *src);
         self.outgoing_dst.entry(src.node).or_default().push(*dst);
         self.mark_dirty(dst.node);
+        self.note(crate::messages::NOTE_CONNECTIONS, |_| crate::messages::Event::Connected { src: *src, dst: *dst, made: true });
         self.changed(Change::Connection, dst.node, Some(*dst));
     }
 
@@ -2781,6 +2826,7 @@ impl Graph {
             }
         }
         self.mark_dirty(dst.node);
+        self.note(crate::messages::NOTE_CONNECTIONS, |_| crate::messages::Event::Connected { src, dst: *dst, made: false });
         self.changed(Change::Connection, dst.node, Some(*dst));
     }
 
@@ -3156,6 +3202,7 @@ impl Graph {
             n.data.elements.insert(index, s.elements.clone());
         }
         self.mark_dirty(id);
+        self.note(crate::messages::NOTE_PLUGS, |_| crate::messages::Event::AttrAdded { node: id, attr: index, name: s.def.name.clone() });
         self.changed(Change::Attrs, id, None);
     }
 
@@ -3177,6 +3224,7 @@ impl Graph {
         }
         self.shift_attr_refs(id, index as i32 + 1, -1);
         self.mark_dirty(id);
+        self.note(crate::messages::NOTE_PLUGS, |_| crate::messages::Event::AttrRemoved { node: id, name: s.def.name.clone(), short: s.def.short_name.clone() });
         self.changed(Change::Attrs, id, None);
         s
     }
@@ -3289,7 +3337,10 @@ impl Graph {
     }
 
     fn replace_attr_raw(&mut self, id: NodeId, index: usize, s: &AttrState) {
-        self.own_type_mut(id).attrs[index] = s.def.clone();
+        let old = std::mem::replace(&mut self.own_type_mut(id).attrs[index], s.def.clone()).name;
+        if old != s.def.name {
+            self.note(crate::messages::NOTE_PLUGS, |_| crate::messages::Event::AttrRenamed { node: id, attr: index, old });
+        }
         let n = self.node_mut(id);
         n.data.values[index] = s.value.clone();
         if !n.data.elements.is_empty() || !s.elements.is_empty() {
@@ -3926,6 +3977,42 @@ impl Graph {
 
     // ---------------------------------------------------------------------------------------------------------------
     // Listeners
+
+    /// Which graph this is, for the message notes.
+    pub fn serial(&self) -> u64 {
+        self.serial
+    }
+
+    #[inline]
+    fn note(&self, kind: u32, e: impl FnOnce(&Graph) -> crate::messages::Event) {
+        if crate::messages::wants(kind) {
+            crate::messages::note(self.serial, e(self));
+        }
+    }
+
+    /// A node as it is, for a note made as it leaves.
+    fn departed(&self, id: NodeId) -> Option<crate::messages::Departed> {
+        let n = self.nodes.get(&id)?;
+        let mut chain = Vec::new();
+        let mut t = Some(n.ty());
+        while let Some(ty) = t {
+            chain.push(ty.name.clone());
+            t = ty.base.as_deref();
+        }
+        let dag = n.ty().dag;
+        Some(crate::messages::Departed {
+            id,
+            name: n.name.clone(),
+            ty: n.ty().name.clone(),
+            chain,
+            dag,
+            owner: n.ty().owner.clone(),
+            parent: self.parent(id),
+            path: self.path(id),
+            full: if dag { self.full_path(id) } else { n.name.clone() },
+            cleared: false,
+        })
+    }
 
     pub fn add_listener(&mut self, f: Listener, immediate: bool) -> i32 {
         let id = self.next_listener;

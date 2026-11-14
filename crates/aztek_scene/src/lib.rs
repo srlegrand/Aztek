@@ -75,6 +75,7 @@ pub mod harold;
 pub mod harold_nodes;
 pub mod mesh_boolean;
 pub mod mesh_data;
+pub mod messages;
 pub mod mesh_edit;
 pub mod mesh_files;
 pub mod mesh_nodes;

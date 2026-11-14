@@ -994,6 +994,19 @@ fn create_with(s: &mut Session, r: &FileRef) -> Result<usize, String> {
     Ok(at)
 }
 
+/// A reference by its node's name or its file: the reference node's name and the file's resolved path.
+pub fn reference_of(s: &Session, name: &str) -> Option<(String, String)> {
+    entry_of(s, name).map(|at| {
+        let e = &s.extras.references.entries[at];
+        (e.rfn.clone(), e.path.clone())
+    })
+}
+
+/// The reference made last: its node's name and file.
+pub fn newest_reference(s: &Session) -> Option<(String, String)> {
+    s.extras.references.entries.last().map(|e| (e.rfn.clone(), e.path.clone()))
+}
+
 /// A reference by its path with a copy number, reference node, or namespace.
 fn entry_of(s: &Session, name: &str) -> Option<usize> {
     let t = &s.extras.references.entries;

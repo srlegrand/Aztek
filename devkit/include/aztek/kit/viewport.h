@@ -1,12 +1,11 @@
-// Aztek plug-in kit: locator nodes, their drawing, and scene messages.
+// Aztek plug-in kit: locator nodes and their drawing.
 //
 // A locator node from a plug-in is a shape in the scene and computes like any node. Its Viewport 2.0 draw override is
 // created and asked for what it draws (prepareForDraw, addUIDrawables); the lines, circles, cones and text it adds are
 // collected for the host's viewport. The legacy draw through M3dView is not called.
-//
-// Messages: callbacks are accepted and given ids, and removing them works; the host does not send these events yet.
 #pragma once
 #include "plugin.h"
+#include "messages.h"
 
 class M3dView {
 public:
@@ -180,51 +179,3 @@ public:
     double focalLength(MStatus* status = 0) const;
 };
 
-class MMessage {
-public:
-    typedef void (*MBasicFunction)(void* clientData);
-    typedef void (*MNodeFunction)(MObject& node, void* clientData);
-    static MStatus removeCallback(MCallbackId id);
-    static MStatus removeCallbacks(MCallbackIdArray& ids);
-    static MCallbackId currentCallbackId(MStatus* status = 0);
-    // The kit's own: an id for a callback the host doesn't send yet.
-    static MCallbackId azNewId();
-};
-
-class MEventMessage : public MMessage {
-public:
-    static MCallbackId addEventCallback(const MString& event, MMessage::MBasicFunction func, void* clientData = 0, MStatus* status = 0);
-};
-
-class MDGModifier;
-class MNodeMessage : public MMessage {
-public:
-    enum AttributeMessage {
-        kConnectionMade = 0x01,
-        kConnectionBroken = 0x02,
-        kAttributeEval = 0x04,
-        kAttributeSet = 0x08,
-        kAttributeLocked = 0x10,
-        kAttributeUnlocked = 0x20,
-        kAttributeAdded = 0x40,
-        kAttributeRemoved = 0x80,
-        kAttributeRenamed = 0x100,
-        kAttributeKeyable = 0x200,
-        kAttributeUnkeyable = 0x400,
-        kIncomingDirection = 0x800,
-        kAttributeArrayAdded = 0x1000,
-        kAttributeArrayRemoved = 0x2000,
-        kOtherPlugSet = 0x4000,
-        kLast = 0x8000
-    };
-    typedef void (*MAttr2PlugFunction)(MNodeMessage::AttributeMessage msg, MPlug& plug, MPlug& otherPlug, void* clientData);
-    typedef void (*MNodePlugFunction)(MObject& node, MPlug& plug, void* clientData);
-    typedef void (*MNodeModifierFunction)(MObject& node, MDGModifier& modifier, void* clientData);
-    typedef void (*MNodeStringFunction)(MObject& node, const MString& str, void* clientData);
-    static MCallbackId addAttributeChangedCallback(MObject& node, MAttr2PlugFunction func, void* clientData = 0, MStatus* status = 0);
-    static MCallbackId addNodeDirtyCallback(MObject& node, MMessage::MNodeFunction func, void* clientData = 0, MStatus* status = 0);
-    static MCallbackId addNodeDirtyPlugCallback(MObject& node, MNodePlugFunction func, void* clientData = 0, MStatus* status = 0);
-    static MCallbackId addNodeAboutToDeleteCallback(MObject& node, MNodeModifierFunction func, void* clientData = 0, MStatus* status = 0);
-    static MCallbackId addNodePreRemovalCallback(MObject& node, MMessage::MNodeFunction func, void* clientData = 0, MStatus* status = 0);
-    static MCallbackId addNameChangedCallback(MObject& node, MNodeStringFunction func, void* clientData = 0, MStatus* status = 0);
-};

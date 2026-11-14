@@ -14,6 +14,8 @@ void aztek_set_main_window(void* window);
 void aztek_use_prefs(void);
 // Once the main window is up: loads the plug-ins marked to load at start and runs the user folder's userSetup scripts.
 void aztek_startup_scripts(void);
+// The application is about to quit: what listens for it hears.
+void aztek_exiting(void);
 char* aztek_mel(const char* src);
 int aztek_python(const char* src);
 char* aztek_exec(const char* name, const char* call_json);

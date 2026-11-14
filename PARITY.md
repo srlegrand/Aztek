@@ -1981,3 +1981,36 @@ of the reference.
 - `MFnMesh` gains `getEdgeVertices`, `getPolygonNormal`, `numUVs`, `getUVs`, `getPolygonUV`, `getPolygonUVid`.
 - `MItMeshVertex::getConnectedEdges` gives the mesh's edge ids; it gave 0, 1, 2... for each vertex.
 - A skinCluster now answers `hasFn(MFn::kGeometryFilt)`, so `MFnGeometryFilter` takes it.
+
+### Plug-in kit: messages (14/11/2026)
+
+Step 3b of the 2027 parity order. Checked by a test plug-in that adds callbacks of each kind and logs what they hear
+through edits, a delete and its undo, a save, an open, a new scene and a plug-in load. Not compared with a running copy
+of the reference.
+
+- `MSceneMessage`: before and after a new scene, an open, a save, an import, an export, a reference made, loaded,
+  unloaded, removed or imported, a file read, a plug-in loaded or unloaded (with the file and the name), the
+  application's start and quit; scene update after each of those that changes what is loaded. Check callbacks run first
+  and can stop the operation ("File operation cancelled by user supplied callback."); a file check callback can pick
+  another file. Namespace renames are sent. Software render messages and connection failures are taken and never sent.
+- `MDGMessage`: nodes added and removed (by type, with the types derived from it), connections made and broken, time
+  changes in the reference's order (time change, force update, delayed, run-up). Pre-connection callbacks are sent just
+  before the connection callbacks, after the connection is made. UUID checks are taken and never sent.
+- `MDagMessage`: parent and child added, removed and reordered, for every node or one; a node made or deleted counts as
+  getting or losing its parent, the world for one at the top. Matrix and world matrix changes with the flags of what
+  changed (translate, rotate, scale, shear, pivots, rotate axis, rotate order). Instance messages are taken and never
+  sent.
+- `MNodeMessage`: attribute changes (set, connection made and broken from both ends, locked, unlocked, keyable,
+  unkeyable, added, removed, renamed, array element removed), attributes added or removed, node dirty and dirty plug
+  (the node and everything downstream), name changed (one node, or every node with a null object), UUID changed, about
+  to delete (the modifier's edits done before the node goes), pre-removal, destroyed (a node gone with the scene).
+  Attribute evaluation and keyable overrides are not sent.
+- `MEventMessage` callbacks run: each is a script job on its event, so they come with the idle loop.
+- `MMessage`: `removeCallback`, `removeCallbacks`, `currentCallbackId`, `nodeCallbacks`. A plug-in's callbacks go
+  when it unloads. `MFileObject` and `MUuid` are new.
+- When they come: a graph message after the command that made the change, still inside its undo step, not in the
+  middle of it; after an undo or redo; from the idle loop for changes made outside commands. A node that has gone is
+  told of once it has, with its name, type and path still answered while its callbacks run; the delete command's own
+  nodes hear about-to-delete and pre-removal while they are there. The reference sends each one as the change happens.
+- Nothing is noted while no callback is registered.
+- The Python API's message classes are not in this step.

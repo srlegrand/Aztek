@@ -339,6 +339,7 @@ fn take_back(s: &mut Session, p: *mut PluginState) {
     }
     for id in std::mem::take(&mut p.callbacks) {
         CALLBACKS.with(|c| c.borrow_mut().remove(&id));
+        super::messages::unwatch(id);
     }
 }
 
@@ -406,14 +407,19 @@ fn load_plugin(s: &mut Session, a: &Args) -> CmdResult {
             if kind_of(&path) == Kind::Foreign {
                 return Err(CommandError::new(format!("{}: {FOREIGN_NOTE}", path.display())));
             }
+            let file = path.to_string_lossy().into_owned();
+            messages::scene(s, messages::BEFORE_PLUGIN_LOAD, json!({ "strings": [file] }));
             load_native(s, &key, &path).map_err(CommandError::new)?;
+            messages::scene(s, messages::AFTER_PLUGIN_LOAD, json!({ "strings": [file, key] }));
             out.push(json!(key));
             continue;
         }
         if python_file(name) {
             let mut f = Map::new();
             f.insert("quiet".into(), json!(quiet));
+            messages::scene(s, messages::BEFORE_PLUGIN_LOAD, json!({ "strings": [name] }));
             if let Value::Array(l) = python_call(s, "load_plugin", Some(name), &f)? {
+                messages::scene(s, messages::AFTER_PLUGIN_LOAD, json!({ "strings": [name, key] }));
                 out.extend(l);
             }
             continue;
@@ -432,10 +438,15 @@ fn unload_plugin(s: &mut Session, a: &Args) -> CmdResult {
         let key = key_of(name);
         if let Some(b) = crate::builtin_plugins::find(name) {
             crate::builtin_plugins::unload(s, b);
-        } else if plugin_named(&key).is_some() {
+        } else if let Some(p) = plugin_named(&key) {
+            let file = unsafe { (*p).path.clone() };
+            messages::scene(s, messages::BEFORE_PLUGIN_UNLOAD, json!({ "strings": [key] }));
             unload_native(s, &key, force).map_err(CommandError::new)?;
+            messages::scene(s, messages::AFTER_PLUGIN_UNLOAD, json!({ "strings": [key, file] }));
         } else if python_started() {
+            messages::scene(s, messages::BEFORE_PLUGIN_UNLOAD, json!({ "strings": [key] }));
             python_call(s, "unload_plugin", Some(name), &a.flags)?;
+            messages::scene(s, messages::AFTER_PLUGIN_UNLOAD, json!({ "strings": [key, name] }));
         } else {
             return Err(CommandError::new(format!("Plug-in \"{name}\" is not loaded.")));
         }

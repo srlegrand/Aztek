@@ -126,5 +126,7 @@ int main(int argc, char** argv) {
     aztek_startup_scripts();
     if (!args.positionalArguments().isEmpty()) w.open_file(args.positionalArguments().first());
     w.run_startup(args.value(script), args.value(shot));
-    return app.exec();
+    int rc = app.exec();
+    aztek_exiting();
+    return rc;
 }

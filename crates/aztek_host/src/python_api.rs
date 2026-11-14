@@ -176,7 +176,7 @@ pub fn read_query(g: &Graph, op: &str, a: &Value) -> Option<Result<Value, String
             "node.roots" => json!(g.roots()),
             "node.info" => {
                 let id = id_of(a)?;
-                let Some(n) = g.node(id) else { return Ok(Value::Null) };
+                let Some(n) = g.node(id) else { return Ok(crate::native_plugin::messages::departed_info(id).unwrap_or(Value::Null)) };
                 let mut chain = Vec::new();
                 let mut t = Some(n.ty());
                 while let Some(ty) = t {
@@ -258,6 +258,16 @@ pub fn query(core: &mut Core, op: &str, a: &Value) -> Result<Value, String> {
     if let Some(r) = read_query(g, op, a) {
         return r;
     }
+    match op {
+        "message.watch" => return crate::native_plugin::messages::watch(&mut core.s, a),
+        "message.nodeCallbacks" => return Ok(crate::native_plugin::messages::node_callbacks(id_of(a)?)),
+        "message.reply" => {
+            crate::native_plugin::messages::reply(a);
+            return Ok(Value::Null);
+        }
+        _ => {}
+    }
+    let g = &mut core.s.graph;
     Ok(match op {
         "plug.setFlag" => {
             let p = g.plug(text_of(a, "name")?).map_err(|e| e.to_string())?;

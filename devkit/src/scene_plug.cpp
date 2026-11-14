@@ -222,10 +222,12 @@ MString MPlug::partialName(bool includeNode, bool, bool, bool, bool, bool useLon
     ok(st);
     std::string a = attr_;
     if (!useLong) {
-        if (spec_) a = spec_->shortName;
-        else {
+        // An attribute added without a short name goes by its long one.
+        if (spec_) {
+            if (!spec_->shortName.empty()) a = spec_->shortName;
+        } else {
             Json info = plugInfo(*this, 0);
-            if (info["short"].isString() && info["component"].integer(-1) < 0) a = info["short"].str();
+            if (info["short"].isString() && !info["short"].str().empty() && info["component"].integer(-1) < 0) a = info["short"].str();
         }
     }
     std::string base = outerPath(spec_, outer_, useLong) + a;

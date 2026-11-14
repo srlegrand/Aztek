@@ -8,6 +8,7 @@
 //! (`IN_COMPUTE`), and the node type's scheduling decides which lock it holds.
 
 mod load;
+pub(crate) mod messages;
 mod nodes;
 pub(crate) use nodes::run_post_create;
 mod table;

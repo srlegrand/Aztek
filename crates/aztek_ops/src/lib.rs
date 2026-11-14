@@ -398,6 +398,13 @@ pub trait CommandHost: Sized + 'static {
     fn top_level_started(&mut self, _name: &str, _call: &Value, _source: CallSource) {}
     /// A top-level command finished; `ok` is false when it failed.
     fn top_level_finished(&mut self, _name: &str, _call: &Value, _source: CallSource, _ok: bool) {}
+    /// Any command, at any depth and not a preview, is about to run: what it was given, which this may change, or an
+    /// error that stops it.
+    fn command_starting(&mut self, _name: &str, _args: &mut Args) -> CmdResult<()> {
+        Ok(())
+    }
+    /// The same command has run, still inside its undo step.
+    fn command_ended(&mut self, _name: &str, _args: &Args, _ok: bool) {}
 }
 
 /// Positional args, or the selection when none were given.
@@ -519,6 +526,12 @@ pub fn execute<C: CommandHost>(
             gate(&def.name)?;
         }
     }
+    let previewing = c.previewing;
+    let mut args = args;
+    if !previewing {
+        ctx.command_starting(&def.name, &mut args)?;
+    }
+    let c = ctx.commands();
     // A preview run is reverted at once, so nothing watching executes should see it.
     let top = c.depth == 0 && !c.previewing;
     let listeners: Vec<ExecuteListener> = if top {
@@ -554,10 +567,17 @@ pub fn execute<C: CommandHost>(
     let result = if def.undoable {
         ctx.open_undo_chunk(&def.name);
         let r = (def.run)(ctx, &args);
+        if !previewing {
+            ctx.command_ended(&def.name, &args, r.is_ok());
+        }
         ctx.close_undo_chunk();
         r
     } else {
-        (def.run)(ctx, &args)
+        let r = (def.run)(ctx, &args);
+        if !previewing {
+            ctx.command_ended(&def.name, &args, r.is_ok());
+        }
+        r
     };
     units::leave(unit_depth, unit_was);
     let result = result.map(|mut v| {

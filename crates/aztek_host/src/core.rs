@@ -110,6 +110,7 @@ impl Core {
         #[cfg(feature = "python")]
         crate::python::register_commands(&mut c.s);
         crate::native_plugin::register_commands(&mut c.s);
+        crate::native_plugin::messages::install();
         // The features kept as plug-ins: there from the start unless turned off.
         crate::builtin_plugins::load_defaults(&mut c.s);
         crate::user_folder::register_commands(&mut c.s);
@@ -331,6 +332,7 @@ impl Core {
         self.note_settings();
         crate::attr_ui::idle(self);
         crate::host_general::watch(&mut self.s);
+        aztek_scene::messages::flush(&mut self.s);
         self.run_conditions();
         let scripts = crate::script_jobs::scan(&mut self.s);
         let deferred = crate::script_jobs::take_deferred();
@@ -726,7 +728,9 @@ impl Core {
 
     /// Saves in the format the path's extension names: `.ma` or Aztek's own.
     pub fn save(&mut self, path: &str) -> Result<(), String> {
+        crate::native_plugin::messages::before_ui(&mut self.s, "save", path)?;
         aztek_scene::ma_file::save_scene(&mut self.s, path, aztek_scene::ma_file::Format::of_path(path))?;
+        crate::native_plugin::messages::after_ui(&mut self.s, "save", path);
         self.drain_captured();
         self.version += 1;
         crate::script_jobs::note_event("SceneSaved");
@@ -735,8 +739,10 @@ impl Core {
     }
 
     pub fn open(&mut self, path: &str) -> Result<(), String> {
+        crate::native_plugin::messages::before_ui(&mut self.s, "open", path)?;
         self.before_command("newScene", &json!({}));
         let warnings = aztek_scene::ma_file::open_scene(&mut self.s, path)?;
+        crate::native_plugin::messages::after_ui(&mut self.s, "open", path);
         // Files older than the default cameras, and .ma files, which leave them out, get them now.
         aztek_scene::cameras::make_defaults(&mut self.s.graph);
         // Warnings from a .ma file arrive through the log.

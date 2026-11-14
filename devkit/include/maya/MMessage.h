@@ -1,3 +1,3 @@
-// Aztek plug-in kit. MMessage is defined in aztek/kit/viewport.h.
+// Aztek plug-in kit. MMessage is defined in aztek/kit/messages.h.
 #pragma once
-#include <aztek/kit/viewport.h>
+#include <aztek/kit/messages.h>

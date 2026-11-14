@@ -233,33 +233,6 @@ double MFnCamera::focalLength(MStatus* st) const {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Messages: given ids; the host doesn't send these events yet.
-
-static std::atomic<long long> nextCallback(1000000);
-MCallbackId MMessage::azNewId() { return (MCallbackId)nextCallback++; }
-MStatus MMessage::removeCallback(MCallbackId) { return MS::kSuccess; }
-MStatus MMessage::removeCallbacks(MCallbackIdArray& ids) {
-    ids.clear();
-    return MS::kSuccess;
-}
-MCallbackId MMessage::currentCallbackId(MStatus* st) {
-    if (st) *st = MS::kSuccess;
-    return 0;
-}
-#define AZ_CALLBACK_STUB                                                                                                 \
-    {                                                                                                                    \
-        if (status) *status = MS::kSuccess;                                                                              \
-        return azNewId();                                                                                                \
-    }
-MCallbackId MEventMessage::addEventCallback(const MString&, MMessage::MBasicFunction, void*, MStatus* status) AZ_CALLBACK_STUB
-MCallbackId MNodeMessage::addAttributeChangedCallback(MObject&, MAttr2PlugFunction, void*, MStatus* status) AZ_CALLBACK_STUB
-MCallbackId MNodeMessage::addNodeDirtyCallback(MObject&, MMessage::MNodeFunction, void*, MStatus* status) AZ_CALLBACK_STUB
-MCallbackId MNodeMessage::addNodeDirtyPlugCallback(MObject&, MNodePlugFunction, void*, MStatus* status) AZ_CALLBACK_STUB
-MCallbackId MNodeMessage::addNodeAboutToDeleteCallback(MObject&, MNodeModifierFunction, void*, MStatus* status) AZ_CALLBACK_STUB
-MCallbackId MNodeMessage::addNodePreRemovalCallback(MObject&, MMessage::MNodeFunction, void*, MStatus* status) AZ_CALLBACK_STUB
-MCallbackId MNodeMessage::addNameChangedCallback(MObject&, MNodeStringFunction, void*, MStatus* status) AZ_CALLBACK_STUB
-
-// ---------------------------------------------------------------------------------------------------------------------
 // MRampAttribute: entries are elements of the array compound, children position, value (or colour) and interpolation.
 
 MRampAttribute::MRampAttribute() {}

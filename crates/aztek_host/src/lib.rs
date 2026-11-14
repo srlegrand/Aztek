@@ -188,6 +188,13 @@ pub extern "C" fn aztek_startup_scripts() {
     }
     #[cfg(not(feature = "python"))]
     let _ = python;
+    with(|h| crate::native_plugin::messages::scene(&mut h.core.s, crate::native_plugin::messages::MAYA_INITIALIZED, json!({})));
+}
+
+/// The application is about to quit: compiled plug-ins hear it.
+#[no_mangle]
+pub extern "C" fn aztek_exiting() {
+    with(|h| crate::native_plugin::messages::scene(&mut h.core.s, crate::native_plugin::messages::MAYA_EXITING, json!({})));
 }
 
 pub use batch::{aztek_batch, run as batch_run};
