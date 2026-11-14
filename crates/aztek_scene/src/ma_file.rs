@@ -1287,6 +1287,17 @@ fn channels_of(t: &NodeType) -> Vec<&'static str> {
     if t.dag {
         v.extend(DRAW_CHANNELS);
     }
+    // A deformer handle's shape: its settings, as the reference writes them there.
+    if let Some((_, _, ps)) = crate::deform::NONLINEAR_PARAMS.iter().find(|k| t.name == k.1) {
+        v.extend(ps.iter().map(|p| p.0));
+        v.push("handleWidth");
+    }
+    if t.name == "clusterHandle" {
+        v.push("origin");
+    }
+    if t.name == "implicitSphere" {
+        v.push("radius");
+    }
     if t.is_a("transform") {
         v.extend(XFORM_CHANNELS);
     }
@@ -1854,6 +1865,8 @@ impl Build<'_> {
         match n.ty.as_str() {
             "transform" | "joint" | "locator" | "nurbsCurve" | "nurbsSurface" | "camera" => true,
             crate::core_nodes::UNKNOWN_DAG | crate::core_nodes::UNKNOWN_TRANSFORM => true,
+            // A deformer's handle shape.
+            ty if crate::deform::handle_shape_kind(ty).is_some() => true,
             ty if PLAIN_SHAPES.contains(&ty) || crate::lights::is_light_type(ty) => true,
             "mesh" => !n.truth(&["io", "intermediateObject"]).unwrap_or(false),
             // A plug-in's locator (mGearWeightDriver).
@@ -1867,8 +1880,7 @@ impl Build<'_> {
         }
         let parent = self.nearest_parent(i);
         let n = &self.doc.nodes[i];
-        let handle = if n.ty == "transform" { deformers::handle_under(self.doc, i) } else { None };
-        let Some(t) = types::find(if handle.is_some() { "deformHandle" } else { &n.ty }) else { return };
+        let Some(t) = types::find(&n.ty) else { return };
         let name = if Graph::valid_name(&n.name) { n.name.clone() } else { String::new() };
         let is_shape = t.is_a("shape");
         let r = (|| -> Result<NodeId, String> {
@@ -1888,11 +1900,6 @@ impl Build<'_> {
                 crate::scripted::post_create_named(self.s, id);
                 self.ids[i] = Some(id);
                 self.used[i] = true;
-                if let Some((shape, kind)) = handle {
-                    self.used[shape] = true;
-                    let a = t.attr_index("deformerType").unwrap();
-                    let _ = self.s.graph.set_value(PlugRef::new(id, a as i32), PlugValue::String(kind.into()));
-                }
             }
             Err(e) => self.warnings.push(format!("{}: {e}", n.name)),
         }
@@ -1911,7 +1918,8 @@ impl Build<'_> {
                 continue;
             }
             // A default node of Aztek's may have it already (defaultRenderGlobals.defaultSurfaceShader).
-            if crate::defaults::is_scene_node(&n.name) && self.s.graph.node(id).is_some_and(|x| x.ty().attr_index(&a.long).is_some()) {
+            // A nonLinear has its kind's settings already, as the reference's addAttr lines give them.
+            if (crate::defaults::is_scene_node(&n.name) || n.ty == "nonLinear") && self.s.graph.node(id).is_some_and(|x| x.ty().attr_index(&a.long).is_some()) {
                 continue;
             }
             let Some(def) = user_attr_def(a) else {
@@ -4022,7 +4030,7 @@ impl Writer<'_> {
         if crate::cameras::is_default_camera(&self.s.graph, id) {
             return false;
         }
-        t.name == "transform" || t.name == "deformHandle" || matches!(t.name.as_str(), crate::core_nodes::UNKNOWN_DAG | crate::core_nodes::UNKNOWN_TRANSFORM) || t.is_a("joint") || t.is_a("locator") || t.is_a("ikHandle") || t.is_a("camera") || t.is_a("light") || PLAIN_SHAPES.contains(&t.name.as_str())
+        t.name == "transform" || crate::deform::handle_shape_kind(&t.name).is_some() || matches!(t.name.as_str(), crate::core_nodes::UNKNOWN_DAG | crate::core_nodes::UNKNOWN_TRANSFORM) || t.is_a("joint") || t.is_a("locator") || t.is_a("ikHandle") || t.is_a("camera") || t.is_a("light") || PLAIN_SHAPES.contains(&t.name.as_str())
     }
 
     fn write_dag(&mut self, id: NodeId) {
@@ -4048,7 +4056,7 @@ impl Writer<'_> {
                 }
                 return;
             }
-            self.create_line(if ty == "deformHandle" { "transform" } else { &ty }, &name, parent);
+            self.create_line(&ty, &name, parent);
             self.write_channels(id);
             if is_plain_node(&ty) {
                 let text = self.plain_attr_lines(id);
@@ -4080,8 +4088,8 @@ impl Writer<'_> {
                 }
                 self.write_mesh(id, &name, parent);
             }
-            if ty == "deformHandle" {
-                self.write_handle_shape(id, &name);
+            if crate::deform::handle_shape_kind(&ty).is_some() {
+                self.write_handle_shape(id);
             }
             if ty == "lattice" {
                 self.write_lattice_points(id);

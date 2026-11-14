@@ -184,6 +184,8 @@ fn member_obj<'a>(j: &'a Value, key: &str) -> Option<&'a Map<String, Value>> {
 /// Creates the document's nodes and connections in `g`. Returns the nodes created; problems go to `warnings`.
 pub fn instantiate(g: &mut Graph, doc: &Value, warnings: &mut Vec<String>) -> Vec<NodeId> {
     let mut created = Vec::new();
+    let mut legacy_nonlinear: Vec<NodeId> = Vec::new();
+    let mut legacy_handles: Vec<(NodeId, String)> = Vec::new();
     // Documents name parents and plug nodes by full path ("|Body|Arm"); older ones by name, unique back then.
     let mut by_path: HashMap<String, NodeId> = HashMap::new();
     let mut path_of: HashMap<NodeId, String> = HashMap::new();
@@ -241,7 +243,16 @@ pub fn instantiate(g: &mut Graph, doc: &Value, warnings: &mut Vec<String>) -> Ve
             .and_then(Value::as_str)
             .unwrap_or("")
             .to_string();
-        let Some(t) = types::find(ty_name) else {
+        // Older documents: a nonlinear deformer of its kind's own type, and a handle of type deformHandle. Read as the
+        // reference has them: a nonLinear with the kind's settings added, and a transform over the kind's shape.
+        let legacy_kind = crate::deform::NONLINEAR.contains(&ty_name).then_some(ty_name);
+        let legacy_handle = ty_name == "deformHandle";
+        let found = match (legacy_kind, legacy_handle) {
+            (Some(_), _) => types::find("nonLinear"),
+            (_, true) => types::find("transform"),
+            _ => types::find(ty_name),
+        };
+        let Some(t) = found else {
             warnings.push(format!(
                 "unknown node type '{ty_name}' ({name}) skipped; is an extension missing?"
             ));
@@ -279,6 +290,16 @@ pub fn instantiate(g: &mut Graph, doc: &Value, warnings: &mut Vec<String>) -> Ve
         if let Some(u) = jn.get("uuid").and_then(Value::as_str) {
             g.set_uuid(id, u);
         }
+        if let Some(kind) = legacy_kind {
+            if let Err(e) = crate::deform::add_nonlinear_attrs(g, id, kind) {
+                warnings.push(format!("{name}: {e}"));
+            }
+            legacy_nonlinear.push(id);
+        }
+        if legacy_handle {
+            let kind = member_obj(jn, "attrs").and_then(|a| a.get("deformerType")).and_then(Value::as_str).unwrap_or("");
+            legacy_handles.push((id, kind.to_string()));
+        }
         by_path.insert(key.clone(), id);
         path_of.insert(id, key);
         by_name.entry(name.clone()).or_default().push(id);
@@ -303,7 +324,8 @@ pub fn instantiate(g: &mut Graph, doc: &Value, warnings: &mut Vec<String>) -> Ve
         let nt = g.node(id).unwrap().type_arc().clone();
         for (attr, value) in stored.into_iter().flatten() {
             let Some((idx, element)) = nt.file_attr_index(attr) else {
-                if !nt.is_retired(attr) {
+                let legacy = (legacy_handle && attr == "deformerType") || (legacy_kind.is_some() && attr.starts_with("unused"));
+                if !nt.is_retired(attr) && !legacy {
                     warnings.push(format!("{name}.{attr}: no such attribute, ignored"));
                 }
                 continue;
@@ -400,6 +422,16 @@ pub fn instantiate(g: &mut Graph, doc: &Value, warnings: &mut Vec<String>) -> Ve
         })();
         if let Err(e) = r {
             warnings.push(format!("connection skipped: {e}"));
+        }
+    }
+    for (h, kind) in legacy_handles {
+        if let Err(e) = crate::deform::add_handle_shape(g, h, &kind) {
+            warnings.push(format!("{}: {e}", g.path(h)));
+        }
+    }
+    for n in legacy_nonlinear {
+        if crate::deform::leader_of(g, n) == n {
+            let _ = crate::deform::link_handle_shape(g, n);
         }
     }
     created

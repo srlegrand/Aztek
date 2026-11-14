@@ -21,7 +21,7 @@ use crate::node::{types, EvalContext, NodeBehavior, NodeData, NodeType};
 use crate::plug::{flags, AttrDef, NodeId, PlugRef, PlugType, PlugValue, NO_NODE};
 use crate::rig::{world, JsonData};
 use crate::session::Session;
-use crate::transform::{Transform, TransformBehavior};
+use crate::transform::Transform;
 
 pub(crate) fn plug(n: NodeId, a: usize) -> PlugRef {
     PlugRef::new(n, a as i32)
@@ -99,10 +99,79 @@ pub(crate) const GEOM: usize = 6;
 pub(crate) const DEFORMER_SET: usize = 7;
 pub(crate) const BASE_COUNT: usize = 8;
 
+/// The kinds of the reference's nonlinear deformer, as `nonLinear -type` names them.
 pub const NONLINEAR: &[&str] = &["bend", "twist", "squash", "flare", "sine", "wave"];
 
+/// Each kind: its handle shape's type and its settings (long name, short name, default), as the reference has them on
+/// the shape and adds them to the nonLinear node.
+pub const NONLINEAR_PARAMS: &[(&str, &str, &[(&str, &str, f64)])] = &[
+    ("bend", "deformBend", &[("curvature", "cur", 0.0), ("lowBound", "lb", -1.0), ("highBound", "hb", 1.0)]),
+    ("twist", "deformTwist", &[("startAngle", "sa", 0.0), ("endAngle", "ea", 0.0), ("lowBound", "lb", -1.0), ("highBound", "hb", 1.0)]),
+    ("squash", "deformSquash", &[("factor", "fac", 0.0), ("expand", "exp", 1.0), ("maxExpandPos", "mp", 0.5), ("startSmoothness", "ss", 0.0), ("endSmoothness", "es", 0.0), ("lowBound", "lb", -1.0), ("highBound", "hb", 1.0)]),
+    ("flare", "deformFlare", &[("startFlareX", "sfx", 1.0), ("startFlareZ", "sfz", 1.0), ("endFlareX", "efx", 1.0), ("endFlareZ", "efz", 1.0), ("curve", "crv", 0.0), ("lowBound", "lb", -1.0), ("highBound", "hb", 1.0)]),
+    ("sine", "deformSine", &[("amplitude", "amp", 0.0), ("wavelength", "wav", 2.0), ("offset", "off", 0.0), ("dropoff", "dr", 0.0), ("lowBound", "lb", -1.0), ("highBound", "hb", 1.0)]),
+    ("wave", "deformWave", &[("amplitude", "amp", 0.0), ("wavelength", "wav", 1.0), ("offset", "off", 0.0), ("dropoff", "dr", 0.0), ("dropoffPosition", "dp", 0.0), ("minRadius", "mnr", 0.0), ("maxRadius", "mxr", 1.0)]),
+];
+
+fn params_of(kind: &str) -> Option<&'static (&'static str, &'static str, &'static [(&'static str, &'static str, f64)])> {
+    NONLINEAR_PARAMS.iter().find(|k| k.0 == kind)
+}
+
+/// Which kind a nonLinear node is: the one whose settings it has.
+fn kind_index(t: &NodeType) -> Option<usize> {
+    NONLINEAR_PARAMS.iter().position(|(_, _, ps)| ps.iter().all(|(n, _, _)| t.attr_index(n).is_some()))
+}
+
+/// A nonLinear node's kind (bend, twist...).
+pub fn nonlinear_kind(g: &Graph, n: NodeId) -> Option<&'static str> {
+    let t = g.node(n)?.type_arc().clone();
+    t.is_a("nonLinear").then(|| kind_index(&t)).flatten().map(|k| NONLINEAR_PARAMS[k].0)
+}
+
+/// What a handle shape draws as: a nonlinear kind, cluster, or sculpt.
+pub fn handle_shape_kind(shape_type: &str) -> Option<&'static str> {
+    if let Some(k) = NONLINEAR_PARAMS.iter().find(|k| k.1 == shape_type) {
+        return Some(k.0);
+    }
+    match shape_type {
+        "clusterHandle" => Some("cluster"),
+        "implicitSphere" => Some("sculpt"),
+        _ => None,
+    }
+}
+
+/// A nonlinear kind's settings on a nonLinear node, as the reference adds them there.
+pub(crate) fn add_nonlinear_attrs(g: &mut Graph, n: NodeId, kind: &str) -> CmdResult<()> {
+    let Some((_, _, ps)) = params_of(kind) else { fail!("nonLinear: type must be one of {}", NONLINEAR.join(", ")) };
+    for (name, short, def) in ps.iter() {
+        if g.node(n).is_some_and(|x| x.ty().attr_index(name).is_some()) {
+            continue;
+        }
+        let mut a = float_attr_short(name, short, *def, "", None, None);
+        a.flags |= flags::USER | flags::INPUT | flags::STORABLE | flags::KEYABLE;
+        a.unit = crate::unit_tables::attr_unit("nonLinear", name);
+        g.add_attr(n, a)?;
+    }
+    Ok(())
+}
+
+/// A nonLinear's settings into its handle shape's, as the reference connects them.
+pub fn link_handle_shape(g: &mut Graph, n: NodeId) -> CmdResult<()> {
+    let Some(kind) = nonlinear_kind(g, n) else { return Ok(()) };
+    let Some(h) = g.source(&plug(n, HANDLE)).map(|s| s.node) else { return Ok(()) };
+    let Some(shape) = g.children(h).iter().copied().find(|&c| g.node(c).is_some_and(|x| x.ty().is_a("deformFunc"))) else { return Ok(()) };
+    let (_, _, ps) = params_of(kind).unwrap();
+    for (name, _, _) in ps.iter() {
+        let (Some(a), Some(b)) = (g.node(n).and_then(|x| x.ty().attr_index(name)), g.node(shape).and_then(|x| x.ty().attr_index(name))) else { continue };
+        if g.source(&plug(shape, b)).is_none() {
+            g.connect(&plug(n, a), &plug(shape, b), false)?;
+        }
+    }
+    Ok(())
+}
+
 pub fn is_deformer(type_name: &str) -> bool {
-    NONLINEAR.contains(&type_name) || matches!(type_name, "cluster" | "blendShape" | "ffd" | "softMod" | "deltaMush" | "tension" | "wrap" | "wire") || crate::deform_extra::TYPES.contains(&type_name) || matches!(type_name, "cloth" | "nCloth")
+    type_name == "nonLinear" || NONLINEAR.contains(&type_name) || matches!(type_name, "cluster" | "blendShape" | "ffd" | "softMod" | "deltaMush" | "tension" | "wrap" | "wire") || crate::deform_extra::TYPES.contains(&type_name) || matches!(type_name, "cloth" | "nCloth")
 }
 
 /// Heavy per-point data: weights, rest points, lattice mappings, wrap bindings. A flat list of numbers.
@@ -168,17 +237,8 @@ fn through_handle(m: &mut Mesh, geom: &DMat4, handle: &DMat4, env: f64, weights:
     }
 }
 
-pub struct NonLinear {
-    kind: usize,
-}
-
-// Nonlinear attributes after the shared ones.
-const NL_A: usize = BASE_COUNT;
-const NL_B: usize = BASE_COUNT + 1;
-const NL_C: usize = BASE_COUNT + 2;
-const NL_LOW: usize = BASE_COUNT + 3;
-const NL_HIGH: usize = BASE_COUNT + 4;
-const NL_D: usize = BASE_COUNT + 5;
+/// The reference's nonLinear: one type for every kind, which the settings added to it say.
+pub struct NonLinear;
 
 fn nonlinear(kind: usize, a: f64, b: f64, c: f64, d: f64, e: f64, lo: f64, hi: f64, p: DVec3) -> DVec3 {
     let span = (hi - lo).max(1e-9);
@@ -251,10 +311,21 @@ impl NodeBehavior for NonLinear {
         let data = json_of(d, DATA);
         let geom = mat_from(data.get("geom").unwrap_or(&Value::Null));
         let handle = d.matrix(HANDLE);
-        let (a, b, c, dd, lo, hi) = (d.float(NL_A), d.float(NL_B), d.float(NL_C), d.float(NL_D), d.float(NL_LOW), d.float(NL_HIGH));
-        let kind = self.kind;
-        // Only flare has a seventh setting, endFlareZ.
-        let ee = if kind == 3 { d.float(NL_D + 1) } else { 0.0 };
+        let t = d.ty().clone();
+        let Some(kind) = kind_index(&t) else {
+            d.set_output(OUT, PlugValue::Mesh(Some(input)));
+            return;
+        };
+        let get = |name: &str, def: f64| t.attr_index(name).map_or(def, |i| d.float(i));
+        // The settings each kind's function takes, in its order.
+        let (a, b, c, dd, ee, lo, hi) = match kind {
+            0 => (get("curvature", 0.0), 0.0, 0.0, 0.0, 0.0, get("lowBound", -1.0), get("highBound", 1.0)),
+            1 => (get("startAngle", 0.0), get("endAngle", 0.0), 0.0, 0.0, 0.0, get("lowBound", -1.0), get("highBound", 1.0)),
+            2 => (get("factor", 0.0), get("expand", 1.0), 0.0, 0.0, 0.0, get("lowBound", -1.0), get("highBound", 1.0)),
+            3 => (get("startFlareX", 1.0), get("endFlareX", 1.0), get("curve", 0.0), get("startFlareZ", 1.0), get("endFlareZ", 1.0), get("lowBound", -1.0), get("highBound", 1.0)),
+            4 => (get("amplitude", 0.0), get("wavelength", 2.0), get("offset", 0.0), 0.0, 0.0, get("lowBound", -1.0), get("highBound", 1.0)),
+            _ => (get("amplitude", 0.0), get("wavelength", 1.0), get("offset", 0.0), 0.0, 0.0, get("minRadius", 0.0), get("maxRadius", 1.0)),
+        };
         let mut m = (*input).clone();
         through_handle(&mut m, &geom, &handle, d.float(ENVELOPE), floats_of(d, WEIGHTS), |p| nonlinear(kind, a, b, c, dd, ee, lo, hi, p));
         d.set_output(OUT, PlugValue::Mesh(Some(Arc::new(m))));
@@ -298,18 +369,12 @@ impl NodeBehavior for Cluster {
     }
 }
 
-/// A deformer handle: a transform drawn as the deformer's frame.
-pub struct DeformHandle;
-impl TransformBehavior for DeformHandle {}
-impl NodeBehavior for DeformHandle {
+/// A deformer's handle shape: it only follows its transform, which the deformer reads.
+#[derive(Default)]
+pub struct HandleShape;
+impl NodeBehavior for HandleShape {
     fn compute(&mut self, _ctx: &EvalContext, d: &mut NodeData) {
-        let local = Transform::local_matrix_of(self, d);
-        let parent = d.matrix(Transform::PARENT_MATRIX);
-        d.set_output(Transform::MATRIX, local);
-        d.set_output(Transform::WORLD_MATRIX, parent * local);
-    }
-    fn as_transform(&self) -> Option<&dyn TransformBehavior> {
-        Some(self)
+        crate::transform::Shape::compute_matrices(d);
     }
     fn as_any(&self) -> &dyn Any {
         self
@@ -319,26 +384,69 @@ impl NodeBehavior for DeformHandle {
 pub fn register_types() {
     static ONCE: std::sync::Once = std::sync::Once::new();
     ONCE.call_once(|| {
-        let xf = types::find("transform").expect("transform");
-        types::register_type(NodeType {
-            name: "deformHandle".into(),
-            base: Some(xf),
+        // The handles' shapes, as the reference has them under each handle's transform.
+        let shape = types::find("shape").expect("shape");
+        let df = types::register_type(NodeType {
+            name: "deformFunc".into(),
+            base: Some(shape.clone()),
             dag: true,
             icon: "axis-y".into(),
-            doc: "A deformer's handle: move, turn and scale it to place the deformation.".into(),
-            own_attrs: vec![AttrDef {
-                name: "deformerType".into(),
-                short_name: "dft".into(),
-                ty: PlugType::String,
-                default_value: PlugValue::String(String::new()),
-                flags: flags::INPUT | flags::STORABLE | flags::HIDDEN,
-                doc: "What it handles: bend, cluster...".into(),
-                ..Default::default()
-            }],
-            create: Some(Arc::new(|| Box::new(DeformHandle))),
+            doc: "A nonlinear deformer's handle shape: the deformation's settings, drawn at its transform.".into(),
+            own_attrs: vec![
+                data_attr("deformerData", "dd", "The settings, for the nonLinear node; the reference connects it there."),
+                float_attr_short("handleWidth", "hw", 1.0, "How wide the handle draws.", Some(0.0), None),
+            ],
             ..Default::default()
         })
-        .expect("deformHandle");
+        .expect("deformFunc");
+        for (kind, shape_type, ps) in NONLINEAR_PARAMS {
+            let own: Vec<AttrDef> = ps
+                .iter()
+                .map(|(n, sh, def)| {
+                    let mut a = float_attr_short(n, sh, *def, "", None, None);
+                    a.flags |= flags::KEYABLE;
+                    a.unit = crate::unit_tables::attr_unit("nonLinear", n);
+                    a
+                })
+                .collect();
+            types::register_type(NodeType {
+                name: shape_type.to_string(),
+                base: Some(df.clone()),
+                dag: true,
+                doc: format!("The {kind} handle's shape: its settings, from the nonLinear node, and its drawing."),
+                own_attrs: own,
+                create: Some(Arc::new(|| Box::<HandleShape>::default())),
+                ..Default::default()
+            })
+            .expect(shape_type);
+        }
+        let mut origin = crate::attr_defs::vec3_attr("origin", "or", DVec3::ZERO, STORED_FLAGS, "Where the handle draws, object space.");
+        origin.child_short = ["ox".into(), "oy".into(), "oz".into()];
+        types::register_type(NodeType {
+            name: "clusterHandle".into(),
+            base: Some(shape.clone()),
+            dag: true,
+            icon: "circle-letter-c".into(),
+            doc: "A cluster's handle shape, drawn at its origin; the cluster follows its transform.".into(),
+            own_attrs: vec![
+                origin,
+                AttrDef { name: "weightedNode".into(), short_name: "wn".into(), ty: PlugType::Int, default_value: PlugValue::Int(0), flags: flags::INPUT | flags::HIDDEN | flags::MESSAGE, doc: "The node whose transform weights the cluster.".into(), ..Default::default() },
+            ],
+            create: Some(Arc::new(|| Box::<HandleShape>::default())),
+            ..Default::default()
+        })
+        .expect("clusterHandle");
+        types::register_type(NodeType {
+            name: "implicitSphere".into(),
+            base: Some(shape),
+            dag: true,
+            icon: "sphere".into(),
+            doc: "A sphere for a sculpt deformer to push points with.".into(),
+            own_attrs: vec![float_attr_short("radius", "rad", 1.0, "The sphere's radius.", Some(0.0), None)],
+            create: Some(Arc::new(|| Box::<HandleShape>::default())),
+            ..Default::default()
+        })
+        .expect("implicitSphere");
         let shared = |extra: Vec<AttrDef>| {
             let mut v = vec![
                 mesh_attr("inputPolymesh", "ip", flags::INPUT | flags::HIDDEN, "The mesh before the deformer."),
@@ -363,41 +471,15 @@ pub fn register_types() {
         crate::deform_blend::register_types(gf.clone());
         crate::deform_extra::register_types(gf.clone());
         crate::dynamics::register_cloth(gf.clone());
-        let nl = types::register_type(NodeType { name: "nonLinear".into(), base: Some(gf.clone()), icon: "wave-sine".into(), doc: "A nonlinear deformer.".into(), ..Default::default() }).expect("nonLinear");
-        let specs: [(&str, [(&str, &str, f64); 6]); 6] = [
-            ("bend", [("curvature", "cur", 0.0), ("unusedB", "ub", 0.0), ("unusedC", "uc", 0.0), ("lowBound", "lb", -1.0), ("highBound", "hb", 1.0), ("unusedD", "ud", 0.0)]),
-            ("twist", [("startAngle", "sa", 0.0), ("endAngle", "ea", 0.0), ("unusedC", "uc", 0.0), ("lowBound", "lb", -1.0), ("highBound", "hb", 1.0), ("unusedD", "ud", 0.0)]),
-            ("squash", [("factor", "f", 0.0), ("expand", "exp", 1.0), ("unusedC", "uc", 0.0), ("lowBound", "lb", -1.0), ("highBound", "hb", 1.0), ("unusedD", "ud", 0.0)]),
-            ("flare", [("startFlareX", "sfx", 1.0), ("endFlareX", "efx", 1.0), ("curve", "c", 0.0), ("lowBound", "lb", -1.0), ("highBound", "hb", 1.0), ("startFlareZ", "sfz", 1.0)]),
-            ("sine", [("amplitude", "amp", 0.0), ("wavelength", "wav", 2.0), ("offset", "off", 0.0), ("lowBound", "lb", -1.0), ("highBound", "hb", 1.0), ("unusedD", "ud", 0.0)]),
-            ("wave", [("amplitude", "amp", 0.0), ("wavelength", "wav", 1.0), ("offset", "off", 0.0), ("minRadius", "mnr", 0.0), ("maxRadius", "mxr", 1.0), ("unusedD", "ud", 0.0)]),
-        ];
-        for (k, (name, attrs)) in specs.iter().enumerate() {
-            let mut own: Vec<AttrDef> = attrs
-                .iter()
-                .map(|(n, s, def)| {
-                    let mut a = float_attr_short(n, s, *def, "", None, None);
-                    if n.starts_with("unused") {
-                        a.flags |= flags::HIDDEN;
-                        a.flags &= !flags::KEYABLE;
-                    }
-                    a
-                })
-                .collect();
-            if *name == "flare" {
-                own.push(float_attr_short("endFlareZ", "efz", 1.0, "", None, None));
-            }
-            types::register_type(NodeType {
-                name: name.to_string(),
-                base: Some(nl.clone()),
-                icon: "wave-sine".into(),
-                doc: format!("The {name} nonlinear deformer: the mesh {name}s in its handle's frame."),
-                own_attrs: own,
-                create: Some(Arc::new(move || Box::new(NonLinear { kind: k }))),
-                ..Default::default()
-            })
-            .expect(name);
-        }
+        types::register_type(NodeType {
+            name: "nonLinear".into(),
+            base: Some(gf.clone()),
+            icon: "wave-sine".into(),
+            doc: "A nonlinear deformer: the mesh bends, twists, squashes, flares or waves in its handle's frame, as the settings added to it say.".into(),
+            create: Some(Arc::new(|| Box::new(NonLinear))),
+            ..Default::default()
+        })
+        .expect("nonLinear");
         types::register_type(NodeType {
             name: "cluster".into(),
             base: Some(gf.clone()),
@@ -496,9 +578,14 @@ pub(crate) fn weights_for(capacity: u32, pts: &Option<Vec<u32>>) -> Option<Vec<f
 /// Connects leader's settings into follower's, so the two read as one deformer.
 pub(crate) fn link_follower(g: &mut Graph, leader: NodeId, follower: NodeId) -> CmdResult<()> {
     crate::deform_sets::merge_sets(g, leader, follower)?;
+    // A nonLinear's settings are added to it: the follower takes the leader's kind.
+    if let Some(kind) = nonlinear_kind(g, leader) {
+        add_nonlinear_attrs(g, follower, kind)?;
+    }
     let attrs: Vec<(usize, bool)> = g.node(leader).unwrap().ty().attrs.iter().enumerate().map(|(i, a)| (i, a.is_array() || a.has(flags::HIDDEN) || !a.has(flags::INPUT) || a.ty == PlugType::Mesh || a.ty == PlugType::Data || a.ty == PlugType::Matrix)).collect();
+    let count = g.node(follower).map_or(0, |n| n.ty().attrs.len());
     for (i, skip) in attrs {
-        if !skip {
+        if !skip && i < count {
             g.connect(&plug(leader, i), &plug(follower, i), false)?;
         }
     }
@@ -506,7 +593,7 @@ pub(crate) fn link_follower(g: &mut Graph, leader: NodeId, follower: NodeId) -> 
 }
 
 /// The first node of a deformer's group.
-pub(crate) fn leader_of(g: &Graph, n: NodeId) -> NodeId {
+pub fn leader_of(g: &Graph, n: NodeId) -> NodeId {
     match g.source(&plug(n, ENVELOPE)) {
         Some(s) if g.node(s.node).zip(g.node(n)).is_some_and(|(a, b)| a.ty().name == b.ty().name) => s.node,
         _ => n,
@@ -791,14 +878,48 @@ pub(crate) fn set_data(g: &mut Graph, n: NodeId, v: Value) -> CmdResult<()> {
     Ok(())
 }
 
+/// A deformer's handle as the reference makes one: a transform with the kind's shape under it (deformBend...,
+/// clusterHandle for a cluster or a wrinkle, implicitSphere for a sculpt).
 pub(crate) fn make_handle(g: &mut Graph, name: &str, kind: &str, at: DVec3, scale: DVec3) -> CmdResult<NodeId> {
-    let t = types::find("deformHandle").unwrap();
-    let h = g.create_node(&t, name, NO_NODE, true)?;
+    let shape_type = match kind {
+        "cluster" | "wrinkle" => "clusterHandle",
+        "sculpt" => "implicitSphere",
+        k => match params_of(k) {
+            Some((_, t, _)) => *t,
+            None => fail!("no handle for a {k}"),
+        },
+    };
+    let (h, _) = crate::dag::create_with_shape(g, shape_type, name, NO_NODE)?;
     g.set_value(plug(h, Transform::TRANSLATE), PlugValue::Vec3(at))?;
     g.set_value(plug(h, Transform::SCALE), PlugValue::Vec3(scale))?;
-    let attr = g.node(h).unwrap().ty().attr_index("deformerType").unwrap();
-    g.set_value(plug(h, attr), PlugValue::String(kind.into()))?;
     Ok(h)
+}
+
+/// The kind's shape under a handle transform that has none: an older document's handle.
+pub(crate) fn add_handle_shape(g: &mut Graph, h: NodeId, kind: &str) -> CmdResult<()> {
+    let shape_type = match kind {
+        "cluster" | "wrinkle" => "clusterHandle",
+        "sculpt" => "implicitSphere",
+        k => match params_of(k) {
+            Some((_, t, _)) => *t,
+            None => return Ok(()),
+        },
+    };
+    let t = types::find(shape_type).unwrap();
+    let name = format!("{}Shape", g.node(h).map(|n| n.name().to_string()).unwrap_or_default());
+    let sh = g.create_node(&t, &name, h, false)?;
+    if kind == "cluster" {
+        let pivot = g.node(h).map(|n| n.data().vec3(Transform::ROTATE_PIVOT)).unwrap_or(DVec3::ZERO);
+        if let Some(a) = g.node(sh).and_then(|x| x.ty().attr_index("origin")) {
+            g.set_value(plug(sh, a), PlugValue::Vec3(pivot))?;
+        }
+    }
+    Ok(())
+}
+
+/// A handle's shape.
+pub fn handle_shape(g: &Graph, h: NodeId) -> Option<NodeId> {
+    g.children(h).iter().copied().find(|&c| g.node(c).is_some_and(|x| handle_shape_kind(&x.ty().name).is_some()))
 }
 
 /// Meshes from the arguments or selection, with the points picked on each (None for all).
@@ -917,7 +1038,8 @@ pub fn register(c: &mut Commands<Session>) {
                     let mut first = NO_NODE;
                     for (m, _) in &meshes {
                         let geom = world(g, crate::dag::transform_of(g, *m));
-                        let n = insert(g, *m, &kind, &name)?;
+                        let n = insert(g, *m, "nonLinear", &name)?;
+                        add_nonlinear_attrs(g, n, &kind)?;
                         set_data(g, n, json!({"geom": mat_json(&geom)}))?;
                         g.connect(&plug(h, Transform::WORLD_MATRIX), &plug(n, HANDLE), false)?;
                         for (k, v) in [("curvature", "curvature"), ("startAngle", "startAngle"), ("endAngle", "endAngle"), ("factor", "factor"), ("amplitude", "amplitude"), ("wavelength", "wavelength")] {
@@ -933,6 +1055,7 @@ pub fn register(c: &mut Commands<Session>) {
                             link_follower(g, first, n)?;
                         }
                     }
+                    link_handle_shape(g, first)?;
                     g.select(&[h], SelectMode::Replace);
                     Ok((first, h))
                 })();
@@ -984,6 +1107,12 @@ pub fn register(c: &mut Commands<Session>) {
                     let h = make_handle(g, &format!("{name}Handle"), "cluster", DVec3::ZERO, DVec3::ONE)?;
                     g.set_value(plug(h, Transform::ROTATE_PIVOT), PlugValue::Vec3(centre))?;
                     g.set_value(plug(h, Transform::SCALE_PIVOT), PlugValue::Vec3(centre))?;
+                    // The reference's handle shape draws at the same place.
+                    if let Some(sh) = handle_shape(g, h) {
+                        if let Some(a) = g.node(sh).and_then(|x| x.ty().attr_index("origin")) {
+                            g.set_value(plug(sh, a), PlugValue::Vec3(centre))?;
+                        }
+                    }
                     g.evaluate();
                     let hw = world(g, h);
                     let mut first = NO_NODE;

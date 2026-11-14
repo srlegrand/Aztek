@@ -1935,3 +1935,25 @@ running copy of the reference.
   `timeToUnitConversion`. The last two count time in the reference's internal unit, 6000 a second, as its files do.
 - Files are still read through `groupId`, `groupParts` and `tweak` nodes as before; one made with `createNode` is not
   yet written to a file.
+
+### Nonlinear deformers and handles laid out as the reference's (14/11/2026)
+
+Step 2 of the 2027 parity order. Checked by reading Aang's bends, squash and clusters and Megaman's clusters, saving
+and reading back: every mesh's bounds and every joint are where they were before the change. Not compared with a
+running copy of the reference.
+
+- A nonlinear deformer is one node type, `nonLinear`, for every kind. The kind's settings are added to it, as the
+  reference adds them (`curvature`, `lowBound`, `highBound` on a bend); `nodeType bend1` is `nonLinear`. Before, each
+  kind was a type of its own (`bend`, `twist`...), which the reference doesn't have.
+- A handle is a transform with the kind's shape under it, as in the reference: `deformBend`, `deformTwist`,
+  `deformSquash`, `deformFlare`, `deformSine` or `deformWave` (all `deformFunc`s), `clusterHandle` for a cluster,
+  `implicitSphere` for a sculpt (Aztek's wrinkle takes a `clusterHandle` too). The deformer's settings are connected into
+  its shape's. Before, the
+  handle was a transform of Aztek's own type, `deformHandle`, with no shape.
+- The settings take the reference's names and defaults, and the ones Aztek lacked: squash's `maxExpandPos`,
+  `startSmoothness`, `endSmoothness` (short `fac` for factor, not `f`), flare's `curve` short `crv`, sine's and
+  wave's `dropoff`, wave's `dropoffPosition`. The new ones are kept and written; the deformation doesn't use them yet.
+- A twist's angles from a file are read in the file's angle unit, and written in it. Twists written by an older
+  Aztek wrote radians where the file said degrees; such a file reads its twist that much smaller.
+- Aztek's own scene files from before read as the new layout: a `bend` node becomes a nonLinear with its settings,
+  a `deformHandle` a transform with its kind's shape.

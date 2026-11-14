@@ -525,7 +525,7 @@ QMenu* MainWindow::deform_menu() {
             QString found;
             for (const QJsonValue& v : ask("artAttrCtx", QJsonObject{{"query", true}, {"queried", QJsonArray{"paintableAttrs"}}}).toArray()) {
                 QString a = v.toString();
-                bool match = ty == "nonLinear" ? QStringList{"bend", "flare", "sine", "squash", "twist", "wave"}.contains(a.section('.', 0, 0)) : a.section('.', 0, 0) == ty;
+                bool match = a.section('.', 0, 0) == ty;
                 if (match) { found = a; break; }
             }
             if (found.isEmpty()) { log("// Warning: select a mesh with that deformer //", 4); return; }

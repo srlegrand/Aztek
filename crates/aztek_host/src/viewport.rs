@@ -3013,11 +3013,13 @@ pub fn rig_items(g: &Graph) -> Vec<RigItem> {
                 }
             }
             out.push(rig_item(g, id, id, "joint", [70, 110, 220, 255], segs));
-        } else if ty.is_a("deformHandle") {
-            let kind = ty.attr_index("deformerType").map(|i| n.data().string(i).to_string()).unwrap_or_default();
-            // A cluster's handle sits on its pivot.
-            let at = w * glam::DMat4::from_translation(n.data().vec3(Transform::ROTATE_PIVOT));
-            out.push(rig_item(g, id, id, "cluster", [200, 120, 230, 255], aztek_scene::deform::handle_lines(&kind, &at)));
+        } else if let Some(kind) = aztek_scene::deform::handle_shape_kind(&ty.name) {
+            // A cluster's handle draws at its shape's origin, which is the transform's pivot.
+            let at = match ty.attr_index("origin") {
+                Some(o) => w * glam::DMat4::from_translation(n.data().vec3(o)),
+                None => w,
+            };
+            out.push(rig_item(g, id, aztek_scene::dag::transform_of(g, id), "cluster", [200, 120, 230, 255], aztek_scene::deform::handle_lines(kind, &at)));
         } else if let Some(segs) = aztek_scene::rig_misc::shape_lines(n) {
             out.push(rig_item(g, id, aztek_scene::dag::transform_of(g, id), "dimension", [60, 90, 230, 255], segs));
         } else if ty.is_a("nurbsCurve") {
@@ -3114,7 +3116,7 @@ pub fn type_category(g: &Graph, id: NodeId) -> &'static str {
     if ty.is_a("ikHandle") {
         return "ikHandle";
     }
-    if ty.is_a("deformHandle") || ty.is_a("softModHandle") || ty.is_a("lattice") || ty.is_a("baseLattice") {
+    if aztek_scene::deform::handle_shape_kind(&ty.name).is_some() || ty.is_a("softModHandle") || ty.is_a("lattice") || ty.is_a("baseLattice") {
         return "deformer";
     }
     if ty.is_a("nurbsSurface") {

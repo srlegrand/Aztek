@@ -86,7 +86,11 @@ fn get(s: &mut Session, node: &str, attr: &str) -> f64 {
     }
 }
 
+/// A node's type, or for a nonLinear its kind (bend, twist...), which says its handles and fields.
 fn type_of(s: &Session, id: NodeId) -> String {
+    if let Some(kind) = aztek_scene::deform::nonlinear_kind(&s.graph, id) {
+        return kind.to_string();
+    }
     s.graph.node(id).map(|n| n.ty().name.to_string()).unwrap_or_default()
 }
 

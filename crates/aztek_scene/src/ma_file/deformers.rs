@@ -21,9 +21,6 @@ fn handle_kind(shape_ty: &str) -> Option<&'static str> {
     HANDLE_SHAPES.iter().find(|x| x.0 == shape_ty).map(|x| x.1)
 }
 
-fn handle_shape_type(kind: &str) -> Option<&'static str> {
-    HANDLE_SHAPES.iter().find(|x| x.1 == kind).map(|x| x.0)
-}
 
 /// Whether a node in a file is a deformer other than a skinCluster.
 pub(super) fn is_file_deformer(ty: &str) -> bool {
@@ -141,6 +138,9 @@ impl Build<'_> {
             self.warnings.push(format!("{}: a nonlinear deformer with no handle shape", n.name));
             return None;
         };
+        // A nonlinear kind is the one nonLinear type, with that kind's settings added.
+        let kind = deform::NONLINEAR.contains(&ty.as_str()).then(|| ty.clone());
+        let ty = if kind.is_some() { "nonLinear".to_string() } else { ty };
         let Some(t) = types::find(&ty).filter(|_| deform::is_deformer(&ty) || crate::scripted::is_plugin_deformer(&ty)) else {
             self.warnings.push(format!("{}: {ty} is not a deformer here", n.name));
             return None;
@@ -153,6 +153,11 @@ impl Build<'_> {
                 return None;
             }
         };
+        if let Some(kind) = &kind {
+            if let Err(e) = deform::add_nonlinear_attrs(&mut self.s.graph, id, kind) {
+                self.warnings.push(format!("{}: {e}", n.name));
+            }
+        }
         if self.ids[di].is_none() {
             self.ids[di] = Some(id);
         }
@@ -283,7 +288,7 @@ impl Build<'_> {
         self.read_weights(&d, capacity, members.as_deref());
 
         if t.is_a("nonLinear") {
-            self.read_nonlinear(&d, &t);
+            self.read_nonlinear(&d);
         }
         if t.name == "cluster" && state.get("plugs").and_then(|p| p.get("dd")).is_none() {
             let geom = n.matrix_element(&["gm", "geomMatrix"], d.geometry).unwrap_or_else(|| rig::world(&mut self.s.graph, xf));
@@ -352,17 +357,21 @@ impl Build<'_> {
         let _ = deform::set_floats(&mut self.s.graph, d.id, WEIGHTS, w);
     }
 
-    /// A nonlinear's settings live on the reference's handle shape, and its geometry matrix on the node.
-    fn read_nonlinear(&mut self, d: &FileDeformer, t: &NodeType) {
+    /// A nonlinear's settings: those set on the node, as the reference writes its added attributes, else those on the
+    /// handle shape; and its geometry matrix on the node.
+    fn read_nonlinear(&mut self, d: &FileDeformer) {
         let doc = self.doc;
         let n = &doc.nodes[d.doc];
-        if let Some(shape) = doc.input(d.doc, &["dd", "deformerData"]).map(|c| c.src) {
-            for (a, def) in t.attrs.iter().enumerate() {
-                if !def.has(flags::HIDDEN) && def.ty == PlugType::Float && a >= deform::BASE_COUNT {
-                    if let Some(v) = doc.nodes[shape].num(&[def.short_name.as_str(), def.name.as_str()]) {
-                        let _ = self.s.graph.set_value(PlugRef::new(d.id, a as i32), PlugValue::Float(v));
-                    }
-                }
+        let t = self.s.graph.node(d.id).unwrap().type_arc().clone();
+        let shape = doc.input(d.doc, &["dd", "deformerData"]).map(|c| c.src);
+        for (a, def) in t.attrs.iter().enumerate() {
+            if !def.has(flags::USER) || def.ty != PlugType::Float {
+                continue;
+            }
+            let names = [def.short_name.as_str(), def.name.as_str()];
+            if let Some(v) = n.num(&names).or_else(|| shape.and_then(|s| doc.nodes[s].num(&names))) {
+                let v = v * if def.unit == units::Unit::Angle { doc.ang } else { 1.0 };
+                let _ = self.s.graph.set_value(PlugRef::new(d.id, a as i32), PlugValue::Float(v));
             }
         }
         if deform::json_of(self.s.graph.node(d.id).unwrap().data(), DATA).get("geom").is_none() {
@@ -525,6 +534,13 @@ impl Build<'_> {
                 // A wrap's driver may be a curve.
                 let from = if matches!(plain_dst.as_str(), "dp" | "driverPoints") { self.target_source(src, from.clone()) } else { from.clone() };
                 self.connect_quietly(&from, &format!("{path}.{attr}"));
+            }
+        }
+        // A nonlinear's settings into its handle shape, as the reference has them.
+        let nonlinear: Vec<NodeId> = self.deformers.iter().map(|d| d.id).filter(|&id| self.s.graph.node(id).is_some_and(|n| n.ty().is_a("nonLinear"))).collect();
+        for id in nonlinear {
+            if deform::leader_of(&self.s.graph, id) == id {
+                let _ = deform::link_handle_shape(&mut self.s.graph, id);
             }
         }
     }
@@ -719,8 +735,8 @@ impl Writer<'_> {
             }
             state.insert("plugs".into(), Value::Object(plugs));
         }
-        if nonlinear {
-            state.insert("type".into(), json!(t.name));
+        if let Some(kind) = deform::nonlinear_kind(&self.s.graph, d).filter(|_| nonlinear) {
+            state.insert("type".into(), json!(kind));
         }
         let leader = deform::leader_of(&self.s.graph, d);
         if leader != d {
@@ -739,7 +755,13 @@ impl Writer<'_> {
             let _ = writeln!(o, "\tsetAttr \".azs\" -type \"string\" {};", quoted(&Value::Object(state).to_string()));
         }
 
-        o.push_str(&self.attr_lines(d, |i, a| !a.has(flags::HIDDEN) && (!nonlinear || i < deform::BASE_COUNT)));
+        // A nonlinear's settings, added to it as the reference adds them.
+        if nonlinear {
+            for a in t.attrs.iter().filter(|a| a.has(flags::USER)) {
+                o.push_str(&attr_add_lines(a));
+            }
+        }
+        o.push_str(&self.attr_lines(d, |_, a| !a.has(flags::HIDDEN)));
 
         // Weights per written point.
         let weights = self.s.graph.node(d).and_then(|n| deform::floats_of(n.data(), WEIGHTS)).map(|f: &Floats| f.0.clone());
@@ -799,31 +821,32 @@ impl Writer<'_> {
         o
     }
 
-    /// What goes with a handle: the reference's shape under its transform, and a nonlinear's settings on that shape.
-    pub(super) fn write_handle_shape(&mut self, h: NodeId, name: &str) {
+    /// What a handle's shape connects to: a nonlinear's deformerData into its deformer, a cluster's transforms into the
+    /// cluster, as the reference has them.
+    pub(super) fn write_handle_shape(&mut self, shape: NodeId) {
         let g = &self.s.graph;
-        let kind = g.node(h).and_then(|n| n.ty().attr_index("deformerType").map(|a| n.value(a).clone()));
-        let Some(PlugValue::String(kind)) = kind else { return };
-        let Some(shape_ty) = handle_shape_type(&kind) else { return };
-        let shape = self.fresh(&format!("{name}Shape"));
-        let path = self.s.graph.path(h);
-        let _ = writeln!(self.out, "createNode {shape_ty} -n {} -p {};\n\tsetAttr -k off \".v\";", quoted(&shape), quoted(&path));
-        let dests = self.s.graph.destinations(&PlugRef::new(h, Transform::WORLD_MATRIX as i32));
-        let Some(d) = dests.iter().find(|p| p.attr as usize == HANDLE && self.keep.contains(&p.node)).map(|p| p.node) else { return };
-        let t = self.s.graph.node(d).unwrap().type_arc().clone();
-        let dp = self.s.graph.path(d);
-        if t.is_a("nonLinear") {
-            for (a, def) in t.attrs.iter().enumerate() {
-                let v = self.s.graph.node(d).unwrap().value(a).clone();
-                if a >= deform::BASE_COUNT && !def.has(flags::HIDDEN) && v != def.default_value {
-                    if let PlugValue::Float(x) = v {
-                        let _ = writeln!(self.out, "\tsetAttr \".{}\" {x};", def.short_name);
-                    }
+        let h = g.parent(shape);
+        if h == NO_NODE {
+            return;
+        }
+        let ty = g.node(shape).map(|n| n.ty().name.clone()).unwrap_or_default();
+        let dests = g.destinations(&PlugRef::new(h, Transform::WORLD_MATRIX as i32));
+        let sp = g.path(shape);
+        let lines: Vec<(String, String)> = dests
+            .iter()
+            .filter(|p| p.attr as usize == HANDLE && self.keep.contains(&p.node) && deform::leader_of(g, p.node) == p.node)
+            .filter_map(|p| {
+                let dt = g.node(p.node)?.ty().name.clone();
+                let dp = g.path(p.node);
+                match (ty.as_str(), dt.as_str()) {
+                    (_, "nonLinear") if ty.starts_with("deform") => Some((format!("{sp}.dd"), format!("{dp}.dd"))),
+                    ("clusterHandle", "cluster") => Some((format!("{sp}.x"), format!("{dp}.x"))),
+                    _ => None,
                 }
-            }
-            self.conn(&format!("{shape}.dd"), &format!("{dp}.dd"));
-        } else {
-            self.conn(&format!("{shape}.x"), &format!("{dp}.x"));
+            })
+            .collect();
+        for (a, b) in lines {
+            self.conn(&a, &b);
         }
     }
 
@@ -891,14 +914,6 @@ impl Writer<'_> {
             format!("{dp}.it[0].itg[{i}].iti[{iti}].igt")
         } else if is_def(&dt) && dst.attr as usize == HANDLE {
             format!("{dp}.ma")
-        } else if dt.is_a("nonLinear") && dst.attr as usize >= deform::BASE_COUNT {
-            // The reference's nonlinear settings are on the handle shape.
-            let h = g.source(&deform::plug(dst.node, HANDLE)).map(|s| s.node);
-            let shape = h.map(|h| format!("{}Shape", g.path(h)));
-            match shape {
-                Some(s) => format!("{s}.{}", attr.short_name),
-                None => return,
-            }
         } else {
             name(&dst)
         };

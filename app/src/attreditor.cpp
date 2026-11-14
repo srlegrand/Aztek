@@ -246,7 +246,7 @@ const QList<Section>& sections_for(const QString& type) {
     if (type == "aiAreaLight") return ai_area;
     if (type == "aiMeshLight") return mesh_light;
     if (type == "aiPhotometricLight") return photometric;
-    static const QSet<QString> shapes{"nurbsSurface", "lattice", "baseLattice", "deformHandle", "softModHandle", "follicle", "distanceDimShape", "annotationShape", "motionTrailShape", "ikEffector"};
+    static const QSet<QString> shapes{"nurbsSurface", "lattice", "baseLattice", "deformBend", "deformTwist", "deformSquash", "deformFlare", "deformSine", "deformWave", "clusterHandle", "implicitSphere", "softModHandle", "follicle", "distanceDimShape", "annotationShape", "motionTrailShape", "ikEffector"};
     if (shapes.contains(type)) return shape;
     static const QSet<QString> materials{"lambert", "blinn", "phong", "phongE", "anisotropic", "surfaceShader"};
     if (materials.contains(type)) return material;

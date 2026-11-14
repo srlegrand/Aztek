@@ -96,7 +96,8 @@ fn outliner_node(g: &Graph, id: NodeId, shapes: bool, show_intermediate: bool, s
         "joint".into()
     } else if n.ty().is_a("ikHandle") {
         "ik".into()
-    } else if n.ty().is_a("deformHandle") {
+    } else if aztek_scene::deform::handle_shape(g, id).is_some() {
+        // The Deformers filter's icon, for a deformer's handle.
         "deformHandle".into()
     } else if n.ty().is_a("transform") {
         match aztek_scene::dag::shapes(g, id, false).first().and_then(|&s| g.node(s)) {
