@@ -681,9 +681,12 @@ impl Writer {
                 return;
             }
         };
+        let (show, has) = (f.get(2).copied().unwrap_or(0), f.get(3).copied().unwrap_or(0));
+        // Then the nice name when it has one, and an enum's fields: checked against every added attribute of three
+        // rigs' files, each read to its last byte.
+        let nice = if show & 0x80 != 0 { Some(c.str()) } else { None };
         let fields = if code == "aENM" { Some(c.str()) } else { None };
         c.u32();
-        let (show, has) = (f.get(2).copied().unwrap_or(0), f.get(3).copied().unwrap_or(0));
         let mut line = String::from("\taddAttr -ci true");
         if show & 0x40 != 0 && code != "aMSG" {
             line.push_str(" -k true");
@@ -692,6 +695,13 @@ impl Writer {
             line.push_str(" -h true");
         }
         let _ = write!(line, " -sn {} -ln {}", q(&short), q(&long));
+        if let Some(n) = nice.filter(|n| !n.is_empty()) {
+            let _ = write!(line, " -nn {}", q(&n));
+        }
+        // An array (mGear's compCtl, rigCtlTags and *_cnx).
+        if has & 0x01 != 0 {
+            line.push_str(" -m");
+        }
         let finite = |x: f64| x.is_finite().then_some(x);
         let min = if has & 0x02 != 0 && c.left() >= 8 { finite(c.f64()) } else { None };
         let max = if has & 0x04 != 0 && c.left() >= 8 { finite(c.f64()) } else { None };
@@ -1112,6 +1122,9 @@ mod tests {
             b.extend(name.as_bytes());
             b.push(0);
         }
+        if flags[2] & 0x80 != 0 {
+            b.extend(b"Nice Name\0");
+        }
         if let Some(f) = fields {
             b.extend(f.as_bytes());
             b.push(0);
@@ -1141,11 +1154,16 @@ mod tests {
         // The first flag byte set, as a rig's attributes have it: the code still ends after four letters.
         let (body, warn) = added(&attr_record(b"aDBL", [0x01, 0xf8, 0xc0, 0x4e], "blend", None, 0.0, 1.0, 0.5));
         assert!(warn.is_empty(), "{warn:?}");
-        assert_eq!(body, "\taddAttr -ci true -k true -sn \"blend\" -ln \"blend\" -min 0 -max 1 -dv 0.5 -at \"double\";\n");
+        assert_eq!(body, "\taddAttr -ci true -k true -sn \"blend\" -ln \"blend\" -nn \"Nice Name\" -min 0 -max 1 -dv 0.5 -at \"double\";\n");
         let (body, _) = added(&attr_record(b"aENM", [0x00, 0xf8, 0x02, 0x4e], "space", Some("world:local"), 0.0, 1.0, 1.0));
         assert_eq!(body, "\taddAttr -ci true -sn \"space\" -ln \"space\" -dv 1 -at \"enum\" -en \"world:local\";\n");
         let (body, _) = added(&attr_record(b"aMSG", [0x00, 0xf8, 0x00, 0x00], "compRoot", None, 0.0, 0.0, 0.0));
         assert_eq!(body, "\taddAttr -ci true -sn \"compRoot\" -ln \"compRoot\" -at \"message\";\n");
+        // A nice name before an enum's fields, and an array of messages, as FatMarine's mGear attributes have them.
+        let (body, _) = added(&attr_record(b"aENM", [0x00, 0xf8, 0xc2, 0x4e], "spine", Some("spine"), 0.0, 1.0, 0.0));
+        assert_eq!(body, "\taddAttr -ci true -k true -sn \"spine\" -ln \"spine\" -nn \"Nice Name\" -dv 0 -at \"enum\" -en \"spine\";\n");
+        let (body, _) = added(&attr_record(b"aMSG", [0x00, 0xd8, 0x00, 0x41], "compCtl", None, 0.0, 0.0, 0.0));
+        assert_eq!(body, "\taddAttr -ci true -sn \"compCtl\" -ln \"compCtl\" -m -at \"message\";\n");
         let (body, _) = added(&attr_record(b"aFLT", [0x00, 0xf8, 0x40, 0x08], "RBF_Multiplier", None, 0.0, 0.0, 2.0));
         assert!(body.contains("-dv 2 -at \"float\""), "{body}");
         // Limits that hold nothing are left off rather than read.

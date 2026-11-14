@@ -285,6 +285,7 @@ struct AddAttr {
     parent: String,
     keyable: bool,
     multi: bool,
+    nice: String,
 }
 
 #[derive(Debug, Default)]
@@ -814,6 +815,7 @@ impl Doc {
                 "-at" | "-attributeType" => a.at = text(),
                 "-dt" | "-dataType" => a.dt = text(),
                 "-en" | "-enumName" => a.en = text(),
+                "-nn" | "-niceName" => a.nice = text(),
                 "-p" | "-parent" => a.parent = text(),
                 "-dv" | "-defaultValue" => a.dv = val.and_then(Tok::num),
                 "-min" | "-minValue" => a.min = val.and_then(Tok::num),
@@ -2652,15 +2654,28 @@ impl Build<'_> {
             }
         };
         for (k, &(e, _)) in ids.iter().enumerate() {
+            // The whole offset (".tg[0].tot" x y z) or one axis of it (".tg[0].toty" y), in the file's order.
             let element_vec = |leaf: &[&str]| -> Option<DVec3> {
-                n.sets.iter().rev().find_map(|s| {
-                    let [a, b] = s.path.as_slice() else { return None };
-                    if !(matches!(a.name.as_str(), "tg" | "target") && a.range.is_some_and(|r| r.0 as i64 == e) && leaf.contains(&b.name.as_str())) {
-                        return None;
+                let mut out: Option<DVec3> = None;
+                for s in &n.sets {
+                    let [a, b] = s.path.as_slice() else { continue };
+                    if !(matches!(a.name.as_str(), "tg" | "target") && a.range.is_some_and(|r| r.0 as i64 == e)) {
+                        continue;
                     }
                     let v = &s.values;
-                    Some(DVec3::new(v.first()?.num()?, v.get(1)?.num()?, v.get(2)?.num()?))
-                })
+                    if leaf.contains(&b.name.as_str()) {
+                        if let (Some(x), Some(y), Some(z)) = (v.first().and_then(Tok::num), v.get(1).and_then(Tok::num), v.get(2).and_then(Tok::num)) {
+                            out = Some(DVec3::new(x, y, z));
+                        }
+                        continue;
+                    }
+                    let axis = leaf.iter().find_map(|l| b.name.strip_prefix(l).and_then(|rest| ["x", "y", "z"].iter().chain(["X", "Y", "Z"].iter()).position(|c| *c == rest)));
+                    if let (Some(axis), Some(x)) = (axis, v.first().and_then(Tok::num)) {
+                        let o = out.get_or_insert(DVec3::ZERO);
+                        o[axis % 3] = x;
+                    }
+                }
+                out
             };
             if let Some(v) = element_vec(&["tot", "targetOffsetTranslate"]) {
                 set_vec(g, "target.targetOffsetTranslate", Some(k as i32), v * doc.lin);
@@ -3190,6 +3205,7 @@ fn user_attr_def(a: &AddAttr) -> Option<AttrDef> {
     if ty == PlugType::Vec3 {
         def = AttrDef { ..crate::node::vec3_attr(&def.name, &def.short_name, DVec3::ZERO, flags_on, "") };
     }
+    def.nice_name = a.nice.clone();
     Some(def)
 }
 

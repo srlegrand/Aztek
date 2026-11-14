@@ -1893,3 +1893,18 @@ reference: the numbers below are Aztek's.
   some flags (`cvWrap -n`) were lost.
 - Not done: the GPU override (Aztek deforms on the CPU only), drawing the weight driver's override, cvWrap's menu
   module (Python, Qt and the reference's menus).
+
+### .mb added attributes and constraint offsets by axis (14/11/2026)
+
+Checked against every added attribute in FatMarine's and Woody's `.mb` files: each record now reads to its last byte.
+Not compared with a running copy of the reference.
+
+- An added attribute's record in an `.mb` file holds its nice name when it has one, before an enum's fields; Aztek
+  read past neither, so a nice name's letters were taken for the attribute's limits and default. FatMarine's spine
+  tangents came out at 10^180 and most of the rig with them. Nice names are kept (`-nn`).
+- An added array attribute (mGear's `compCtl`, `rigCtlTags`, `*_cnx`) is read as an array; it was read as one plug,
+  and every connection after the first was refused.
+- A constraint's target offset set one axis at a time (`.tg[0].toty`), as the reference saves one from an `.mb`, is
+  read; only the whole offset (`.tg[0].tot`) was.
+- `addAttr -nn` in an `.ma` file is read.
+- FatMarine now opens in its bind pose. Its `weightDriver` nodes (brave rabbit's, not mGear's) are still not read.
