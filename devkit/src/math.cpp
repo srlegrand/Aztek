@@ -37,6 +37,11 @@ MVector MVector::operator*(const MMatrix& m) const {
     return MVector(x * m[0][0] + y * m[1][0] + z * m[2][0], x * m[0][1] + y * m[1][1] + z * m[2][1], x * m[0][2] + y * m[1][2] + z * m[2][2]);
 }
 MVector& MVector::operator*=(const MMatrix& m) { return *this = *this * m; }
+MVector operator*(int s, const MVector& v) { return v * (double)s; }
+MVector operator*(short s, const MVector& v) { return v * (double)s; }
+MVector operator*(unsigned int s, const MVector& v) { return v * (double)s; }
+MVector operator*(unsigned short s, const MVector& v) { return v * (double)s; }
+MVector operator*(float s, const MVector& v) { return v * (double)s; }
 MVector operator*(double s, const MVector& v) { return v * s; }
 MVector operator*(const MMatrix& m, const MVector& v) {
     return MVector(m[0][0] * v.x + m[0][1] * v.y + m[0][2] * v.z, m[1][0] * v.x + m[1][1] * v.y + m[1][2] * v.z, m[2][0] * v.x + m[2][1] * v.y + m[2][2] * v.z);
@@ -82,7 +87,12 @@ MStatus MFloatVector::normalize() {
     return MS::kSuccess;
 }
 bool MFloatVector::isEquivalent(const MFloatVector& o, float tol) const { return (*this - o).length() <= tol; }
+MFloatVector operator*(int s, const MFloatVector& v) { return v * (float)s; }
+MFloatVector operator*(short s, const MFloatVector& v) { return v * (float)s; }
+MFloatVector operator*(unsigned int s, const MFloatVector& v) { return v * (float)s; }
+MFloatVector operator*(unsigned short s, const MFloatVector& v) { return v * (float)s; }
 MFloatVector operator*(float s, const MFloatVector& v) { return v * s; }
+MFloatVector operator*(double s, const MFloatVector& v) { return v * (float)s; }
 std::ostream& operator<<(std::ostream& os, const MFloatVector& v) { return os << "[" << v.x << ", " << v.y << ", " << v.z << "]"; }
 
 MPoint::MPoint(const MFloatPoint& p) : x(p.x), y(p.y), z(p.z), w(p.w) {}

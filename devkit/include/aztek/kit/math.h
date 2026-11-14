@@ -55,6 +55,12 @@ public:
     double x, y, z;
     static const MVector zero, one, xAxis, yAxis, zAxis, xNegAxis, yNegAxis, zNegAxis;
 };
+// A number of any type times a vector, as the reference declares them: one for each, so none is ambiguous.
+MVector operator*(int s, const MVector& v);
+MVector operator*(short s, const MVector& v);
+MVector operator*(unsigned int s, const MVector& v);
+MVector operator*(unsigned short s, const MVector& v);
+MVector operator*(float s, const MVector& v);
 MVector operator*(double s, const MVector& v);
 MVector operator*(const MMatrix& m, const MVector& v);
 std::ostream& operator<<(std::ostream& os, const MVector& v);
@@ -90,7 +96,12 @@ public:
     bool isEquivalent(const MFloatVector& o, float tol = 1e-5f) const;
     float x, y, z;
 };
+MFloatVector operator*(int s, const MFloatVector& v);
+MFloatVector operator*(short s, const MFloatVector& v);
+MFloatVector operator*(unsigned int s, const MFloatVector& v);
+MFloatVector operator*(unsigned short s, const MFloatVector& v);
 MFloatVector operator*(float s, const MFloatVector& v);
+MFloatVector operator*(double s, const MFloatVector& v);
 std::ostream& operator<<(std::ostream& os, const MFloatVector& v);
 
 class MPoint {

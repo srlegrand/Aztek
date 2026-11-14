@@ -42,6 +42,15 @@ jobs:
           echo "go=$go" >> "$GITHUB_OUTPUT"
           echo "Building $version: $go"
 
+  # The plug-in kit and the shipped plug-ins under clang (as on macOS) and GCC, in a minute: a compile error shows here
+  # before the long builds reach it.
+  kit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile
+        run: tools/check_kit.sh
+
   linux:
     needs: gate
     if: needs.gate.outputs.go == 'true'
@@ -278,8 +287,8 @@ jobs:
           pkg/*.AppImage --appimage-extract >/dev/null
           AZTEK_BIN="$PWD/squashfs-root/AppRun" packaging/linux/smoke-test.sh
 
-  # Flatpak and snap: the AppImage that started in the clean systems, repacked for each. Neither can fail the run or
-  # hold a release back: one that does not build or start is left out of that release.
+  # Flatpak: the AppImage that started in the clean systems, repacked. It can't fail the run or hold a release back:
+  # one that does not build or start is left out of that release.
   flatpak:
     needs: [gate, verify-appimage]
     if: always() && needs.verify-appimage.result == 'success'
@@ -312,53 +321,6 @@ jobs:
         with:
           name: aztek-flatpak
           path: aztek-*.flatpak
-
-  snap:
-    needs: [gate, verify-appimage]
-    if: always() && needs.verify-appimage.result == 'success'
-    continue-on-error: true
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: aztek-appimage
-          path: pkg
-
-      - name: Unpack the AppImage
-        run: |
-          packaging/flatpak/unpack-appimage.sh pkg/*.AppImage packaging/snap/AppDir
-          echo "${{ needs.gate.outputs.version }}" > packaging/snap/version
-
-      - uses: snapcore/action-build@v1
-        id: build
-        with:
-          path: packaging/snap
-
-      # Installed here as a user would install the file, then started: libraries, the program, Python.
-      - name: Install and start it
-        run: |
-          sudo snap install --dangerous "${{ steps.build.outputs.snap }}"
-          sudo snap install mesa-2404
-          sudo snap connect aztek:gpu-2404 mesa-2404:gpu-2404 || true
-          printf 'import sys, json, ctypes, ssl, sqlite3, zlib\nimport aztek.cmds as cmds\nprint(sys.version, cmds.polyCube())\n' > "$HOME/aztek-check.py"
-          QT_QPA_PLATFORM=offscreen snap run aztek --help
-          snap run aztek --batch --script "$HOME/aztek-check.py"
-
-      # The window too, where the runner lets a confined program reach its display. Told, not required.
-      - name: Start its window
-        continue-on-error: true
-        run: |
-          sudo apt-get update && sudo apt-get install -y xvfb xauth
-          timeout 180 xvfb-run -a -f "$HOME/aztek-xauth" -s "-screen 0 1280x800x24" snap run aztek --script "$HOME/aztek-check.py" --screenshot "$HOME/aztek-window.png"
-          test -s "$HOME/aztek-window.png"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: aztek-snap
-          path: ${{ steps.build.outputs.snap }}
 
   windows:
     needs: gate
@@ -480,14 +442,13 @@ jobs:
           name: aztek-macos-arm64
           path: dist/aztek-macos-arm64.zip
 
-  # Every push to main replaces the "latest" pre-release; a v* tag makes a versioned release.
+  # Every push to main makes a release of what built; a v* tag makes a versioned release. A platform that failed is
+  # left out of that release and named in its notes: one platform failing holds back none of the others.
   release:
-    needs: [gate, linux, ubuntu-2204, rocky, verify-rpm, verify-deb, verify-appimage, flatpak, snap, windows, macos]
+    needs: [gate, linux, ubuntu-2204, rocky, verify-rpm, verify-deb, verify-appimage, flatpak, windows, macos]
     if: >-
       always() && needs.gate.outputs.go == 'true'
-      && needs.linux.result == 'success' && needs.ubuntu-2204.result == 'success' && needs.rocky.result == 'success'
-      && needs.verify-rpm.result == 'success' && needs.verify-deb.result == 'success' && needs.windows.result == 'success'
-      && (github.event_name == 'push' || github.event_name == 'schedule')
+      && (github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
       && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-24.04
     permissions:
@@ -500,28 +461,56 @@ jobs:
         with:
           merge-multiple: true
 
-      # Only an AppImage that started in the clean systems is released. The Flatpak and the snap are made from it, and
-      # only once each has started: one that failed uploaded nothing.
-      - name: Unverified AppImage
-        if: needs.verify-appimage.result != 'success'
-        run: rm -f aztek-*.AppImage aztek-*.flatpak aztek_*.snap
+      # Only what started in a clean system goes out. A job that failed uploaded nothing; a package that built but did
+      # not install and start is taken out here.
+      - name: Keep what was checked
+        id: keep
+        run: |
+          shopt -s nullglob
+          missing=()
+          [ "${{ needs.linux.result }}" = success ] || missing+=("Linux tar.gz, Ubuntu 24.04 .deb")
+          [ "${{ needs.ubuntu-2204.result }}" = success ] || missing+=("Ubuntu 22.04 .deb")
+          [ "${{ needs.rocky.result }}" = success ] || missing+=("Rocky .rpm, AppImage, Flatpak")
+          [ "${{ needs.windows.result }}" = success ] || missing+=("Windows")
+          [ "${{ needs.macos.result }}" = success ] || missing+=("macOS")
+          if [ "${{ needs.verify-rpm.result }}" != success ]; then rm -f aztek-*.rpm; missing+=("Rocky .rpm (did not install and start)"); fi
+          if [ "${{ needs.verify-deb.result }}" != success ]; then rm -f aztek_*.deb; missing+=("Ubuntu .deb (did not install and start)"); fi
+          if [ "${{ needs.verify-appimage.result }}" != success ]; then rm -f aztek-*.AppImage aztek-*.flatpak; missing+=("AppImage and Flatpak (did not start)"); fi
+          [ "${{ needs.flatpak.result }}" = success ] || missing+=("Flatpak")
+          files=(aztek-* aztek_*)
+          printf '%s\n' "${files[@]}" > files.txt
+          echo "count=${#files[@]}" >> "$GITHUB_OUTPUT"
+          {
+            echo "notes<<EOF"
+            echo "Built $(date -u '+%d/%m/%Y %H:%M') UTC from $GITHUB_SHA."
+            if [ ${#missing[@]} -gt 0 ]; then
+              echo
+              echo "Not in this release, as its build or check failed: $(IFS=';'; echo "${missing[*]}" | sed 's/;/; /g'). The release before has them."
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          cat files.txt
 
       - name: Release
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && steps.keep.outputs.count != '0'
         env:
           VERSION: ${{ needs.gate.outputs.version }}
+          NOTES: ${{ steps.keep.outputs.notes }}
         run: |
           tag="v$VERSION"
           short="${VERSION%.0} (${GITHUB_SHA::7})"
+          mapfile -t files < files.txt
           if ! gh release view "$tag" >/dev/null 2>&1; then
-            gh release create "$tag" aztek-* aztek_* --target "$GITHUB_SHA" --latest --title "Aztek $short" \
-              --notes "Built $(date -u '+%d/%m/%Y %H:%M') UTC from $GITHUB_SHA." --generate-notes
+            gh release create "$tag" "${files[@]}" --target "$GITHUB_SHA" --latest --title "Aztek $short" \
+              --notes "$NOTES" --generate-notes
           fi
           # The old rolling pre-release, from before builds had numbers of their own.
           gh release delete latest --yes --cleanup-tag 2>/dev/null || true
 
       - name: Versioned release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') && steps.keep.outputs.count != '0'
+        env:
+          NOTES: ${{ steps.keep.outputs.notes }}
         run: |
-          gh release create "$GITHUB_REF_NAME" aztek-* aztek_* \
-            --title "Aztek $GITHUB_REF_NAME" --generate-notes
+          mapfile -t files < files.txt
+          gh release create "$GITHUB_REF_NAME" "${files[@]}" --title "Aztek $GITHUB_REF_NAME" --notes "$NOTES" --generate-notes

@@ -73,6 +73,8 @@ install -Dm644 %{aztek_src}/LICENSE %{buildroot}%{_datadir}/licenses/aztek/LICEN
 %{_datadir}/applications/aztek.desktop
 %{_datadir}/icons/hicolor/*/apps/aztek.*
 %{_datadir}/aztek
+# The plug-ins that ship with Aztek (plugins/CMakeLists.txt installs them to lib/aztek/plug-ins).
+%{_prefix}/lib/aztek
 %if %{with bundled_qt}
 %{_libdir}/aztek
 %endif

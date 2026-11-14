@@ -103,9 +103,10 @@ Kind this_install() {
 #else
     // An AppImage says where its file is; the program itself runs from a read-only mount of it.
     if (!qEnvironmentVariableIsEmpty("APPIMAGE")) return {"appimage", "x86_64.AppImage"};
-    // A Flatpak or a snap is read-only to the program in it, and is replaced from outside.
+    // A Flatpak is read-only to the program in it, and is replaced from outside.
     if (!qEnvironmentVariableIsEmpty("FLATPAK_ID")) return {"flatpak", "x86_64.flatpak"};
-    if (!qEnvironmentVariableIsEmpty("SNAP")) return {"snap", "amd64.snap"};
+    // Snaps are no longer made: one installed before is pointed at the AppImage.
+    if (!qEnvironmentVariableIsEmpty("SNAP")) return {"snap", "x86_64.AppImage"};
     if (QCoreApplication::applicationFilePath().startsWith("/usr/")) {
         QHash<QString, QString> os = os_release();
         QString id = os.value("ID"), like = os.value("ID_LIKE"), ver = os.value("VERSION_ID");
@@ -333,7 +334,7 @@ void found(QWidget* w, bool manual, const QJsonObject& rel, const std::function<
         how = "This copy is a Flatpak: the new one downloads in your browser, to install over it with flatpak install --user and the file's name.";
         install_label = "Download";
     } else if (k.id == "snap") {
-        how = "This copy is a snap: the new one downloads in your browser, to install over it with sudo snap install --dangerous and the file's name.";
+        how = "This copy is a snap, and Aztek no longer comes as one: the AppImage downloads in your browser. Remove the snap with sudo snap remove aztek and run the AppImage instead.";
         install_label = "Download";
     } else if (k.id == "appimage") {
         how = "The AppImage file is replaced with the new one, then Aztek restarts.";

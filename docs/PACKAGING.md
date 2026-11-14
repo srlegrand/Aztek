@@ -15,7 +15,6 @@ by hand.
 | `aztek-linux-x86_64.tar.gz` | ubuntu-24.04 | `build.sh` | system | system |
 | `aztek-<version>-x86_64.AppImage` | `rockylinux:8` container | `packaging/appimage/build-appimage.sh` | 6.8 bundled | 3.12 bundled |
 | `aztek-<version>-x86_64.flatpak` | flatpak-builder container | `packaging/flatpak/build-flatpak.sh` | the AppImage's | the AppImage's |
-| `aztek_<version>_amd64.snap` | ubuntu-24.04, snapcraft | `packaging/snap/build-snap.sh` | the AppImage's | the AppImage's |
 
 ## Rocky Linux
 
@@ -124,32 +123,23 @@ release yet: when it fails, the other packages still go out.
 - `./build-macos.sh` builds it (`--deps` installs the dependencies with Homebrew); `--package` makes the same `Aztek.app` and zip as the release build, which runs that script.
 - Not checked yet: the viewport on a real Mac, and whether Ctrl and Alt in mouse and key handling should be Cmd and Option.
 
-## Flatpak and snap
+## Flatpak
 
-Both are the AppImage repacked: the program, Qt and Python that already started in the clean containers, unpacked and
-put where each format wants them, with a launcher that points Python and the loader at them. Neither builds Aztek
-again, so neither needs the source's dependencies inside its build.
+The AppImage repacked: the program, Qt and Python that already started in the clean containers, unpacked and put
+where Flatpak wants them, with a launcher that points Python and the loader at them. It doesn't build Aztek again, so
+it needs none of the source's dependencies inside its build.
 
     flatpak install --user ./aztek-*-x86_64.flatpak
     flatpak run io.github.srlegrand.Aztek
 
-    sudo snap install --dangerous ./aztek_*_amd64.snap
-    aztek
-
-- Flatpak (`packaging/flatpak`): application id `io.github.srlegrand.Aztek`, on `org.freedesktop.Platform` 25.08. It
-  may use X11, the GPU, the network (the update check) and the host's files, since scenes, textures and references
-  are wherever they are kept. Its build starts the program and runs a Python script inside the runtime, so a
-  library the runtime lacks fails the build. The file is a single-file bundle: installing it fetches the runtime
-  from Flathub if it is not there. It is not on Flathub.
-- Snap (`packaging/snap`): `core24`, strictly confined, with the home folder, removable media, X11, the network and
-  the GPU through Snapcraft's `gpu` extension (the `mesa-2404` snap). `--dangerous` is how a snap file from outside
-  the store is installed; it is not in the Snap Store, so `mesa-2404` has to be there: `sudo snap install mesa-2404`.
-  Files outside the home folder and removable media are out of its reach, and so are hidden folders in the home
-  folder (names starting with a dot). `~/maya` is not hidden, so the User Folder can still point at it.
-- Help > Check for Updates sees either as what it is and downloads the new file, to install over the old one with
-  the same command. Neither updates itself.
-- In CI each is built from the verified AppImage only (`flatpak` and `snap` in `build.yml`). The snap is installed on
-  the runner and started without a window and with a script; its window under Xvfb is tried and reported, not
-  required. A job that fails leaves that release without the file and does not fail the run.
-- `packaging/flatpak/build-flatpak.sh` and `packaging/snap/build-snap.sh` build them from an AppImage on a machine
-  with the tools.
+- Application id `io.github.srlegrand.Aztek`, on `org.freedesktop.Platform` 25.08 (`packaging/flatpak`). It may use
+  X11, the GPU, the network (the update check) and the host's files, since scenes, textures and references are
+  wherever they are kept. Its build starts the program and runs a Python script inside the runtime, so a library the
+  runtime lacks fails the build. The file is a single-file bundle: installing it fetches the runtime from Flathub if
+  it is not there. It is not on Flathub.
+- Help > Check for Updates sees it as a Flatpak and downloads the new file, to install over the old one with the same
+  command. It doesn't update itself.
+- In CI it is built from the verified AppImage only (`flatpak` in `build.yml`). A failure leaves that release without
+  the file and does not fail the run.
+- `packaging/flatpak/build-flatpak.sh` builds it from an AppImage on a machine with the tools.
+- There is no snap any more (from 14/11/2026). A snap installed before is pointed at the AppImage by Check for Updates.
