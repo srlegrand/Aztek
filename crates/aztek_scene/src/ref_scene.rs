@@ -1347,7 +1347,7 @@ pub fn register(c: &mut Commands<Session>) {
             let Some(ty) = a.pos_str(0) else { fail!("getClassification: name a node type") };
             let classes: Vec<String> = crate::utility_nodes::classification(ty).map(str::to_string).into_iter().collect();
             if let Some(want) = a.get("satisfies").and_then(Value::as_str) {
-                return Ok(json!(classes.iter().any(|x| x == want || x.starts_with(&format!("{want}/")) || x.starts_with(&format!("{want}:")))));
+                return Ok(json!(classes.iter().flat_map(|x| x.split(':')).any(|x| x == want || x.starts_with(&format!("{want}/")))));
             }
             Ok(json!(classes))
         })

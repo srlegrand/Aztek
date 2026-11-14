@@ -23,7 +23,7 @@ pub(super) fn short_plug(g: &Graph, p: &PlugRef) -> String {
 
 /// Whether a node's setAttr lines use short names, as the reference's do for these.
 pub(super) fn writes_short(g: &Graph, id: NodeId) -> bool {
-    g.node(id).is_some_and(|n| n.ty().is_a(SG_TYPE) || crate::defaults::is_scene_node(n.name()) || n.ty().is_a("light") || shading::classification(&n.ty().name).is_some() || n.ty().name == "animLayer" || n.ty().name.starts_with("animBlendNode") || !n.ty().owner.is_empty())
+    g.node(id).is_some_and(|n| n.ty().is_a(SG_TYPE) || crate::defaults::is_scene_node(n.name()) || n.ty().is_a("light") || shading::classification(&n.ty().name).is_some() || crate::utility_nodes::classification(&n.ty().name).is_some() || n.ty().name == "animLayer" || n.ty().name.starts_with("animBlendNode") || !n.ty().owner.is_empty())
 }
 
 fn node_ref(g: &Graph, id: NodeId) -> String {

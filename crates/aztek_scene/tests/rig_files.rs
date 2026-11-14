@@ -197,7 +197,7 @@ fn spline_ik_keeps_its_root_on_the_curve() {
 
 #[test]
 fn utility_names_are_the_ones_the_reference_writes() {
-    let body = "createNode transform -n \"o\";\ncreateNode angleBetween -n \"ab\";\n\tsetAttr \".v2\" -type \"double3\" 0 1 0 ;\ncreateNode pairBlend -n \"pb\";\n\tsetAttr \".w\" 0;\n\tsetAttr \".itx1\" 4;\nconnectAttr \"pb.otx\" \"o.tx\";\nconnectAttr \"ab.a\" \"o.ry\";\ncreateNode transform -n \"sum\";\ncreateNode transform -n \"x\";\n\tsetAttr \".t\" -type \"double3\" 2 3 0 ;\ncreateNode blendWeighted -n \"bw\";\nconnectAttr \"x.tx\" \"bw.i[0]\";\nconnectAttr \"x.ty\" \"bw.i[1]\";\nconnectAttr \"bw.o\" \"sum.tx\";\n";
+    let body = "createNode transform -n \"o\";\ncreateNode angleBetween -n \"ab\";\n\tsetAttr \".v1\" -type \"double3\" 1 0 0 ;\n\tsetAttr \".v2\" -type \"double3\" 0 1 0 ;\ncreateNode pairBlend -n \"pb\";\n\tsetAttr \".w\" 0;\n\tsetAttr \".itx1\" 4;\nconnectAttr \"pb.otx\" \"o.tx\";\nconnectAttr \"ab.a\" \"o.ry\";\ncreateNode transform -n \"sum\";\ncreateNode transform -n \"x\";\n\tsetAttr \".t\" -type \"double3\" 2 3 0 ;\ncreateNode blendWeighted -n \"bw\";\nconnectAttr \"x.tx\" \"bw.i[0]\";\nconnectAttr \"x.ty\" \"bw.i[1]\";\nconnectAttr \"bw.o\" \"sum.tx\";\n";
     let (mut s, w) = load(body);
     assert!(w.iter().all(|x| !x.contains("->")), "{w:?}");
     assert_near(get(&mut s, "o.rotateY"), &[90.0], "angleBetween.a is the angle");

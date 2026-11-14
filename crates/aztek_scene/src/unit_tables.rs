@@ -52,9 +52,10 @@ pub fn attr_unit(ty: &str, name: &str) -> Unit {
         (t, "euler") if t != "angleBetween" && t != "angleBetweenDL" => return Unit::None,
         (t, "rotation") if !matches!(t, "polyPlanarProj" | "polySphProj" | "polyCylProj" | "extrude") => return Unit::None,
         (t, "twist" | "roll") if t != "ikHandle" && !t.starts_with("deform") && t != "polyExtrudeFacet" && t != "polyExtrudeEdge" && t != "polyTorus" => return Unit::None,
-        (t, "distance") if t != "distanceBetween" && t != "distanceBetweenDL" && t != "distanceDimShape" => return Unit::None,
+        // distanceBetween has no unit since the reference's 2024 math nodes; distanceBetweenDL declares its own.
+        (t, "distance") if t != "distanceDimShape" => return Unit::None,
         (t, "center") if t == "polySpherize" => return Linear,
-        (t, "point1" | "point2") if t != "distanceBetween" && t != "distanceBetweenDL" => return Unit::None,
+        (_, "point1" | "point2") => return Unit::None,
         (t, "maxDistance" | "minDistance") if t != "closestPointOnSurface" => return Unit::None,
         _ => {}
     }

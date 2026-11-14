@@ -2099,3 +2099,37 @@ Not compared with a running copy of the reference.
   `stealCallableInfo`. `MPxTransform::createTransformationMatrix` makes the registered matrix. The namespace-renamed
   callback was given the old name first; it gets the new one first, as the reference's
   `MSceneMessage::addNamespaceRenamedCallback` documents.
+
+### Math nodes and their DL twins (14/11/2026)
+
+Step 5 of the 2027 parity order. Attributes (long and short names, defaults, limits, keyable or not) and
+classifications are the 2027 release's, read from [maya-node-list](https://github.com/yamahigashi/maya-node-list)
+(generated from that release) and checked against the reference's 2027 node pages for `absolute`, `absoluteDL`,
+`angleBetween`, `rotateVector`, `modulo`, `round`, `smoothStep`, `inverseLerp`, `axisFromMatrix` and `rowFromMatrix`.
+Checked by a test that computes each node, reads a DL node in metres, and saves and opens a scene. Not compared with a
+running copy of the reference.
+
+- 98 nodes from one table (`math_nodes.rs`): 45 nodes that each have a plain and a DL version (90), five with no DL
+  version (`and`, `or`, `not`, `pi`, `rotationFromMatrix`), and three DL nodes that twin classic nodes (`addDL`,
+  `multDL`, `pointMatrixMultDL`). New: everything but `sum`, `multiply`, `divide`, `subtract`, `distanceBetween`,
+  `angleBetween` and the DL twins of the last two, which were there and now come from the table.
+- A plain node's values have no unit; a DL node's are distances (`doubleLinear`), so they read and write in the current
+  linear unit. Angles (`sin.input`, `acos.output`, `rotateVector.rotate`, `pi.output`, `angleBetween.angle`) are angles
+  in both. Both compute the same.
+- Corrected on nodes that were there: `distanceBetween` had distances; since the 2024 math nodes it has no unit
+  (`distanceBetweenDL` has them). `angleBetween`'s `vector1` and `vector2` default to (0, 1, 0) and (0, 0, 1), not
+  (1, 0, 0) twice: a reference file that leaves them at their defaults read wrong. `divide.input2` defaults to 1.
+  `multiply`'s new elements default to 0. The classifications were `utility/general`.
+- Classifications: `math/<group>:drawdb/shader/operation/<node>` (`mathLinear/...` for DL), as the 2027 release
+  reports them. Its node pages add `utility/scalar` on some (`absolute`) and give `math` alone on others
+  (`rotateVector`); Aztek follows the release. `listNodeTypes` and `getClassification -satisfies` look at each part of
+  a classification.
+- Where the pages leave it open, what Aztek does: `round` takes a half up (-2.5 gives -2); `modulo` takes the
+  modulus's sign (-1 modulo 3 is 2) and gives 0 for a modulus of 0; `divide` and `inverseLerp` give 0 instead of
+  dividing by 0; `log` gives 0 for an input or base out of range; `inverseLerp` is (interpolation - input1) /
+  (input2 - input1) (its page writes -input1 / (input2 - input1), which leaves `interpolation` out); `atan2` is
+  atan2(input1, input2); `axisFromMatrix`'s output is not normalized; `rotationFromMatrix` is in XYZ order.
+- Scene files write utility nodes' attributes by their short names (`.i[1]`, `.ro`), as the reference does; this
+  applies to every utility node, not only the math ones. Connections still use long names.
+- Not done: `timeFunction` and `sampler`, also in the reference's math classification but not in this family. The
+  reference's `MFn` types for these nodes (`kAbsolute` and the rest) are not in the Python API's `MFn`.

@@ -696,8 +696,10 @@ fn list_node_types(a: &Args) -> CmdResult {
     let mut out = Vec::new();
     for t in crate::node::types::all() {
         let Some(c) = crate::utility_nodes::classification(&t.name) else { continue };
-        let ok = c == class || c.starts_with(&format!("{class}/")) || c.starts_with(&format!("{class}:")) || (class.contains('*') && crate::ref_core::glob(class, c));
-        let no = exclude.as_ref().is_some_and(|e| c == e || c.starts_with(&format!("{e}/")));
+        // A classification can have several parts, split by colons: any of them counts.
+        let under = |want: &str| c.split(':').any(|p| p == want || p.starts_with(&format!("{want}/")) || (want.contains('*') && crate::ref_core::glob(want, p)));
+        let ok = under(class) || c == class;
+        let no = exclude.as_ref().is_some_and(|e| under(e));
         if ok && !no {
             out.push(t.name.clone());
         }

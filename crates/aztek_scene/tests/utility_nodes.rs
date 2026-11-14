@@ -214,7 +214,10 @@ fn distance_angle_vector_product() {
     set(&mut s, "distanceBetween1.point2", json!([4.0, 6.0, 3.0]));
     close(&get(&mut s, "distanceBetween1.distance"), 5.0);
 
+    // The reference's defaults are (0, 1, 0) and (0, 0, 1).
     node(&mut s, "angleBetween");
+    close(&get(&mut s, "angleBetween1.angle"), 90.0);
+    set(&mut s, "angleBetween1.vector1", json!([1.0, 0.0, 0.0]));
     set(&mut s, "angleBetween1.vector2", json!([0.0, 1.0, 0.0]));
     close(&get(&mut s, "angleBetween1.angle"), 90.0);
     close3(&get(&mut s, "angleBetween1.axis"), [0.0, 0.0, 1.0]);

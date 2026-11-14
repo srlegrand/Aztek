@@ -406,23 +406,14 @@ fn binary_float(name: &'static str, doc: &'static str, c: Compute) -> Spec {
     Spec(name, "utility/general", doc, vec![fin("input1", "i1", 0.0), fin("input2", "i2", 0.0), fout("output", "o")], c)
 }
 
-/// Later releases of the reference add "DL" twins of these nodes, the same attributes and the same result.
-const TWINS: &[(&str, &str, &str)] = &[
-    ("addDL", "addDoubleLinear", "input1 + input2: the later twin of addDoubleLinear."),
-    ("multDL", "multDoubleLinear", "input1 * input2: the later twin of multDoubleLinear."),
-    ("distanceBetweenDL", "distanceBetween", "The distance between two points: the later twin of distanceBetween."),
-    ("angleBetweenDL", "angleBetween", "The rotation from vector1 to vector2: the later twin of angleBetween."),
-];
-
 fn table() -> Vec<Spec> {
     let mut t = base_table();
-    for (twin, of, doc) in TWINS {
-        if let Some(Spec(_, class, _, attrs, compute)) = t.iter().find(|s| s.0 == *of).map(|s| Spec(s.0, s.1, s.2, s.3.clone(), s.4)) {
-            t.push(Spec(twin, class, doc, attrs, compute));
-        }
-    }
+    t.extend(math::specs());
     t
 }
+
+#[path = "math_nodes.rs"]
+mod math;
 
 fn base_table() -> Vec<Spec> {
     vec![
@@ -618,24 +609,6 @@ fn base_table() -> Vec<Spec> {
                 let (a, c) = (f(d, "outputMin"), f(d, "outputMax"));
                 set(d, "outValue", a + tv * (c - a));
                 set(d, "outColor", DVec3::splat(a) + tc * (c - a));
-            }),
-        Spec("distanceBetween", "utility/general", "The distance between two points, each through its matrix.",
-            vec![vin("point1", "p1", [0.0; 3]), min_in("inMatrix1", "im1"), vin("point2", "p2", [0.0; 3]), min_in("inMatrix2", "im2"), fout("distance", "d")],
-            |d| {
-                let x = m(d, "inMatrix1").transform_point3(v(d, "point1"));
-                let y = m(d, "inMatrix2").transform_point3(v(d, "point2"));
-                set(d, "distance", x.distance(y));
-            }),
-        Spec("angleBetween", "utility/general", "The rotation from vector1 to vector2: axis, angle in degrees, and as Euler angles.",
-            vec![vin("vector1", "v1", [1.0, 0.0, 0.0]), vin("vector2", "v2", [1.0, 0.0, 0.0]), vout("axis", "ax"), fout("angle", "a"), vout("euler", "eu")],
-            |d| {
-                let (x, y) = (v(d, "vector1").normalize_or_zero(), v(d, "vector2").normalize_or_zero());
-                let angle = x.angle_between(y);
-                let axis = x.cross(y).normalize_or_zero();
-                set(d, "axis", axis);
-                set(d, "angle", angle);
-                let q = if axis == DVec3::ZERO { DQuat::IDENTITY } else { DQuat::from_axis_angle(axis, angle) };
-                set(d, "euler", quat_euler(q, RotateOrder::Xyz));
             }),
         Spec("vectorProduct", "utility/general", "Dot or cross product, or a vector or point through a matrix.",
             vec![
@@ -1071,22 +1044,6 @@ fn base_table() -> Vec<Spec> {
                 set(d, "outColor", c);
                 set(d, "outAlpha", a);
             }),
-        Spec("sum", "utility/general", "The sum of its inputs.", vec![multi(fin("input", "i", 0.0)), fout("output", "o")], |d| {
-            let o: f64 = scalars(d, "input").iter().sum();
-            set(d, "output", o);
-        }),
-        Spec("multiply", "utility/general", "The product of its inputs.", vec![multi(fin("input", "i", 1.0)), fout("output", "o")], |d| {
-            let o: f64 = scalars(d, "input").iter().product();
-            set(d, "output", o);
-        }),
-        binary_float("divide", "input1 / input2.", |d| {
-            let o = divide(f(d, "input1"), f(d, "input2"));
-            set(d, "output", o);
-        }),
-        binary_float("subtract", "input1 - input2.", |d| {
-            let o = f(d, "input1") - f(d, "input2");
-            set(d, "output", o);
-        }),
         Spec("rgbToHsv", "utility/color", "RGB to hue (degrees), saturation, value.", vec![cin("inRgb", "ir", [0.0; 3]), vec_kids("outHsv", "oh", [0.0; 3], OUT, HSV)], |d| {
             let o = hsv_of(v(d, "inRgb"));
             set(d, "outHsv", o);
