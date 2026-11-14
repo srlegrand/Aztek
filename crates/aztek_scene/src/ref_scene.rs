@@ -223,8 +223,14 @@ fn delete_cmd(s: &mut Session, a: &Args, prev: &aztek_ops::RunFn<Session>) -> Cm
                 doomed.push(sp.node);
             }
         }
-        // Constraint nodes parented under the object count as its constraints too.
+        // Constraint nodes parented under the object count as its constraints too, and so does the symmetry constraint
+        // of a joint driving its twin.
         if a.bool("constraints") {
+            for (d, sp) in g.connections() {
+                if sp.node == id && g.node(d.node).is_some_and(|n| n.ty().name == "symmetryConstraint") && !doomed.contains(&d.node) {
+                    doomed.push(d.node);
+                }
+            }
             for &c in g.children(id).to_vec().iter() {
                 if g.node(c).is_some_and(|n| is_constraint(n.ty())) && !doomed.contains(&c) {
                     doomed.push(c);

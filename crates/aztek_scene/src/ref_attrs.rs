@@ -28,6 +28,11 @@ pub(crate) fn compound_children(ty: &NodeType, name: &str) -> Vec<usize> {
     if out.is_empty() {
         out = ty.group_children(name);
     }
+    if out.is_empty() {
+        // A multi compound by its short name: remapValue.vl.
+        let prefix = format!("{name}.");
+        out = ty.attrs.iter().enumerate().filter(|(_, a)| a.name.contains('.') && a.short_name.starts_with(&prefix)).map(|(i, _)| i).collect();
+    }
     out
 }
 
@@ -214,6 +219,17 @@ fn read_args(g: &mut Graph, a: &Args) -> CmdResult {
     if let Some((id, kids)) = compound_of(g, &name) {
         if a.bool("type") {
             return Ok(json!("TdataCompound"));
+        }
+        // A multi compound (remapValue.value) counts and lists its elements.
+        let group = g.node(id).and_then(|n| kids.first().map(|&k| n.ty().attrs[k].clone())).filter(|d| d.is_array() && d.name.contains('.'));
+        if let Some(d) = group {
+            let indices = g.group_indices(id, d.name.split('.').next().unwrap_or(""));
+            if a.bool("size") {
+                return Ok(json!(indices.len()));
+            }
+            if a.bool("multiIndices") {
+                return Ok(json!(indices));
+            }
         }
         if a.bool("size") {
             return Ok(json!(1));

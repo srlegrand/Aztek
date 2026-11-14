@@ -409,11 +409,14 @@ fn binary_float(name: &'static str, doc: &'static str, c: Compute) -> Spec {
 fn table() -> Vec<Spec> {
     let mut t = base_table();
     t.extend(math::specs());
+    t.extend(rig::specs());
     t
 }
 
 #[path = "math_nodes.rs"]
 mod math;
+#[path = "rig_nodes.rs"]
+mod rig;
 
 fn base_table() -> Vec<Spec> {
     vec![
@@ -1117,11 +1120,22 @@ pub fn register_types() {
 /// What createNode gives a new node beyond its defaults: remapValue starts with its ramps' two end points.
 pub fn seed(g: &mut Graph, id: NodeId) -> crate::error::Result<()> {
     let Some(n) = g.node(id) else { return Ok(()) };
-    if n.ty().name != "remapValue" {
-        return Ok(());
-    }
     let ty = n.type_arc().clone();
     let attr = |name: &str| ty.attr_index(name).unwrap() as i32;
+    let ramps = rig::seed_ramps(&ty.name);
+    if !ramps.is_empty() {
+        for r in ramps {
+            for (k, x) in [(0, 0.0), (1, 1.0)] {
+                g.set_value(PlugRef::element(id, attr(&format!("{r}.{r}_Position")), k), PlugValue::Float(x))?;
+                g.set_value(PlugRef::element(id, attr(&format!("{r}.{r}_FloatValue")), k), PlugValue::Float(x))?;
+                g.set_value(PlugRef::element(id, attr(&format!("{r}.{r}_Interp")), k), PlugValue::Int(1))?;
+            }
+        }
+        return Ok(());
+    }
+    if ty.name != "remapValue" {
+        return Ok(());
+    }
     for (k, x) in [(0, 0.0), (1, 1.0)] {
         g.set_value(PlugRef::element(id, attr("value.value_Position"), k), PlugValue::Float(x))?;
         g.set_value(PlugRef::element(id, attr("value.value_FloatValue"), k), PlugValue::Float(x))?;

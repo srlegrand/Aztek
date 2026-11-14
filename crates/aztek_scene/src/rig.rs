@@ -426,6 +426,89 @@ fn mirror_one(g: &mut Graph, src: NodeId, parent: NodeId, how: &Mirror, out: &mu
     Ok(())
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+// Joint symmetry: a driven joint mirrored from its source by a symmetryConstraint.
+
+/// The symmetryConstraint a joint drives, or that reads it.
+fn symmetry_of(g: &Graph, j: NodeId) -> Option<(NodeId, NodeId, NodeId)> {
+    for (d, sp) in g.connections() {
+        let c = if d.node == j { sp.node } else if sp.node == j { d.node } else { continue };
+        if g.node(c).is_none_or(|n| n.ty().name != "symmetryConstraint") {
+            continue;
+        }
+        let t = g.node(c).unwrap().type_arc().clone();
+        let src = g.source(&PlugRef::new(c, t.attr_index("targetWorldMatrix")? as i32)).map(|p| p.node);
+        let driven = g.destinations(&PlugRef::new(c, t.attr_index("constraintTranslate")? as i32)).first().map(|p| p.node);
+        if let (Some(src), Some(driven)) = (src, driven) {
+            return Some((c, src, driven));
+        }
+    }
+    None
+}
+
+/// A joint's symmetric twin: the joint it drives or is driven by.
+fn symmetry_twin(g: &Graph, j: NodeId) -> Option<NodeId> {
+    symmetry_of(g, j).map(|(_, src, driven)| if src == j { driven } else { src })
+}
+
+/// Makes the driven twin of a joint mirrored across the world planes of `axes` (any of x, y, z): a joint under its
+/// parent's twin (or its parent) and a symmetryConstraint that keeps it mirrored. None for a joint on the plane, or
+/// one that has a twin already.
+pub(crate) fn make_symmetric(g: &mut Graph, src: NodeId, axes: &str) -> CmdResult<Option<NodeId>> {
+    if symmetry_twin(g, src).is_some() {
+        return Ok(None);
+    }
+    let flip = DVec3::new(
+        if axes.contains('x') { -1.0 } else { 1.0 },
+        if axes.contains('y') { -1.0 } else { 1.0 },
+        if axes.contains('z') { -1.0 } else { 1.0 },
+    );
+    if flip == DVec3::ONE {
+        fail!("joint: -symmetryAxis takes x, y or z");
+    }
+    g.evaluate();
+    let at = world(g, src).w_axis.truncate();
+    let mirrored = at * flip;
+    if mirrored.distance(at) < 1e-6 {
+        return Ok(None);
+    }
+    let parent = g.parent(src);
+    let twin_parent = if parent == NO_NODE { NO_NODE } else { symmetry_twin(g, parent).unwrap_or(parent) };
+    let radius = g.node(src).unwrap().data().float(Joint::RADIUS);
+    let driven = create_joint(g, "joint1", twin_parent, mirrored, radius)?;
+    copy_joint_settings(g, src, driven)?;
+    let t = types::find("symmetryConstraint").unwrap();
+    let name = format!("{}_symmetryConstraint1", g.node(driven).unwrap().name());
+    let c = g.create_node(&t, &name, NO_NODE, true)?;
+    let (sp, dp, cp) = (g.path(src), g.path(driven), g.path(c));
+    for (k, on) in [("xAxis", flip.x < 0.0), ("yAxis", flip.y < 0.0), ("zAxis", flip.z < 0.0)] {
+        let p = g.plug(&format!("{cp}.{k}"))?;
+        g.set_value(p, PlugValue::Bool(on))?;
+        let p = g.plug(&format!("{cp}.{}ChildAxis", &k[..1]))?;
+        g.set_value(p, PlugValue::Bool(on))?;
+    }
+    let links = [
+        (format!("{sp}.translate"), format!("{cp}.targetTranslate")),
+        (format!("{sp}.rotate"), format!("{cp}.targetRotate")),
+        (format!("{sp}.scale"), format!("{cp}.targetScale")),
+        (format!("{sp}.rotateOrder"), format!("{cp}.targetRotateOrder")),
+        (format!("{sp}.jointOrient"), format!("{cp}.targetJointOrient")),
+        (format!("{sp}.worldMatrix[0]"), format!("{cp}.targetWorldMatrix")),
+        (format!("{sp}.parentMatrix[0]"), format!("{cp}.targetParentMatrix")),
+        (format!("{dp}.parentInverseMatrix[0]"), format!("{cp}.constraintInverseParentWorldMatrix")),
+        (format!("{cp}.constraintTranslate"), format!("{dp}.translate")),
+        (format!("{cp}.constraintRotate"), format!("{dp}.rotate")),
+        (format!("{cp}.constraintScale"), format!("{dp}.scale")),
+        (format!("{cp}.constraintRotateOrder"), format!("{dp}.rotateOrder")),
+        (format!("{cp}.constraintJointOrient"), format!("{dp}.jointOrient")),
+    ];
+    for (from, to) in links {
+        let (a, b) = (g.plug(&from)?, g.plug(&to)?);
+        g.connect(&a, &b, true)?;
+    }
+    Ok(Some(driven))
+}
+
 /// The reference's insertJoint: a new joint under `j`, at its place and in its frame; j's child joints move under it.
 pub fn insert_joint(g: &mut Graph, j: NodeId) -> CmdResult<NodeId> {
     if has_skin(g, j) {
@@ -972,6 +1055,9 @@ pub fn register(c: &mut Commands<Session>) {
                     if a.bool("zeroScaleOrient") {
                         zero_scale_orient(g, id)?;
                     }
+                    if a.bool("symmetry") {
+                        make_symmetric(g, id, &a.string("symmetryAxis", "x").to_lowercase())?;
+                    }
                 }
                 return Ok(Value::Null);
             }
@@ -984,6 +1070,9 @@ pub fn register(c: &mut Commands<Session>) {
             // At creation -oj orients the joint this one extends.
             if parent != NO_NODE && a.has("orientJoint") {
                 orient_joint(g, parent, &a.string("orientJoint", "xyz"), &a.string("secondaryAxisOrient", "yup"))?;
+            }
+            if a.bool("symmetry") {
+                make_symmetric(g, j, &a.string("symmetryAxis", "x").to_lowercase())?;
             }
             g.select(&[j], SelectMode::Replace);
             Ok(json!(g.path(j)))
@@ -1010,6 +1099,8 @@ pub fn register(c: &mut Commands<Session>) {
     .flag(f("secondaryAxisOrient", "sao", ArgType::String, "Where the second axis points, yup, zup, xdown..."))
     .flag(f("children", "ch", ArgType::Bool, "Edit: the joints below too."))
     .flag(f("zeroScaleOrient", "zso", ArgType::Bool, "Set rotateAxis to zero; jointOrient takes the change."))
+    .flag(f("symmetry", "sym", ArgType::Bool, "Also make the joint's mirrored twin, kept mirrored by a symmetryConstraint."))
+    .flag(f("symmetryAxis", "sa", ArgType::String, "The axes -sym mirrors across: any of x, y and z (x)."))
     .flag(f("exists", "ex", ArgType::String, "Whether a joint of this name exists."))
     .flag(f("edit", "e", ArgType::Bool, "Change existing joints."))
     .flag(f("query", "q", ArgType::Bool, "Query a joint (its world position unless a flag is asked about)."))

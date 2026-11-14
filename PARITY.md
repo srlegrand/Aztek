@@ -2153,3 +2153,61 @@ running copy of the 2027 release.
 - Plug-in kit: `MFn::Type` carries the reference's numbers for the 109 kinds it has. `kEntity` and `kLast` are gone,
   `kPolyPlane` is `kPolyMesh` and `kPluginObject` is `kPlugin` (582), the reference's names. Checks that relied on
   kinds being numbered in a row (components, poly primitives) name each kind instead.
+
+### Newer rigging nodes: parentMatrix, uvPin, proximityPin, remapColor, remapHsv (14/11/2026)
+
+Step 6a of the 2027 parity order. Attributes (long and short names, defaults, limits, enums) and classifications are
+the 2027 release's, read from [maya-node-list](https://github.com/yamahigashi/maya-node-list); behaviour from the
+reference's 2027 node pages ([parentMatrix](https://help.autodesk.com/cloudhelp/2027/ENU/Maya-Tech-Docs/Nodes/parentMatrix.html),
+[uvPin](https://help.autodesk.com/cloudhelp/2027/ENU/Maya-Tech-Docs/Nodes/uvPin.html),
+[proximityPin](https://help.autodesk.com/cloudhelp/2027/ENU/Maya-Tech-Docs/Nodes/proximityPin.html),
+[remapColor](https://help.autodesk.com/cloudhelp/2027/ENU/Maya-Tech-Docs/Nodes/remapColor.html)). The pages say what
+each node does, not its arithmetic; where they leave it open is listed below. Checked by a test that computes each
+node and saves and opens a scene. Not compared with a running copy of the reference.
+
+- `parentMatrix`: each enabled target's `offsetMatrix * targetMatrix`, blended by `weight` and normalized (translation,
+  scale and shear averaged, rotation slerped), then blended with `inputMatrix` by `envelope`. `preSpaceMatrix` is
+  applied to each matrix first and `postSpaceMatrix` to the result. `enable` off, or no target with weight, gives
+  `inputMatrix`.
+- `uvPin`: one `outputMatrix` and `outputTranslate` per `coordinate`. The UV is found on `originalGeometry` (or on
+  `deformedGeometry` when nothing is connected there) and read at the same place on `deformedGeometry`. The
+  `normalAxis` row is the smooth normal, the `tangentAxis` row the surface's direction of increasing U, and the third
+  row completes a right-handed frame. A UV outside every face takes the nearest face's edge.
+- `proximityPin`: each `inputMatrix` is bound to the closest place on `originalGeometry` and follows it on
+  `deformedGeometry`, the offset carried in the surface's frame (its tangent along the face's first edge, or along U
+  with `coordMode` UV). `offsetTranslation` and `offsetOrientation` at 0 put the output on the surface in the
+  surface's frame; `envelope` blends from the input. The binding is found again at each evaluation, not stored.
+- `relativeSpaceMode` Custom gives both pins' outputs relative to `relativeSpaceMatrix`; World and Local give them as
+  the connected geometry is.
+- `remapColor` and `remapHsv`: each channel is taken from `inputMin`..`inputMax` to 0..1, through its ramp, then to
+  `outputMin`..`outputMax`. Hue runs 0 to 1 around the circle. A new node's ramps run from (0, 0) to (1, 1), linear, as `remapValue`'s do; the 2027 tables give no ramp defaults, so this is not confirmed.
+- `getAttr` on a multi compound (`remapValue.value`, `remapColor.r`) gives its element count with `size` and its
+  indices with `multiIndices`, and finds it by its short name. It gave 1 and the first element's values.
+- Not done: `normalOverride` Rail Curve and `railCurve` (read, not used); `uvSetName` (the first UV set is used);
+  NURBS surfaces as pin geometry (meshes only); the component tag and falloff nodes, the next part of step 6.
+
+### Joint symmetry and symmetryConstraint (14/11/2026)
+
+Step 6b of the 2027 parity order. The node's attributes are the 2027 release's
+([maya-node-list](https://github.com/yamahigashi/maya-node-list)), its behaviour from its
+[2027 node page](https://help.autodesk.com/cloudhelp/2027/ENU/Maya-Tech-Docs/Nodes/symmetryConstraint.html) and the
+reference's pages on [symmetric joints](https://help.autodesk.com/cloudhelp/ENU/MayaCRE-CharacterAnimation/files/GUID-94C63F67-C65E-4CEC-A225-B8ADEC0B1364.htm)
+and [breaking symmetry](https://help.autodesk.com/cloudhelp/2023/ENU/Maya-CharacterAnimation/files/GUID-B15D4D00-C38D-41B8-A8C3-430B852C7E88.htm).
+The [2027 `joint` page](https://help.autodesk.com/cloudhelp/2027/ENU/Maya-Tech-Docs/CommandsPython/joint.html) gives
+`-symmetry` and `-symmetryAxis`. Checked by a test that builds a mirrored chain, moves the source, deletes a
+constraint, and saves and opens a scene. Not compared with a running copy of the reference.
+
+- `joint -sym -sa x` (create, or edit on existing joints) makes the joint's driven twin, mirrored across the world
+  planes of the axes given, under the twin of the joint's parent (or the parent itself when it has none), and a
+  `symmetryConstraint` that keeps it so. Translate, rotate, scale, rotate order and joint orient are connected, as the
+  reference's page lists; nothing else is.
+- The node: the target's world position mirrored across `symmetryRootWorldMatrix`'s planes at `symmetryRootOffset`,
+  into the driven joint's parent space (`constraintInverseParentWorldMatrix`). Rotate and scale are the target's, as
+  the page says. The joint orient is the target's frame mirrored with every axis reversed, so the same rotate values
+  make mirrored motion (as `mirrorJoint -mirrorBehavior`). `symmetryMiddlePoint` is the midpoint in the root's frame.
+- `delete -constraints` on either joint removes the constraint, as Delete by Type > Constraints does.
+- Where the pages leave it open, what Aztek does: a joint on the mirror plane gets no twin; the twin is named as a new
+  joint is (`joint3`) and the node `<twin>_symmetryConstraint1`; the command returns the source joint.
+- As Aztek's other constraints, the node is not under the joint it drives; a file that parents it there opens.
+- Not done: `xChildAxis`..`zChildAxis` and `targetChildTranslate` (a child mirrored on other axes than its parent);
+  the pink display of driven joints; the joint tool's interactive symmetry option.
