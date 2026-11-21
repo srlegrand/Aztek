@@ -208,7 +208,8 @@ pub fn output_path(common: &Common, scene: &str, camera: &str, layer: &str, aov:
         p = format!("{p}.{:0width$}", f.round() as i64, width = common.padding);
     }
     let ext = &common.format;
-    if dir.is_empty() || p.starts_with('/') {
+    // A prefix that is a whole path already, `C:/...` included, is used as it is.
+    if dir.is_empty() || p.starts_with('/') || std::path::Path::new(&p).is_absolute() {
         format!("{p}.{ext}")
     } else {
         format!("{dir}/{p}.{ext}")

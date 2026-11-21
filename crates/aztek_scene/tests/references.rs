@@ -37,8 +37,9 @@ fn open(s: &mut Session, path: &std::path::Path) {
     run(s, "file", json!({"args": [path.to_string_lossy()], "open": true, "force": true}));
 }
 
+/// Forward slashes, as the reference writes a reference's path on every system.
 fn text(p: &std::path::Path) -> String {
-    p.to_string_lossy().to_string()
+    p.to_string_lossy().replace('\\', "/")
 }
 
 fn write(dir: &std::path::Path, name: &str, body: &str) -> String {

@@ -20,7 +20,8 @@ fn close3(v: &Value, want: [f64; 3]) {
 fn temp(name: &str) -> String {
     let d = std::env::temp_dir().join(format!("aztek_audit_{}", std::process::id()));
     std::fs::create_dir_all(&d).unwrap();
-    d.join(name).to_string_lossy().to_string()
+    // Forward slashes, as the reference writes a reference's path on every system.
+    d.join(name).to_string_lossy().replace('\\', "/")
 }
 
 #[test]

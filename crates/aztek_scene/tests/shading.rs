@@ -231,7 +231,9 @@ fn texture_paths_are_found_as_they_are_written_then_by_name() {
     // From another machine: by name, next to the scene first.
     assert_eq!(find("D:/somewhere/Beside.png"), Some(scenes.join("Beside.png")));
     assert_eq!(find("D:\\somewhere\\Beside.png"), Some(scenes.join("Beside.png")));
-    assert_eq!(find("D:/somewhere/beside.PNG"), Some(scenes.join("Beside.png")));
+    // Where names ignore case (Windows) the name as written is already the file; the disk spells it either way.
+    let same = |p: Option<std::path::PathBuf>| p.and_then(|p| std::fs::canonicalize(p).ok());
+    assert_eq!(same(find("D:/somewhere/beside.PNG")), same(Some(scenes.join("Beside.png"))));
     // In the project's sourceimages.
     assert_eq!(find("D:/other/Project.png"), Some(images.join("Project.png")));
     assert_eq!(find("sourceimages/Project.png"), Some(images.join("Project.png")));

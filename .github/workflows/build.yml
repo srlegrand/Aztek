@@ -566,7 +566,14 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: ". -> build/cargo"
+          workspaces: |
+            . -> target
+            . -> build/cargo
+
+      # The Rust tests, as the Linux jobs run them, against the Python 3.12 setup-python put on PATH.
+      - name: Test
+        shell: bash
+        run: PYO3_PYTHON="$pythonLocation/python.exe" tools/ci/retry.sh 2 cargo test --workspace
 
       # Tried three times; after a failure, one job at a time.
       - name: Build

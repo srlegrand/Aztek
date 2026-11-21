@@ -126,8 +126,11 @@ mod tests {
 
     #[test]
     fn relative() {
-        assert_eq!(relative_to("/a/b/t.png", "/a/b").as_deref(), Some("./t.png"));
-        assert_eq!(relative_to("/a/t.png", "/a/b").as_deref(), Some("../t.png"));
+        // `/a` is only a whole path where there are no drive letters.
+        let root = if cfg!(windows) { "C:/" } else { "/" };
+        let at = |p: &str| format!("{root}{p}");
+        assert_eq!(relative_to(&at("a/b/t.png"), &at("a/b")).as_deref(), Some("./t.png"));
+        assert_eq!(relative_to(&at("a/t.png"), &at("a/b")).as_deref(), Some("../t.png"));
         assert_eq!(relative_to("t.png", "/a"), None);
     }
 
