@@ -93,7 +93,10 @@ if ($py) {
     # pip in Aztek's own Python, as the reference's mayapy has it: `aztekpy -m pip install ...`. Not fatal: the program
     # runs without it.
     if (Test-Path "$dist\aztekpy.exe") {
+        # Windows PowerShell turns a native program's stderr into errors, which "Stop" would make fatal.
+        $ErrorActionPreference = "Continue"
         & "$dist\aztekpy.exe" -m ensurepip --default-pip 2>&1 | Out-Host
+        $ErrorActionPreference = "Stop"
         if ($LASTEXITCODE -ne 0) { Write-Warning "pip was not added to the bundled Python" }
         $global:LASTEXITCODE = 0
     }

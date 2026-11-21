@@ -629,7 +629,12 @@ def _aztek_pymain(argv, exe, packages):
     sys.stdout, sys.stderr = sys.__stdout__, sys.__stderr__
     if exe:
         sys.executable = exe
-    args = list(argv)
+    args, flags = _aztek_py_options(list(argv))
+    if args is None:
+        return 2
+    _aztek_py_isolate(flags)
+    # -I and -P: neither the current folder nor the script's goes on the path.
+    safe_path = "I" in flags or "P" in flags
     # pip installs into Aztek's own packages unless told where: the reference's mayapy keeps its packages to itself.
     if len(args) >= 3 and args[0] == "-m" and args[1] == "pip" and args[2] == "install":
         given = {"-t", "--target", "--prefix", "--root", "--user", "-e", "--editable"}
@@ -641,7 +646,7 @@ def _aztek_pymain(argv, exe, packages):
         if args and args[0] in ("-V", "--version"):
             print("Python " + sys.version.split()[0])
             return 0
-        if not args or args == ["-i"]:
+        if not args:
             sys.argv = [""]
             code.interact(banner="Aztek Python " + sys.version.split()[0] + "\nType help() for help.", local=main, exitmsg="")
             return 0
@@ -656,14 +661,16 @@ def _aztek_pymain(argv, exe, packages):
                 print("Argument expected for the -m option", file=sys.stderr)
                 return 2
             sys.argv = [args[1]] + args[2:]
-            sys.path.insert(0, os.getcwd())
+            if not safe_path:
+                sys.path.insert(0, os.getcwd())
             runpy.run_module(args[1], run_name="__main__", alter_sys=True)
         elif args[0] == "-":
             sys.argv = ["-"] + args[1:]
             exec(compile(sys.stdin.read(), "<stdin>", "exec"), main)
         else:
             sys.argv = list(args)
-            sys.path.insert(0, os.path.dirname(os.path.abspath(args[0])))
+            if not safe_path:
+                sys.path.insert(0, os.path.dirname(os.path.abspath(args[0])))
             runpy.run_path(args[0], run_name="__main__")
     except SystemExit as e:
         c = e.code
@@ -682,3 +689,65 @@ def _aztek_pymain(argv, exe, packages):
         sys.stdout.flush()
         sys.stderr.flush()
     return 0
+
+
+# Python's interpreter options that take a value, and those that take none. The interpreter is already running, so -W,
+# and the path flags -I, -P, -E and -s, are what take effect; the rest are accepted so that command lines written for
+# python.exe (ensurepip, pip, venv) run.
+_AZTEK_PY_VALUED = "WX"
+_AZTEK_PY_FLAGS = "bBdEiIOPqsSuvx"
+
+
+def _aztek_py_options(args):
+    """Takes Python's interpreter options off the front of aztekpy's arguments: (the rest, the flag letters given), or
+    (None, "") on a bad option."""
+    import warnings
+
+    flags = ""
+    # -c, -m, -V and --long options are _aztek_pymain's to read.
+    while args and args[0].startswith("-") and len(args[0]) > 1 and args[0][1] not in "cmV-":
+        opt = args.pop(0)
+        letters = opt[1:]
+        while letters:
+            letter, letters = letters[0], letters[1:]
+            if letter in _AZTEK_PY_VALUED:
+                value = letters or (args.pop(0) if args else None)
+                if value is None:
+                    print("Argument expected for the -" + letter + " option", file=sys.stderr)
+                    return None, ""
+                if letter == "W":
+                    warnings._setoption(value)
+                letters = ""
+            elif letter in _AZTEK_PY_FLAGS:
+                flags += letter
+            elif letter in "cm":
+                # -Ec, -Im pip: the rest of the token is -c's code or -m's module, as Python reads it.
+                args[0:0] = ["-" + letter] + ([letters] if letters else [])
+                letters = ""
+            else:
+                print("Unknown option: -" + letter, file=sys.stderr)
+                return None, ""
+    return args, flags
+
+
+def _aztek_py_isolate(flags):
+    """-E and -I take PYTHONPATH's folders off the path, -s and -I the user's site-packages, -I and -P the current
+    folder's "" entry, as Python would have."""
+    import os
+    import site
+
+    drop = set()
+    keep_empty = not ("I" in flags or "P" in flags)
+    env = os.environ.get("PYTHONPATH", "")
+    if env and ("E" in flags or "I" in flags):
+        entries = env.split(os.pathsep)
+        drop.update(p for p in entries if p)
+        # An empty entry is the current folder, on the path as "" or as the folder itself.
+        if "" in entries:
+            drop.add(os.getcwd())
+            keep_empty = False
+    if "s" in flags or "I" in flags:
+        drop.add(site.getusersitepackages())
+        site.ENABLE_USER_SITE = False
+    norm = {os.path.normcase(os.path.abspath(p)) for p in drop}
+    sys.path[:] = [p for p in sys.path if (keep_empty if not p else os.path.normcase(os.path.abspath(p)) not in norm)]
