@@ -94,7 +94,7 @@ fn sets_and_paint_in_mel() {
 fn skin_in_mel() {
     let dir = std::env::temp_dir().join(format!("aztek_mel_deform_{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let path = dir.to_string_lossy().to_string();
+    let path = dir.to_string_lossy().replace('\\', "/");
     let mut c = Core::new();
     mel(&mut c, "polyCube -h 2 -sy 2 -n a; select -cl; joint -p 0 -1 0 -n j1; joint -p 0 1 0 -n j2;");
     assert_eq!(mel(&mut c, "skinCluster -n sk -bm 2 -hmf 0.5 -sm 2 j1 a;"), json!(["sk"]));

@@ -125,9 +125,9 @@ fn obj_import_names_and_returns_new_nodes() {
     let b = dir.join("b.obj");
     std::fs::write(&b, "o Thing\nv 0 0 0\nv 1 0 0\nv 0 1 0\nusemtl default\nf 1 2 3\n").unwrap();
     mel(&mut c, "loadPlugin objExport;");
-    let n = mel(&mut c, &format!("file -i -rnn \"{}\";", a.display()));
+    let n = mel(&mut c, &format!("file -i -rnn \"{}\";", a.display().to_string().replace('\\', "/")));
     assert!(n.as_array().unwrap().iter().any(|x| x.as_str().unwrap().ends_with("polySurface1")), "{n}");
-    let n = mel(&mut c, &format!("file -i -rnn \"{}\";", b.display()));
+    let n = mel(&mut c, &format!("file -i -rnn \"{}\";", b.display().to_string().replace('\\', "/")));
     assert!(n.as_array().unwrap().iter().any(|x| x == "Thing"), "{n}");
     assert_eq!(mel(&mut c, "ls -type transform \"default*\";"), json!([]));
 }
@@ -138,7 +138,7 @@ fn every_imported_type_can_be_referenced() {
     let mut c = Core::new();
     let dir = std::env::temp_dir().join("aztek_issue_92");
     std::fs::create_dir_all(&dir).unwrap();
-    let d = dir.display().to_string();
+    let d = dir.display().to_string().replace('\\', "/");
     mel(&mut c, "loadPlugin objExport; loadPlugin fbx; loadPlugin gltf; loadPlugin AbcImport; loadPlugin AbcExport;");
     mel(&mut c, "polyCube -n c;");
     mel(&mut c, &format!("file -f -type \"FBX export\" -exportAll \"{d}/c.fbx\";"));
@@ -212,7 +212,7 @@ fn a_stage_reads_alembic_obj_fbx_and_gltf_references() {
     let mut c = Core::new();
     let dir = std::env::temp_dir().join("aztek_issue_100");
     std::fs::create_dir_all(&dir).unwrap();
-    let d = dir.display().to_string();
+    let d = dir.display().to_string().replace('\\', "/");
     mel(&mut c, "loadPlugin objExport; loadPlugin fbx; loadPlugin gltf; loadPlugin AbcExport; loadPlugin mayaUsdPlugin;");
     mel(&mut c, "polyCube -n c;");
     mel(&mut c, &format!("AbcExport -j \"-root |c -file {d}/c.abc\";"));
@@ -240,7 +240,7 @@ fn bakes_and_psd_networks() {
     let mut c = Core::new();
     let dir = std::env::temp_dir().join(format!("aztek_issue_108_{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let d = dir.display().to_string();
+    let d = dir.display().to_string().replace('\\', "/");
     mel(&mut c, "polyPlane -n p -sx 1 -sy 1; shadingNode -asShader lambert -n m; sets -renderable true -noSurfaceShader true -empty -n mSG; connectAttr m.outColor mSG.surfaceShader; sets -e -forceElement mSG p;");
     mel(&mut c, "shadingNode -asTexture checker -n ch; connectAttr ch.outColor m.color; setAttr ch.color1 -type double3 1 0 0; setAttr ch.color2 -type double3 0 0 1;");
     let made = mel(&mut c, &format!("convertSolidTx -rx 64 -ry 64 -fin \"{d}/bake.png\" -force m.color p;"));
@@ -264,7 +264,7 @@ fn bakes_and_psd_networks() {
     assert_eq!(mel(&mut c, "listConnections -s 1 -d 0 m.color;"), json!([tex.clone()]));
     assert_eq!(mel(&mut c, &format!("getAttr {tex}.layerSetName;")), json!("m.color"));
     // The layer set as the texture shows it: the checker, now painted in the PSD.
-    let out = dir.join("set.png").display().to_string();
+    let out = dir.join("set.png").display().to_string().replace('\\', "/");
     mel(&mut c, &format!("psdExport -psf \"{d}/m.psd\" -lsn m.color -ofn \"{out}\";"));
     let set = image::open(&out).unwrap().to_rgba8();
     assert_eq!(set.get_pixel(4, 4).0, img.get_pixel(4, 4).0);

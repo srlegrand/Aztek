@@ -1295,7 +1295,7 @@ fn camera_moves_work_on_the_camera_node() {
     assert!(c.mel_checked("dolly -d 1 fitMe;").is_err());
     // Playblast with no view writes nothing and says so, and gives the pattern.
     let dir = std::env::temp_dir().join(format!("aztek_blast_{}", std::process::id()));
-    let base = dir.join("shot").display().to_string();
+    let base = dir.join("shot").display().to_string().replace('\\', "/");
     assert_eq!(ok(&mut c, &format!("playblast -f \"{base}\" -fmt \"image\" -st 1 -et 3 -wh 64 64 -v 0 -fp 4 -p 100 -fo -cc 1;")), json!(format!("{base}.####.png")));
     errors(&mut c);
 }

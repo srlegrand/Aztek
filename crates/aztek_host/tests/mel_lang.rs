@@ -29,6 +29,10 @@ fn failure(src: &str) -> String {
 fn comments_and_literals() {
     assert_eq!(val("// a comment\n/* and\n another */ 1 + /* inline */ 2; // done"), json!(3));
     assert_eq!(val(r#""a\tb\n\"c\"\\";"#), json!("a\tb\n\"c\"\\"));
+    // A backslash before any other character is dropped, so a Windows path is written with / or \\ in a script.
+    assert_eq!(val(r#""C:\Users\me\scene.ma";"#), json!("C:Usersmescene.ma"));
+    assert_eq!(val(r#""C:\\Users\\me\\scene.ma";"#), json!("C:\\Users\\me\\scene.ma"));
+    assert_eq!(val(r#""C:/Users/me/scene.ma";"#), json!("C:/Users/me/scene.ma"));
     assert_eq!(val("1.5e2;"), json!(150.0));
     assert_eq!(val(".5;"), json!(0.5));
     assert_eq!(val("0x10;"), json!(16));

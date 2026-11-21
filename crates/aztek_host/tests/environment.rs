@@ -14,6 +14,15 @@ fn slash(p: &Path) -> String {
     p.to_string_lossy().replace('\\', "/")
 }
 
+/// A value with its paths' separators written as `/`: on Windows one folder can be spelled with either.
+fn fwd(v: Value) -> Value {
+    match v {
+        Value::String(s) => Value::String(s.replace('\\', "/")),
+        Value::Array(a) => Value::Array(a.into_iter().map(fwd).collect()),
+        other => other,
+    }
+}
+
 #[test]
 fn the_reference_s_variables_are_read() {
     let base = std::env::temp_dir().join(format!("aztek_environment_{}", std::process::id()));
@@ -59,25 +68,25 @@ fn the_reference_s_variables_are_read() {
     assert_eq!(q["detected"], json!(theirs.to_string_lossy()), "{q}");
 
     // Shelves on the shelf path, icons on the icon path with the /%B spelling.
-    assert_eq!(c.mel("aztekEnvironment -shelfFiles;"), json!([base.join("shelves/shelf_Studio.mel").to_string_lossy()]));
-    assert_eq!(c.mel("aztekEnvironment -icon \"studio.png\";"), json!(base.join("icons/studio.png").to_string_lossy()));
+    assert_eq!(fwd(c.mel("aztekEnvironment -shelfFiles;")), json!([slash(&base.join("shelves/shelf_Studio.mel"))]));
+    assert_eq!(fwd(c.mel("aztekEnvironment -icon \"studio.png\";")), json!(slash(&base.join("icons/studio.png"))));
     assert_eq!(c.mel("aztekEnvironment -icon \"missing.png\";"), json!(""));
-    assert_eq!(c.mel("xbmLangPathList;"), json!([base.join("icons").to_string_lossy()]));
+    assert_eq!(fwd(c.mel("xbmLangPathList;")), json!([slash(&base.join("icons"))]));
 
     // AZTEK_ENV_DIR: the one folder the file is read from.
     std::env::set_var("AZTEK_ENV_DIR", base.join("elsewhere"));
     let q = c.mel("aztekUserFolder -mode \"aztek\";");
-    assert_eq!(q["envFile"], json!(base.join("elsewhere/Aztek.env").to_string_lossy()), "{q}");
+    assert_eq!(fwd(q["envFile"].clone()), json!(slash(&base.join("elsewhere/Aztek.env"))), "{q}");
     assert_eq!(c.mel("getenv \"AZ_ENV_ELSEWHERE\";"), json!("yes"));
     assert_eq!(c.mel("aztekEnvironment -shelfFiles;"), json!([]), "what the other file put on the paths is taken back");
     std::env::remove_var("AZTEK_ENV_DIR");
 
     // The project a session starts in; Aztek's own spelling wins.
     std::env::set_var("MAYA_PROJECT", base.join("projA"));
-    assert_eq!(c.mel("workspace -q -rd;"), json!(format!("{}/", base.join("projA").to_string_lossy())));
+    assert_eq!(fwd(c.mel("workspace -q -rd;")), json!(format!("{}/", slash(&base.join("projA")))));
     std::env::set_var("AZTEK_PROJECT", base.join("projB"));
-    assert_eq!(c.mel("workspace -q -rd;"), json!(format!("{}/", base.join("projB").to_string_lossy())));
-    assert_eq!(c.mel("aztekEnvironment -value \"MAYA_PROJECT\";"), json!(base.join("projB").to_string_lossy()));
+    assert_eq!(fwd(c.mel("workspace -q -rd;")), json!(format!("{}/", slash(&base.join("projB")))));
+    assert_eq!(fwd(c.mel("aztekEnvironment -value \"MAYA_PROJECT\";")), json!(slash(&base.join("projB"))));
     std::env::set_var("MAYA_PROJECTS_DIR", base.join("projects"));
     assert_eq!(c.mel("internalVar -userWorkspaceDir;"), json!(format!("{}/", slash(&base.join("projects")))));
 

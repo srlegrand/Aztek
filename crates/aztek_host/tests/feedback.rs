@@ -119,7 +119,7 @@ fn a_zip_holds_the_text() {
 fn the_scene_copy_leaves_the_scene_as_it_was() {
     let dir = temp("scene");
     let path = dir.join("aztek-scene.zip");
-    let named = dir.join("secret_project_shot12.ma").to_str().unwrap().to_string();
+    let named = dir.join("secret_project_shot12.ma").to_str().unwrap().replace('\\', "/");
     let mut c = Core::new();
     c.mel("polyCube -n \"box\";");
     c.mel("polySphere -n \"ball\";");
@@ -149,6 +149,6 @@ fn the_scene_copy_leaves_the_scene_as_it_was() {
     let copy = dir.join("copy.ma");
     std::fs::write(&copy, &text).unwrap();
     let mut other = Core::new();
-    other.mel(&format!("file -f -o \"{}\";", copy.to_str().unwrap()));
+    other.mel(&format!("file -f -o \"{}\";", copy.to_str().unwrap().replace('\\', "/")));
     assert_eq!(other.mel("objExists box;"), json!(true));
 }

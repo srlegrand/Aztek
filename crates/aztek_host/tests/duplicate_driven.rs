@@ -13,7 +13,7 @@ fn num(c: &mut Core, mel: &str) -> f64 {
 fn a_brick_moved_by_its_rigid_body_is_copied_where_it_is() {
     let scene = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/dynamics/rigid_wall_breaking.ma");
     let mut c = Core::new();
-    c.mel_checked(&format!("file -o -f \"{}\";", scene.display())).unwrap();
+    c.mel_checked(&format!("file -o -f \"{}\";", scene.display().to_string().replace('\\', "/"))).unwrap();
     c.mel_checked("currentTime 20;").unwrap();
     let (x, y, rz) = (num(&mut c, "getAttr brick_0_0.tx"), num(&mut c, "getAttr brick_0_0.ty"), num(&mut c, "getAttr brick_0_0.rz"));
     c.mel_checked("select -r brick_0_0; string $d[] = `duplicate -rr`; global string $copy; $copy = $d[0];").unwrap();

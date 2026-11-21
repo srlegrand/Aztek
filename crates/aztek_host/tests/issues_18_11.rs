@@ -89,8 +89,8 @@ fn texture_deformer_saves() {
     let f = d.join("td.ma");
     mel(&mut c, "polyPlane -n p -w 4 -h 4 -sx 8 -sy 8; textureDeformer p; shadingNode -asTexture checker -n chk; connectAttr chk.outColor textureDeformer1.texture; setAttr textureDeformer1.strength 0.5;");
     let before = points(&mut c, "p");
-    mel(&mut c, &format!("file -rename \"{}\"; file -save -type \"mayaAscii\";", f.display()));
-    mel(&mut c, &format!("file -f -new; file -o \"{}\";", f.display()));
+    mel(&mut c, &format!("file -rename \"{}\"; file -save -type \"mayaAscii\";", f.display().to_string().replace('\\', "/")));
+    mel(&mut c, &format!("file -f -new; file -o \"{}\";", f.display().to_string().replace('\\', "/")));
     assert_eq!(mel(&mut c, "listConnections -s 1 -d 0 textureDeformer1.handleMatrix;"), json!(["textureDeformerHandle1"]));
     let after = points(&mut c, "p");
     for (a, b) in before.iter().zip(&after) {

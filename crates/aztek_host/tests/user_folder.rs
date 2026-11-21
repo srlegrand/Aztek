@@ -10,6 +10,9 @@ fn write(p: &Path, text: &[u8]) {
     std::fs::write(p, text).unwrap();
 }
 
+/// A compiled plug-in's file as the reference names it on this system: it looks for .mll on Windows, .so elsewhere.
+const THEIR_PLUG_IN: &str = if cfg!(windows) { "theirTool.mll" } else { "theirTool.so" };
+
 fn slash(p: &Path) -> String {
     p.to_string_lossy().replace('\\', "/")
 }
@@ -37,7 +40,15 @@ fn snapshot(dir: &Path) -> Vec<(PathBuf, Vec<u8>)> {
 fn an_existing_folder_is_linked_copied_and_its_plug_ins_told_apart() {
     let base = std::env::temp_dir().join(format!("aztek_user_folder_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&base);
-    let (theirs, own, prefs) = (base.join("maya"), base.join("aztek"), base.join("prefs"));
+    // The reference's folder where it keeps it by default under the home folder on this system.
+    let theirs = if cfg!(windows) {
+        base.join("Documents").join("maya")
+    } else if cfg!(target_os = "macos") {
+        base.join("Library").join("Preferences").join("Autodesk").join("maya")
+    } else {
+        base.join("maya")
+    };
+    let (own, prefs) = (base.join("aztek"), base.join("prefs"));
     std::env::set_var("HOME", &base);
     std::env::set_var("AZTEK_PREFS", &prefs);
     std::env::set_var("AZTEK_APP_DIR", &own);
@@ -55,7 +66,7 @@ fn an_existing_folder_is_linked_copied_and_its_plug_ins_told_apart() {
     write(&theirs.join("scripts/ufShared.mel"), b"global proc int ufShared() { return 42; }\n");
     write(&theirs.join("2025/Maya.env"), format!("UF_TEST_VAR = hello\nMAYA_SCRIPT_PATH = {}\n", slash(&base.join("extra"))).as_bytes());
     write(&base.join("extra/ufExtra.mel"), b"global proc int ufExtra() { return 9; }\n");
-    write(&theirs.join("2025/plug-ins/theirTool.so"), b"\x7fELF....initializePlugin\0uninitializePlugin\0libOpenMaya.so\0");
+    write(&theirs.join("2025/plug-ins").join(THEIR_PLUG_IN), b"\x7fELF....initializePlugin\0uninitializePlugin\0libOpenMaya.so\0");
     write(&theirs.join("2025/plug-ins/notes.txt"), b"not a plug-in");
     write(&theirs.join("plug-ins/ufPy.py"), b"def initializePlugin(obj):\n    pass\n\ndef uninitializePlugin(obj):\n    pass\n");
     write(
@@ -146,7 +157,7 @@ fn an_existing_folder_is_linked_copied_and_its_plug_ins_told_apart() {
     assert_eq!(r["kept"], json!(1), "{r}");
     assert!(r["failed"].as_array().unwrap().is_empty(), "{r}");
     assert!(own.join("scripts/userSetup.mel").is_file());
-    assert!(own.join("plug-ins/theirTool.so").is_file());
+    assert!(own.join("plug-ins").join(THEIR_PLUG_IN).is_file());
     assert!(own.join("modules/tool.mod").is_file());
     assert!(own.join("prefs/userPrefs.mel").is_file());
     assert!(own.join("Aztek.env").is_file());

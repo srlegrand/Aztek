@@ -55,7 +55,7 @@ fn nurbs_from_mel() {
 fn references_from_mel() {
     let dir = std::env::temp_dir().join(format!("aztek_audit_mel_{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let path = dir.join("source.ma").to_str().unwrap().to_string();
+    let path = dir.join("source.ma").to_str().unwrap().replace('\\', "/");
     let mut c = Core::new();
     c.mel("polyCube -n \"box\";");
     c.mel(&format!("file -f -save -type \"mayaAscii\" \"{path}\";"));
