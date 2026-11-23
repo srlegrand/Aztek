@@ -154,6 +154,15 @@ int main(int argc, char** argv) {
     aztek_use_prefs();
     az::MainWindow w;
     aztek_set_main_window(static_cast<QMainWindow*>(&w));
+    // The saved size and panels before the window is shown. Restoring them after show resized the window under the splash,
+    // and under XWayland on a scaled screen the parts drawn at the old size stayed on screen (#225).
+    if (!args.isSet(shot)) {
+        QSettings s;
+        if (s.contains("window/geometry")) {
+            w.restoreGeometry(s.value("window/geometry").toByteArray());
+            w.restoreState(s.value("window/state").toByteArray());
+        }
+    }
     // Keep the viewport hidden while the first-run dialog processes events. On macOS, presenting a frame here can
     // block the dialog while Metal waits for a drawable. Script and screenshot runs skip the prompt.
     if (!args.isSet(script) && !args.isSet(shot)) az::ask_user_folder_at_first_start(&w, splash);

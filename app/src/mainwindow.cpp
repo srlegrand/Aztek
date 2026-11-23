@@ -2584,10 +2584,7 @@ void MainWindow::closeEvent(QCloseEvent* e) {
 void MainWindow::run_startup(const QString& script, const QString& screenshot) {
     no_prompts_ = !screenshot.isEmpty();
     QSettings s;
-    if (s.contains("window/geometry") && screenshot.isEmpty()) {
-        restoreGeometry(s.value("window/geometry").toByteArray());
-        restoreState(s.value("window/state").toByteArray());
-    }
+    // The saved geometry and panels were restored before the window was shown (#225).
     exec_quiet("constructionHistory", QJsonObject{{"state", s.value("prefs/constructionHistory", true).toBool()}});
     // Last time ended without closing: offer the newest autosave. Not when a script or a screenshot drives the run.
     const bool crashed = s.value("session/running", false).toBool();
