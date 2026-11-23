@@ -2,6 +2,7 @@
 
 use aztek_scene::{ma_file, mb_file, Session};
 use serde_json::{json, Value};
+use std::process::Command;
 
 fn data(name: &str) -> String {
     format!("{}/tests/data/mb/{name}", env!("CARGO_MANIFEST_DIR"))
@@ -154,6 +155,45 @@ fn a_reference_binary_file_written_again_reads_the_same() {
     let (ma, mb) = saved_both_ways(&mut s, "dummy_again");
     let d = first_difference(&ma, &mb);
     assert!(d.is_empty(), "{d}");
+}
+
+/// Run with `AZTEK_MAYAPY` set to Maya's mayapy, then pass `-- --ignored` to this test.
+#[test]
+#[ignore = "requires Maya 2026 or 2027 mayapy; set AZTEK_MAYAPY to enable"]
+fn maya_reads_uvs_from_aztek_binary() {
+    let mayapy = std::env::var_os("AZTEK_MAYAPY").expect("set AZTEK_MAYAPY to Maya mayapy");
+    let mut s = Session::new();
+    run(&mut s, "polyPlane", json!({"name": "uvProbe", "subdivisionsX": 2, "subdivisionsZ": 1}));
+    run(&mut s, "polyCube", json!({"name": "cubeProbe"}));
+    let path = temp("maya_uv_probe.mb");
+    let warnings = ma_file::save_scene(&mut s, &path, ma_file::Format::Mb).unwrap();
+    assert!(warnings.is_empty(), "{warnings:?}");
+
+    let script = format!("{}/../../tools/reference_capture/verify_mb_uv.py", env!("CARGO_MANIFEST_DIR"));
+    let output = Command::new(mayapy).arg(script).arg(&path).output().expect("run Maya mayapy");
+    assert!(output.status.success(), "Maya failed:\n{}", String::from_utf8_lossy(&output.stderr));
+    let result: Value = serde_json::from_slice(&output.stdout).expect("Maya JSON output");
+    assert!(matches!(result["version"].as_str(), Some("2026" | "2027")), "{result}");
+    eprintln!("Maya runtime: {}", result);
+    let data = &result["meshes"]["uvProbeShape"]["sets"]["map1"];
+    assert_eq!(data["uvCount"], 6);
+    assert_eq!(data["faceCounts"], json!([4, 4]));
+    assert_eq!(data["faceIds"], json!([0, 1, 4, 3, 1, 2, 5, 4]));
+    assert_eq!(data["uvs"], json!([0.0, 0.0, 0.5, 0.0, 1.0, 0.0, 0.0, 1.0, 0.5, 1.0, 1.0, 1.0]));
+    let cube = &result["meshes"]["cubeProbeShape"]["sets"]["map1"];
+    assert_eq!(cube["uvCount"], 14, "{result}");
+    assert_eq!(cube["faceCounts"], json!([4, 4, 4, 4, 4, 4]));
+    assert_eq!(cube["faceIds"], json!([0, 1, 3, 2, 2, 3, 5, 4, 4, 5, 7, 6, 6, 7, 9, 8, 1, 10, 11, 3, 12, 0, 2, 13]));
+    let expected = [
+        0.33, 0.0, 0.6633333, 0.0, 0.33, 0.25, 0.6633333, 0.25, 0.33, 0.5, 0.6633333, 0.5,
+        0.33, 0.75, 0.6633333, 0.75, 0.33, 1.0, 0.6633333, 1.0, 1.0, 0.0, 1.0, 0.25, 0.0,
+        0.0, 0.0, 0.25,
+    ];
+    let actual = cube["uvs"].as_array().expect("cube UV coordinates");
+    assert_eq!(actual.len(), expected.len());
+    for (actual, expected) in actual.iter().zip(expected) {
+        assert!((actual.as_f64().unwrap() - expected).abs() < 1e-6, "{result}");
+    }
 }
 
 #[test]
