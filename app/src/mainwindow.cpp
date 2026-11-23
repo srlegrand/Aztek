@@ -2576,7 +2576,9 @@ void MainWindow::closeEvent(QCloseEvent* e) {
     }
     QSettings s;
     s.setValue("window/geometry", saveGeometry());
-    s.setValue("window/state", saveState());
+    // The panels belong to the workspace shown: opening Aztek again brings this arrangement back under its name, so the
+    // Workspace box and the layout agree (#261).
+    s.setValue("workspaces/" + s.value("workspaces_current", "General").toString(), saveState());
     s.setValue("session/running", false);
     e->accept();
 }
@@ -2584,10 +2586,10 @@ void MainWindow::closeEvent(QCloseEvent* e) {
 void MainWindow::run_startup(const QString& script, const QString& screenshot) {
     no_prompts_ = !screenshot.isEmpty();
     QSettings s;
-    if (s.contains("window/geometry") && screenshot.isEmpty()) {
-        restoreGeometry(s.value("window/geometry").toByteArray());
-        restoreState(s.value("window/state").toByteArray());
-    }
+    if (s.contains("window/geometry") && screenshot.isEmpty()) restoreGeometry(s.value("window/geometry").toByteArray());
+    // The workspace chosen last is laid out as its menu entry lays it out, rather than as the last session happened to
+    // leave the panels: the Workspace box names it, so the layout has to match it (#261).
+    if (screenshot.isEmpty()) apply_workspace(s.value("workspaces_current", "General").toString());
     exec_quiet("constructionHistory", QJsonObject{{"state", s.value("prefs/constructionHistory", true).toBool()}});
     // Last time ended without closing: offer the newest autosave. Not when a script or a screenshot drives the run.
     const bool crashed = s.value("session/running", false).toBool();
