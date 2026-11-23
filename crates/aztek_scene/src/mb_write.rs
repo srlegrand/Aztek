@@ -203,6 +203,9 @@ impl MeshAcc {
                 });
             }
         }
+        // The reference's mesh data ends with a 16-byte geometry-tag header, then a gtag count.
+        // Keep the empty table so Maya can read meshes with baked construction history.
+        d.raw(&[0; 16]).str("gtag").u32(0);
         d.0
     }
 }
