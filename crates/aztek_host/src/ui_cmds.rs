@@ -19,7 +19,7 @@ fn f(name: &str, short: &str, ty: ArgType, doc: &str) -> FlagDef {
 }
 
 #[derive(Default)]
-struct Ui {
+pub(crate) struct Ui {
     /// 0 hierarchy (roots), 1 object, 2 component.
     scope: i32,
     prefs: Map<String, Value>,
@@ -27,9 +27,11 @@ struct Ui {
     loaded: bool,
     run_time: BTreeMap<String, Value>,
     name_commands: BTreeMap<String, Value>,
-    huds: BTreeMap<String, Value>,
+    pub(crate) huds: BTreeMap<String, Value>,
     /// Which of the built-in heads up displays are on.
-    hud_on: BTreeSet<String>,
+    pub(crate) hud_on: BTreeSet<String>,
+    /// The heads up display's layout: the last ID given, the options, the grid and whether any of it shows.
+    pub(crate) hud: crate::hud::Layout,
     /// What `hotkey` has bound, for hotkeyCheck.
     hotkeys: Vec<Value>,
     /// hotkeySet: the sets made, and the current one (None: the default set).
@@ -42,7 +44,7 @@ struct Ui {
 
 static UI: Mutex<Option<Ui>> = Mutex::new(None);
 
-fn with_ui<R>(f: impl FnOnce(&mut Ui) -> R) -> R {
+pub(crate) fn with_ui<R>(f: impl FnOnce(&mut Ui) -> R) -> R {
     let mut g = UI.lock().unwrap();
     let u = g.get_or_insert_with(|| Ui { scope: 1, hud_on: ["viewAxis".to_string(), "cameraNames".to_string()].into_iter().collect(), ..Default::default() });
     f(u)
@@ -239,6 +241,15 @@ fn hud_control(kind: &'static str, a: &aztek_ops::Args) -> aztek_ops::CmdResult 
             *v = crate::scriptui::callback_value(v);
         }
     }
+    // The font sizes are small or large.
+    for (k, v) in &flags {
+        if k.ends_with("FontSize") {
+            let t = v.as_str().unwrap_or("");
+            if !a.bool("query") && t != "small" && t != "large" {
+                fail!("{kind}: -{k} is small or large, not {v}.");
+            }
+        }
+    }
     if a.bool("query") {
         let Some(n) = name else { fail!("{kind}: name it.") };
         let q = a.get("queried").and_then(Value::as_array).and_then(|q| q.first()).and_then(Value::as_str).map(str::to_string).or_else(|| flags.keys().next().cloned());
@@ -250,6 +261,7 @@ fn hud_control(kind: &'static str, a: &aztek_ops::Args) -> aztek_ops::CmdResult 
                 "section" | "block" => json!(0),
                 "minValue" | "value" => json!(0.0),
                 "maxValue" => json!(100.0),
+                k if k.ends_with("FontSize") => json!("small"),
                 _ => Value::Null,
             }))
         });
@@ -264,26 +276,10 @@ fn hud_control(kind: &'static str, a: &aztek_ops::Args) -> aztek_ops::CmdResult 
                 fail!("{kind}: Object's name '{n}' is not unique.");
             }
             flags.insert("kind".to_string(), json!(kind));
+            flags.insert("id".to_string(), json!(u.hud.next_id()));
             u.huds.insert(n.clone(), Value::Object(flags));
         }
         Ok(json!(n))
-    })
-}
-
-pub fn custom_huds() -> Vec<(i64, i64, String, String)> {
-    with_ui(|u| {
-        u.huds
-            .values()
-            .filter(|h| h.get("kind").is_none() && h.get("visible").and_then(Value::as_bool).unwrap_or(true))
-            .map(|h| {
-                (
-                    h.get("section").and_then(Value::as_i64).unwrap_or(0),
-                    h.get("block").and_then(Value::as_i64).unwrap_or(0),
-                    h.get("label").and_then(Value::as_str).unwrap_or("").to_string(),
-                    h.get("command").and_then(Value::as_str).unwrap_or("").to_string(),
-                )
-            })
-            .collect()
     })
 }
 
@@ -816,7 +812,7 @@ pub fn register(s: &mut Session) {
     const HUD_COMMON: &str = "section:s:a block:b:a blockSize:bs:a blockAlignment:ba:a padding:p:a visible:vis:b allowOverlap:ao:b";
     const HUD_BUTTON: &str = "label:l:a labelFontSize:lfs:a buttonWidth:bw:a buttonShape:bsh:a pressCommand:pc:a releaseCommand:rc:a";
     const HUD_SLIDER: &str = "label:l:a labelFontSize:lfs:a labelWidth:lw:a type:t:a value:v:a minValue:min:a maxValue:max:a valueAlignment:va:a valueFontSize:vfs:a valueWidth:vw:a sliderLength:sl:a sliderIncrement:si:a decimalPrecision:dp:a internalPadding:ip:a showFrame:sf:b dragCommand:dc:a pressCommand:pc:a releaseCommand:rc:a";
-    const HUD_SLIDER_BUTTON: &str = "sliderLabel:sl:a sliderLabelFontSize:slf:a sliderLabelWidth:slw:a type:t:a value:v:a minValue:min:a maxValue:max:a valueAlignment:va:a valueFontSize:vfs:a valueWidth:vw:a sliderLength:sln:a sliderIncrement:si:a decimalPrecision:dp:a internalPadding:ip:a sliderDragCommand:sdc:a sliderPressCommand:spc:a sliderReleaseCommand:src:a buttonLabel:bl:a buttonLabelFontSize:blf:a buttonWidth:bw:a buttonShape:bsh:a buttonPressCommand:bpc:a buttonReleaseCommand:brc:a";
+    const HUD_SLIDER_BUTTON: &str = "sliderLabel:sl:a sliderLabelFontSize:sfs:a sliderLabelWidth:slw:a type:t:a value:v:a minValue:min:a maxValue:max:a valueAlignment:va:a valueFontSize:vfs:a valueWidth:vw:a sliderLength:sln:a sliderIncrement:si:a decimalPrecision:dp:a internalPadding:ip:a sliderDragCommand:sdc:a sliderPressCommand:spc:a sliderReleaseCommand:src:a buttonLabel:bl:a buttonLabelFontSize:bfs:a buttonWidth:bw:a buttonShape:bsh:a buttonPressCommand:bpc:a buttonReleaseCommand:brc:a";
     for (kind, spec) in [("hudButton", HUD_BUTTON), ("hudSlider", HUD_SLIDER), ("hudSliderButton", HUD_SLIDER_BUTTON)] {
         let mut c = Cmd::new(kind, "A control in the heads up display: -section, -block, its label, value and commands. headsUpDisplay -rem removes it.", move |_s, a| hud_control(kind, a)).positional("name").undoable(false);
         c = crate::scriptui::add_flags(c, spec);
@@ -825,56 +821,7 @@ pub fn register(s: &mut Session) {
         reg(s, c);
     }
 
-    reg(
-        s,
-        Cmd::new("headsUpDisplay", "Text in the views: -s section -b block -l label -c command; -rem removes; -ex tests; -lh lists.", |_s, a| {
-            let name = a.pos_str(0).map(str::to_string);
-            with_ui(|u| {
-                if a.bool("listHeadsUpDisplays") {
-                    return Ok(json!(u.huds.keys().cloned().collect::<Vec<_>>()));
-                }
-                if let Some(rm) = a.get("remove") {
-                    if let Some(n) = rm.as_str().map(str::to_string).or(name.clone()) {
-                        u.huds.remove(&n);
-                    }
-                    return Ok(Value::Null);
-                }
-                let Some(n) = name else { return Ok(Value::Null) };
-                if a.bool("exists") {
-                    return Ok(json!(u.huds.contains_key(&n) || u.hud_on.contains(&n)));
-                }
-                if a.has("visible") && !a.has("section") && !u.huds.contains_key(&n) {
-                    if a.bool("visible") {
-                        u.hud_on.insert(n);
-                    } else {
-                        u.hud_on.remove(&n);
-                    }
-                    return Ok(Value::Null);
-                }
-                let e = u.huds.entry(n).or_insert(json!({}));
-                for (k, ty) in [("section", 0), ("block", 0), ("label", 1), ("command", 1), ("visible", 2)] {
-                    if a.has(k) {
-                        e[k] = match ty {
-                            0 => json!(a.int(k, 0)),
-                            1 => json!(a.string(k, "")),
-                            _ => json!(a.bool(k)),
-                        };
-                    }
-                }
-                Ok(Value::Null)
-            })
-        })
-        .positional("name")
-        .undoable(false)
-        .flag(f("section", "s", ArgType::Int, "Screen section, 0 to 9."))
-        .flag(f("block", "b", ArgType::Int, "Row in the section."))
-        .flag(f("label", "l", ArgType::String, "Label text."))
-        .flag(f("command", "c", ArgType::String, "MEL giving the value."))
-        .flag(f("visible", "vis", ArgType::Bool, "Show it."))
-        .flag(f("remove", "rem", ArgType::Any, "Remove it."))
-        .flag(f("exists", "ex", ArgType::Bool, "Whether it exists."))
-        .flag(f("listHeadsUpDisplays", "lh", ArgType::Bool, "List them.")),
-    );
+    crate::hud::register(s);
 
     reg(
         s,
@@ -1137,6 +1084,11 @@ pub fn register(s: &mut Session) {
 
 }
 
+
+/// A runTimeCommand's fields (command, annotation, label, image, version, language and the rest), for controls made from one.
+pub(crate) fn run_time_entry(name: &str) -> Option<Value> {
+    with_ui(|u| u.run_time.get(name).cloned())
+}
 
 /// runTimeCommand: named commands that run a script, the factory ones the shell has and those scripts make.
 fn run_time_command() -> Cmd {

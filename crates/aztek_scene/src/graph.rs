@@ -3313,8 +3313,12 @@ impl Graph {
     }
 
     fn insert_attr_raw(&mut self, id: NodeId, index: usize, s: &AttrState) {
-        self.own_type_mut(id);
-        self.shift_attr_refs(id, index as i32, 1);
+        let count = self.own_type_mut(id).attrs.len();
+        // Added after the last one, as an added attribute is, nothing refers to where it goes: every connection is left
+        // as it is, rather than gone through for each attribute a file adds.
+        if index < count {
+            self.shift_attr_refs(id, index as i32, 1);
+        }
         let n = self.node_mut(id);
         Arc::make_mut(&mut n.data.ty)
             .attrs

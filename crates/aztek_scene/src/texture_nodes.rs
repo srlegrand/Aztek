@@ -394,7 +394,18 @@ pub fn classification(ty: &str) -> Option<&'static str> {
     if ty == "place3dTexture" {
         return Some("utility/general");
     }
-    table().into_iter().filter(|t| !TAKEN.contains(&t.0)).find(|t| t.0 == ty).map(|t| t.1)
+    // Asked for each node a scene creates: the table is built once, not every time (it builds every type's attributes).
+    static BY_TYPE: std::sync::OnceLock<std::collections::HashMap<&'static str, &'static str>> = std::sync::OnceLock::new();
+    BY_TYPE
+        .get_or_init(|| {
+            let mut m = std::collections::HashMap::new();
+            for t in table().into_iter().filter(|t| !TAKEN.contains(&t.0)) {
+                m.entry(t.0).or_insert(t.1);
+            }
+            m
+        })
+        .get(ty)
+        .copied()
 }
 
 /// Names Aztek already uses for something else: its cloth simulation node is called `cloth`, which is the reference's

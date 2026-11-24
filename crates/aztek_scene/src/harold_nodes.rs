@@ -575,7 +575,18 @@ pub fn register_types() {
 
 /// classification for shadingNode and the Hypershade.
 pub fn classification(ty: &str) -> Option<&'static str> {
-    table().into_iter().find(|t| t.0 == ty).map(|t| t.1)
+    // Asked for each node a scene creates: the table is built once, not every time (it builds every type's attributes).
+    static BY_TYPE: std::sync::OnceLock<std::collections::HashMap<&'static str, &'static str>> = std::sync::OnceLock::new();
+    BY_TYPE
+        .get_or_init(|| {
+            let mut m = std::collections::HashMap::new();
+            for t in table() {
+                m.entry(t.0).or_insert(t.1);
+            }
+            m
+        })
+        .get(ty)
+        .copied()
 }
 
 /// Default nodes rendering keeps in every scene, created once with the scene's other defaults.

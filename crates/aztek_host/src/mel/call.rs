@@ -169,6 +169,9 @@ fn query_takes_value(cmd: &str, flag: &str) -> bool {
             | ("proximityWrap", "canBeAdded")
             | ("selectPriority" | "selectType", "queryByName")
             | ("setInfinity", "attribute")
+            | ("headsUpDisplay", "getOption")
+            | ("gradientControlNoAttr", "valueAtPoint")
+            | ("iconTextScrollList", "itemAt" | "visualRectAt")
             | ("copyDeformerWeights", "sourceShape" | "destinationShape" | "sourceDeformer" | "destinationDeformer")
             | (
                 "polySelect",

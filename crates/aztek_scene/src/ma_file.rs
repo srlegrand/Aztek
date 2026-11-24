@@ -408,6 +408,14 @@ struct RefLine {
     owner: Option<String>,
 }
 
+/// The connections into and out of each node, and each node's children, by index in the document.
+#[derive(Debug, Default)]
+struct DocIndex {
+    ins: Vec<Vec<usize>>,
+    outs: Vec<Vec<usize>>,
+    kids: Vec<Vec<usize>>,
+}
+
 #[derive(Debug)]
 struct Doc {
     /// Plug-ins the file's requires lines name.
@@ -422,6 +430,8 @@ struct Doc {
     nodes: Vec<MaNode>,
     by_name: HashMap<String, Vec<usize>>,
     conns: Vec<Conn>,
+    /// Made when the build starts (make_index), once the document no longer changes.
+    index: std::sync::OnceLock<DocIndex>,
     /// Centimetres per file unit, degrees per file unit.
     lin: f64,
     ang: f64,
@@ -521,7 +531,7 @@ impl Doc {
 
     fn parse(text: &str) -> Doc {
         FILE_UNITS.with(|u| u.set((1.0, std::f64::consts::PI / 180.0)));
-        let mut d = Doc { light_set: Vec::new(), relationships: Vec::new(), nodes: Vec::new(), by_name: HashMap::new(), conns: Vec::new(), lin: 1.0, ang: std::f64::consts::PI / 180.0, fps: None, drop_frame: false, warnings: Vec::new(), refs: Vec::new(), ref_load: Vec::new(), instances: Vec::new(), ref_conns: Vec::new(), up_z: false, requires: Vec::new(), plugin_versions: HashMap::new(), plugin_data_types: HashMap::new(), file_info: Vec::new(), characters: Vec::new() };
+        let mut d = Doc { light_set: Vec::new(), relationships: Vec::new(), nodes: Vec::new(), by_name: HashMap::new(), conns: Vec::new(), index: std::sync::OnceLock::new(), lin: 1.0, ang: std::f64::consts::PI / 180.0, fps: None, drop_frame: false, warnings: Vec::new(), refs: Vec::new(), ref_load: Vec::new(), instances: Vec::new(), ref_conns: Vec::new(), up_z: false, requires: Vec::new(), plugin_versions: HashMap::new(), plugin_data_types: HashMap::new(), file_info: Vec::new(), characters: Vec::new() };
         let mut lex = Lexer::new(text);
         let mut st = Vec::new();
         let mut current: Option<usize> = None;
@@ -922,7 +932,45 @@ impl Doc {
 
     /// The one connection into node's attribute (indices ignored unless the name holds them), and its source.
     fn input(&self, node: usize, attrs: &[&str]) -> Option<&Conn> {
-        self.conns.iter().find(|c| c.dst == node && attrs.contains(&plain_attr(&c.dst_attr).as_str()))
+        self.conns_in(node).find(|c| c.dst == node && attrs.contains(&plain_attr(&c.dst_attr).as_str()))
+    }
+
+    /// The connections into a node, from the index once the build has made it, else by going through them all.
+    fn conns_in(&self, node: usize) -> impl Iterator<Item = &Conn> + '_ {
+        self.by_index(node, |x| &x.ins, move |c: &&Conn| c.dst == node)
+    }
+
+    /// The connections out of a node, as conns_in.
+    fn conns_out(&self, node: usize) -> impl Iterator<Item = &Conn> + '_ {
+        self.by_index(node, |x| &x.outs, move |c: &&Conn| c.src == node)
+    }
+
+    fn by_index<'a>(&'a self, node: usize, list: impl Fn(&'a DocIndex) -> &'a Vec<Vec<usize>>, test: impl Fn(&&Conn) -> bool + 'a) -> impl Iterator<Item = &'a Conn> + 'a {
+        let indexed = self.index.get().map(|x| list(x).get(node).map_or(&[][..], |v| v.as_slice()).iter().map(move |&k| &self.conns[k]));
+        let scanned = self.index.get().is_none().then(|| self.conns.iter().filter(test));
+        indexed.into_iter().flatten().chain(scanned.into_iter().flatten())
+    }
+
+    /// Makes the index of connections and children the build reads them through: a scan of the whole document for each
+    /// node it builds made a big scene's read take time in the square of its size. Once nothing changes the document.
+    fn make_index(&self) {
+        self.index.get_or_init(|| {
+            let mut x = DocIndex { ins: vec![Vec::new(); self.nodes.len()], outs: vec![Vec::new(); self.nodes.len()], kids: vec![Vec::new(); self.nodes.len()] };
+            for (k, c) in self.conns.iter().enumerate() {
+                if let Some(v) = x.ins.get_mut(c.dst) {
+                    v.push(k);
+                }
+                if let Some(v) = x.outs.get_mut(c.src) {
+                    v.push(k);
+                }
+            }
+            for (i, n) in self.nodes.iter().enumerate() {
+                if let Some(v) = n.parent.and_then(|p| x.kids.get_mut(p)) {
+                    v.push(i);
+                }
+            }
+            x
+        });
     }
 
     fn index_of(&self, n: &MaNode) -> usize {
@@ -930,7 +978,9 @@ impl Doc {
     }
 
     fn children(&self, node: usize) -> impl Iterator<Item = usize> + '_ {
-        self.nodes.iter().enumerate().filter(move |(_, n)| n.parent == Some(node)).map(|(i, _)| i)
+        let indexed = self.index.get().map(|x| x.kids.get(node).map_or(&[][..], |v| v.as_slice()).iter().copied());
+        let scanned = self.index.get().is_none().then(|| self.nodes.iter().enumerate().filter(move |(_, n)| n.parent == Some(node)).map(|(i, _)| i));
+        indexed.into_iter().flatten().chain(scanned.into_iter().flatten())
     }
 }
 
@@ -1785,7 +1835,7 @@ fn apply_deletion(n: &MaNode, m: &mut Mesh) {
 /// Whether a file's plug-in deformer deforms something other than curves and surfaces: its output goes anywhere but a
 /// NURBS shape's create.
 fn mesh_plugin_deformer(doc: &Doc, i: usize) -> bool {
-    doc.conns.iter().any(|c| {
+    doc.conns_out(i).any(|c| {
         c.src == i && matches!(plain_attr(&c.src_attr).as_str(), "og" | "outputGeometry") && !matches!(doc.nodes[c.dst].ty.as_str(), "nurbsCurve" | "nurbsSurface")
     })
 }
@@ -1798,8 +1848,8 @@ fn walk_chain(doc: &Doc, shape: usize, stored: &HashMap<usize, MaMesh>) -> Chain
     let mut through = 0;
     while seen.insert(at) {
         let plain = |c: &&Conn| c.dst == at && INPUT_ATTRS.contains(&plain_attr(&c.dst_attr).as_str());
-        let by_index = doc.conns.iter().filter(plain).find(|c| first_index(&c.dst_attr).unwrap_or(0) == through);
-        let Some(conn) = by_index.or_else(|| doc.conns.iter().find(plain)) else { break };
+        let by_index = doc.conns_in(at).filter(plain).find(|c| first_index(&c.dst_attr).unwrap_or(0) == through);
+        let Some(conn) = by_index.or_else(|| doc.conns_in(at).find(plain)) else { break };
         let next = conn.src;
         let index = first_index(&conn.src_attr).unwrap_or(0);
         // A plug-in's deformer on a mesh is in the chain like any other.
@@ -1861,7 +1911,7 @@ fn plain_object_set(doc: &Doc, i: usize) -> bool {
     let n = &doc.nodes[i];
     n.ty == crate::object_sets::TYPE_NAME
         && !matches!(n.name.trim_start_matches(':'), "defaultLightSet" | "defaultObjectSet")
-        && !doc.conns.iter().any(|c| c.dst == i && matches!(plain_attr(&c.dst_attr).as_str(), "ub" | "usedBy"))
+        && !doc.conns_in(i).any(|c| c.dst == i && matches!(plain_attr(&c.dst_attr).as_str(), "ub" | "usedBy"))
 }
 
 struct Build<'a> {
@@ -1887,7 +1937,7 @@ impl Build<'_> {
     /// reference puts between. Here the deformer keeps the original curve itself, so the original shape is removed.
     fn curve_deformers(&mut self) {
         let doc = self.doc;
-        let feeding = |node: usize, attrs: &[&str]| doc.conns.iter().find(|c| c.dst == node && attrs.contains(&plain_attr(&c.dst_attr).as_str())).map(|c| (c.src, plain_attr(&c.src_attr)));
+        let feeding = |node: usize, attrs: &[&str]| doc.conns_in(node).find(|c| c.dst == node && attrs.contains(&plain_attr(&c.dst_attr).as_str())).map(|c| (c.src, plain_attr(&c.src_attr)));
         for c in &doc.conns {
             if !matches!(plain_attr(&c.src_attr).as_str(), "og" | "outputGeometry") || !matches!(plain_attr(&c.dst_attr).as_str(), "cr" | "create") {
                 continue;
@@ -2627,7 +2677,7 @@ impl Build<'_> {
         let t = types::find(skin::SKIN_TYPE).unwrap();
         let ma = t.attr_index("matrix").unwrap();
         let mut infs: BTreeMap<i64, usize> = BTreeMap::new();
-        for c in doc.conns.iter().filter(|c| c.dst == sk && matches!(plain_attr(&c.dst_attr).as_str(), "ma" | "matrix")) {
+        for c in doc.conns_in(sk).filter(|c| c.dst == sk && matches!(plain_attr(&c.dst_attr).as_str(), "ma" | "matrix")) {
             if let Some(e) = first_index(&c.dst_attr).filter(|&e| e < 1 << 16) {
                 infs.insert(e, c.src);
             }
@@ -2648,7 +2698,7 @@ impl Build<'_> {
         }
         // A bind pre-matrix the file connects (a skin riding a local rig) stays live.
         let pm = t.attr_index("bindPreMatrix").unwrap();
-        for c in doc.conns.iter().filter(|c| c.dst == sk && matches!(plain_attr(&c.dst_attr).as_str(), "pm" | "bindPreMatrix")) {
+        for c in doc.conns_in(sk).filter(|c| c.dst == sk && matches!(plain_attr(&c.dst_attr).as_str(), "pm" | "bindPreMatrix")) {
             let (Some(e), Some(src)) = (first_index(&c.dst_attr).filter(|&e| e < 1 << 16), self.id(c.src)) else { continue };
             let Ok(from) = self.s.graph.plug(&format!("{}.{}", self.s.graph.path(src), c.src_attr)) else {
                 self.warnings.push(format!("{}.{}: no such attribute for {}.pm[{e}]", doc.nodes[c.src].name, c.src_attr, n.name));
@@ -2775,7 +2825,7 @@ impl Build<'_> {
         let doc = self.doc;
         let n = &doc.nodes[i];
         let mut targets: BTreeMap<i64, usize> = BTreeMap::new();
-        for c in doc.conns.iter().filter(|c| c.dst == i && c.dst_attr.starts_with("tg[")) {
+        for c in doc.conns_in(i).filter(|c| c.dst == i && c.dst_attr.starts_with("tg[")) {
             let leaf = plain_attr(&c.dst_attr);
             if leaf != "tg.tw" {
                 if let Some(e) = first_index(&c.dst_attr) {
@@ -2788,12 +2838,11 @@ impl Build<'_> {
         let pole_handle = (n.ty == "poleVectorConstraint").then(|| doc.input(i, &["cpim", "constraintParentInverseMatrix"]).map(|c| c.src)).flatten().filter(|&h| doc.nodes[h].ty == "ikHandle");
         // The driven object: where the outputs go, else what its parent matrix came from, else its DAG parent.
         let driven = pole_handle.or_else(|| doc
-            .conns
-            .iter()
+            .conns_out(i)
             .find(|c| c.src == i && matches!(plain_attr(&c.src_attr).as_str(), "ctx" | "cty" | "ctz" | "ct" | "crx" | "cry" | "crz" | "cr" | "csx" | "csy" | "csz" | "cs"))
             .map(|c| c.dst)
             // A constraint blended with animation goes through a pairBlend; what it drives is what that drives.
-            .map(|d| if doc.nodes[d].ty == "pairBlend" { doc.conns.iter().find(|c| c.src == d && matches!(plain_attr(&c.src_attr).as_str(), "ot" | "otx" | "oty" | "otz" | "or" | "orx" | "ory" | "orz" | "outTranslate" | "outTranslateX" | "outTranslateY" | "outTranslateZ" | "outRotate" | "outRotateX" | "outRotateY" | "outRotateZ")).map_or(d, |c| c.dst) } else { d })
+            .map(|d| if doc.nodes[d].ty == "pairBlend" { doc.conns_out(d).find(|c| c.src == d && matches!(plain_attr(&c.src_attr).as_str(), "ot" | "otx" | "oty" | "otz" | "or" | "orx" | "ory" | "orz" | "outTranslate" | "outTranslateX" | "outTranslateY" | "outTranslateZ" | "outRotate" | "outRotateX" | "outRotateY" | "outRotateZ")).map_or(d, |c| c.dst) } else { d })
             .or_else(|| doc.input(i, &["cpim"]).map(|c| c.src))
             .or(n.parent));
         let Some(driven_id) = driven.and_then(|d| self.id(d)) else {
@@ -2811,7 +2860,7 @@ impl Build<'_> {
             };
             ids.push((e as i64, t));
             // The weight: a value on the element, or the user attr (w0) wired to it.
-            let wired = doc.conns.iter().find(|c| c.dst == i && c.src == i && first_index(&c.dst_attr) == Some(e) && plain_attr(&c.dst_attr).ends_with("tw"));
+            let wired = doc.conns_in(i).find(|c| c.dst == i && c.src == i && first_index(&c.dst_attr) == Some(e) && plain_attr(&c.dst_attr).ends_with("tw"));
             let w = wired
                 .and_then(|c| n.num(&[c.src_attr.as_str()]).or_else(|| n.adds.iter().find(|a| a.short == c.src_attr || a.long == c.src_attr).and_then(|a| n.num(&[a.long.as_str(), a.short.as_str()]))))
                 .or_else(|| {
@@ -2839,7 +2888,7 @@ impl Build<'_> {
         let wired = |whole: &str, parts: [&str; 3]| -> Option<Vec<&'static str>> {
             let mut on = [false; 3];
             let mut any = false;
-            for c in doc.conns.iter().filter(|c| c.src == i) {
+            for c in doc.conns_out(i).filter(|c| c.src == i) {
                 let a = plain_attr(&c.src_attr);
                 if a == whole {
                     return Some(Vec::new());
@@ -2870,7 +2919,7 @@ impl Build<'_> {
         // The handle's pole vector comes from somewhere else in the file: the constraint's output goes where the file
         // sends it, by the connections read later.
         if let Some(h) = pole_handle {
-            let into_handle = doc.conns.iter().any(|x| x.src == i && x.dst == h);
+            let into_handle = doc.conns_out(i).any(|x| x.src == i && x.dst == h);
             if !into_handle {
                 let pv = PlugRef::new(driven_id, crate::ik::IkHandle::POLE_VECTOR as i32);
                 let g = &mut self.s.graph;
@@ -2972,7 +3021,7 @@ impl Build<'_> {
         let n = &doc.nodes[i];
         self.used[i] = true;
         let mut members: BTreeMap<i64, usize> = BTreeMap::new();
-        for c in doc.conns.iter().filter(|c| c.dst == i && matches!(plain_attr(&c.dst_attr).as_str(), "m" | "members")) {
+        for c in doc.conns_in(i).filter(|c| c.dst == i && matches!(plain_attr(&c.dst_attr).as_str(), "m" | "members")) {
             if let Some(e) = first_index(&c.dst_attr) {
                 if doc.nodes[c.src].ty == "joint" {
                     members.insert(e, c.src);
@@ -3277,7 +3326,7 @@ impl Build<'_> {
         }
         // The constraint took the channels when it was made; they belong to the pairBlend.
         for &b in &blends {
-            for c in doc.conns.iter().filter(|c| c.src == b) {
+            for c in doc.conns_out(b).filter(|c| c.src == b) {
                 let (Some(src), Some(dst)) = (self.id(c.src), self.id(c.dst)) else { continue };
                 self.plain_connection(c, c.src, &c.src_attr, src, dst);
             }
@@ -3295,7 +3344,7 @@ impl Build<'_> {
         if self.doc.ref_conns.iter().any(|c| c.src.starts_with(&start)) {
             return true;
         }
-        self.doc.conns.iter().any(|c| {
+        self.doc.conns_out(i).any(|c| {
             c.src == i && {
                 let d = &self.doc.nodes[c.dst];
                 let plain = plain_attr(&c.dst_attr);
@@ -3642,6 +3691,7 @@ pub(crate) fn last_read_names() -> Vec<(NodeId, String)> {
 
 /// Builds the document in the session. Everything goes in one pass; the graph evaluates on demand for world matrices.
 fn build(s: &mut Session, doc: &Doc, import: bool) -> Vec<String> {
+    doc.make_index();
     let prior: Vec<NodeId> = s.graph.selection().to_vec();
     let take_rate = import && IMPORT_FRAME_RATE.with(Cell::get);
     let fps = if import && !take_rate { anim::fps() } else { doc.fps.unwrap_or_else(anim::fps) };

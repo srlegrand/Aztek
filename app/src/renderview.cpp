@@ -368,7 +368,10 @@ public:
         file->addAction("Save Image...", [this] { save_image(); });
         if (!embedded) {
             file->addSeparator();
-            file->addAction("Close", [this] { close(); });
+            file->addAction("Close", [this] {
+                if (auto* dock = qobject_cast<QDockWidget*>(parentWidget())) dock->close();
+                else close();
+            });
         }
         QMenu* render = bar->addMenu("Render");
         render->addAction("Render", [this] { render_now(); });

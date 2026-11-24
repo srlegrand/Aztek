@@ -795,6 +795,9 @@ fn run_move_inner(s: &mut Session, a: &Args, prev: &RunFn<Session>) -> CmdResult
         }
         return r.map(|_| Value::Null);
     }
+    if is_component_call(a) && !m.relative {
+        return move_components_to(s, a, &m);
+    }
     if is_component_call(a) {
         let key = if m.relative { "by" } else { "to" };
         return prev(s, &plain_args(a, json!({key: j3(m.values)})));
@@ -838,6 +841,43 @@ fn run_move_inner(s: &mut Session, a: &Args, prev: &RunFn<Session>) -> CmdResult
     if !saved.is_empty() {
         restore_worlds(&mut s.graph, saved)?;
     }
+    Ok(Value::Null)
+}
+
+/// An absolute move of components: every point named goes to the position given, on the axes given, in world space
+/// or with -objectSpace (or -localSpace) in its object's space.
+fn move_components_to(s: &mut Session, a: &Args, m: &Motion) -> CmdResult {
+    let local = a.bool("objectSpace") || a.bool("localSpace");
+    let named: Vec<String> = a.named().into_iter().filter(|n| crate::components::is_component_string(n)).collect();
+    let mut points: Vec<String> = Vec::new();
+    for n in &named {
+        let l = s.run("ls", json!({"args": [n], "flatten": true}))?;
+        points.extend(l.as_array().into_iter().flatten().filter_map(Value::as_str).map(str::to_string));
+    }
+    let space = if local { "objectSpace" } else { "worldSpace" };
+    s.graph.open_chunk("move");
+    let r = (|| -> CmdResult<()> {
+        if m.mask == [true; 3] {
+            s.run("xform", json!({"args": points, space: true, "translation": j3(m.values)}))?;
+            return Ok(());
+        }
+        for p in &points {
+            let at = s.run("xform", json!({"args": [p], "query": true, space: true, "translation": true}))?;
+            let mut v: Vec<f64> = at.as_array().into_iter().flatten().filter_map(Value::as_f64).collect();
+            if v.len() < 3 {
+                continue;
+            }
+            for i in 0..3 {
+                if m.mask[i] {
+                    v[i] = m.values[i];
+                }
+            }
+            s.run("xform", json!({"args": [p], space: true, "translation": [v[0], v[1], v[2]]}))?;
+        }
+        Ok(())
+    })();
+    s.graph.close_chunk();
+    r?;
     Ok(Value::Null)
 }
 

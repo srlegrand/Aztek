@@ -2686,6 +2686,33 @@ impl Viewport {
         p
     }
 
+    /// The point on the curves' segments nearest px on screen, within 40 pixels of it.
+    fn nearest_on_curves(&self, segs: &[(DVec3, DVec3)], px: DVec2) -> Option<DVec3> {
+        let screen = self.screen();
+        let mut best: Option<(f64, DVec3)> = None;
+        for &(a, b) in segs {
+            let Some((pa, pb)) = screen.project_segment(a, b) else { continue };
+            let ab = pb - pa;
+            let t = if ab.length_squared() < 1e-9 { 0.0 } else { ((px - pa).dot(ab) / ab.length_squared()).clamp(0.0, 1.0) };
+            let dist = (pa + ab * t - px).length();
+            if dist < 40.0 && best.is_none_or(|x| dist < x.0) {
+                best = Some((dist, a.lerp(b, t)));
+            }
+        }
+        best.map(|(_, p)| p)
+    }
+
+    /// Where the joint tool puts a joint: with C held, on the curve nearest the cursor (curves from snap_curves), else
+    /// as place_point does.
+    pub fn place_joint_point(&self, curves: &[(DVec3, DVec3)], px: DVec2) -> DVec3 {
+        if self.snap == 3 {
+            if let Some(p) = self.nearest_on_curves(curves, px) {
+                return p;
+            }
+        }
+        self.place_point(px)
+    }
+
     /// The joint, locator or IK handle drawn through the click box around px, the nearest if several, as its transform.
     pub fn pick_rig(&self, g: &Graph, px: DVec2) -> Option<NodeId> {
         let screen = self.screen();
@@ -3838,23 +3865,10 @@ impl Viewport {
                     None => return world,
                 }
             }
-            3 => {
-                let screen = self.screen();
-                let mut best: Option<(f64, DVec3)> = None;
-                for &(a, b) in &d.snap_curves {
-                    let Some((pa, pb)) = screen.project_segment(a, b) else { continue };
-                    let ab = pb - pa;
-                    let t = if ab.length_squared() < 1e-9 { 0.0 } else { ((px - pa).dot(ab) / ab.length_squared()).clamp(0.0, 1.0) };
-                    let dist = (pa + ab * t - px).length();
-                    if dist < 40.0 && best.is_none_or(|x| dist < x.0) {
-                        best = Some((dist, a.lerp(b, t)));
-                    }
-                }
-                match best {
-                    Some((_, p)) => p,
-                    None => return world,
-                }
-            }
+            3 => match self.nearest_on_curves(&d.snap_curves, px) {
+                Some(p) => p,
+                None => return world,
+            },
             4 => {
                 // Stays in the plane through the pivot facing the camera.
                 let n = (self.cam.eye() - d.pivot).normalize_or_zero();
@@ -4541,6 +4555,11 @@ fn selected_lattices(g: &Graph) -> Vec<(NodeId, NodeId, [u32; 3], Vec<DVec3>)> {
 /// A joint's colour when nothing sets one: a mid blue, a shade darker than it was, nearer the reference's (#150).
 /// Unverified against a measured value.
 pub const JOINT_COLOR: [u8; 4] = [6, 9, 98, 255];
+
+/// The world segments of the curves drawn in the view, for a curve snap (C) to land on.
+pub fn snap_curves(g: &Graph) -> Vec<(DVec3, DVec3)> {
+    rig_items(g).into_iter().filter(|it| type_category(g, it.node) == "curve").flat_map(|it| it.segs).collect()
+}
 
 pub fn rig_items(g: &Graph) -> Vec<RigItem> {
     use aztek_scene::rig::Joint;

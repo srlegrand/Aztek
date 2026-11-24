@@ -34,10 +34,15 @@ pub mod attr_ui;
 pub mod script_objects;
 pub mod host_general;
 pub mod ee_listen;
+pub mod command_port;
+pub mod command_line;
 pub mod scriptui;
 pub mod tools;
 pub mod tools_quad;
 pub mod ui_cmds;
+pub mod hud;
+pub mod hotbox;
+pub mod ramp_controls;
 pub mod update;
 pub mod environment;
 pub mod user_folder;
@@ -49,6 +54,8 @@ pub mod profiler;
 pub mod sys_info;
 pub mod about;
 pub mod channel_box;
+pub mod cmd_fields;
+pub mod more_controls;
 pub mod attr_menus;
 pub mod video;
 pub mod text;
@@ -81,7 +88,8 @@ use crate::view::View;
 
 pub(crate) struct Host {
     pub(crate) core: Core,
-    views: HashMap<i32, View>,
+    /// Boxed, so a view made or dropped while another is in use doesn't move it.
+    views: HashMap<i32, Box<View>>,
     next_view: i32,
     shared: Option<Arc<Shared>>,
 }
@@ -90,11 +98,62 @@ thread_local! {
     static HOST: RefCell<Option<Host>> = const { RefCell::new(None) };
     /// The host, for calls that arrive while a command is suspended in a shell hook.
     static LIVE: std::cell::Cell<*mut Host> = const { std::cell::Cell::new(std::ptr::null_mut()) };
+    /// The views a call is working in. A call that reaches the host again from inside one (a dialog's or a Python
+    /// callback's event loop, run from a heads-up display button, say) leaves them alone.
+    static VIEWS_IN_USE: RefCell<Vec<i32>> = const { RefCell::new(Vec::new()) };
+    /// Views the shell closed while a call was working in them: dropped when it returns.
+    static VIEWS_CLOSED: RefCell<Vec<i32>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Runs `f` on slot `id` of `slots` with `ctx`, unless there is no such slot or a call further out is working in it: a
+/// call from a nested event loop must not take a second hold of a view the frames under it hold (#269). A slot closed
+/// meanwhile goes to `drop_slot` once `f` returns.
+fn use_slot<V, C, R>(slots: &mut HashMap<i32, Box<V>>, ctx: &mut C, id: i32, drop_slot: impl FnOnce(Box<V>), f: impl FnOnce(&mut C, &mut V) -> R) -> Option<R> {
+    if VIEWS_IN_USE.with(|u| u.borrow().contains(&id)) {
+        return None;
+    }
+    // The box stays put whatever the nested calls add to or take from the map; one closing this slot only marks it.
+    let v: *mut V = &mut **slots.get_mut(&id)?;
+    VIEWS_IN_USE.with(|u| u.borrow_mut().push(id));
+    let r = f(ctx, unsafe { &mut *v });
+    VIEWS_IN_USE.with(|u| u.borrow_mut().retain(|&x| x != id));
+    let closed = VIEWS_CLOSED.with(|c| {
+        let mut c = c.borrow_mut();
+        let was = c.contains(&id);
+        c.retain(|&x| x != id);
+        was
+    });
+    if closed {
+        if let Some(b) = slots.remove(&id) {
+            drop_slot(b);
+        }
+    }
+    Some(r)
+}
+
+/// Closes slot `id`, or marks it to close when the call working in it returns.
+fn close_slot<V>(slots: &mut HashMap<i32, Box<V>>, id: i32, drop_slot: impl FnOnce(Box<V>)) {
+    if VIEWS_IN_USE.with(|u| u.borrow().contains(&id)) {
+        VIEWS_CLOSED.with(|c| c.borrow_mut().push(id));
+    } else if let Some(b) = slots.remove(&id) {
+        drop_slot(b);
+    }
+}
+
+/// A view and the core, as use_slot gives them.
+fn use_view<R>(h: &mut Host, id: i32, f: impl FnOnce(&mut Core, &mut View) -> R) -> Option<R> {
+    let Host { core, views, .. } = h;
+    use_slot(views, core, id, release_view, f)
+}
+
+fn release_view(mut v: Box<View>) {
+    v.vp.release(&mut v.gpu);
 }
 
 /// The host. A dialog a command opens runs the shell's event loop on top of that command, whose frames hold the host: the
 /// shell's calls from that loop take it from `LIVE`. Those frames are suspended in the hook call and touch nothing until
-/// it returns. Any other second borrow is a bug, and panics.
+/// it returns. A Python callback can do the same, a tool calling `QApplication.processEvents()` in its window setup; its
+/// frames are suspended in the Python call. Any other second borrow is a bug, and panics.
 pub(crate) fn with<R>(f: impl FnOnce(&mut Host) -> R) -> R {
     HOST.with(|h| match h.try_borrow_mut() {
         Ok(mut b) => {
@@ -108,11 +167,24 @@ pub(crate) fn with<R>(f: impl FnOnce(&mut Host) -> R) -> R {
             f(host)
         }
         Err(_) => {
-            assert!(scriptui::in_hook(), "the host was entered twice");
+            assert!(scriptui::in_hook() || in_host_callback(), "the host was entered twice");
             let host = unsafe { &mut *LIVE.with(std::cell::Cell::get) };
             lend_session(host, f)
         }
     })
+}
+
+/// Whether this thread is inside Python the host lent its session to. Qt may run a nested event loop there, and the
+/// shell's timers and paint calls then reach the host again.
+fn in_host_callback() -> bool {
+    #[cfg(feature = "python")]
+    {
+        python::in_host_callback()
+    }
+    #[cfg(not(feature = "python"))]
+    {
+        false
+    }
 }
 
 #[cfg(feature = "python")]
@@ -683,7 +755,7 @@ pub extern "C" fn aztek_view_create(
             Ok(gpu) => {
                 let id = h.next_view;
                 h.next_view += 1;
-                h.views.insert(id, View::new(gpu, cam, dpr));
+                h.views.insert(id, Box::new(View::new(gpu, cam, dpr)));
                 id
             }
             Err(e) => {
@@ -696,29 +768,20 @@ pub extern "C" fn aztek_view_create(
 
 #[no_mangle]
 pub extern "C" fn aztek_view_destroy(id: i32) {
-    with(|h| {
-        if let Some(mut v) = h.views.remove(&id) {
-            v.vp.release(&mut v.gpu);
-        }
-    })
+    with(|h| close_slot(&mut h.views, id, release_view))
 }
 
 #[no_mangle]
 pub extern "C" fn aztek_view_resize(id: i32, width: i32, height: i32) {
     with(|h| {
-        if let Some(v) = h.views.get_mut(&id) {
-            v.resize(width.max(1) as u32, height.max(1) as u32);
-        }
+        use_view(h, id, |_, v| v.resize(width.max(1) as u32, height.max(1) as u32));
     })
 }
 
 #[no_mangle]
 pub extern "C" fn aztek_view_render(id: i32) {
     with(|h| {
-        let Host { core, views, .. } = h;
-        if let Some(v) = views.get_mut(&id) {
-            v.render(core);
-        }
+        use_view(h, id, |core, v| v.render(core));
     })
 }
 
@@ -729,17 +792,14 @@ pub extern "C" fn aztek_view_mouse(id: i32, kind: i32, button: i32, x: f64, y: f
     // The viewport works in what's stored; what it echoes goes back to the current units.
     aztek_ops::units::stored(|| {
     with(|h| {
-        let Host { core, views, .. } = h;
-        match views.get_mut(&id) {
-            Some(v) => {
-                // Where the pointer is, for autoPlace -um.
-                let size = v.vp.size();
-                let rays = crate::host_general::ViewRays { centre: v.vp.cam.ray(size * 0.5, size), pointer: v.vp.cam.ray(DVec2::new(x, y), size) };
-                crate::host_general::note_pointer(&v.cam_node, rays);
-                v.mouse(core, kind, button, DVec2::new(x, y), crate::host_general::forced_modifiers(mods), buttons) as i32
-            }
-            None => 0,
-        }
+        use_view(h, id, |core, v| {
+            // Where the pointer is, for autoPlace -um.
+            let size = v.vp.size();
+            let rays = crate::host_general::ViewRays { centre: v.vp.cam.ray(size * 0.5, size), pointer: v.vp.cam.ray(DVec2::new(x, y), size) };
+            crate::host_general::note_pointer(&v.cam_node, rays);
+            v.mouse(core, kind, button, DVec2::new(x, y), crate::host_general::forced_modifiers(mods), buttons) as i32
+        })
+        .unwrap_or(0)
     })
     })
 }
@@ -748,7 +808,7 @@ pub extern "C" fn aztek_view_mouse(id: i32, kind: i32, button: i32, x: f64, y: f
 /// marking menu.
 #[no_mangle]
 pub extern "C" fn aztek_view_on_cube(id: i32, x: f64, y: f64) -> i32 {
-    with(|h| h.views.get(&id).is_some_and(|v| v.on_cube(DVec2::new(x, y))) as i32)
+    with(|h| use_view(h, id, |_, v| v.on_cube(DVec2::new(x, y))).unwrap_or(false) as i32)
 }
 
 #[no_mangle]
@@ -756,9 +816,7 @@ pub extern "C" fn aztek_view_wheel(id: i32, delta: f64) {
     // The viewport works in what's stored; what it echoes goes back to the current units.
     aztek_ops::units::stored(|| {
     with(|h| {
-        if let Some(v) = h.views.get_mut(&id) {
-            v.wheel(&mut h.core, delta);
-        }
+        use_view(h, id, |core, v| v.wheel(core, delta));
     })
     })
 }
@@ -772,13 +830,9 @@ pub extern "C" fn aztek_view_set(id: i32, key: *const c_char, value: *const c_ch
     let key = cstr(key);
     let v: Value = serde_json::from_str(&cstr(value)).unwrap_or(Value::Null);
     with(|h| {
-        let Host { core, views, .. } = h;
-        if id == 0 {
-            for v2 in views.values_mut() {
-                v2.set(core, &key, &v);
-            }
-        } else if let Some(view) = views.get_mut(&id) {
-            view.set(core, &key, &v);
+        let ids: Vec<i32> = if id == 0 { h.views.keys().copied().collect() } else { vec![id] };
+        for i in ids {
+            use_view(h, i, |core, view| view.set(core, &key, &v));
         }
     })
     })
@@ -787,7 +841,7 @@ pub extern "C" fn aztek_view_set(id: i32, key: *const c_char, value: *const c_ch
 #[no_mangle]
 pub extern "C" fn aztek_view_get(id: i32, key: *const c_char) -> *mut c_char {
     let key = cstr(key);
-    with(|h| out_json(h.views.get(&id).map(|v| v.get(&key)).unwrap_or(Value::Null)))
+    with(|h| out_json(use_view(h, id, |_, v| v.get(&key)).unwrap_or(Value::Null)))
 }
 
 /// Renders a view and writes it as a binary PPM (for tests and bug reports). Returns 1 on success.
@@ -795,14 +849,15 @@ pub extern "C" fn aztek_view_get(id: i32, key: *const c_char) -> *mut c_char {
 pub extern "C" fn aztek_view_capture(id: i32, path: *const c_char) -> i32 {
     let path = cstr(path);
     with(|h| {
-        let Host { core, views, .. } = h;
-        let Some(v) = views.get_mut(&id) else { return 0 };
-        v.want_capture = true;
-        v.render(core);
-        let Some((w, hgt, rgb)) = v.capture.take() else { return 0 };
-        let mut data = format!("P6\n{w} {hgt}\n255\n").into_bytes();
-        data.extend_from_slice(&rgb);
-        std::fs::write(&path, data).is_ok() as i32
+        use_view(h, id, |core, v| {
+            v.want_capture = true;
+            v.render(core);
+            let Some((w, hgt, rgb)) = v.capture.take() else { return 0 };
+            let mut data = format!("P6\n{w} {hgt}\n255\n").into_bytes();
+            data.extend_from_slice(&rgb);
+            std::fs::write(&path, data).is_ok() as i32
+        })
+        .unwrap_or(0)
     })
 }
 
@@ -810,15 +865,93 @@ pub extern "C" fn aztek_view_capture(id: i32, path: *const c_char) -> i32 {
 #[no_mangle]
 pub extern "C" fn aztek_view_hit(id: i32, x: f64, y: f64) -> *mut c_char {
     with(|h| {
-        let Host { core, views, .. } = h;
-        let Some(v) = views.get_mut(&id) else { return out(String::new()) };
-        let items = viewport::gather(&mut core.s.graph);
-        v.vp.rect = [0.0, 0.0, v.gpu.extent.width as f64, v.gpu.extent.height as f64];
-        let px = DVec2::new(x, y);
-        if let Some(id) = v.vp.pick_rig(&core.s.graph, px) {
-            return out(core.s.graph.path(id));
-        }
-        let hit = v.vp.raycast(&items, px).map(|(i, _, _)| core.s.graph.path(items[i].xf)).unwrap_or_default();
-        out(hit)
+        let hit = use_view(h, id, |core, v| {
+            let items = viewport::gather(&mut core.s.graph);
+            v.vp.rect = [0.0, 0.0, v.gpu.extent.width as f64, v.gpu.extent.height as f64];
+            let px = DVec2::new(x, y);
+            if let Some(id) = v.vp.pick_rig(&core.s.graph, px) {
+                return core.s.graph.path(id);
+            }
+            v.vp.raycast(&items, px).map(|(i, _, _)| core.s.graph.path(items[i].xf)).unwrap_or_default()
+        });
+        out(hit.unwrap_or_default())
     })
+}
+
+#[cfg(all(test, feature = "python"))]
+mod tests {
+    use super::*;
+
+    /// A tool's Python callback can run a nested Qt event loop (`QApplication.processEvents()`, which the Red Kite
+    /// shelves do while building their tabs). The shell's poller and paint calls reach the host from that loop, and must
+    /// find it, as they do from a dialog's hook.
+    #[test]
+    fn the_host_is_lent_to_a_nested_event_loop_in_python() {
+        with(|h| {
+            let core_ptr: *mut core::Core = &mut h.core;
+            let version = h.core.version;
+            python::test_nested(core_ptr, || {
+                with(|h| h.core.version += 1);
+            });
+            assert!(h.core.version > version);
+        });
+    }
+
+    /// From a plug-in command or an undo step the session has moved out into a nested core: a call from a nested event
+    /// loop there finds the scene, and what it does stays when the command returns.
+    #[test]
+    fn a_nested_event_loop_in_a_plugin_command_reaches_the_scene() {
+        with(|h| {
+            h.core.mel("createNode transform -n beforeNested;");
+            let s: *mut aztek_scene::Session = &mut h.core.s;
+            python::test_nested_session(unsafe { &mut *s }, || {
+                with(|h| {
+                    assert!(h.core.s.graph.find("beforeNested").ok().flatten().is_some(), "the lent session is the scene");
+                    h.core.mel("createNode transform -n fromNested;");
+                });
+            });
+            assert!(h.core.s.graph.find("fromNested").ok().flatten().is_some(), "what the nested call made stays");
+        });
+    }
+
+    /// Inside a node's compute the graph is mid-evaluation: the shell isn't let in even with a callback's core set.
+    #[test]
+    fn a_compute_does_not_lend_the_host() {
+        let mut c = core::Core::new();
+        python::test_nested(&mut c, || {
+            assert!(in_host_callback());
+            python::test_in_compute(|| assert!(!in_host_callback()));
+        });
+    }
+
+    /// A call from a nested event loop leaves alone a view a call under it is working in, and a view closed from there
+    /// goes once that call returns; another view made meanwhile doesn't move the one in use.
+    #[test]
+    fn a_view_in_use_is_left_alone_by_nested_calls() {
+        let mut slots: HashMap<i32, Box<u32>> = HashMap::from([(1, Box::new(10)), (2, Box::new(20))]);
+        let map: *mut HashMap<i32, Box<u32>> = &mut slots;
+        let dropped = RefCell::new(Vec::new());
+        let r = use_slot(unsafe { &mut *map }, &mut (), 1, |b| dropped.borrow_mut().push(*b), |_, v| {
+            let before: *const u32 = v;
+            // The nested call: view 1 is skipped, view 2 is used, and new views go in.
+            let inner = unsafe { &mut *map };
+            assert_eq!(use_slot(inner, &mut (), 1, |_| {}, |_, _| ()), None);
+            assert_eq!(use_slot(inner, &mut (), 2, |_| {}, |_, w| *w), Some(20));
+            for k in 3..200 {
+                inner.insert(k, Box::new(k as u32));
+            }
+            close_slot(inner, 1, |_| panic!("dropped under the call using it"));
+            assert!(std::ptr::eq(before, v as *const u32), "the view in use moved");
+            assert!(dropped.borrow().is_empty());
+            *v += 1;
+            *v
+        });
+        assert_eq!(r, Some(11));
+        // Closed while in use: dropped once the call returned, with what that call left in it.
+        assert_eq!(*dropped.borrow(), vec![11]);
+        assert!(!slots.contains_key(&1));
+        // Not in use: closed at once.
+        close_slot(&mut slots, 2, |b| dropped.borrow_mut().push(*b));
+        assert_eq!(*dropped.borrow(), vec![11, 20]);
+    }
 }

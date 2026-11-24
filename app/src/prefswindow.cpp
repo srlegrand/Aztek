@@ -191,6 +191,7 @@ Preferences::Preferences(QWidget* parent) : QDialog(parent) {
     check(f, "Shelf", "uiShelf", true);
     check(f, "Tool box", "uiToolbox", true);
     check(f, "Time slider", "uiTimeSlider", true);
+    check(f, "Range slider", "uiRangeSlider", true);
     check(f, "Command line", "uiCommandLine", true);
     check(f, "Help line", "helpLine", true);
     f = page("Display");
@@ -531,12 +532,13 @@ void MainWindow::apply_prefs() {
     qApp->setFont(f);
     statusBar()->setVisible(s.value("prefs/helpLine", true).toBool());
     auto bar = [this, &s](const char* name, const char* key) {
-        if (QToolBar* t = findChild<QToolBar*>(name)) t->setVisible(s.value(QString("prefs/") + key, true).toBool());
+        if (QWidget* t = findChild<QWidget*>(name, Qt::FindDirectChildrenOnly)) t->setVisible(s.value(QString("prefs/") + key, true).toBool());
     };
     bar("statusLine", "uiStatusLine");
     bar("shelf", "uiShelf");
     bar("toolbox", "uiToolbox");
-    bar("timeBar", "uiTimeSlider");
+    bar("TimeSlider", "uiTimeSlider");
+    bar("RangeSlider", "uiRangeSlider");
     bar("commandLine", "uiCommandLine");
     for (ViewportWidget* v : panels_->views()) {
         v->set("background", QString::number(s.value("prefs/background", 0.36).toDouble()));

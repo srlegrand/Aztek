@@ -244,7 +244,12 @@ impl Build<'_> {
             self.apply_channels(i);
             let lines: Vec<String> = n.sets.iter().filter(|s| !(s.path.len() == 1 && names_added(n, &s.path[0].name))).filter_map(kept_set).collect();
             // Kept on the destination when both ends are held.
-            let conns: Vec<String> = doc.conns.iter().filter(|c| c.dst == i || (c.src == i && !is_held.contains(&c.dst))).map(|c| conn_line(c, i)).collect();
+            let conns: Vec<String> = {
+                // In the file's order, as a scan of them all gives them.
+                let mut mine: Vec<&Conn> = doc.conns_in(i).chain(doc.conns_out(i).filter(|c| c.dst != i)).filter(|c| c.dst == i || (c.src == i && !is_held.contains(&c.dst))).collect();
+                mine.sort_by_key(|c| *c as *const Conn as usize);
+                mine.into_iter().map(|c| conn_line(c, i)).collect()
+            };
             let (plugin, version) = plugin_of(doc, &n.ty);
             let conns = self.settle(&conns.join("\n"));
             for (a, v) in [("fty", n.ty.clone()), ("fat", lines.join("\n")), ("fcn", conns), ("fpl", plugin.clone()), ("fpv", version)] {

@@ -1531,6 +1531,9 @@ Workspace; a saved arrangement under a workspace's name wins over the shipped on
 workspace docks go back to windows when another is chosen. `workspaceLayoutManager -setCurrent`, `-q -current`,
 `-listLayouts` and `-reset` script it. MASH and Motion Graphics wait for TRASH.
 
+23/11/2026 (#261): On launch the last selected workspace opens with its own layout. Once its editors exist, the docks
+are restored to their last positions if the saved session used that workspace.
+
 ### Tangent types: auto mix, ease and custom, slow and fast (18/11/2026, #141)
 
 `MFnAnimCurve` in both APIs has the reference's whole TangentType list, `kTangentAutoMix`, `kTangentAutoEase` and
@@ -1807,10 +1810,14 @@ too, so a chain curls with each joint turned by the same amount, by the manipula
 scale in scripts. About a point, only the tops of the selection travel round it. Move still moves the tops only, so a
 child doesn't go twice as far.
 
-### Shift and Ctrl+Shift right-click menus as the reference's (19/11/2026, #183)
+### Viewport marking menus (23/11/2026, #183)
 
-Shift+right-click in object, vertex, edge and face mode and Ctrl+Shift+right-click give the reference's menus item for
-item, in its places and order: round the compass, the list under it with its rules, the submenus (Merge Vertices,
+Ctrl+right-click opens the selection conversion menu. Ctrl+Shift+right-click opens Symmetry, Lasso, Select and Paint
+Select around the compass, with Selection Constraints and Transform Constraints below.
+With nothing selected, Shift+right-click opens the polygon creation compass and the full list below it, with icons,
+option boxes, Interactive Creation and Polygon Display All.
+Shift+right-click in object, vertex, edge and face mode gives the reference's menus item for
+item, in their places and order: round the compass, the list under it with its rules, the submenus (Merge Vertices,
 Vertex Normals, Merge/Collapse Edges, Flip/Spin Edge, Soften/Harden Edges, Face Normals, Mapping, Booleans, Polygon
 Display) and the option boxes, which open the command's option window or the tool's settings. Items Aztek has nothing
 behind yet (Smart Extrude, Connect Tool, Vertex Normal Edit Tool, Transfer Vertex Order, Split mesh with projected
@@ -1839,6 +1846,8 @@ edits in the original and the weights following, and the scene itself is left as
 They opened as windows of their own. They open as floating panels now: dragged by the title onto an edge of the main
 window or onto another panel, they dock beside it or as a tab, as in the reference. Right-clicking a panel's title gives
 that panel's Undock Tab and Close Tab rather than the list of every panel and bar.
+
+23/11/2026 (#274): File > Close in the Render View closes the panel. Opening it again brings back the same view.
 
 ### The second Outliner (19/11/2026, #188)
 
@@ -2277,6 +2286,15 @@ Dollying in goes by shares of the distance to the centre of interest; once it ge
 longer creeps on in ever smaller steps: it pushes the centre of interest ahead and goes on at a steady few
 centimetres a wheel step (a share of 10 cm), and tracking from there moves as it would 10 cm from the centre of
 interest instead of crawling. Dollying out goes back by shares of the distance; framing (F) still sets it afresh.
+
+### Time and Range Sliders dock (24/11/2026, #272)
+
+The Time Slider and the Range Slider are docked controls of their own, TimeSlider and RangeSlider as the reference
+names them, each with a grab handle down its left that pads it off the window's edge. Dragged by it they dock above or
+below the views or float as windows; a double-click on it docks them again. They run the window's width under the side
+panels, though the toolbox still runs down beside them. Display > UI Elements, the hotbox and the preferences show and
+hide each one, and the layout lock keeps them where they are (docs/issues/272-slider-docks.png: docked, then both
+floated).
 
 ### Collapse the sides (17/11/2026, #97)
 
@@ -4166,6 +4184,28 @@ plug-ins Aztek ships:
 - `progressWindow` answers false while one is showing, as the reference's, rather than failing.
 Not done: a plug-in locator under the transform it drives (mGear's weightDriver under its driven node) is read as a
 cycle and its outputs are left unconnected; ikSpringSolver.
+
+### The status line to the reference's own definition (23/11/2026)
+
+![The status line](docs/status-line.png)
+
+The bar under the main menu is rebuilt to the reference's status line: the 100 pixel menu set menu (Modeling, Rigging,
+Animation, FX, Rendering and a Customize entry), the New, Open, Save, Undo and Redo icons, the hierarchy, object and
+component scopes, the hierarchy, object and component masks in the reference's order and with its tooltips, Lock and
+Highlight Selection, the five snapping icons (including Snap to Projected Center), Make Live with its menu and live
+object's name, the symmetry arrow and its text field, Inputs, Outputs and Construction History, Render View, Render,
+IPR, Render Settings, Hypershade, Render Setup, Light Editor and the viewport pause, and the quick input button with
+its four modes and the text and X, Y, Z fields. Each group folds behind the 9 pixel handle before it, the separators
+are the reference's 5 pixels, buttons are 22 pixels with 20 pixel icons, and the bar is 23 pixels high. The editor
+toggles at the far right are the reference's five, with the separate Layer Editor button hidden while the Channel Box
+and Layer Editor share a dock.
+The mode menu's text is Absolute transform, Relative transform, Rename or Select by name; Select by name takes
+wildcards, Rename renames the selection, and the numeric fields move, rotate or scale by the current tool.
+Not done: the Customize entry has no menu set editor behind it and is greyed; Render Setup, Light Editor and the
+viewport pause have no feature in Aztek yet and are greyed; the right-click pick-mask menus offer All On, All Off and
+each mask, where the reference divides the object and component masks into their long category lists. The hierarchy
+Leaf and Template buttons set the modes selectMode accepts for scripts, but selection stays at the roots, and Snap to
+Projected Center sets snapMode -meshCenter while the viewport does not use that snap yet.
 
 ### Channel Box and Layer Editor, to the reference's interface (24/11/2026)
 

@@ -19,6 +19,89 @@ fn split_plug(path: &str) -> Option<(&str, &str)> {
     path.split_once('.')
 }
 
+/// A point component named as a plug, with or without one axis: pCube1.vtx[3], curve1.cv[1], pCube1.vtx[3].xv,
+/// nurbsSphere1.cv[1][2].yValue. Gives the component and the axis (0 to 2) when one is named.
+fn point_plug(name: &str) -> Option<(String, Option<usize>)> {
+    if let Some((head, tail)) = name.rsplit_once('.') {
+        let axis = match tail {
+            "xValue" | "xv" => Some(0),
+            "yValue" | "yv" => Some(1),
+            "zValue" | "zv" => Some(2),
+            _ => None,
+        };
+        if let Some(ax) = axis {
+            if crate::components::is_component_string(head) && head.ends_with(']') {
+                return Some((head.to_string(), Some(ax)));
+            }
+        }
+    }
+    (crate::components::is_component_string(name) && name.ends_with(']')).then(|| (name.to_string(), None))
+}
+
+/// Each point of a component string, by its own name.
+fn points_flat(s: &mut Session, comp: &str) -> CmdResult<Vec<String>> {
+    let l = s.run("ls", json!({"args": [comp], "flatten": true}))?;
+    Ok(l.as_array().into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect())
+}
+
+/// Local positions of the points named, x y z for each.
+fn point_positions(s: &mut Session, comp: &str) -> CmdResult<Vec<f64>> {
+    let v = s.run("xform", json!({"args": [comp], "query": true, "objectSpace": true, "translation": true}))?;
+    Ok(v.as_array().into_iter().flatten().filter_map(Value::as_f64).collect())
+}
+
+/// getAttr on points that aren't a mesh's (curve and surface CVs, lattice points), and on one axis of any point.
+fn get_point(s: &mut Session, comp: &str, axis: Option<usize>) -> CmdResult<Option<Value>> {
+    let Ok(p) = point_positions(s, comp) else { return Ok(None) };
+    if p.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(match axis {
+        Some(ax) => {
+            let one: Vec<f64> = p.chunks(3).filter(|c| c.len() == 3).map(|c| c[ax]).collect();
+            if one.len() == 1 {
+                json!(one[0])
+            } else {
+                json!(one)
+            }
+        }
+        None => json!(p),
+    }))
+}
+
+/// setAttr on points: three values per point, or one per point for one axis. Positions are local.
+fn set_point(s: &mut Session, comp: &str, axis: Option<usize>, vals: &[f64]) -> CmdResult<bool> {
+    let names = points_flat(s, comp)?;
+    if names.is_empty() {
+        return Ok(false);
+    }
+    s.graph.open_chunk(&format!("setAttr {comp}"));
+    let r = (|| -> CmdResult<()> {
+        for (i, n) in names.iter().enumerate() {
+            let to = match axis {
+                Some(ax) => {
+                    let Some(&v) = vals.get(i).or(vals.last()) else { break };
+                    let mut p = point_positions(s, n)?;
+                    if p.len() < 3 {
+                        continue;
+                    }
+                    p[ax] = v;
+                    [p[0], p[1], p[2]]
+                }
+                None => {
+                    let Some(c) = vals.get(i * 3..i * 3 + 3) else { break };
+                    [c[0], c[1], c[2]]
+                }
+            };
+            s.run("xform", json!({"args": [n], "objectSpace": true, "translation": to}))?;
+        }
+        Ok(())
+    })();
+    s.graph.close_chunk();
+    r?;
+    Ok(true)
+}
+
 /// Children of a compound with no value of its own: quaternions (by category) and addAttr's plain compounds.
 pub(crate) fn compound_children(ty: &NodeType, name: &str) -> Vec<usize> {
     if ty.attr_index(name).is_some() {
@@ -199,6 +282,17 @@ fn get_attr(s: &mut Session, a: &Args, prev: &aztek_ops::RunFn<Session>) -> CmdR
         let mut rest = a.clone();
         rest.flags.remove("time");
         return s.graph.at_time(t, |g| read_args(g, &rest));
+    }
+    // One axis of a point (pCube1.vtx[3].xv), and points that aren't a mesh's (curve1.cv[1]).
+    if s.graph.plug(&name).is_err() && !a.bool("type") && !a.bool("size") {
+        if let Some((comp, axis)) = point_plug(&name) {
+            let mesh_point = axis.is_none() && !crate::skin::points_named(&mut s.graph, std::slice::from_ref(&comp)).is_empty();
+            if !mesh_point {
+                if let Some(v) = get_point(s, &comp, axis)? {
+                    return Ok(v);
+                }
+            }
+        }
     }
     let g = &mut s.graph;
     // Components: the local position, as the reference gives for vtx and cv. A multi attribute reads the same way, so plugs first.
@@ -395,6 +489,18 @@ fn set_attr_one(s: &mut Session, a: &Args, prev: &aztek_ops::RunFn<Session>) -> 
     };
     if let Some(r) = crate::deform_paint::set_weights(&mut s.graph, &name, &a.positional[1..]) {
         return r;
+    }
+    // One axis of a point, and points that aren't a mesh's.
+    if s.graph.plug(&name).is_err() && a.positional.len() > 1 {
+        if let Some((comp, axis)) = point_plug(&name) {
+            let mesh_point = axis.is_none() && !crate::skin::points_named(&mut s.graph, std::slice::from_ref(&comp)).is_empty();
+            if !mesh_point {
+                let vals: Vec<f64> = number_list(&a.positional[1..]).iter().filter_map(Value::as_f64).collect();
+                if set_point(s, &comp, axis, &vals)? {
+                    return Ok(Value::Null);
+                }
+            }
+        }
     }
     // Mesh points by component.
     if s.graph.plug(&name).is_err() && crate::components::is_component_string(&name) && a.positional.len() > 1 {
@@ -752,6 +858,35 @@ fn attribute_query(s: &mut Session, a: &Args) -> CmdResult {
         }
         if a.bool("longName") || a.bool("shortName") || a.bool("niceName") {
             return Ok(json!(attr));
+        }
+        if a.bool("typeExact") {
+            return Ok(json!("compound"));
+        }
+        // A compound's properties are its children's: a multi compound (remapValue.value) has array children.
+        let defs: Vec<&AttrDef> = kids.iter().map(|&k| &ty.attrs[k]).collect();
+        let multi = defs.iter().all(|d| d.is_array());
+        let answer = |k: &str| -> Option<bool> {
+            Some(match k {
+                "multi" | "indexMatters" => multi,
+                "readable" | "connectable" => true,
+                "writable" => defs.iter().any(|d| d.has(flags::INPUT)),
+                "storable" => defs.iter().any(|d| d.has(flags::STORABLE)),
+                "hidden" => defs.iter().all(|d| d.has(flags::HIDDEN)),
+                "keyable" | "channelBox" | "usedAsColor" | "usedAsFilename" | "enum" | "message" | "minExists" | "maxExists" | "softMinExists" | "softMaxExists" | "rangeExists"
+                | "softRangeExists" | "affectsAppearance" | "affectsWorldspace" | "worldspace" | "internal" | "internalSet" | "internalGet" | "indeterminant" | "renderSource"
+                | "usesMultiBuilder" => false,
+                "cachedInternally" => defs.iter().any(|d| d.has(flags::INPUT)),
+                "enforcingUniqueName" => true,
+                _ => return None,
+            })
+        };
+        if let Some(k) = BOOL_QUERIES.iter().find(|k| a.bool(k)) {
+            if let Some(v) = answer(k) {
+                return Ok(json!(v));
+            }
+        }
+        if a.bool("listParent") || a.bool("listSiblings") || a.bool("listDefault") {
+            return Ok(Value::Null);
         }
         fail!("attributeQuery: nothing to say about compound {attr}");
     }

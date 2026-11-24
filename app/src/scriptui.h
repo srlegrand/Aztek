@@ -20,6 +20,7 @@ class QMainWindow;
 class QMenu;
 class QMenuBar;
 class QPushButton;
+class QToolButton;
 class QWidget;
 
 namespace az {
@@ -72,6 +73,7 @@ private:
     void relayout_form(Item* it);
     void rebuild_option_menu(Item* it);
     void symbol_check_image(Item* it);
+    void icon_look(Item* it, QToolButton* b, const QJsonObject& props);
     void shelf_button_extras(Item* it, const QJsonObject& props);
     QMenuBar* menu_bar_of(Item* it);
     void window_extras(Item* it, const QJsonObject& props);
@@ -82,6 +84,10 @@ private:
     void prompt_dialog(const QJsonObject& p);
     void file_dialog2(const QJsonObject& p);
     void file_dialog(const QJsonObject& p);
+    void frameless_dialog(const QJsonObject& p);
+    void font_dialog(const QJsonObject& p);
+    void grab_color(const QJsonObject& p);
+    void color_editor(const QJsonObject& p);
     void playblast(const QJsonObject& p);
     void pump();
 

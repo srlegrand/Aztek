@@ -756,7 +756,7 @@ fn create_edit_query_on_the_controls() {
     assert_eq!(ok(&mut c, "text -q -l t;"), json!("Note"));
     assert_eq!(ok(&mut c, "text -q -al t;"), json!("left"));
     ok(&mut c, "colorSliderGrp -l \"Colour\" -rgb 1 0 0 csg;");
-    assert_eq!(ok(&mut c, "colorSliderGrp -q -rgb csg;"), json!([1, 0, 0]));
+    assert_eq!(ok(&mut c, "colorSliderGrp -q -rgb csg;"), json!([1.0, 0.0, 0.0]));
     ok(&mut c, "colorIndexSliderGrp -l \"Index\" -min 1 -max 31 -v 4 cig;");
     assert_eq!(ok(&mut c, "colorIndexSliderGrp -q -v cig;"), json!(4));
     ok(&mut c, "progressBar -max 10 -pr 2 pb;");

@@ -590,6 +590,50 @@ QPixmap draw(const QString& name, int size) {
         p.setPen(Qt::NoPen);
         if (name == "moveUp") p.drawPolygon(QPolygonF({{25, 4}, {31, 12}, {19, 12}}));
         else p.drawPolygon(QPolygonF({{25, 26}, {19, 18}, {31, 18}}));
+    } else if (name == "menuArrow") {
+        p.setBrush(kInk);
+        p.setPen(Qt::NoPen);
+        p.drawPolygon(QPolygonF({{8, 12}, {24, 12}, {16, 23}}));
+    } else if (name == "quickSelect") {
+        QPolygonF a({{9, 5}, {9, 25}, {14, 20}, {18, 28}, {21, 27}, {17, 19}, {24, 19}});
+        p.setBrush(kBlue);
+        p.setPen(QPen(QColor(30, 30, 30), 1.2));
+        p.drawPolygon(a);
+    } else if (name == "quickRename") {
+        p.setBrush(kOrange);
+        p.setPen(QPen(QColor(40, 40, 40), 1.2));
+        p.drawPolygon(QPolygonF({{7, 25}, {9, 18}, {22, 5}, {27, 10}, {14, 23}}));
+        p.setBrush(Qt::NoBrush);
+        p.drawLine(QPointF(9, 18), QPointF(14, 23));
+        p.setPen(QPen(kInk, 2));
+        p.drawLine(QPointF(22, 5), QPointF(27, 10));
+    } else if (name == "absolute" || name == "relative") {
+        QFont f = p.font();
+        f.setPixelSize(9);
+        f.setBold(true);
+        p.setFont(f);
+        p.setPen(kInk);
+        p.drawText(full, Qt::AlignCenter, name == "absolute" ? "Abs" : "Rel");
+    } else if (name == "future") {
+        p.setBrush(Qt::NoBrush);
+        pen_color(kInk, 1.6);
+        p.drawRect(QRectF(5, 8, 10, 16));
+        arrow(p, QPointF(16, 16), QPointF(27, 16), 5);
+    } else if (name == "constructHistory") {
+        p.setBrush(Qt::NoBrush);
+        pen_color(kInk, 1.6);
+        p.drawArc(QRectF(7, 7, 18, 18), 30 * 16, 300 * 16);
+        p.drawLine(QPointF(16, 16), QPointF(16, 10));
+        p.drawLine(QPointF(16, 16), QPointF(21, 18));
+    } else if (name == "particles") {
+        p.setPen(Qt::NoPen);
+        p.setBrush(kBlue);
+        for (const QPointF& at : {QPointF(10, 12), QPointF(20, 9), QPointF(18, 21), QPointF(7, 23)}) p.drawEllipse(at, 3.2, 3.2);
+        pen_color(kInk, 1.0);
+        p.setBrush(Qt::NoBrush);
+        p.drawLine(QPointF(10, 12), QPointF(20, 9));
+        p.drawLine(QPointF(10, 12), QPointF(18, 21));
+        p.drawLine(QPointF(18, 21), QPointF(7, 23));
     } else if (name == "stop") {
         p.setBrush(kInk);
         p.setPen(Qt::NoPen);

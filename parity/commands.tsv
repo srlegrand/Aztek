@@ -138,30 +138,30 @@ closeCurve	done	auto
 closeSurface	done	auto
 cluster	done	auto
 cmdFileOutput	done	auto
-cmdScrollFieldExecuter	missing	
-cmdScrollFieldReporter	missing	
-cmdShell	missing	
+cmdScrollFieldExecuter	done	auto
+cmdScrollFieldReporter	done	auto
+cmdShell	done	auto
 coarsenSubdivSelectionList	missing	
 collision	missing	
 color	done	auto
 colorAtPoint	missing	
-colorEditor	missing	
+colorEditor	done	auto
 colorIndex	done	auto
 colorIndexSliderGrp	done	auto
-colorInputWidgetGrp	missing	
+colorInputWidgetGrp	done	auto
 colorManagementCatalog	missing	
 colorManagementConvert	missing	
 colorManagementFileRules	missing	
 colorManagementPrefs	missing	
-colorSliderButtonGrp	missing	
+colorSliderButtonGrp	done	auto
 colorSliderGrp	done	auto
 columnLayout	done	auto
 combinationShape	done	auto
 commandEcho	done	auto
-commandLine	missing	
+commandLine	done	auto
 commandLogging	done	auto
-commandPort	missing	
-componentBox	missing	
+commandPort	done	auto
+componentBox	done	auto
 componentEditor	done	auto
 componentTag	done	auto
 condition	done	auto
@@ -328,11 +328,11 @@ expressionEditorListen	done	auto
 extendCurve	done	auto
 extendSurface	done	auto
 extrude	done	auto
-falloffCurve	missing	
-falloffCurveAttr	missing	
+falloffCurve	done	auto
+falloffCurveAttr	done	auto
 fcheck	done	auto
 file	done	auto
-fileBrowserDialog	missing	
+fileBrowserDialog	done	auto
 fileDialog	done	auto
 fileDialog2	done	auto
 fileInfo	done	auto
@@ -355,7 +355,7 @@ floatField	done	auto
 floatFieldGrp	done	auto
 floatScrollBar	done	auto
 floatSlider	done	auto
-floatSlider2	missing	
+floatSlider2	done	auto
 floatSliderButtonGrp	done	auto
 floatSliderGrp	done	auto
 flow	done	auto
@@ -364,12 +364,12 @@ fluidCacheInfo	missing
 fluidEmitter	missing	
 fluidVoxelInfo	missing	
 flushUndo	done	auto
-fontDialog	missing	
+fontDialog	done	auto
 formLayout	done	auto
 format	done	auto
 frameBufferName	missing	
 frameLayout	done	auto
-framelessDialog	missing	
+framelessDialog	done	auto
 freeFormFillet	done	auto
 freeze	done	auto
 freezeOptions	done	auto
@@ -395,9 +395,9 @@ glRender	missing
 glRenderEditor	missing	
 globalStitch	done	auto
 goal	missing	
-grabColor	missing	
-gradientControl	missing	
-gradientControlNoAttr	missing	
+grabColor	done	auto
+gradientControl	done	auto
+gradientControlNoAttr	done	auto
 graphDollyCtx	done	auto
 graphSelectContext	done	auto
 graphTrackCtx	done	auto
@@ -412,12 +412,12 @@ hasMetadata	missing
 headsUpDisplay	done	auto
 headsUpMessage	done	auto
 help	done	auto
-helpLine	missing	
+helpLine	done	auto
 hide	done	auto
 hikGlobals	done	auto
 hilite	done	auto
 hitTest	done	auto
-hotBox	missing	
+hotBox	done	auto
 hotkey	done	auto
 hotkeyCheck	done	auto
 hotkeyCtx	done	auto
@@ -435,9 +435,9 @@ hyperShade	done	auto
 iconTextButton	done	auto
 iconTextCheckBox	done	auto
 iconTextRadioButton	done	auto
-iconTextRadioCollection	missing	
-iconTextScrollList	missing	
-iconTextStaticLabel	missing	
+iconTextRadioCollection	done	auto
+iconTextScrollList	done	auto
+iconTextStaticLabel	done	auto
 ikHandle	done	auto
 ikHandleCtx	done	auto
 ikHandleDisplayScale	done	auto

@@ -781,7 +781,8 @@ QMenu* MainWindow::display_menu() {
     ui_item("Status Line", findChild<QToolBar*>("statusLine"));
     ui_item("Shelf", findChild<QToolBar*>("shelf"));
     ui_item("Tool Box", findChild<QToolBar*>("toolbox"));
-    ui_item("Time and Range Sliders", findChild<QToolBar*>("timeBar"));
+    ui_item("Time Slider", time_dock_);
+    ui_item("Range Slider", range_dock_);
     ui_item("Command Line", findChild<QToolBar*>("commandLine"));
     ui_item("Help Line", statusBar());
     ui->addSeparator();
@@ -961,6 +962,9 @@ void MainWindow::default_dock_layout() {
         addDockWidget(Qt::RightDockWidgetArea, d);
         tabifyDockWidget(channel_dock_, d);
     }
+    for (QDockWidget* d : {time_dock_, range_dock_}) d->setFloating(false);
+    addDockWidget(Qt::BottomDockWidgetArea, time_dock_, Qt::Vertical);
+    splitDockWidget(time_dock_, range_dock_, Qt::Vertical);
 }
 
 // An editor window docked into the main window for a workspace; release_docked_editors gives it back as a window.
@@ -976,8 +980,9 @@ QDockWidget* MainWindow::dock_editor(const QString& id, QWidget* editor, const Q
     d->setWidget(editor);
     editor->show();
     d->setFloating(false);
-    addDockWidget(area, d);
+    addDockWidget(area, d, area == Qt::BottomDockWidgetArea ? Qt::Vertical : Qt::Horizontal);
     d->show();
+    if (area == Qt::BottomDockWidgetArea) seat_slider_docks();
     return d;
 }
 
@@ -1043,12 +1048,12 @@ void MainWindow::apply_workspace(const QString& name) {
     // A saved one first: the arrangement the user kept under this name.
     QByteArray saved = s.value("workspaces/" + name).toByteArray();
     if (!saved.isEmpty()) {
-        restoreState(saved);
+        restore_layout(saved);
         return;
     }
     if (!workspace_names().contains(name)) return;
     auto bar = [this](const char* id, bool on) {
-        if (auto* b = findChild<QToolBar*>(id)) b->setVisible(on);
+        if (auto* b = findChild<QWidget*>(id, Qt::FindDirectChildrenOnly)) b->setVisible(on);
     };
     // The panels on the edges; the rest of the reference's editors are docked in below.
     auto only = [this](bool outliner, bool channels, bool attr, bool tool) {
@@ -1061,12 +1066,12 @@ void MainWindow::apply_workspace(const QString& name) {
         if (hik_dock_) hik_dock_->hide();
     };
     auto set_menus = [this](const QString& set) {
-        if (menu_set_) menu_set_->setCurrentText(set);
+        set_menu_set(set);
     };
     auto shelf = [this](const QString& n) {
         if (shelf_bar_) shelf_bar_->select_shelf(n);
     };
-    for (const char* id : {"statusLine", "shelf", "toolbox", "timeBar", "commandLine"}) bar(id, true);
+    for (const char* id : {"statusLine", "shelf", "toolbox", "TimeSlider", "RangeSlider", "commandLine"}) bar(id, true);
     panels_->set_layout(0);
     if (name == "General" || name == "Bicrust Fluids") {
         only(true, true, true, false);
@@ -1082,13 +1087,14 @@ void MainWindow::apply_workspace(const QString& name) {
             mtk_dock_->show();
             mtk_dock_->raise();
         }
-        bar("timeBar", false);
+        bar("TimeSlider", false);
+        bar("RangeSlider", false);
         set_menus("Modeling");
         shelf("Poly Modeling");
     } else if (name == "Modeling - Expert") {
         // The view alone: no shelf, tool box, time slider or panels.
         only(false, false, false, false);
-        for (const char* id : {"shelf", "toolbox", "timeBar"}) bar(id, false);
+        for (const char* id : {"shelf", "toolbox", "TimeSlider", "RangeSlider"}) bar(id, false);
         set_menus("Modeling");
     } else if (name == "Sculpting" || name == "Pose Sculpting") {
         // The Shape Editor over the Tool Settings on the right.
@@ -1105,7 +1111,8 @@ void MainWindow::apply_workspace(const QString& name) {
             }
             tool_dock_->raise();
         }
-        bar("timeBar", false);
+        bar("TimeSlider", false);
+        bar("RangeSlider", false);
         set_menus("Modeling");
         shelf("Sculpting");
     } else if (name == "UV Editing") {
@@ -1113,7 +1120,8 @@ void MainWindow::apply_workspace(const QString& name) {
         only(false, false, false, false);
         show_uv_editor();
         if (QDockWidget* d = dock_editor("uvEditor", uv_window_, "UV Editor", Qt::RightDockWidgetArea)) resizeDocks({d}, {width() / 2}, Qt::Horizontal);
-        bar("timeBar", false);
+        bar("TimeSlider", false);
+        bar("RangeSlider", false);
         set_menus("Modeling");
         shelf("UV Editing");
     } else if (name == "XJEN" || name == "XJEN - Interactive Groom") {
@@ -1416,11 +1424,7 @@ void MainWindow::tool_marking_menu(QPoint global, const QString& hold) {
     if (!items.isEmpty()) MarkingMenu::show_at(global, items);
 }
 
-// Ctrl+Shift+right button. With something selected and Move, Rotate or Scale active, that tool's options: the ones the
-// Tool Settings window has, set through the same context flags and saved the same way, so each shows what the other
-// set. Otherwise the selection tools' menu.
-void MainWindow::tool_options_marking_menu(QPoint global) {
-    const bool xform = (tool_ == "move" || tool_ == "rotate" || tool_ == "scale") && !selection_names().isEmpty();
+void MainWindow::selection_marking_menu(QPoint global) {
     auto item = [](const QString& label, int dir, std::function<void()> fn) {
         MarkItem m;
         m.label = label;
@@ -1439,10 +1443,6 @@ void MainWindow::tool_options_marking_menu(QPoint global) {
         m.label = label;
         m.dir = dir;
         m.sub = sub;
-        return m;
-    };
-    auto ruled = [](MarkItem m) {
-        m.separator = true;
         return m;
     };
 
@@ -1480,101 +1480,11 @@ void MainWindow::tool_options_marking_menu(QPoint global) {
         xf_constraints.append(box(label, -1, xc == t, [t] { exec_quiet("xformConstraint", QJsonObject{{"type", t}}); Host::get()->poke(); }));
     }
 
-    QList<MarkItem> items;
-    if (tool_ == "quadDraw" || tool_ == "multiCut") {
-        // Quad Draw's: Relax and Extend, a switch to Multi-Cut (or back), and the toolkit with the rest (#140).
-        const QJsonObject o = tool_options("quadDraw");
-        auto pick = [this, box](const QString& key, int now, const QStringList& names) {
-            QList<MarkItem> out;
-            for (int i = 0; i < names.size(); ++i)
-                out.append(box(names[i], -1, now == i, [this, key, i] {
-                    QSettings().setValue("mtk/quadDraw/" + key, QString::number(i));
-                    push_tool_options("quadDraw");
-                    reset_tool_panel("quadDraw");
-                }));
-            return out;
-        };
-        const bool quad = tool_ == "quadDraw";
-        items = {menu("Relax", 0, pick("relax", o["relax"].toInt(), {"Auto-Lock", "Interior Vertices", "Border Vertices", "All Vertices"})),
-                 menu("Extend", 4, pick("extend", o["extend"].toInt(), {"Edge", "Loop", "Border"})),
-                 item(quad ? "Multi-Cut" : "Quad Draw", 2, [this, quad] { set_tool(quad ? "multiCut" : "quadDraw"); }),
-                 item("Modeling Toolkit", 6, [this] { show_modeling_toolkit(); }),
-                 item("Clear Dots", -1, [this] {
-                     for (ViewportWidget* v : panels_->views()) v->set("quadDrawAction", "\"clearDots\"");
-                 }),
-                 menu("Symmetry", -1, symmetry)};
-        MarkingMenu::show_at(global, items);
-        return;
-    }
-    if (!xform) {
-        items = {menu("Symmetry", 0, symmetry), item("Lasso", 2, [this] { set_tool("lasso"); }), menu("Select", 4, select), item("Paint Select", 6, [this] { set_tool("paintSelect"); }),
-                 menu("Selection Constraints", -1, sel_constraints), menu("Transform Constraints", -1, xf_constraints)};
-        MarkingMenu::show_at(global, items);
-        return;
-    }
-
-    const QString kind = tool_ == "rotate" ? "manipRotateContext" : tool_ == "scale" ? "manipScaleContext" : "manipMoveContext";
-    const QString name = tool_ == "rotate" ? "Rotate" : tool_ == "scale" ? "Scale" : "Move";
-    auto get = [kind, name](const char* flag) { return ask(kind, QJsonObject{{"query", true}, {"queried", QJsonArray{flag}}, {"args", QJsonArray{name}}}); };
-    // As the Tool Settings window sets a flag: on the context, and kept for the next start.
-    auto set = [kind, name](const QString& flag, const QJsonValue& v) {
-        QSettings().setValue(QString("toolOptions/%1/%2").arg(name, flag), v.toVariant());
-        QJsonObject c{{"edit", true}, {"args", QJsonArray{name}}};
-        c[flag] = v;
-        exec_quiet(kind, c);
-    };
-    auto is_on = [get](const char* flag, bool fallback) {
-        const QJsonValue v = get(flag);
-        return v.isNull() || v.isUndefined() ? fallback : (v.isBool() ? v.toBool() : v.toInt() != 0);
-    };
-    auto flag_box = [box, set, is_on](const QString& label, int dir, const char* flag, bool fallback = false) {
-        const bool on = is_on(flag, fallback);
-        const QString f = flag;
-        return box(label, dir, on, [set, f, on] { set(f, !on); Host::get()->poke(); });
-    };
-    const int mode = get("mode").toInt(tool_ == "rotate" ? 0 : 2);
-    auto orient = [box, set, mode](const QString& label, int dir, int m) {
-        return box(label, dir, mode == m, [set, m] { set("mode", m); Host::get()->poke(); });
-    };
-    auto pref = [](const char* p) { return ask("uiPref", QJsonObject{{"args", QJsonArray{p}}}); };
-    auto pref_box = [box, pref](const QString& label, const char* p) {
-        const QJsonValue v = pref(p);
-        const bool on = v.isNull() || v.isUndefined() ? true : (v.isBool() ? v.toBool() : v.isString() ? v.toString() != "false" && v.toString() != "0" : v.toDouble() != 0);
-        const QString key = p;
-        return box(label, -1, on, [key, on] { exec_quiet("uiPref", QJsonObject{{"args", QJsonArray{key, !on}}}); Host::get()->poke(); });
-    };
-
-    // Step snap, as the Tool Settings' Step Snap list.
-    const bool snap = is_on("snap", false), relative = is_on("snapRelative", true);
-    auto step = [box, set](const QString& label, bool on, int m) {
-        return box(label, -1, on, [set, m] {
-            set("snapRelative", m != 2);
-            set("snap", m != 0);
-            Host::get()->poke();
-        });
-    };
-    const QList<MarkItem> snaps = {step("Off", !snap, 0), step("Relative", snap && relative, 1), step("Absolute", snap && !relative, 2)};
-
-    // The orientations the compass does not hold.
-    QList<MarkItem> axes;
-    if (tool_ == "rotate") {
-        axes = {orient("Gimbal", -1, 2), orient("Custom", -1, 3)};
-    } else {
-        axes = {orient("Parent", -1, 1), orient("Normal", -1, 3)};
-        if (tool_ == "move") axes += {orient("Along Rotation Axis", -1, 4), orient("Along Live Object Axis", -1, 5)};
-        axes.append(orient("Custom", -1, 6));
-    }
-
-    items = {menu("Symmetry", 0, symmetry), orient("Component", 1, 10), menu("Snap", 2, snaps), menu("Select", 4, select), menu("Axis", 5, axes),
-             orient("World", 6, tool_ == "rotate" ? 1 : 2), orient("Object", 7, 0)};
-    if (tool_ == "move") items.append(flag_box("Keep Spacing", 3, "snapComponentsRelative"));
-    items += {menu("Selection Constraints", -1, sel_constraints), menu("Transform Constraints", -1, xf_constraints),
-              ruled(pref_box("Shift Extrude", "shiftExtrude")), pref_box("Shift Duplicate", "shiftDuplicate"),
-              ruled(flag_box("Preserve UVs", -1, "preserveUV")), flag_box("Preserve Children", -1, "preserveChildPosition"), flag_box("Tweak Mode", -1, "tweakMode")};
-    if (tool_ == "move") items.append(flag_box("Update Triad", -1, "interactiveUpdate"));
-    if (tool_ == "scale") items.append(flag_box("Prevent Negative Scale", -1, "preventNegativeScale", true));
-    items.append(ruled(item(name + " Options", -1, [this] { show_tool_settings(); })));
-    MarkingMenu::show_at(global, items);
+    MarkingMenu::show_at(global, {
+        menu("Symmetry", 0, symmetry), item("Lasso", 2, [this] { set_tool("lasso"); }),
+        menu("Select", 4, select), item("Paint Select", 6, [this] { set_tool("paintSelect"); }),
+        menu("Selection Constraints", -1, sel_constraints), menu("Transform Constraints", -1, xf_constraints),
+    });
 }
 
 QList<MarkItem> MainWindow::hotbox_zone(int zone, QPoint origin) {
@@ -1601,24 +1511,6 @@ QList<MarkItem> MainWindow::hotbox_zone(int zone, QPoint origin) {
             return [widget] { widget->setVisible(!widget->isVisible()); };
         };
         auto tool_bar = [this, toggle](const char* name) { return toggle(findChild<QToolBar*>(name)); };
-        auto slider = [this](const char* name, const char* other_name) {
-            auto* bar = findChild<QToolBar*>("timeBar");
-            auto* row = bar->findChild<QWidget*>(name);
-            auto* other = bar->findChild<QWidget*>(other_name);
-            return [bar, row, other] {
-                if (bar->isHidden()) {
-                    other->hide();
-                    row->show();
-                    bar->show();
-                } else {
-                    row->setVisible(row->isHidden());
-                    if (row->isHidden() && other->isHidden()) {
-                        bar->hide();
-                        row->show();
-                    }
-                }
-            };
-        };
         // The Channel Box and Layer Editor share a dock, as they do in the reference's combined mode.
         MarkItem attributes{"Attributes", 2};
         attributes.sub = {{"Tool Settings", 0, [] { mel("ToggleToolSettings;"); }},
@@ -1629,8 +1521,8 @@ QList<MarkItem> MainWindow::hotbox_zone(int zone, QPoint origin) {
                                else show_attribute_editor();
                            }}};
         return {{"Help Line", 0, toggle(statusBar())}, {"Status Line", 1, tool_bar("statusLine")}, attributes,
-                {"Tool Box", 3, tool_bar("toolbox")}, {"Time Slider", 4, slider("timeSliderRow", "rangeSliderRow")},
-                {"Range Slider", 5, slider("rangeSliderRow", "timeSliderRow")},
+                {"Tool Box", 3, tool_bar("toolbox")}, {"Time Slider", 4, toggle(time_dock_)},
+                {"Range Slider", 5, toggle(range_dock_)},
                 {"Shelf", 6, tool_bar("shelf")}, {"Command Line", 7, tool_bar("commandLine")}};
     }
     case 2: {
@@ -1676,6 +1568,10 @@ QList<MarkItem> MainWindow::hotbox_zone(int zone, QPoint origin) {
 }
 
 void MainWindow::marking_menu(QPoint global, int mods) {
+    if ((mods & 3) == 3) {
+        selection_marking_menu(global);
+        return;
+    }
     ViewportWidget* v = active_view();
     QString mode = state()["mode"].toString();
     QList<MarkItem> items;
@@ -1723,32 +1619,39 @@ void MainWindow::marking_menu(QPoint global, int mods) {
         const QString c = mode == "face" ? "polyMoveFacet" : mode == "edge" ? "polyMoveEdge" : "polyMoveVertex";
         return act("Transform Component", -1, [c] { exec(c); }, [c] { OptionsDialog::open(c, "Transform Component"); });
     };
-        static QHash<QString, bool> shown;
-        auto flip = [](const QString& key, const QString& flag, const QJsonObject& with) {
-            return [key, flag, with] {
-                shown[key] = !shown.value(key);
-                QJsonObject c = with;
-                c[flag] = shown[key];
-                exec("polyOptions", c);
-            };
+    static QHash<QString, bool> shown;
+    auto flip = [](const QString& key, const QString& flag, QJsonObject flags) {
+        return [key, flag, flags]() mutable {
+            flags[flag] = shown[key] = !shown.value(key);
+            exec("polyOptions", flags);
         };
-        QList<MarkItem> display = {
+    };
+    auto polygon_display = [subm, flip](bool global = false) {
+        const auto options = [global](QJsonObject flags) {
+            if (global) flags["global"] = true;
+            exec("polyOptions", flags);
+        };
+        auto relative = [options](const char* flag) {
+            return [options, flag] { options({{"relative", true}, {flag, true}}); };
+        };
+        return subm(global ? "Polygon Display All" : "Polygon Display", -1, {
             {"Toggle Backface Culling", -1, flip("bc", "backCulling", {})},
-            {"Toggle Border Edges", -1, run("polyOptions", {{"relative", true}, {"displayBorder", true}}), true, false, false, true},
-            {"Toggle Texture Border Edges", -1, run("polyOptions", {{"relative", true}, {"displayMapBorder", true}})},
-            {"Toggle Face Normals", -1, flip("fn", "displayNormal", QJsonObject{{"facet", true}}), true, false, false, true},
-            {"Toggle Vertex Normals", -1, flip("vn", "displayNormal", QJsonObject{{"point", true}})},
-            {"Toggle Face Centers", -1, run("polyOptions", {{"relative", true}, {"displayCenter", true}}), true, false, false, true},
-            {"Toggle Hidden Triangles", -1, run("polyOptions", {{"relative", true}, {"displayTriangle", true}})},
-            {"Toggle Vertices", -1, run("polyOptions", {{"relative", true}, {"displayVertex", true}})},
-            {"Reset Polygon Display", -1, [] {
-                 shown.clear();
-                 exec("polyOptions", QJsonObject{{"backCulling", false}, {"displayBorder", false}, {"displayMapBorder", false},
-                                                 {"displayCenter", false}, {"displayTriangle", false}, {"displayVertex", false}});
-                 exec("polyOptions", QJsonObject{{"displayNormal", false}, {"facet", true}});
-                 exec("polyOptions", QJsonObject{{"displayNormal", false}, {"point", true}});
-             }, true, false, false, true}};
-    auto polygon_display = [subm, display]() { return subm("Polygon Display", -1, display); };
+            {"Toggle Border Edges", -1, relative("displayBorder"), true, false, false, true},
+            {"Toggle Texture Border Edges", -1, relative("displayMapBorder")},
+            {"Toggle Face Normals", -1, flip("fn", "displayNormal", {{"facet", true}}), true, false, false, true},
+            {"Toggle Vertex Normals", -1, flip("vn", "displayNormal", {{"point", true}})},
+            {"Toggle Face Centers", -1, relative("displayCenter"), true, false, false, true},
+            {"Toggle Hidden Triangles", -1, relative("displayTriangle")},
+            {"Toggle Vertices", -1, relative("displayVertex")},
+            {"Reset Polygon Display", -1, [options] {
+                shown.clear();
+                options({{"backCulling", false}, {"displayBorder", false}, {"displayMapBorder", false},
+                         {"displayCenter", false}, {"displayTriangle", false}, {"displayVertex", false}});
+                options({{"displayNormal", false}, {"facet", true}});
+                options({{"displayNormal", false}, {"point", true}});
+             }, true, false, false, true},
+        });
+    };
     auto mapping = [subm, com]() {
         return subm("Mapping", -1, {com("Automatic", -1, "polyAutoProjection", {}, true), com("Contour Stretch", -1, "polyContourProjection", {}, true),
                                     com("Cylindrical", -1, "polyCylindricalProjection", {}, true), com("Planar", -1, "polyPlanarProjection", {}, true),
@@ -1758,8 +1661,8 @@ void MainWindow::marking_menu(QPoint global, int mods) {
         return subm("Soften/Harden Edges", 3, {com("Soften Edge", 1, "polySoftEdge", {{"angle", 180.0}}), com("Soften/Harden", 2, "polySoftEdge", {}, true),
                                               com("Harden Edge", 3, "polySoftEdge", {{"angle", 0.0}}), act("Toggle Soft Edge Display", 4, flip("se", "softEdge", {}))});
     };
-    if ((mods & 1) && (mods & 2)) {
-        // Ctrl+Shift: converting the selection, as the reference's (#183).
+    if (mods & 2) {
+        // Ctrl: converting the selection, as the reference's (#183).
         auto to = [com](const QString& label, const QString& kind) { return com(label, -1, "convertSelection", args(QJsonArray{kind})); };
         items = {subm("To Edges", 0, {to("To Edges", "edge"), com("To Edge Loop", -1, "selectLoop"), com("To Edge Ring", -1, "selectLoop", {{"ring", true}})}),
                  subm("Grow Selection", 1, {com("Grow Selection", -1, "growSelection"), com("Grow Along Loop", -1, "growSelection", {{"alongLoop", true}})}),
@@ -1779,24 +1682,47 @@ void MainWindow::marking_menu(QPoint global, int mods) {
     } else if ((mods & 1) && selection_names().isEmpty()) {
         // Shift with nothing selected: the polygon primitives of the Create menu, made as its items make them
         // (Interactive Creation and the option boxes' saved settings apply).
-        auto prim = [this](const char* command) {
-            QString c = command;
-            return [this, c] {
-                static const QHash<QString, QString> drawn{{"polyCube", "createCube"}, {"polyPlane", "createPlane"}, {"polySphere", "createSphere"}, {"polyCylinder", "createCylinder"}, {"polyCone", "createCone"}, {"polyTorus", "createTorus"}};
-                if (drawn.contains(c) && QSettings().value("prefs/interactiveCreation", false).toBool()) {
-                    set_tool(drawn[c]);
-                    return;
-                }
-                exec(c, OptionsDialog::saved(c));
-            };
+        auto with_icon = [](MarkItem item, const char* glyph) {
+            item.icon = icon(glyph, 16);
+            return item;
+        };
+        auto prim = [this, act, with_icon](const char* label, int dir, const char* command, const char* glyph, const char* draw_tool = nullptr) {
+            const QString c = command, t = QString::fromLatin1(draw_tool);
+            return with_icon(act(label, dir, [this, c, t] {
+                if (!t.isEmpty() && QSettings().value("prefs/interactiveCreation", false).toBool())
+                    set_tool(t);
+                else
+                    exec(c, OptionsDialog::saved(c));
+            }, [c, label] { OptionsDialog::open(c, label); }), glyph);
         };
         const bool interactive = QSettings().value("prefs/interactiveCreation", false).toBool();
-        items = {{"Poly Cube", 0, prim("polyCube")}, {"Poly Cone", 1, prim("polyCone")}, {"Poly Cylinder", 2, prim("polyCylinder")}, {"Poly Torus", 3, prim("polyTorus")},
-                 {"Poly Plane", 4, prim("polyPlane")}, {"Poly Pyramid", 5, prim("polyPyramid")}, {"Poly Sphere", 6, prim("polySphere")},
-                 {"Create Polygon Tool", 7, [this] { set_tool("createPolygon"); }},
-                 {"Poly Disc", -1, prim("polyDisc")}, {"Poly Pipe", -1, prim("polyPipe")}, {"Poly Prism", -1, prim("polyPrism")}, {"Poly Helix", -1, prim("polyHelix")},
-                 {"Platonic Solid", -1, prim("polyPlatonicSolid")}, {"Super Shape", -1, prim("polySuperShape")},
-                 {"Interactive Creation", -1, [interactive] { QSettings().setValue("prefs/interactiveCreation", !interactive); }, true, interactive}};
+        MarkingMenu::show_at(global, {
+            with_icon(tool("Create Polygon Tool", 0, "createPolygon"), "face"),
+            prim("Disc", 1, "polyDisc", "disc"),
+            prim("Sphere", 2, "polySphere", "sphere", "createSphere"),
+            prim("Torus", 3, "polyTorus", "torus", "createTorus"),
+            prim("Cube", 4, "polyCube", "cube", "createCube"),
+            prim("Cone", 5, "polyCone", "cone", "createCone"),
+            prim("Cylinder", 6, "polyCylinder", "cylinder", "createCylinder"),
+            prim("Plane", 7, "polyPlane", "plane", "createPlane"),
+            prim("Platonic Solid", -1, "polyPlatonicSolid", "mesh"),
+            prim("Pyramid", -1, "polyPyramid", "cone"),
+            prim("Prism", -1, "polyPrism", "cylinder"),
+            prim("Pipe", -1, "polyPipe", "pipe"),
+            prim("Helix", -1, "polyHelix", "torus"),
+            with_icon(none("Gear", -1, true), "options"),
+            prim("Soccer Ball", -1, "polySoccerBall", "sphere"),
+            sep(with_icon(none("Super Ellipse", -1, true), "sphere")),
+            with_icon(none("Spherical Harmonics", -1, true), "sphere"),
+            prim("Ultra Shape", -1, "polySuperShape", "sphere"),
+            with_icon(none("Type", -1), "script"),
+            with_icon(none("SVG", -1), "script"),
+            with_icon(tool("Quad Draw Tool", -1, "quadDraw"), "quadDraw"),
+            sep({"Interactive Creation", -1, [interactive] { QSettings().setValue("prefs/interactiveCreation", !interactive); }, true, interactive, true}),
+            {"Exit On Completion", -1, {}, false, true, true},
+            sep(polygon_display(true)),
+        }, nullptr, false, true);
+        return;
     } else if (mods & 1) {
         // Shift: the modelling tools for the component type, as the reference's (#183).
         if (mode == "face") {
@@ -1865,12 +1791,6 @@ void MainWindow::marking_menu(QPoint global, int mods) {
                      none("Connect Tool", -1, true), tool("Quad Draw Tool", -1, "quadDraw"),
                      sep(polygon_display())};
         }
-    } else if (mods & 2) {
-        // Ctrl: selection conversion.
-        items = {{"To Edges", 0, run("convertSelection", args(QJsonArray{"edge"}))}, {"To Faces", 4, run("convertSelection", args(QJsonArray{"face"}))},
-                 {"To Vertices", 6, run("convertSelection", args(QJsonArray{"vertex"}))}, {"Grow", 2, run("growSelection")},
-                 {"Edge Ring", 1, run("selectLoop", {{"ring", true}})}, {"Edge Loop", 7, run("selectLoop")},
-                 {"Shrink", -1, run("shrinkSelection")}, {"Border", -1, run("selectBorder")}, {"Shell", -1, [this] { select_shell(false); }}, {"Shell Border", -1, [this] { select_shell(true); }}};
     } else {
         QString hit;
         if (v) {

@@ -317,9 +317,9 @@ impl Build<'_> {
     fn read_wires(&mut self, d: &FileDeformer) {
         let doc = self.doc;
         let of = |this: &Self, names: [&str; 2], k: i64| {
-            doc.conns.iter().find(|c| c.dst == d.doc && names.contains(&plain_attr(&c.dst_attr).as_str()) && first_index(&c.dst_attr).unwrap_or(0) == k).and_then(|c| this.id(c.src))
+            doc.conns_in(d.doc).find(|c| c.dst == d.doc && names.contains(&plain_attr(&c.dst_attr).as_str()) && first_index(&c.dst_attr).unwrap_or(0) == k).and_then(|c| this.id(c.src))
         };
-        let indices: Vec<i64> = doc.conns.iter().filter(|c| c.dst == d.doc && matches!(plain_attr(&c.dst_attr).as_str(), "dw" | "deformedWire")).map(|c| first_index(&c.dst_attr).unwrap_or(0)).collect();
+        let indices: Vec<i64> = doc.conns_in(d.doc).filter(|c| c.dst == d.doc && matches!(plain_attr(&c.dst_attr).as_str(), "dw" | "deformedWire")).map(|c| first_index(&c.dst_attr).unwrap_or(0)).collect();
         for k in indices {
             let Some(driver) = of(self, ["dw", "deformedWire"], k) else { continue };
             let base = of(self, ["bw", "baseWire"], k);
@@ -332,7 +332,7 @@ impl Build<'_> {
     /// The points the deformer acts on, when that isn't all of them.
     fn read_members(&mut self, d: &FileDeformer, capacity: u32) -> Option<Vec<u32>> {
         let doc = self.doc;
-        let conn = doc.conns.iter().find(|c| c.dst == d.doc && matches!(plain_attr(&c.dst_attr).as_str(), "ip.ig" | "input.inputGeometry") && first_index(&c.dst_attr).unwrap_or(0) == d.geometry)?;
+        let conn = doc.conns_in(d.doc).find(|c| c.dst == d.doc && matches!(plain_attr(&c.dst_attr).as_str(), "ip.ig" | "input.inputGeometry") && first_index(&c.dst_attr).unwrap_or(0) == d.geometry)?;
         let parts = &doc.nodes[conn.src];
         if parts.ty != "groupParts" {
             return None;
@@ -440,7 +440,7 @@ impl Build<'_> {
             }
         }
         // Live targets have an item with no points yet.
-        for c in doc.conns.iter().filter(|c| c.dst == d.doc) {
+        for c in doc.conns_in(d.doc).filter(|c| c.dst == d.doc) {
             if let Some((g, i, iti)) = live_target_path(&c.dst_attr) {
                 if g == d.geometry {
                     items.entry((i, iti)).or_default();

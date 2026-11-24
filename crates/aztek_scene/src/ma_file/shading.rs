@@ -161,10 +161,10 @@ fn file_group_faces(doc: &Doc, shape: usize, k: i64, count: u32) -> Option<Vec<u
             return Some(face_ids(&s.values, count));
         }
     }
-    let id = doc.conns.iter().find(|c| {
+    let id = doc.conns_in(shape).find(|c| {
         c.dst == shape && matches!(plain_attr(&c.dst_attr).as_str(), "iog.og.gid" | "instObjGroups.objectGroups.objectGroupId") && parse_path(&c.dst_attr).get(1).and_then(|s| s.range).map(|r| r.0) == Some(k)
     })?;
-    let parts = doc.conns.iter().find(|c| c.src == id.src && doc.nodes[c.dst].ty == "groupParts" && matches!(plain_attr(&c.dst_attr).as_str(), "gi" | "groupId"))?;
+    let parts = doc.conns_out(id.src).find(|c| c.src == id.src && doc.nodes[c.dst].ty == "groupParts" && matches!(plain_attr(&c.dst_attr).as_str(), "gi" | "groupId"))?;
     let set = doc.nodes[parts.dst].set_of(&["ic", "inputComponents"])?;
     Some(face_ids(&set.values, count))
 }

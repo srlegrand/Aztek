@@ -1155,7 +1155,16 @@ fn base_table() -> Vec<Spec> {
 
 /// classification, by type: for shadingNode and getClassification.
 pub fn classification(type_name: &str) -> Option<&'static str> {
-    table().into_iter().find(|s| s.0 == type_name).map(|s| s.1).or_else(|| crate::shading::classification(type_name)).or_else(|| crate::lights::classification(type_name))
+    // Asked for each node a scene creates: the table is built once, not every time (it builds every type's attributes).
+    static BY_TYPE: std::sync::OnceLock<std::collections::HashMap<&'static str, &'static str>> = std::sync::OnceLock::new();
+    let own = BY_TYPE.get_or_init(|| {
+        let mut m = std::collections::HashMap::new();
+        for s in table() {
+            m.entry(s.0).or_insert(s.1);
+        }
+        m
+    });
+    own.get(type_name).copied().or_else(|| crate::shading::classification(type_name)).or_else(|| crate::lights::classification(type_name))
 }
 
 pub fn register_types() {

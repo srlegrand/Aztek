@@ -1158,6 +1158,12 @@ pub(crate) fn intercept(core: &mut crate::core::Core, name: &str, call: &Value) 
     if let Some(r) = crate::channel_box::intercept(core, name, call) {
         return Some(r);
     }
+    if let Some(r) = crate::cmd_fields::intercept(core, name, call) {
+        return Some(r);
+    }
+    if let Some(r) = crate::command_line::intercept(core, name, call) {
+        return Some(r);
+    }
     if let Some(r) = crate::attr_menus::intercept(core, name, call) {
         return Some(r);
     }

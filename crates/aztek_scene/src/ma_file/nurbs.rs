@@ -21,8 +21,8 @@ fn walk(doc: &Doc, shape: usize) -> NurbsChain {
     let mut through = 0;
     while seen.insert(at) {
         let plain = |k: &&Conn| k.dst == at && IN.contains(&plain_attr(&k.dst_attr).as_str());
-        let by_index = doc.conns.iter().filter(plain).find(|k| first_index(&k.dst_attr).unwrap_or(0) == through);
-        let Some(conn) = by_index.or_else(|| doc.conns.iter().find(plain)) else { break };
+        let by_index = doc.conns_in(at).filter(plain).find(|k| first_index(&k.dst_attr).unwrap_or(0) == through);
+        let Some(conn) = by_index.or_else(|| doc.conns_in(at).find(plain)) else { break };
         let next = conn.src;
         let index = first_index(&conn.src_attr).unwrap_or(0);
         let ty = doc.nodes[next].ty.as_str();

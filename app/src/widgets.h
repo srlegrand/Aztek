@@ -211,11 +211,21 @@ private:
 
 struct MarkItem;
 
-// Space held: common and panel menus above the cursor, task menu sets below, and marking menus in five zones.
+// Space held, or hotBox from a script: common and panel menus above the cursor, task menu sets below, and marking menus
+// in five zones. Which rows show and how it is drawn are hotBox's settings, given each time it pops.
 class Hotbox : public QWidget {
     Q_OBJECT
 public:
     Hotbox(const QList<QMenu*>& common, const QList<QPair<QString, QList<QMenu*>>>& sets, QMenu* recent, QWidget* parent);
+    // hotBox's rows by name (common, pane, modeling, polygons, surfaces, rigging, animation, dynamics, cloth, rendering);
+    // a row not named shows. A menu with the azHotboxGroup property "polygons" or "surfaces" shows under that row alone.
+    void set_rows_shown(const QHash<QString, bool>& rows);
+    // hotBox's settings: "dh" all of it, "dzo" the zones without the menus, "dco" nothing drawn and the middle's marking
+    // menu wherever the press; transparency 0 to 100; with rmb, a right press in the middle lists `current`'s menus.
+    void set_look(const QString& style, int transparency, bool rmb, const QList<QMenu*>& current);
+    // Popped by something other than a key (hotBox -noKeyPress): the key's release doesn't put it away.
+    void set_hold(bool hold) { hold_ = hold; }
+    bool holding() const { return hold_; }
     void popup(QPoint global, const QList<QAction*>& panel_actions);
     void finish();
     // Zone: 0 north, 1 east, 2 south, 3 west, 4 the Aztek box in the middle.
@@ -223,20 +233,35 @@ public:
 signals:
     // Space up; a tap, quick and with nothing done in the hotbox, toggles the view under the cursor.
     void spaceReleased(bool tap);
+    // A menu or zone of it was used.
+    void used();
+    // A row turned on or off from Hotbox Controls.
+    void rowToggled(const QString& row, bool on);
 protected:
     void paintEvent(QPaintEvent*) override;
     void mousePressEvent(QMouseEvent*) override;
     void keyReleaseEvent(QKeyEvent*) override;
 private:
     int zone_at(QPoint p) const;
-    void mark_used() { used_ = true; }
-    QWidget* box_;
+    void mark_used();
+    void apply_rows();
+    void place(QPoint target);
+    QWidget* box_ = nullptr;
     QWidget* middle_ = nullptr;
     QList<QToolButton*> panel_buttons_;
+    QHash<QString, QWidget*> strips_;
+    QHash<QString, QAction*> toggles_;
+    QList<QPair<QToolButton*, QString>> groups_;
+    QHash<QString, bool> rows_;
     QPoint center_;
     QPoint origin_;
     qint64 shown_ms_ = 0;
     bool used_ = false;
+    bool hold_ = false;
+    QString style_ = "dh";
+    int transparency_ = 25;
+    bool rmb_ = true;
+    QList<QMenu*> current_;
     std::function<QList<MarkItem>(int, QPoint)> zones_;
 };
 

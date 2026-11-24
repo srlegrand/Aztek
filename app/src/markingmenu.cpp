@@ -4,6 +4,7 @@
 #include <QDateTime>
 #include <QGuiApplication>
 #include <QKeyEvent>
+#include <QLineF>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
@@ -26,22 +27,22 @@ QList<QPair<QPoint, QList<MarkItem>>>& parents() {
 }
 } // namespace
 
-void MarkingMenu::show_at(QPoint global, const QList<MarkItem>& items, QWidget* owner, bool hotbox_zone) {
+void MarkingMenu::show_at(QPoint global, const QList<MarkItem>& items, QWidget* owner, bool hotbox_zone, bool center_list) {
     parents().clear();
-    open(global, items, owner, hotbox_zone);
+    open(global, items, owner, hotbox_zone, center_list);
 }
 
-void MarkingMenu::open(QPoint global, const QList<MarkItem>& items, QWidget* owner, bool hotbox_zone) {
-    auto* m = new MarkingMenu(global, items, owner, hotbox_zone);
+void MarkingMenu::open(QPoint global, const QList<MarkItem>& items, QWidget* owner, bool hotbox_zone, bool center_list) {
+    auto* m = new MarkingMenu(global, items, owner, hotbox_zone, center_list);
     m->setAttribute(Qt::WA_DeleteOnClose);
     m->show();
     m->grabMouse();
     m->setFocus();
 }
 
-MarkingMenu::MarkingMenu(QPoint global, const QList<MarkItem>& items, QWidget* owner, bool hotbox_zone)
+MarkingMenu::MarkingMenu(QPoint global, const QList<MarkItem>& items, QWidget* owner, bool hotbox_zone, bool center_list)
     : QWidget(owner, Qt::Popup | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint), items_(items),
-      opening_point_(global), hotbox_zone_(hotbox_zone) {
+      opening_point_(global), hotbox_zone_(hotbox_zone), center_list_(center_list) {
     setAttribute(Qt::WA_TranslucentBackground);
     setMouseTracking(true);
     if (hotbox_zone_) {
@@ -58,13 +59,14 @@ MarkingMenu::MarkingMenu(QPoint global, const QList<MarkItem>& items, QWidget* o
     int list_w = 140;
     for (const MarkItem& it : items_) {
         compass |= it.dir >= 0;
-        if (it.dir < 0) list_w = qMax(list_w, fm.horizontalAdvance(it.label) + 24 + (it.checkable ? 18 : 0) + (it.sub.isEmpty() ? 0 : 14) + (it.option ? 22 : 0));
+        if (it.dir < 0) list_w = qMax(list_w, fm.horizontalAdvance(it.label) + 24 + (it.checkable || !it.icon.isNull() ? 18 : 0) + (it.sub.isEmpty() ? 0 : 14) + (it.option ? 22 : 0));
     }
+    const int list_x = compass && center_list_ ? -list_w / 2 : -85;
     int list_y = compass ? 2 * kRow + kH + 10 : 14;
     QList<QRect> rules;
     for (const MarkItem& it : items_) {
         int w = fm.horizontalAdvance(it.label) + (hotbox_zone_ ? 50 : 24)
-            + (it.checkable ? 18 : 0) + (it.sub.isEmpty() || hotbox_zone_ ? 0 : 14) + (it.option ? 22 : 0);
+            + (it.checkable || !it.icon.isNull() ? 18 : 0) + (it.sub.isEmpty() || hotbox_zone_ ? 0 : 14) + (it.option ? 22 : 0);
         QRect r;
         if (it.dir >= 0) {
             // The reference's compass (#183): five rows a little over an item apart, north and south centred over the
@@ -77,17 +79,17 @@ MarkingMenu::MarkingMenu(QPoint global, const QList<MarkItem>& items, QWidget* o
             r = QRect(left, y - h / 2, w, h);
         } else {
             if (it.separator) {
-                rules.append(QRect(-85, list_y, list_w, 7));
+                rules.append(QRect(list_x, list_y, list_w, 7));
                 list_y += 7;
             }
-            r = QRect(-85, list_y, list_w, kH);
+            r = QRect(list_x, list_y, list_w, kH);
             list_y += kH;
         }
         rs.append(r);
     }
     QRect bound(-6, -6, 12, 12);
     for (const QRect& r : rs) bound = bound.united(r);
-    if (hotbox_zone_) {
+    if (hotbox_zone_ || center_list_) {
         if (QScreen* s = QGuiApplication::screenAt(global)) {
             const QRect area = s->availableGeometry().adjusted(4, 4, -4, -4);
             if (area.width() >= bound.width())
@@ -103,13 +105,13 @@ MarkingMenu::MarkingMenu(QPoint global, const QList<MarkItem>& items, QWidget* o
     }
     bound.adjust(-4, -4, 4, 4);
     center_ = -bound.topLeft();
-    cursor_ = center_;
     for (QRect& r : rs) r.translate(center_);
     for (QRect& r : rules) r.translate(center_);
     rects_ = rs;
     rules_ = rules;
     resize(bound.size());
     move(global - center_);
+    cursor_ = opening_point_ - (global - center_);
     // Without a compositor the translucent background shows black: show only the items and the centre.
     shape_ = QRegion(QRect(center_ - QPoint(7, 7), QSize(14, 14)), QRegion::Ellipse);
     for (const QRect& r : rects_) shape_ += r.adjusted(-1, -1, 1, 1);
@@ -148,18 +150,42 @@ void MarkingMenu::update_shape() {
     setMask(mask);
 }
 
-int MarkingMenu::item_at(QPoint p) const {
+int MarkingMenu::item_at(QPoint p, bool stroke) const {
     for (int i = 0; i < rects_.size(); ++i)
-        if (rects_[i].contains(p) && items_[i].enabled) return i;
-    // Past the dead zone, the direction picks the compass item.
-    QPoint d = p - center_;
+        if (rects_[i].contains(p)) return items_[i].enabled ? i : -1;
+
+    const QPoint d = p - center_;
+    if (!stroke || d.manhattanLength() <= 8) return -1;
+
+    // Mouse events can jump over a whole row. Use the last item crossed on the way to this sample.
+    if (p != cursor_) {
+        const QLineF segment(p, cursor_);
+        qreal nearest = segment.length();
+        int crossed = -1;
+        for (int i = 0; i < rects_.size(); ++i) {
+            const QRect& r = rects_[i];
+            if (!items_[i].enabled || r.contains(cursor_)) continue;
+            const QPolygonF border{QRectF(r)};
+            for (int edge = 1; edge < border.size(); ++edge) {
+                QPointF hit;
+                if (segment.intersects(QLineF(border[edge - 1], border[edge]), &hit) != QLineF::BoundedIntersection) continue;
+                const qreal distance = QLineF(p, hit).length();
+                if (distance >= nearest) continue;
+                nearest = distance;
+                crossed = i;
+            }
+        }
+        if (crossed >= 0) return crossed;
+    }
+
+    // A compass mark can also pick an item by direction before reaching its box.
     if (std::hypot(d.x(), d.y()) > 28) {
         double a = std::atan2(double(d.x()), double(-d.y()));
         int dir = int(std::lround(a / (M_PI / 4.0)) + 8) % 8;
         for (int i = 0; i < items_.size(); ++i)
             if (items_[i].dir == dir && items_[i].enabled && p.y() < rects_.value(i).bottom() + kRadius) return i;
     }
-    return -1;
+    return hover_;
 }
 
 std::function<void(const QString&, const std::function<void()>&)>& MarkingMenu::around() {
@@ -174,7 +200,7 @@ void MarkingMenu::open_sub(int i) {
     parents().append({mapToGlobal(center_), items_});
     releaseMouse();
     close();
-    open(at, sub, parentWidget(), hotbox_zone_);
+    open(at, sub, parentWidget(), hotbox_zone_, center_list_);
 }
 
 // Back over the dot: the menu this one came from opens again where it was.
@@ -183,7 +209,7 @@ void MarkingMenu::back_to_parent() {
     const auto up = parents().takeLast();
     releaseMouse();
     close();
-    open(up.first, up.second, parentWidget(), hotbox_zone_);
+    open(up.first, up.second, parentWidget(), hotbox_zone_, center_list_);
 }
 
 QRect MarkingMenu::option_box(int i) const {
@@ -260,6 +286,10 @@ void MarkingMenu::paintEvent(QPaintEvent*) {
             }
             p.setPen(ink);
             left = 26;
+        } else if (!it.icon.isNull()) {
+            it.icon.paint(&p, QRect(r.left() + 6, r.center().y() - 7, 14, 14),
+                          Qt::AlignCenter, it.enabled ? QIcon::Normal : QIcon::Disabled);
+            left = 24;
         } else if (it.checked) {
             text = QString::fromUtf8("✓ ") + text;
         }
@@ -289,16 +319,17 @@ void MarkingMenu::paintEvent(QPaintEvent*) {
 
 void MarkingMenu::mouseMoveEvent(QMouseEvent* e) {
     QPoint pos = e->position().toPoint();
-    const QPoint movement = hotbox_zone_ && !has_back_ ? e->globalPosition().toPoint() - opening_point_ : pos - center_;
+    const QPoint movement = (hotbox_zone_ || center_list_) && !has_back_ ? e->globalPosition().toPoint() - opening_point_ : pos - center_;
     if (movement.manhattanLength() > 8) dragged_ = true;
     if (has_back_ && (pos - back_).manhattanLength() < 9) {
         back_to_parent();
         return;
     }
-    int h = item_at(pos);
-    if (h != hover_ || (hotbox_zone_ && pos != cursor_)) {
-        hover_ = h;
-        cursor_ = pos;
+    const int h = item_at(pos, e->buttons() != Qt::NoButton);
+    const bool repaint = h != hover_ || (hotbox_zone_ && pos != cursor_);
+    hover_ = h;
+    cursor_ = pos;
+    if (repaint) {
         if (hotbox_zone_) update_shape();
         update();
     }
@@ -317,9 +348,9 @@ void MarkingMenu::mouseMoveEvent(QMouseEvent* e) {
 
 void MarkingMenu::mouseReleaseEvent(QMouseEvent* e) {
     QPoint pos = e->position().toPoint();
-    const bool opening_click = hotbox_zone_ && !has_back_ && !dragged_
+    const bool opening_click = (hotbox_zone_ || center_list_) && !has_back_ && !dragged_
         && (e->globalPosition().toPoint() - opening_point_).manhattanLength() <= 8;
-    int i = opening_click ? -1 : item_at(pos);
+    const int i = opening_click ? -1 : (pos == cursor_ ? hover_ : item_at(pos, true));
     qint64 held = QDateTime::currentMSecsSinceEpoch() - opened_ms_;
     // A quick click leaves the menu open for a second click.
     if (i < 0 && !dragged_ && held < 400) return;

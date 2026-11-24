@@ -99,6 +99,7 @@ impl Core {
         register_ui_commands(&mut c.s);
         aztek_scene::scripted::set_post_create_hook(crate::native_plugin::run_post_create);
         crate::ui_cmds::register(&mut c.s);
+        crate::hotbox::register(&mut c.s);
         crate::autosave::register(&mut c.s);
         crate::archive::register(&mut c.s);
         crate::scriptui::register(&mut c.s);
@@ -108,6 +109,8 @@ impl Core {
         crate::panel_cmds::register(&mut c.s);
         crate::host_general::register(&mut c.s);
         crate::ee_listen::register(&mut c.s);
+        crate::command_port::register(&mut c.s);
+        crate::command_line::register(&mut c.s);
         crate::sys_host::register(&mut c.s);
         crate::sys_more::register(&mut c.s);
         crate::sys_info::register(&mut c.s);
@@ -158,6 +161,7 @@ impl Core {
         crate::batch::echo(&text, kind);
         crate::environment::line(&text);
         crate::sys_prefs::history_line(&text);
+        crate::cmd_fields::history_line(&text, kind);
         self.log.push(LogLine { text, kind });
     }
 
@@ -362,6 +366,8 @@ impl Core {
     pub fn ui_event(&mut self, ev: &Value) {
         let due = crate::scriptui::shell_event(ev);
         crate::attr_ui::shell_changed(self, ev);
+        crate::more_controls::shell_changed(self, ev);
+        crate::ramp_controls::shell_changed(self, ev);
         for (cb, args) in due {
             self.run_callback(&cb, &args);
         }
@@ -376,16 +382,24 @@ impl Core {
         self.in_idle = true;
         self.note_settings();
         crate::attr_ui::idle(self);
+        crate::more_controls::idle(self);
+        crate::ramp_controls::idle(self);
         crate::host_general::watch(&mut self.s);
         aztek_scene::messages::flush(&mut self.s);
         self.run_conditions();
         let mut scripts = crate::script_jobs::scan(&mut self.s);
         scripts.extend(crate::ee_listen::due(&self.s));
         let deferred = crate::script_jobs::take_deferred();
+        let watched = crate::cmd_fields::file_changes();
         self.drain_captured();
+        for (cb, args) in watched {
+            self.run_callback(&cb, &args);
+        }
         self.run_callbacks(scripts);
         self.run_callbacks(deferred);
+        crate::hud::idle(self);
         self.run_event_procs();
+        crate::command_port::serve(self);
         self.in_idle = false;
     }
 
@@ -586,6 +600,12 @@ impl Core {
         }
         // move's own component options (-reflection, -preserveUV, -parameter) are worked by move itself.
         if name == "move" && ["reflection", "preserveUV", "parameter"].iter().any(|k| call.get(*k).is_some_and(|v| v.as_bool() != Some(false))) {
+            return (name, call);
+        }
+        // An absolute move puts the points where it says: move works that out in the space asked for.
+        // So does one with single axes (move -a -x 0, move -r -y 1).
+        let absolute = call.get("to").is_some() && call.get("relative").and_then(Value::as_bool) != Some(true) && call.get("by").is_none();
+        if name == "move" && (absolute || ["x", "y", "z"].iter().any(|k| call.get(*k).is_some_and(|v| !v.is_null() && v != &json!(false)))) {
             return (name, call);
         }
         // And rotate's and scale's (-reflection, -preserveUV, -orientAxes).

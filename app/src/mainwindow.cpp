@@ -124,7 +124,8 @@ MainWindow::MainWindow() {
     // with QApplication.topLevelWidgets(), without shiboken (#142).
     setObjectName("MayaWindow");
     setDockOptions(QMainWindow::AnimatedDocks | QMainWindow::AllowTabbedDocks | QMainWindow::AllowNestedDocks);
-    setCorner(Qt::BottomRightCorner, Qt::RightDockWidgetArea);
+    // The bottom right goes to the Time and Range Sliders, which run the window's width as the reference's do.
+    setCorner(Qt::BottomRightCorner, Qt::BottomDockWidgetArea);
     setCorner(Qt::TopRightCorner, Qt::RightDockWidgetArea);
 
     panels_ = new PanelLayout(this);
@@ -1231,10 +1232,12 @@ void MainWindow::build_menus() {
     row->addWidget(lock);
     mb->setCornerWidget(corner, Qt::TopRightCorner);
     lock_layout(locked);
-    build_menu_set(menu_set_->currentText());
+    build_menu_set(menu_set_);
 }
 
 void MainWindow::build_menu_set(const QString& set) {
+    // The reference calls the dynamics menu set FX; scripts still say Dynamics.
+    const QString wanted = set == "Dynamics" ? QString("FX") : set;
     QMenuBar* mb = menuBar();
     mb->clear();
     for (QMenu* m : set_menus_) m->deleteLater();
@@ -1251,13 +1254,13 @@ void MainWindow::build_menu_set(const QString& set) {
         {"Modeling", {mesh_menu(), edit_mesh_menu(), mesh_tools_menu(), mesh_display_menu(), curves_menu(), surfaces_menu(), uv_menu(), deform, generate}},
         {"Rigging", {skeleton_menu(), skin_menu(), deform, constrain, control_menu()}},
         {"Animation", {key_menu(), playback, audio_menu(), visualize_menu(), deform, constrain, cache_menu()}},
-        {"Dynamics", dynamics_menus() + QList<QMenu*>{generate, playback}},
+        {"FX", dynamics_menus() + QList<QMenu*>{generate, playback}},
         {"Rendering", {render_menu(this), harold_menu(this)}},
     };
     set_menus_ = common;
     set_menus_.append(light);
     for (const auto& [name, menus] : sets)
-        if (name == set) set_menus_.append(menus);
+        if (name == wanted) set_menus_.append(menus);
     for (const auto& entry : sets)
         for (auto* menu : entry.second)
             if (!set_menus_.contains(menu) && !hotbox_menus_.contains(menu)) hotbox_menus_.append(menu);
@@ -1278,13 +1281,40 @@ void MainWindow::build_menu_set(const QString& set) {
     if (hotbox_) hotbox_->deleteLater();
     common.append(help);
     sets.last().second.prepend(light);
+    // hotBox's polygons and surfaces rows are these of the Modeling row's menus.
+    for (QMenu* m : sets.first().second) {
+        const QString t = QString(m->title()).remove('&');
+        if (t == "Mesh" || t == "Edit Mesh" || t == "Mesh Tools" || t == "Mesh Display" || t == "UV") m->setProperty("azHotboxGroup", "polygons");
+        else if (t == "Curves" || t == "Surfaces") m->setProperty("azHotboxGroup", "surfaces");
+    }
     hotbox_ = new Hotbox(common, sets, recents, this);
     hotbox_->set_zones([this](int zone, QPoint origin) { return hotbox_zone(zone, origin); });
     connect(hotbox_, &Hotbox::spaceReleased, this, [this](bool tap) {
         held_.remove(Qt::Key_Space);
         space_held_ = false;
+        exec_quiet("hotBox", QJsonObject{{"release", true}});
         if (tap) panels_->toggle();
     });
+    connect(hotbox_, &Hotbox::used, this, [] { ask("aztekHotBox", QJsonObject{{"used", true}}); });
+    // Hotbox Controls rows go to hotBox, so they hold for the next pop and scripts see them.
+    connect(hotbox_, &Hotbox::rowToggled, this, [](const QString& row, bool on) {
+        exec_quiet("hotBox", QJsonObject{{row == "pane" ? QString("PaneToggleMenus") : row + "ToggleMenus", on}});
+    });
+}
+
+void MainWindow::show_hotbox(QPoint global, bool hold) {
+    if (!hotbox_) return;
+    const QJsonObject st = ask("aztekHotBox").toObject();
+    const QJsonObject on = st["rows"].toObject();
+    QHash<QString, bool> rows;
+    for (auto it = on.begin(); it != on.end(); ++it) rows[it.key()] = it.value().toBool(true);
+    hotbox_->set_look(st["style"].toString("dh"), st["transparency"].toInt(25), st["rmbPopups"].toBool(true),
+                      set_menus_.mid(7, std::max(0, int(set_menus_.size()) - 8)));
+    hotbox_->set_rows_shown(rows);
+    hotbox_->set_hold(hold);
+    ModelPanel* panel = panels_ ? panels_->panel_at(global) : nullptr;
+    hotbox_->popup(global, panel ? panel->panel_menu_actions() : QList<QAction*>());
+    ask("aztekHotBox", QJsonObject{{"shown", QJsonArray{global.x(), global.y()}}});
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -1356,9 +1386,79 @@ void MainWindow::build_toolbox() {
     tb->addWidget(mark);
 }
 
+// The grab handle down the left of the Time and Range Sliders: a column of dots, and room either side of it. Clicks on
+// it go to the dock, which drags it and docks or floats it on a double-click.
+class SliderGrip : public QWidget {
+public:
+    static constexpr QDockWidget::DockWidgetFeatures features =
+        QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable | QDockWidget::DockWidgetVerticalTitleBar;
+    explicit SliderGrip(QWidget* parent) : QWidget(parent) {
+        setFixedWidth(10);
+        setCursor(Qt::SizeAllCursor);
+        setToolTip("Drag to move, or off the window to float; double-click to dock");
+    }
+    QSize sizeHint() const override { return {10, 10}; }
+    QSize minimumSizeHint() const override { return {10, 10}; }
+
+protected:
+    void paintEvent(QPaintEvent*) override {
+        QPainter p(this);
+        const QColor c = palette().color(QPalette::Mid);
+        for (int y = 3; y + 2 <= height() - 2; y += 4)
+            for (int x : {2, 6}) p.fillRect(x, y, 2, 2, c);
+    }
+};
+
 void MainWindow::lock_layout(bool on) {
     for (QDockWidget* d : findChildren<QDockWidget*>())
-        d->setFeatures(on ? QDockWidget::DockWidgetClosable : QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
+        if (d != time_dock_ && d != range_dock_)
+            d->setFeatures(on ? QDockWidget::DockWidgetClosable : QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
+    // The sliders keep their grab handles, which stay as padding but no longer drag while locked.
+    for (QDockWidget* d : {time_dock_, range_dock_})
+        if (d) d->setFeatures(on ? QDockWidget::DockWidgetVerticalTitleBar : SliderGrip::features);
+}
+
+QDockWidget* MainWindow::slider_dock(const QString& title, const QString& id) {
+    auto* d = new QDockWidget(title, this);
+    d->setObjectName(id);
+    d->setTitleBarWidget(new SliderGrip(d));
+    d->setFeatures(SliderGrip::features);
+    d->setAllowedAreas(Qt::TopDockWidgetArea | Qt::BottomDockWidgetArea);
+    // Pulled off, it opens half the window wide rather than squeezed to its least.
+    connect(d, &QDockWidget::topLevelChanged, d, [this, d](bool floating) {
+        if (floating) d->resize(qMax(d->width(), width() / 2), d->sizeHint().height());
+    });
+    return d;
+}
+
+// A saved window layout. One kept before the sliders were docks of their own has no place for them: they go under the
+// views, the Time Slider over the Range Slider, as a fresh layout has them.
+void MainWindow::restore_layout(const QByteArray& state) {
+    restoreState(state);
+    // A layout keeps the corners it was saved with; the bottom right is the sliders' now.
+    setCorner(Qt::BottomRightCorner, Qt::BottomDockWidgetArea);
+    QByteArray name;
+    for (QChar c : QStringLiteral("TimeSlider")) name.append(char(c.unicode() >> 8)).append(char(c.unicode() & 0xff));
+    if (state.contains(name)) return;
+    for (QDockWidget* d : {time_dock_, range_dock_}) {
+        d->setFloating(false);
+        removeDockWidget(d);
+    }
+    addDockWidget(Qt::BottomDockWidgetArea, time_dock_, Qt::Vertical);
+    splitDockWidget(time_dock_, range_dock_, Qt::Vertical);
+    time_dock_->show();
+    range_dock_->show();
+}
+
+// The slider docks go back under whatever a workspace docked below the views, as the reference keeps them.
+void MainWindow::seat_slider_docks() {
+    for (QDockWidget* d : {time_dock_, range_dock_}) {
+        if (!d || d->isFloating() || dockWidgetArea(d) != Qt::BottomDockWidgetArea) continue;
+        const bool shown = !d->isHidden();
+        removeDockWidget(d);
+        addDockWidget(Qt::BottomDockWidgetArea, d, Qt::Vertical);
+        d->setVisible(shown);
+    }
 }
 
 void MainWindow::toggle_side(bool left, QToolButton* handle) {
@@ -1473,21 +1573,20 @@ void MainWindow::build_bottom() {
     connect(command_line_, &CommandLine::openScriptEditor, this, &MainWindow::show_script_editor);
     cl->addWidget(command_line_);
 
-    addToolBarBreak(Qt::BottomToolBarArea);
-    QToolBar* bottom = new QToolBar("Time Slider", this);
-    bottom->setObjectName("timeBar");
-    bottom->setMovable(false);
-    addToolBar(Qt::BottomToolBarArea, bottom);
-    auto* w = new QWidget(bottom);
-    auto* v = new QVBoxLayout(w);
-    v->setContentsMargins(0, 0, 0, 0);
-    v->setSpacing(2);
-    auto* time_row = new QWidget(w);
+    // The Time Slider and the Range Slider are docked controls of their own, TimeSlider and RangeSlider as the
+    // reference names them: each has a grab handle down its left that keeps it off the window's edge, drags it above
+    // or below the views, or pulls it off as a window, and a double-click on it docks it again (#272).
+    time_dock_ = slider_dock("Time Slider", "TimeSlider");
+    range_dock_ = slider_dock("Range Slider", "RangeSlider");
+    addDockWidget(Qt::BottomDockWidgetArea, time_dock_);
+    splitDockWidget(time_dock_, range_dock_, Qt::Vertical);
+    lock_layout(QSettings().value("window/uiLocked", false).toBool());
+    auto* time_row = new QWidget(time_dock_);
     time_row->setObjectName("timeSliderRow");
     auto* row1 = new QHBoxLayout(time_row);
     row1->setContentsMargins(0, 0, 0, 0);
-    time_slider_ = new TimeSlider(w);
-    auto* current = new QSpinBox(w);
+    time_slider_ = new TimeSlider(time_row);
+    auto* current = new QSpinBox(time_row);
     current_frame_ = current;
     current->setRange(-100000, 100000);
     current->setValue(1);
@@ -1506,7 +1605,7 @@ void MainWindow::build_bottom() {
     });
     row1->addWidget(time_slider_, 1);
     row1->addWidget(current);
-    auto* play = new QToolBar(w);
+    auto* play = new QToolBar(time_row);
     play->setObjectName("playback");
     play->setIconSize(QSize(16, 16));
     play_timer_ = new QTimer(this);
@@ -1546,20 +1645,20 @@ void MainWindow::build_bottom() {
     play->addAction(icon("next"), "Step forward one frame", [this] { step_time(1); });
     play->addAction(icon("last"), "Go to end of playback range", [this] { go_to_time(time_slider_->end()); });
     row1->addWidget(play);
-    v->addWidget(time_row);
-    auto* range_row = new QWidget(w);
+    time_dock_->setWidget(time_row);
+    auto* range_row = new QWidget(range_dock_);
     range_row->setObjectName("rangeSliderRow");
     auto* row2 = new QHBoxLayout(range_row);
     row2->setContentsMargins(0, 0, 0, 0);
-    auto field = [w](double val) {
-        auto* s = new QSpinBox(w);
+    auto field = [range_row](double val) {
+        auto* s = new QSpinBox(range_row);
         s->setRange(-100000, 100000);
         s->setValue(int(val));
         s->setFixedWidth(64);
         return s;
     };
     anim_start_ = field(1), play_start_ = field(1), play_end_ = field(120), anim_end_ = field(200);
-    range_slider_ = new RangeSlider(w);
+    range_slider_ = new RangeSlider(range_row);
     auto push = [this] {
         exec_quiet("playbackOptions", QJsonObject{{"animationStartTime", anim_start_->value()},
                                                   {"minTime", play_start_->value()},
@@ -1588,7 +1687,7 @@ void MainWindow::build_bottom() {
     row2->addWidget(play_start_);
     row2->addWidget(range_slider_, 1);
     // The bookmark icon: a click makes one, a right-click has the manager and framing.
-    auto* bookmark = new QToolButton(w);
+    auto* bookmark = new QToolButton(range_row);
     bookmark->setText(QString::fromUtf8("\u2691"));
     bookmark->setToolTip("Create Bookmark (Alt+T); right-click for the Bookmark Manager");
     bookmark->setAutoRaise(true);
@@ -1616,7 +1715,7 @@ void MainWindow::build_bottom() {
     row2->addWidget(play_end_);
     row2->addWidget(anim_end_);
     // Time units by name, as the Settings have them.
-    auto* fps = new QComboBox(w);
+    auto* fps = new QComboBox(range_row);
     fps_box_ = fps;
     fps->setToolTip("Time unit");
     struct U { const char* label; double rate; };
@@ -1625,7 +1724,7 @@ void MainWindow::build_bottom() {
         exec("playbackOptions", QJsonObject{{"framesPerSecond", fps->itemData(i).toDouble()}});
     });
     row2->addWidget(fps);
-    auto* speed = new QComboBox(w);
+    auto* speed = new QComboBox(range_row);
     speed_box_ = speed;
     speed->setToolTip("Playback speed");
     speed->addItems({"Play every frame", "Real-time", "Half", "Twice"});
@@ -1635,7 +1734,7 @@ void MainWindow::build_bottom() {
         apply_prefs();
     });
     row2->addWidget(speed);
-    auto* loop = new QComboBox(w);
+    auto* loop = new QComboBox(range_row);
     loop->setToolTip("Looping");
     loop->addItems({"Once", "Oscillate", "Continuous"});
     loop->setCurrentText(QSettings().value("prefs/playbackLoop", "Continuous").toString());
@@ -1644,7 +1743,7 @@ void MainWindow::build_bottom() {
         loop_mode_ = loop->currentText();
     });
     row2->addWidget(loop);
-    auto* tb = new QToolBar(w);
+    auto* tb = new QToolBar(range_row);
     tb->setIconSize(QSize(16, 16));
     auto_key_ = tb->addAction(icon("autokey"), "Auto keyframe toggle", [this](bool on) {
         exec("autoKeyframe", QJsonObject{{"state", on}});
@@ -1652,8 +1751,7 @@ void MainWindow::build_bottom() {
     auto_key_->setCheckable(true);
     auto_key_->setObjectName("autoKey");
     row2->addWidget(tb);
-    v->addWidget(range_row);
-    bottom->addWidget(w);
+    range_dock_->setWidget(range_row);
 
     help_line_ = new QLabel(this);
     statusBar()->addWidget(help_line_, 1);
@@ -1764,7 +1862,10 @@ void MainWindow::refresh_state() {
     auto_key_->setChecked(ask("autoKeyframe", QJsonObject{{"query", true}}).toBool());
     auto_key_->blockSignals(false);
     QString mode = st["mode"].toString();
-    if (mode_buttons_.contains(mode)) mode_buttons_[mode]->setChecked(true);
+    if (mode_buttons_.contains(mode)) {
+        const QSignalBlocker block(mode_buttons_[mode]);
+        mode_buttons_[mode]->setChecked(true);
+    }
     history_button_->setChecked(st["history"].toBool());
     sync_status_line();
     update_title();
@@ -2578,6 +2679,7 @@ void MainWindow::closeEvent(QCloseEvent* e) {
     QSettings s;
     s.setValue("window/geometry", saveGeometry());
     s.setValue("window/state", saveState());
+    s.setValue("window/workspace", s.value("workspaces_current", "General"));
     s.setValue("session/running", false);
     e->accept();
 }
@@ -2587,9 +2689,18 @@ void MainWindow::run_startup(const QString& script, const QString& screenshot) {
     QSettings s;
     if (s.contains("window/geometry") && screenshot.isEmpty()) {
         restoreGeometry(s.value("window/geometry").toByteArray());
-        restoreState(s.value("window/state").toByteArray());
+        restore_layout(s.value("window/state").toByteArray());
     }
     exec_quiet("constructionHistory", QJsonObject{{"state", s.value("prefs/constructionHistory", true).toBool()}});
+    const QString workspace = s.value("workspaces_current", "General").toString();
+    const QString saved_workspace = s.value("window/workspace").toString();
+    if (screenshot.isEmpty() && (workspace != "General" || s.contains("workspaces/General")
+                               || (!saved_workspace.isEmpty() && saved_workspace != workspace))) {
+        // Workspace editors must exist before Qt can put their docks back where the user left them.
+        apply_workspace(workspace);
+        if (saved_workspace == workspace)
+            restore_layout(s.value("window/state").toByteArray());
+    }
     // Last time ended without closing: offer the newest autosave. Not when a script or a screenshot drives the run.
     const bool crashed = s.value("session/running", false).toBool();
     s.setValue("session/running", true);

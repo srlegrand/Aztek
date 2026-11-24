@@ -55,8 +55,8 @@ pub(super) fn walk_ordered(doc: &Doc, shape: usize, stored: &HashMap<usize, MaMe
     let file_deformer = |t: &str| deformers::is_file_deformer(t) || crate::scripted::is_plugin_deformer(t);
     while seen.insert(at) {
         let plain = |c: &&Conn| c.dst == at && INPUT_ATTRS.contains(&plain_attr(&c.dst_attr).as_str());
-        let by_index = doc.conns.iter().filter(plain).find(|c| first_index(&c.dst_attr).unwrap_or(0) == through);
-        let Some(conn) = by_index.or_else(|| doc.conns.iter().find(plain)) else { break };
+        let by_index = doc.conns_in(at).filter(plain).find(|c| first_index(&c.dst_attr).unwrap_or(0) == through);
+        let Some(conn) = by_index.or_else(|| doc.conns_in(at).find(plain)) else { break };
         let next = conn.src;
         let index = first_index(&conn.src_attr).unwrap_or(0);
         let n = &doc.nodes[next];

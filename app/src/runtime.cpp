@@ -123,7 +123,7 @@ void MainWindow::apply_snap() {
     // A held key wins; otherwise the first toggle that's on.
     QString m = snap_held_;
     if (m.isEmpty())
-        for (const char* s : {"point", "curve", "grid", "viewPlane", "live"})
+        for (const char* s : {"point", "curve", "grid", "viewPlane", "meshCenter", "live"})
             if (snap_on_.contains(s)) {
                 m = s;
                 break;
@@ -399,13 +399,13 @@ void MainWindow::build_runtime() {
     });
     r("ManipBigger", "Display", "Bigger manipulator", [this] { scale_manip(0.25); });
     r("ManipSmaller", "Display", "Smaller manipulator", [this] { scale_manip(-0.25); });
-    r("MenuSetAnimation", "Menus", "Animation menus", [this] { menu_set_->setCurrentText("Animation"); });
-    r("MenuSetModeling", "Menus", "Modeling menus", [this] { menu_set_->setCurrentText("Modeling"); });
-    r("MenuSetRigging", "Menus", "Rigging menus", [this] { menu_set_->setCurrentText("Rigging"); });
-    r("MenuSetRendering", "Menus", "Rendering menus", [this] { menu_set_->setCurrentText("Rendering"); });
+    r("MenuSetAnimation", "Menus", "Animation menus", [this] { set_menu_set("Animation"); });
+    r("MenuSetModeling", "Menus", "Modeling menus", [this] { set_menu_set("Modeling"); });
+    r("MenuSetRigging", "Menus", "Rigging menus", [this] { set_menu_set("Rigging"); });
+    r("MenuSetRendering", "Menus", "Rendering menus", [this] { set_menu_set("Rendering"); });
     r("InteractiveGroomEditor", "Windows", "Interactive Groom Editor", [this] { show_named_window("interactiveGroomEditor"); });
     r("InteractiveGroomTool", "Tools", "The Interactive Groom tools, with the tool xjenGroomCtx names", [this] { set_tool("groom"); });
-    r("MenuSetDynamics", "Menus", "Dynamics menus", [this] { menu_set_->setCurrentText("Dynamics"); });
+    r("MenuSetDynamics", "Menus", "Dynamics menus", [this] { set_menu_set("FX"); });
     // H as the reference's: a tap shows or hides the selection (Display > Toggle Show/Hide), held with a left click in a
     // view it's the menu sets (#175).
     r("MenuSetHoldPress", "Menus", "H: hold with a left click in a view for the menu sets", [this] {
@@ -421,11 +421,10 @@ void MainWindow::build_runtime() {
     // The menu sets at the pointer, as the reference's H marking menu offers them.
     r("MenuSetMenu", "Menus", "Choose a menu set at the pointer", [this] {
         QMenu menu(this);
-        for (int i = 0; i < menu_set_->count(); ++i) {
-            QString t = menu_set_->itemText(i);
-            QAction* a = menu.addAction(t, [this, t] { menu_set_->setCurrentText(t); });
+        for (const QString& t : menu_set_names()) {
+            QAction* a = menu.addAction(t, [this, t] { set_menu_set(t); });
             a->setCheckable(true);
-            a->setChecked(t == menu_set_->currentText());
+            a->setChecked(t == menu_set_);
         }
         menu.exec(QCursor::pos());
     });
@@ -497,15 +496,13 @@ void MainWindow::build_runtime() {
     r("HotBoxPress", "Menus", "Hold for the hotbox, tap for one or four views", [this] {
         space_held_ = true;
         // At once, as the reference's: a quick tap with nothing picked still toggles the view.
-        if (hotbox_ && !hotbox_->isVisible()) {
-            const QPoint origin = QCursor::pos();
-            hotbox_->popup(origin, panels_->panel_at(origin)->panel_menu_actions());
-        }
+        if (hotbox_ && !hotbox_->isVisible()) show_hotbox(QCursor::pos(), false);
     });
     r("HotBoxRelease", "Menus", "Hold for the hotbox, tap for one or four views", [this] {
         space_held_ = false;
         QWidget* popup = QApplication::activePopupWidget();
-        if (hotbox_ && hotbox_->isVisible() && !(popup && popup->inherits("QMenu"))) hotbox_->finish();
+        // finish() reports the release to hotBox and toggles the view on a tap; one popped with -noKeyPress stays up.
+        if (hotbox_ && hotbox_->isVisible() && !hotbox_->holding() && !(popup && popup->inherits("QMenu"))) hotbox_->finish();
     });
     // Holding a tool key with a left press in a view opens that tool's marking menu; K and I work a drag in the view.
     auto held_key = [this](const char* name, const char* id) {
@@ -976,10 +973,28 @@ void MainWindow::handle_ui_request(const QString& r) {
         QTimer::singleShot(0, this, [this, code] {
             if (close()) QCoreApplication::exit(code);
         });
+    } else if (name == "hotBox") {
+        // hotBox from a script: show at -position or the cursor, hide on -release, -updateMenus builds the rows again.
+        if (payload.startsWith("show|")) {
+            QJsonObject o = parse(payload.mid(5)).toObject();
+            QJsonArray at = o["position"].toArray();
+            QPoint global = at.size() == 2 ? QPoint(at[0].toInt(), at[1].toInt()) : QCursor::pos();
+            if (hotbox_ && hotbox_->isVisible()) hotbox_->hide();
+            show_hotbox(global, o["noKeyPress"].toBool());
+        } else if (payload == "hide") {
+            if (hotbox_ && hotbox_->isVisible()) hotbox_->hide();
+        } else if (payload == "update") {
+            // The menus and the hotbox's rows made again, once the request is done.
+            QTimer::singleShot(0, this, [this] { build_menu_set(menu_set_); });
+        }
     } else if (name == "scriptEditorClear") {
         // scriptEditorInfo -clearHistory: the history pane, and what was kept for it before it opened.
         log_before_editor_ = QJsonArray();
         if (script_editor_) script_editor_->clear_history();
+    } else if (name == "shelfAdd") {
+        // A field's -saveSelectionToShelf: a button on the current shelf.
+        QJsonObject o = parse(payload).toObject();
+        if (shelf_bar_) shelf_bar_->add_to_current(o["label"].toString(), "script", o["command"].toString(), o["sourceType"].toString("mel"));
     } else if (name == "scriptEditorInput") {
         if (script_editor_) script_editor_->set_input(payload);
     } else if (name == "aboutBox") {
@@ -1131,8 +1146,11 @@ void MainWindow::handle_ui_request(const QString& r) {
         const QString keep = payload.section('|', 0, 0);
         const bool hide_bars = payload.section('|', 1, 1) == "1";
         QSettings().setValue("workspaces_collapsed", saveState());
+        // The Time and Range Sliders count as bars, as the toolbars they once were.
         for (QDockWidget* d : findChildren<QDockWidget*>())
-            if (d->objectName() != keep && d->windowTitle() != keep && !d->isFloating()) d->hide();
+            if (d->objectName() != keep && d->windowTitle() != keep && !d->isFloating() &&
+                (hide_bars || (d->objectName() != "TimeSlider" && d->objectName() != "RangeSlider")))
+                d->hide();
         if (hide_bars)
             for (QToolBar* b : findChildren<QToolBar*>()) b->hide();
     } else if (name == "workspaceRestore") {

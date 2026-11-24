@@ -48,6 +48,8 @@ struct Job {
     /// The flag and value as a listing shows them.
     listing: String,
     last: Value,
+    /// The heads up display's own watches: no listing shows them and no -kill or -killAll reaches them.
+    hidden: bool,
 }
 
 #[derive(Default)]
@@ -341,7 +343,7 @@ fn script_job(s: &mut Session, a: &Args) -> CmdResult {
     if let Some(id) = a.get("kill").and_then(Value::as_i64) {
         let force = a.bool("force");
         return with_jobs(|j| {
-            let Some(p) = j.list.iter().position(|x| x.id == id) else { fail!("scriptJob: Job {id} does not exist.") };
+            let Some(p) = j.list.iter().position(|x| x.id == id && !x.hidden) else { fail!("scriptJob: Job {id} does not exist.") };
             if (j.list[p].protected || j.list[p].permanent) && !force {
                 fail!("scriptJob: Job {id} is protected; use -force.");
             }
@@ -351,14 +353,14 @@ fn script_job(s: &mut Session, a: &Args) -> CmdResult {
     }
     if a.bool("killAll") {
         let force = a.bool("force");
-        with_jobs(|j| j.list.retain(|x| (x.protected || x.permanent) && !force));
+        with_jobs(|j| j.list.retain(|x| x.hidden || ((x.protected || x.permanent) && !force)));
         return Ok(Value::Null);
     }
     if let Some(id) = a.get("exists").and_then(Value::as_i64) {
-        return Ok(json!(with_jobs(|j| j.list.iter().any(|x| x.id == id))));
+        return Ok(json!(with_jobs(|j| j.list.iter().any(|x| x.id == id && !x.hidden))));
     }
     if a.bool("listJobs") || a.bool("list") {
-        return Ok(with_jobs(|j| json!(j.list.iter().map(|x| format!("{}: {}", x.id, x.listing)).collect::<Vec<_>>())));
+        return Ok(with_jobs(|j| json!(j.list.iter().filter(|x| !x.hidden).map(|x| format!("{}: {}", x.id, x.listing)).collect::<Vec<_>>())));
     }
     if a.bool("listEvents") {
         return Ok(json!(EVENTS));
@@ -462,10 +464,26 @@ fn script_job(s: &mut Session, a: &Args) -> CmdResult {
     let id = with_jobs(|j| {
         j.next += 1;
         let id = j.next;
-        j.list.push(Job { id, watch, script, run_once: a.bool("runOnce"), kill_with_scene: a.bool("killWithScene"), protected: a.bool("protected"), permanent: a.bool("permanent"), parent, listing, last });
+        j.list.push(Job { id, watch, script, run_once: a.bool("runOnce"), kill_with_scene: a.bool("killWithScene"), protected: a.bool("protected"), permanent: a.bool("permanent"), parent, listing, last, hidden: false });
         id
     });
     Ok(json!(id))
+}
+
+/// Starts a job as scriptJob would from these flags, kept out of every listing and out of reach of -kill and -killAll.
+pub fn start_hidden(s: &mut Session, call: Value) -> Result<i64, String> {
+    let id = s.run("scriptJob", call).map_err(|e| e.to_string())?.as_i64().unwrap_or(0);
+    with_jobs(|j| {
+        if let Some(x) = j.list.iter_mut().find(|x| x.id == id) {
+            x.hidden = true;
+        }
+    });
+    Ok(id)
+}
+
+/// Ends a job start_hidden started.
+pub fn kill_hidden(id: i64) {
+    with_jobs(|j| j.list.retain(|x| !(x.hidden && x.id == id)));
 }
 
 /// A control's full path when it exists, else the name as given.
