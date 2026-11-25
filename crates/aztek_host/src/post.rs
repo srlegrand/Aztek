@@ -100,6 +100,24 @@ float behind_at(vec3 at) {
     return point_at(q, dq).z - at.z;
 }
 
+// The pixel round about `q` that the surface covers most. A surface's edge pixel is part background in the scene's
+// colour, and the background is no light (#301): the bounce takes the colour from a pixel the surface fills instead.
+ivec2 covered_near(ivec2 q) {
+    ivec2 best = q;
+    float most = texelFetch(sampler2D(t_albedo, s_point), q, 0).a;
+    for (int y = -1; y <= 1; ++y) {
+        for (int x = -1; x <= 1; ++x) {
+            ivec2 at = clamp(q + ivec2(x, y), ivec2(0), ivec2(pc.size.xy) - 1);
+            float a = texelFetch(sampler2D(t_albedo, s_point), at, 0).a;
+            if (a > most + 0.01 && depth_at(vec2(at) + 0.5) > 0.0) {
+                most = a;
+                best = at;
+            }
+        }
+    }
+    return best;
+}
+
 // Noise that differs from pixel to pixel with no pattern the eye picks out.
 float noise(vec2 px) {
     return fract(52.9829189 * fract(dot(px, vec2(0.06711056, 0.00583715))));
@@ -225,7 +243,7 @@ void main() {
                     vec3 at = from + dir * hi;
                     if (behind_at(at) < 0.05 * hi + 0.02 * reach) {
                         vec4 clip = pp.proj * vec4(at, 1.0);
-                        ivec2 q = ivec2(clip.xy / clip.w * 0.5 * pc.size.xy + 0.5 * pc.size.xy);
+                        ivec2 q = covered_near(ivec2(clip.xy / clip.w * 0.5 * pc.size.xy + 0.5 * pc.size.xy));
                         vec3 hit_colour = texelFetch(sampler2D(t_albedo, s_point), q, 0).rgb;
                         gi += pow(texelFetch(sampler2D(t_scene, s_point), q, 0).rgb, vec3(2.2));
                         // The second time round, the surface met also sends back what the first bounce brought it.
@@ -596,7 +614,19 @@ impl Post {
             bg_bottom: match s.gradient { Some((_, b)) => [b[0], b[1], b[2], s.clear_grey], None => [0.0, 0.0, 0.0, s.clear_grey] },
         }
     }
+}
 
+/// The occlusion passes' constants. They have no use for the background, so its colours are cleared and its first value
+/// says only which pass this is: 1 in the bounce light's second, 0 in the first. Left as the view's gradient, a top
+/// colour with more than half red (the default gradient's has 0.54) made the first pass act as the second, and the
+/// bounce light changed with the background (#301).
+fn occlusion_push(mut push: PostPush, second: bool) -> PostPush {
+    push.bg_top = [if second { 1.0 } else { 0.0 }, 0.0, 0.0, 0.0];
+    push.bg_bottom = [0.0; 4];
+    push
+}
+
+impl Post {
     /// The projection, contact shadow and depth of field, into the uniform buffer the shaders read.
     fn write_params(&self, proj: Mat4, s: &PostSettings, w: f32, h: f32) {
         let data = PostParams {
@@ -625,16 +655,14 @@ impl Post {
     /// Works out the occlusion. Between `Gpu::begin_occlusion` and `Gpu::begin_post`. Nothing is drawn with it off.
     pub fn draw_occlusion(&self, gpu: &Gpu, proj: Mat4, orthographic: bool, s: &PostSettings) {
         if s.ambient_occlusion || s.contact.is_some() || s.bounce > 0.0 {
-            self.pass(gpu, self.ao_pipeline, self.ao_set, &self.push(gpu, proj, orthographic, s));
+            self.pass(gpu, self.ao_pipeline, self.ao_set, &occlusion_push(self.push(gpu, proj, orthographic, s), false));
         }
     }
 
     /// The bounce light's second pass: the rays again, now meeting surfaces lit by the first bounce as well. Between
     /// `Gpu::begin_bounce` and `Gpu::begin_post`, with bounce light on.
     pub fn draw_bounce(&self, gpu: &Gpu, proj: Mat4, orthographic: bool, s: &PostSettings) {
-        let mut push = self.push(gpu, proj, orthographic, s);
-        // The occlusion passes have no use for the background: its first value says which pass this is.
-        push.bg_top[0] = 1.0;
+        let push = occlusion_push(self.push(gpu, proj, orthographic, s), true);
         self.pass(gpu, self.ao_pipeline, self.bounce_set, &push);
     }
 
@@ -685,6 +713,21 @@ mod tests {
         assert!((p[0] * (1.0 / 5.0 - p[1]) - 0.875 * 0.1 * 500.0).abs() < 1e-3, "{p:?}");
         assert!(p[2] > 0.0);
         assert_eq!(dof_params(proj, &PostSettings::default(), 1000.0, 1000.0), [0.0; 4]);
+    }
+
+    #[test]
+    fn the_background_never_reaches_the_bounce_light() {
+        // #301: the default gradient's top colour has 0.54 red, which the first occlusion pass took for the flag of the
+        // second. Whatever the background, the first pass is the first and the second the second.
+        let push = PostPush { inv_proj: [0.0; 16], ao: [0.0; 4], size: [0.0; 4], bg_top: [0.54, 0.62, 0.70, 1.0], bg_bottom: [0.1, 0.1, 0.1, 0.63] };
+        let first = occlusion_push(push, false);
+        assert_eq!(first.bg_top, [0.0; 4]);
+        assert_eq!(first.bg_bottom, [0.0; 4]);
+        let white = PostPush { bg_top: [1.0; 4], ..push };
+        assert_eq!(occlusion_push(white, false).bg_top[0], 0.0);
+        assert_eq!(occlusion_push(push, true).bg_top, [1.0, 0.0, 0.0, 0.0]);
+        // A hit on a surface's edge takes its colour from a pixel the surface covers, not the part background one.
+        assert!(AO_MAIN.contains("ivec2 q = covered_near("));
     }
 
     #[test]

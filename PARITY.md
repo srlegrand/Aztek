@@ -4422,3 +4422,15 @@ treated as before.
 
 A Move drag with Snap to Curve enabled follows the nearest point on the curve even when the cursor moves farther
 than 40 pixels away. This applies to the C shortcut and the Snap to Curves toggle.
+
+### What changed (25/11/2026, #301)
+
+The view's background no longer lights the scene. The bounce light's first pass read the flag that tells it from its
+second pass out of the background's push constants, which held the gradient's top colour: with the gradient on (the
+first of Alt+B's backgrounds), a top colour with more than half red (the default's is 0.54) made the first pass take
+last frame's occlusion and bounce as its own, so indirect light and its reflections changed as the background was
+cycled. The occlusion passes now get a cleared background and the flag alone. A ray that meets a surface at its
+anti-aliased edge also takes that surface's colour from the pixel round about that it covers most, so the background
+mixed into an edge pixel is not bounced back either. The background is a working aid only, as in the reference, and
+Harold renders with its own background (black, alpha 0). Not yet checked in the built app against the screenshots in
+the issue.
