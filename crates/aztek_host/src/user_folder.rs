@@ -4,7 +4,8 @@
 //!
 //! Three choices, kept in `userFolder.json` beside Aztek's other preferences:
 //! - `aztek`: Aztek's own folder (`~/aztek`), the default. An existing folder can be copied into it.
-//! - `link`: an existing folder of the reference's, used in place and never written to.
+//! - `link`: an existing folder of the reference's, used in place and written to only by Help > Install mGear,
+//!   which puts its module in its `modules` folder.
 //! - `custom`: any other folder with the same layout.
 //!
 //! Applying a choice puts its folders on the script, plug-in and module paths (through `AZTEK_SCRIPT_PATH`,
@@ -307,8 +308,8 @@ fn platform_matches(cond: &str) -> bool {
 /// Reads one `.mod` file: each `+ [conditions] name version path` line starts a module, and the lines under it add
 /// to the environment (`VAR = value`, `VAR := folder in the module`, `VAR += value`, `VAR +:= folder`) or move one of
 /// its folders (`scripts: folder`, `plug-ins: folder`). A module's `scripts` and `plug-ins` folders go on the paths.
-/// A block for another platform is skipped; of several blocks for versions of the reference, the one for the chosen
-/// version is taken, or the first when none is chosen or none matches.
+/// A block for another platform is skipped; a block for `MAYAVERSION:aztek` is taken first; of several blocks for
+/// versions of the reference, the one for the chosen version is taken, or the first when none is chosen or none matches.
 fn read_mod_file(a: &mut Applied, file: &Path, version: &str) {
     let Ok(text) = std::fs::read_to_string(file) else { return };
     let dir = file.parent().unwrap_or(Path::new(".")).to_path_buf();
@@ -374,7 +375,8 @@ fn read_mod_file(a: &mut Applied, file: &Path, version: &str) {
         let ours: u32 = aztek_core::REFERENCE_VERSION.parse().unwrap_or(0);
         let pick = of
             .iter()
-            .find(|b| b.for_version.as_deref() == Some(version) && !version.is_empty())
+            .find(|b| b.for_version.as_deref().is_some_and(|v| v.eq_ignore_ascii_case("aztek")))
+            .or_else(|| of.iter().find(|b| b.for_version.as_deref() == Some(version) && !version.is_empty()))
             .or_else(|| of.iter().find(|b| b.for_version.as_deref() == Some(aztek_core::REFERENCE_VERSION)))
             .or_else(|| of.iter().find(|b| b.for_version.is_none()))
             .or_else(|| of.iter().filter(|b| year(b).is_some_and(|y| y <= ours)).max_by_key(|b| year(b)))
@@ -468,13 +470,19 @@ pub fn apply(c: &Choice) -> Applied {
     let mut module_dirs = path_list("AZTEK_MODULE_PATH");
     module_dirs.extend(path_list("MAYA_MODULE_PATH"));
     let version = a.version.clone();
+    let mut files: Vec<PathBuf> = Vec::new();
     for d in module_dirs {
         let Ok(rd) = std::fs::read_dir(&d) else { continue };
-        let mut files: Vec<PathBuf> = rd.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "mod")).collect();
-        files.sort();
-        for f in files {
-            read_mod_file(&mut a, &f, &version);
-        }
+        let mut here: Vec<PathBuf> = rd.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "mod")).collect();
+        here.sort();
+        files.extend(here);
+    }
+    // A module built for Aztek (a block for MAYAVERSION:aztek, as mGear's for Aztek) comes before one of the same
+    // name built for the reference, wherever each is: the reference's plug-ins can't load here.
+    let for_aztek = |f: &PathBuf| std::fs::read_to_string(f).is_ok_and(|t| t.to_ascii_lowercase().contains("mayaversion:aztek"));
+    let (ours, theirs): (Vec<PathBuf>, Vec<PathBuf>) = files.into_iter().partition(for_aztek);
+    for f in ours.into_iter().chain(theirs) {
+        read_mod_file(&mut a, &f, &version);
     }
     *APPLIED.lock().unwrap() = Some(a.clone());
     a
@@ -1145,7 +1153,7 @@ pub fn register_commands(s: &mut Session) {
     s.register(
         CommandDef::<Session>::new(
             "aztekUserFolder",
-            "Where scripts, plug-ins, modules and preferences kept between versions are looked for: -mode aztek (Aztek's own folder), link (an existing folder of the reference's, used in place and never written to) or custom, with -folder and -version; -copyFrom folder copies one into Aztek's own. -q describes what is in force.",
+            "Where scripts, plug-ins, modules and preferences kept between versions are looked for: -mode aztek (Aztek's own folder), link (an existing folder of the reference's, used in place, written to only by Help > Install mGear) or custom, with -folder and -version; -copyFrom folder copies one into Aztek's own. -q describes what is in force.",
             user_folder_cmd,
         )
         .flag(b("query", "q", "Describe the choice, the folders on each path and the modules found."))

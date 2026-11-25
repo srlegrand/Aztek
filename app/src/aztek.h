@@ -46,6 +46,9 @@ char* aztek_update_latest(void);
 char* aztek_update_download(const char* url, const char* path, const char* digest);
 void aztek_update_progress(uint64_t* done, uint64_t* total);
 void aztek_update_cancel(void);
+// mGear built for this Aztek: the newest release with a zip for it, {tag, version, asset: {name, url, size, digest}}
+// or {error}. Blocks.
+char* aztek_mgear_release(void);
 // A GET of a JSON document (the welcome screen's announcements): the body, or {error}. Blocks.
 char* aztek_fetch_json(const char* url);
 

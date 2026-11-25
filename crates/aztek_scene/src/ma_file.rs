@@ -4021,6 +4021,10 @@ pub fn read_text(s: &mut Session, text: &str, import: bool) -> Vec<String> {
             if !found && doc.nodes.iter().any(missing) {
                 match loaded {
                     Err(e) => before.push(format!("plug-in {name} did not load: {e}")),
+                    // mGear's come from Help > Install mGear, built for Aztek.
+                    Ok(_) if ["mgear_solvers", "mGearWeightDriver", "weightDriver", "cvwrap"].contains(&name.as_str()) => {
+                        before.push(format!("plug-in {name} was not found on the plug-in path: it is mGear's, which Help > Install mGear installs"))
+                    }
                     Ok(_) => before.push(format!("plug-in {name} was not found on the plug-in path")),
                 }
             }

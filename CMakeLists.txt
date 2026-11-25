@@ -139,6 +139,7 @@ add_executable(aztek WIN32
   app/src/pluginmanager.cpp
   app/src/feedback.cpp
   app/src/external.cpp
+  app/src/mgearinstall.cpp
   app/src/editors.cpp
   app/src/attreditor.cpp
   app/src/colorchooser.cpp

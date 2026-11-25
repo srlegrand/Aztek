@@ -13,5 +13,7 @@ namespace az {
 void updates_at_startup(QWidget* main, std::function<bool()> may_quit);
 // Help > Check for Updates: checks now and says what it found, newer or not.
 void check_for_updates(QWidget* main, std::function<bool()> may_quit);
+// Help > Install mGear: mGear built for this Aztek, downloaded and installed as a module in the user folder.
+void install_mgear(QWidget* main);
 
 } // namespace az

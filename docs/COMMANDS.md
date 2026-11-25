@@ -3593,6 +3593,17 @@ Arguments: the light
 | --- | --- | --- |
 | `set` | `set` | In or out. |
 
+## aztekMgear
+
+mGear built for Aztek (github.com/srlegrand/mgear), installed as a module in the user folder's modules folder. -release finds the release for this Aztek, -install downloads and installs it, -installFile installs a release's zip, -query says what is installed. Aztek's own command.
+
+| Flag | Short | Description |
+| --- | --- | --- |
+| `query` | `q` | Where mGear goes and what is installed there: {modules, installed: {version, path, definition} or null}. |
+| `release` | `rel` | The newest release for this Aztek: {tag, version, asset}, or {error}. |
+| `install` | `i` | Download the newest release for this Aztek and install it. |
+| `installFile` | `if` | Install a release's zip from disk. |
+
 ## aztekParity
 
 How far Aztek is towards the reference, from the parity ledger (parity/ in the source): the share done over all its areas, and each area's counts. Shown at the foot of the welcome screen.
@@ -3663,7 +3674,7 @@ What file runs for a USD type or extension.
 
 ## aztekUserFolder
 
-Where scripts, plug-ins, modules and preferences kept between versions are looked for: -mode aztek (Aztek's own folder), link (an existing folder of the reference's, used in place and never written to) or custom, with -folder and -version; -copyFrom folder copies one into Aztek's own. -q describes what is in force.
+Where scripts, plug-ins, modules and preferences kept between versions are looked for: -mode aztek (Aztek's own folder), link (an existing folder of the reference's, used in place, written to only by Help > Install mGear) or custom, with -folder and -version; -copyFrom folder copies one into Aztek's own. -q describes what is in force.
 
 | Flag | Short | Description |
 | --- | --- | --- |

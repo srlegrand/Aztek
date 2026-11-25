@@ -131,6 +131,7 @@ impl Core {
         // The features kept as plug-ins: there from the start unless turned off.
         crate::builtin_plugins::load_defaults(&mut c.s);
         crate::user_folder::register_commands(&mut c.s);
+        crate::mgear::register_commands(&mut c.s);
         crate::environment::register_commands(&mut c.s);
         crate::environment::startup();
         aztek_scene::unit_tables::tag_commands(&mut c.s.commands);
