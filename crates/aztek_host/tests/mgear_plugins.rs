@@ -73,12 +73,19 @@ fn mgear_solvers_load_and_work() {
     assert_eq!(nums(&mel(&mut c, "pointPosition crvShape.cv[1];")), vec![5.0, 0.0, 0.0]);
     mel(&mut c, "setAttr b.ty 4;");
     assert_eq!(nums(&mel(&mut c, "pointPosition crvShape.cv[1];")), vec![5.0, 4.0, 0.0]);
+    // deform() is handed the curve's world matrix, as the reference hands it over: the points stay on their drivers
+    // when the curve's own transform moves, rather than moving twice (mGear's curves sit under the moving rig).
+    mel(&mut c, "setAttr crv.t 10 0 3; setAttr crv.ry 30;");
+    let cv = nums(&mel(&mut c, "pointPosition crvShape.cv[1];"));
+    assert!(near(&cv, &[5.0, 4.0, 0.0], 1e-9), "{cv:?}");
+    mel(&mut c, "setAttr crv.t 0 0 0; setAttr crv.ry 0;");
     assert_eq!(mel(&mut c, "objExists crvShapeOrig;"), json!(false), "the deformer keeps the original curve");
     let out = std::env::temp_dir().join(format!("aztek-curve-cns-{}.ma", std::process::id()));
     let out_s = out.display().to_string().replace('\\', "/");
     mel(&mut c, &format!("file -rename \"{out_s}\"; file -save -type \"mayaAscii\";"));
     let text = std::fs::read_to_string(&out).unwrap();
     assert!(text.contains("connectAttr \"mgear_curveCns1.og[0]\" \"crvShape.cr\";") && text.contains("crvShapeOrig.ws\" \"mgear_curveCns1.ip[0].ig\";"), "{text}");
+    assert!(!text.contains("mgear_curveCns1.gm") && !text.contains("mgear_curveCns1.geomMatrix"), "the world matrix link is not written: {text}");
     mel(&mut c, &format!("file -f -o \"{out_s}\";"));
     mel(&mut c, "setAttr b.ty 7;");
     assert_eq!(nums(&mel(&mut c, "pointPosition crvShape.cv[1];")), vec![5.0, 7.0, 0.0]);

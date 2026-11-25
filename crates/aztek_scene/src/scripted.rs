@@ -10,7 +10,8 @@ use serde_json::Value;
 
 use crate::error::Result;
 use crate::node::{types, vec3_attr, EvalContext, NodeBehavior, NodeData, NodeType};
-use crate::plug::{flags, AttrDef, NodeId, PlugType, PlugValue, NO_NODE};
+use crate::graph::Graph;
+use crate::plug::{flags, AttrDef, NodeId, PlugRef, PlugType, PlugValue, NO_NODE};
 
 /// Called with the node's type name, its id, its name, the time in seconds and its values (inputs pulled); writes its
 /// outputs. May run on a worker thread.
@@ -371,6 +372,12 @@ pub fn register_native_type(name: &str, owner: &str, attrs: &[Value], kind: Nati
                 // of it goes into the shape.
                 own.push(crate::curves::curve_attr("inputCurve", "icv", flags::INPUT | flags::STORABLE | flags::HIDDEN, "The curve the deformer starts from, when it deforms a curve."));
                 own.push(crate::curves::curve_attr("outputCurve", "ocv", flags::OUTPUT | flags::HIDDEN, "The deformed curve."));
+                // The world matrix deform() is handed (its localToWorld): the reference passes the deformed shape's,
+                // with no attribute in the file. Here it is a hidden input, linked when the deformer is wired.
+                if !own.iter().any(|a| a.name == GEOM_MATRIX) {
+                    own.push(AttrDef { short_name: "gm".into(), ..crate::attr_defs::matrix_attr(GEOM_MATRIX, flags::INPUT | flags::HIDDEN, "The deformed shape's world matrix, as deform() is handed it.") });
+                    LINKED_GEOM.write().unwrap().insert(name.to_string());
+                }
             }
             own
         },
@@ -395,6 +402,59 @@ pub fn register_native_type(name: &str, owner: &str, attrs: &[Value], kind: Nati
 
 pub fn is_plugin_deformer(name: &str) -> bool {
     DEFORMERS.read().unwrap().contains(name)
+}
+
+const GEOM_MATRIX: &str = "geomMatrix";
+/// Plug-in deformer types whose geomMatrix is ours, not the plug-in's: linked to the shape, never written.
+static LINKED_GEOM: RwLock<BTreeSet<String>> = RwLock::new(BTreeSet::new());
+
+/// The geomMatrix input Aztek links on a plug-in deformer, when the plug-in didn't make one of its own.
+pub fn linked_geom_attr(g: &Graph, n: NodeId) -> Option<usize> {
+    let t = g.node(n)?.ty();
+    LINKED_GEOM.read().unwrap().contains(&t.name).then(|| t.attr_index(GEOM_MATRIX)).flatten()
+}
+
+/// The shape a deformer's output reaches, through any deformers after it.
+fn shape_fed_by(g: &Graph, n: NodeId) -> Option<NodeId> {
+    let mut at = n;
+    for _ in 0..4096 {
+        let t = g.node(at)?.ty();
+        let outs: Vec<usize> = ["output", "outputCurve", "outputGeometry"].iter().filter_map(|a| t.attr_index(a)).collect();
+        let mut next = None;
+        for o in outs {
+            for d in g.destinations(&PlugRef::new(at, o as i32)) {
+                let dt = g.node(d.node)?.ty();
+                if crate::components::is_mesh(g, d.node) || dt.name == crate::curves::SHAPE_TYPE {
+                    return Some(d.node);
+                }
+                next.get_or_insert(d.node);
+            }
+        }
+        at = next?;
+    }
+    None
+}
+
+/// Links each plug-in deformer's geomMatrix to the world matrix of the shape it deforms, so deform() is handed where
+/// the shape is now, as in the reference. Without it the points were worked out as if the shape sat at the origin,
+/// and a shape under a moving group moved twice (mGear's curveCns curves under the rig).
+pub fn link_geom_matrices(g: &mut Graph) {
+    let ids: Vec<NodeId> = g.nodes().into_iter().filter(|&n| linked_geom_attr(g, n).is_some()).collect();
+    for n in ids {
+        link_geom_matrix(g, n);
+    }
+}
+
+pub fn link_geom_matrix(g: &mut Graph, n: NodeId) {
+    let Some(gm) = linked_geom_attr(g, n) else { return };
+    let Some(shape) = shape_fed_by(g, n) else { return };
+    // The transform's: the shape's own world matrix sits on the node the deformer feeds.
+    let xf = crate::dag::transform_of(g, shape);
+    let to = PlugRef::new(n, gm as i32);
+    if g.source(&to).is_some() {
+        return;
+    }
+    let _ = g.connect(&PlugRef::new(xf, crate::transform::DagNode::WORLD_MATRIX as i32), &to, false);
 }
 
 /// The plug-in a node type came from.

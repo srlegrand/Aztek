@@ -948,8 +948,8 @@ impl NodeBehavior for Locator {
     }
 }
 
-/// Translation, rotation, scale and shear, so that m = T * R * shear_matrix(shear) * S. A mirrored matrix gets all three
-/// scales negated, as `decompose` does.
+/// Translation, rotation, scale and shear, so that m = T * R * shear_matrix(shear) * S. A mirrored matrix takes its
+/// mirror in the z scale.
 pub fn decompose_full(m: &DMat4) -> (DVec3, DMat3, DVec3, DVec3) {
     let t = m.w_axis.truncate();
     let (x, y, z) = (m.x_axis.truncate(), m.y_axis.truncate(), m.z_axis.truncate());
@@ -964,23 +964,21 @@ pub fn decompose_full(m: &DMat4) -> (DVec3, DMat3, DVec3, DVec3) {
     let z2 = z - ax * xz - ay * yz;
     s.z = z2.length();
     let mut az = z2.normalize_or_zero();
+    // A mirrored matrix takes its mirror in z, as the reference's own decomposition does: the scale's z is negated
+    // and the rotation stays proper. Rigs store that split (an x mirror as rotate 0 180 0 with scale 1 1 -1).
+    if ax.dot(ay.cross(az)) < 0.0 {
+        s.z = -s.z;
+        az = -az;
+    }
     let shear = DVec3::new(
         if s.y != 0.0 { xy / s.y } else { 0.0 },
         if s.z != 0.0 { xz / s.z } else { 0.0 },
         if s.z != 0.0 { yz / s.z } else { 0.0 },
     );
-    let (mut ax, mut ay) = (ax, ay);
-    if ax.dot(ay.cross(az)) < 0.0 {
-        s = -s;
-        ax = -ax;
-        ay = -ay;
-        az = -az;
-    }
     (t, DMat3::from_cols(ax, ay, az), s, shear)
 }
 
-/// glm::decompose without perspective: scale, rotation and translation, skew removed. A mirrored matrix gets all
-/// three scales negated, as glm does.
+/// Scale, rotation and translation, skew removed. A mirrored matrix takes its mirror in z, as decompose_full.
 pub fn decompose(m: &DMat4) -> (DVec3, DMat3, DVec3) {
     let translation = m.w_axis.truncate();
     let mut rows = [
@@ -1002,10 +1000,8 @@ pub fn decompose(m: &DMat4) -> (DVec3, DMat3, DVec3) {
     scale.z = rows[2].length();
     rows[2] = rows[2].normalize_or_zero();
     if rows[0].dot(rows[1].cross(rows[2])) < 0.0 {
-        scale = -scale;
-        for r in &mut rows {
-            *r = -*r;
-        }
+        scale.z = -scale.z;
+        rows[2] = -rows[2];
     }
     (
         scale,

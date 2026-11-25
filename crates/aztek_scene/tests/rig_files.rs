@@ -657,3 +657,72 @@ fn a_joint_compensates_for_its_parents_scale() {
     assert_near(m[0..3].to_vec(), &[1.0, 0.0, 0.0], "b keeps its own size");
     assert_near(m[12..15].to_vec(), &[2.0, 0.0, 0.0], "and sits where the scaled parent puts it");
 }
+
+/// A motion path made with createNode keeps the reference node's defaults: front axis y, up axis z, a vector up. mGear
+/// sets only the up axis and follow, so its spine took the curve's line on x and its joints turned a quarter on all axes.
+#[test]
+fn a_bare_motion_path_fronts_on_y() {
+    let (mut s, w) = load(concat!(
+        "createNode transform -n \"path\";\n",
+        "createNode nurbsCurve -n \"pathShape\" -p \"path\";\n",
+        "\tsetAttr -k off \".v\";\n",
+        "\tsetAttr \".cc\" -type \"nurbsCurve\" \n\t\t1 1 0 no 3\n\t\t2 0 1\n\t\t2\n\t\t0 0 0\n\t\t0 10 0\n\t\t;\n",
+        "createNode transform -n \"loc\";\n",
+        "createNode motionPath -n \"motionPath1\";\n",
+        "\tsetAttr \".u\" 0.5;\n",
+        "\tsetAttr \".f\" yes;\n",
+        "\tsetAttr \".ua\" 0;\n",
+        "\tsetAttr \".fm\" yes;\n",
+        "\tsetAttr \".wu\" -type \"double3\" 1 0 0 ;\n",
+        "connectAttr \"pathShape.ws\" \"motionPath1.gp\";\n",
+        "connectAttr \"motionPath1.ac\" \"loc.t\";\n",
+        "connectAttr \"motionPath1.r\" \"loc.r\";\n",
+        "connectAttr \"motionPath1.ro\" \"loc.ro\";\n",
+    ));
+    assert!(w.is_empty(), "{w:?}");
+    let m = get(&mut s, "loc.worldMatrix");
+    assert_near(m[0..3].to_vec(), &[1.0, 0.0, 0.0], "x toward the up vector");
+    assert_near(m[4..7].to_vec(), &[0.0, 1.0, 0.0], "y along the path");
+    assert_near(m[12..15].to_vec(), &[0.0, 5.0, 0.0], "halfway");
+    assert_eq!(s.run("getAttr", json!({"args": ["motionPath1.frontAxis"]})).unwrap(), json!(1));
+    assert_eq!(s.run("getAttr", json!({"args": ["motionPath1.worldUpType"]})).unwrap(), json!(3));
+}
+
+/// A wire whose rest curve is a shape in the scene reads it live, as the reference's baseWire: moved with its driver
+/// under the same group, there is nothing to deform, and the deformed curve moves once with the group.
+#[test]
+fn a_wire_rest_curve_moves_with_its_driver() {
+    let line = |name: &str, x: f64| {
+        format!(
+            "createNode transform -n \"{name}\" -p \"grp\";\ncreateNode nurbsCurve -n \"{name}Shape\" -p \"{name}\";\n\tsetAttr \".cc\" -type \"nurbsCurve\" \n\t\t1 1 0 no 3\n\t\t2 0 1\n\t\t2\n\t\t{x} 0 0\n\t\t{x} 0 10\n\t\t;\n"
+        )
+    };
+    let body = format!(
+        "createNode transform -n \"grp\";\n{}{}{}createNode nurbsCurve -n \"ropeShapeOrig\" -p \"rope\";\n\tsetAttr -k off \".v\";\n\tsetAttr \".io\" yes;\n\tsetAttr \".cc\" -type \"nurbsCurve\" \n\t\t1 1 0 no 3\n\t\t2 0 1\n\t\t2\n\t\t0.5 0 0\n\t\t0.5 0 10\n\t\t;\n{}",
+        line("rope", 0.5),
+        line("drv", 0.0),
+        line("drvBaseWire", 0.0),
+        concat!(
+            "createNode wire -n \"wire1\";\n",
+            "\tsetAttr \".dds[0]\"  1000;\n",
+            "\tsetAttr \".sc[0]\"  1;\n",
+            "connectAttr \"wire1.og[0]\" \"ropeShape.cr\";\n",
+            "connectAttr \"ropeShapeOrig.ws\" \"wire1.ip[0].ig\";\n",
+            "connectAttr \"ropeShapeOrig.l\" \"wire1.orggeom[0]\";\n",
+            "connectAttr \"drvBaseWireShape.ws\" \"wire1.bw[0]\";\n",
+            "connectAttr \"drvShape.ws\" \"wire1.dw[0]\";\n",
+        )
+    );
+    let (mut s, w) = load(&body);
+    assert!(w.is_empty(), "{w:?}");
+    let pos = |s: &mut Session| match s.run("pointPosition", json!({"args": ["ropeShape.cv[1]"], "world": true})).unwrap() {
+        Value::Array(a) => a.iter().map(|x| x.as_f64().unwrap()).collect::<Vec<f64>>(),
+        v => panic!("{v}"),
+    };
+    assert_near(pos(&mut s), &[0.5, 0.0, 10.0], "at rest");
+    s.run("setAttr", json!({"args": ["grp.tx", 30.0]})).unwrap();
+    assert_near(pos(&mut s), &[30.5, 0.0, 10.0], "moved once with the group");
+    // The driver alone moving still pulls the rope.
+    s.run("setAttr", json!({"args": ["drv.ty", 2.0]})).unwrap();
+    assert_near(pos(&mut s), &[30.5, 2.0, 10.0], "pulled by the driver");
+}

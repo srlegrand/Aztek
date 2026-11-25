@@ -4185,6 +4185,25 @@ plug-ins Aztek ships:
 Not done: a plug-in locator under the transform it drives (mGear's weightDriver under its driven node) is read as a
 cycle and its outputs are left unconnected; ikSpringSolver.
 
+### mGear rigs at rest and moved as a whole (25/11/2026)
+
+Checked on the Kaneda rig (mGear, 761 joints, 21 skinned meshes): every joint a skinCluster binds now sits on its bind
+pose as the file loads (516 of 516, against the bind pre-matrices the file holds), and moving or turning world_ctl or
+global_C0_ctl moves every joint and every skinned point with it once. Four causes:
+- A motionPath made with createNode has the reference node's defaults, front axis y, up axis z and a vector up;
+  pathAnimation still sets its own (x, y, scene). mGear's spine and neck took the curve's line on x.
+- A mirrored matrix comes apart with its mirror in the z scale (decomposeMatrix and the rest), as the reference's
+  does, not with all three scales negated: right-side children of mGear's mirrored offsets turned half a turn.
+- A plug-in deformer's deform() is handed the deformed shape's world matrix, as in the reference: its geomMatrix is a
+  hidden input linked to the shape's transform and not written to files. mGear's curveCns and slideCurve curves under
+  the rig moved twice, then three times through the curves made from them.
+- A wire whose rest curve is a shape reads it live, as the reference's baseWire; a single chain IK handle turns its
+  chain by the handle's rotation alone, so a parent turning with it no longer counts twice.
+`tools/rig_check/pose_dump.py` poses a rig through a fixed set of control moves in either application and
+`pose_compare.py` compares two dumps.
+Not done: posed against the reference. Turning a leg's IK control past half a turn flips its twist joints and an arm's
+IK control pulled to the shoulder flips the arm, which may be the reference's behaviour too; it needs a dump from it.
+
 ### Channel Box and Layer Editor, to the reference's interface (24/11/2026)
 
 ![The Channel Box and Layer Editor](docs/channel-box.png)

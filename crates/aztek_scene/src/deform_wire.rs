@@ -123,6 +123,8 @@ fn tangent(line: &[DVec3], seg: usize) -> DVec3 {
 struct Wire {
     /// Each driver's polyline now, by element.
     live: Mutex<Vec<(i32, Vec<DVec3>)>>,
+    /// Each rest curve that is a shape in the scene, now: it moves with its parents, as the reference's baseWire does.
+    live_base: Mutex<Vec<(i32, Vec<DVec3>)>>,
     /// The points and base wires the nearest places were worked out for.
     key: (Vec<DVec3>, Vec<f64>),
     nearest: Vec<Vec<(usize, f64, f64)>>,
@@ -139,7 +141,14 @@ impl NodeBehavior for Wire {
             d.set_output(OUT, PlugValue::Mesh(Some(input)));
             return;
         };
-        let base = unpack(&base_data);
+        let mut base = unpack(&base_data);
+        let mut base_key = base_data.0.clone();
+        for (i, line) in self.live_base.lock().unwrap().iter() {
+            if let Some(b) = base.get_mut(*i as usize) {
+                *b = line.clone();
+                base_key.extend(line.iter().flat_map(|p| p.to_array()));
+            }
+        }
         if live.is_empty() || base.is_empty() {
             d.set_output(OUT, PlugValue::Mesh(Some(input)));
             return;
@@ -147,9 +156,9 @@ impl NodeBehavior for Wire {
         let geom = d.matrix(GEOM);
         let gi = geom.inverse();
         let points: Vec<DVec3> = input.positions().iter().map(|p| geom.transform_point3(*p)).collect();
-        if self.key.0 != points || self.key.1 != base_data.0 {
+        if self.key.0 != points || self.key.1 != base_key {
             self.nearest = base.iter().map(|line| points.iter().map(|q| nearest_on(line, *q)).collect()).collect();
-            self.key = (points.clone(), base_data.0.clone());
+            self.key = (points.clone(), base_key);
         }
         let holders = floats_of(d, HOLDERS).map(unpack).unwrap_or_default();
         let (rotation, crossing, tension, local) = (d.float(ROTATION), d.float(CROSSING), d.float(TENSION), d.float(LOCAL_INFLUENCE));
@@ -250,11 +259,18 @@ pub fn install(g: &mut Graph) {
 fn sample(g: &mut Graph, w: NodeId) {
     let drivers: Vec<(i32, NodeId)> = g.elements(&plug(w, WIRE_MATRIX)).into_iter().filter_map(|e| g.source(&e).map(|s| (e.element, s.node))).collect();
     let now: Vec<(i32, Vec<DVec3>)> = drivers.into_iter().map(|(i, d)| (i, driver_points(g, d))).collect();
+    let bases: Vec<(i32, NodeId)> = g.elements(&plug(w, BASE_WIRE_MATRIX)).into_iter().filter_map(|e| g.source(&e).map(|s| (e.element, s.node))).collect();
+    let base_now: Vec<(i32, Vec<DVec3>)> = bases.into_iter().map(|(i, b)| (i, driver_points(g, b))).filter(|(_, l)| !l.is_empty()).collect();
     let Some(wire) = g.node(w).and_then(|n| n.behavior().as_any().downcast_ref::<Wire>()) else { return };
-    let mut live = wire.live.lock().unwrap();
-    if *live != now {
-        *live = now;
-        drop(live);
+    let mut changed = false;
+    for (slot, value) in [(&wire.live, now), (&wire.live_base, base_now)] {
+        let mut held = slot.lock().unwrap();
+        if *held != value {
+            *held = value;
+            changed = true;
+        }
+    }
+    if changed {
         g.touch(w);
     }
 }

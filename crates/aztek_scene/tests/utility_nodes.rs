@@ -582,3 +582,29 @@ connectAttr "pma.o1" "cn.ft";
     close(&get(&mut s, "cn.firstTerm"), 11.0);
     close(&get(&mut s, "cn.colorIfTrueG"), 2.0);
 }
+
+/// A mirrored matrix comes apart as the reference's decomposeMatrix gives it: the mirror in the z scale, the rotation
+/// proper. An x mirror is rotate 0 180 0 with scale 1 1 -1; mGear stores that split on its right-side offsets, and
+/// negating all three scales turned their children a half turn about z.
+#[test]
+fn a_mirrored_matrix_takes_its_mirror_in_z() {
+    let mut s = Session::new();
+    node(&mut s, "decomposeMatrix");
+    let mirror = json!([-1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 2.0, 3.0, 4.0, 1.0]);
+    run(&mut s, "setAttr", json!({"args": ["decomposeMatrix1.inputMatrix", mirror], "typ": "matrix"}));
+    close3(&get(&mut s, "decomposeMatrix1.outputScale"), [1.0, 1.0, -1.0]);
+    let r = get(&mut s, "decomposeMatrix1.outputRotate");
+    let r: Vec<f64> = r.as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
+    // A half turn about y, in either Euler spelling.
+    let (x, y, z) = (r[0].abs(), r[1].abs(), r[2].abs());
+    let half = |v: f64| (v - 180.0).abs() < 1e-6;
+    assert!((x < 1e-6 && half(y) && z < 1e-6) || (half(x) && y < 1e-6 && half(z)), "rotate {r:?}");
+    close3(&get(&mut s, "decomposeMatrix1.outputTranslate"), [2.0, 3.0, 4.0]);
+    // A sheared, scaled and mirrored matrix goes back together from its parts.
+    let m = glam::DMat4::from_cols_array(&[0.8, 0.3, -0.2, 0.0, 0.1, 1.4, 0.4, 0.0, 0.5, -0.2, -2.1, 0.0, 1.0, 2.0, 3.0, 1.0]);
+    assert!(m.determinant() < 0.0);
+    let (t, r, sc, sh) = aztek_scene::transform::decompose_full(&m);
+    assert!(sc.x > 0.0 && sc.y > 0.0 && sc.z < 0.0, "{sc}");
+    let back = glam::DMat4::from_translation(t) * glam::DMat4::from_mat3(r) * aztek_scene::transform::shear_matrix(sh) * glam::DMat4::from_scale(sc);
+    assert!(back.abs_diff_eq(m, 1e-9), "{back} != {m}");
+}

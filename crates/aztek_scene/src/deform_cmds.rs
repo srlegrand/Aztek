@@ -66,6 +66,7 @@ fn create_plugin(s: &mut Session, a: &Args, ty: &str) -> CmdResult {
             g.set_value(PlugRef::new(n, inp as i32), crate::curves::to_value(start))?;
             let create = g.node(shape).and_then(|x| x.ty().attr_index("create")).ok_or_else(|| aztek_ops::CommandError::new("deformer: not a curve shape"))?;
             g.connect(&PlugRef::new(n, out as i32), &PlugRef::new(shape, create as i32), true)?;
+            crate::scripted::link_geom_matrix(g, n);
             made.push(json!(g.path(n)));
         }
         return Ok(Value::Array(made));
@@ -88,6 +89,9 @@ fn create_plugin(s: &mut Session, a: &Args, ty: &str) -> CmdResult {
     }
     for (m, p) in targets {
         deform::add_geometry(g, n, m, &p)?;
+    }
+    for x in deform::group(g, n) {
+        crate::scripted::link_geom_matrix(g, x);
     }
     Ok(json!([g.path(n)]))
 }

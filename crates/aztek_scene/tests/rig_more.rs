@@ -1518,3 +1518,24 @@ fn tangent_constraint_aims_along_the_curve() {
     assert!((m[1].as_f64().unwrap().abs() - 1.0).abs() < 1e-6, "{m}");
     s.run("delete", json!({"args": ["rider_tangentConstraint1"]})).unwrap();
 }
+
+/// A single chain handle and its chain under a group that turns: the chain turns once, with the group, as everything
+/// else under it. The parent's rotation was counted twice, which turned mGear's leg up-vector chains about their bone.
+#[test]
+fn a_single_chain_under_a_turning_group_turns_once() {
+    let mut s = Session::new();
+    run(&mut s, "joint", json!({"p": [0.0, 0.0, 0.0], "name": "j1"}));
+    run(&mut s, "joint", json!({"p": [0.0, -5.0, 1.0], "name": "j2"}));
+    run(&mut s, "createNode", json!({"args": ["transform"], "name": "grp"}));
+    run(&mut s, "parent", json!({"args": ["j1", "grp"]}));
+    run(&mut s, "ikHandle", json!({"startJoint": "j1", "endEffector": "j2", "solver": "ikSCsolver", "name": "h"}));
+    run(&mut s, "parent", json!({"args": ["h", "grp"]}));
+    let rest: Vec<f64> = attr(&mut s, "j1.worldMatrix").as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
+    assert!(attr3(&mut s, "j1.rotate").iter().all(|v| v.abs() < 1e-6), "a new handle leaves the chain as it is");
+    run(&mut s, "setAttr", json!({"args": ["grp.rotate", 20.0, 75.0, -10.0]}));
+    run(&mut s, "setAttr", json!({"args": ["grp.translate", 3.0, 1.0, -2.0]}));
+    let g = glam::DMat4::from_cols_array(&attr(&mut s, "grp.worldMatrix").as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect::<Vec<_>>().try_into().unwrap());
+    let want = g * glam::DMat4::from_cols_array(&rest.try_into().unwrap());
+    let got = glam::DMat4::from_cols_array(&attr(&mut s, "j1.worldMatrix").as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect::<Vec<_>>().try_into().unwrap());
+    assert!(got.abs_diff_eq(want, 1e-6), "{got}\n!=\n{want}");
+}

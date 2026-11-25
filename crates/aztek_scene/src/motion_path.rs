@@ -549,6 +549,10 @@ fn path_animation(s: &mut Session, a: &Args) -> CmdResult {
         let order = g.node(id).map(|x| x.data().int(Transform::ROTATE_ORDER)).unwrap_or(0);
         g.set_value(PlugRef::new(mp, ROTATE_ORDER as i32), PlugValue::Int(order))?;
         g.connect(&PlugRef::new(mp, ALL_COORDINATES as i32), &PlugRef::new(id, Transform::TRANSLATE as i32), true)?;
+        // The command's own defaults (front x, up y, scene up) differ from the node's (front y, up z, vector up).
+        for (at, v) in [(FRONT_AXIS, 0), (UP_AXIS, 1), (WORLD_UP_TYPE, 0)] {
+            g.set_value(PlugRef::new(mp, at as i32), PlugValue::Int(v))?;
+        }
         apply_path_flags(g, mp, a)?;
         out.push(g.path(mp));
     }
@@ -881,7 +885,7 @@ pub fn register_types() {
                     name: "worldUpType".into(),
                     short_name: "wut".into(),
                     ty: PlugType::Enum,
-                    default_value: PlugValue::Int(0),
+                    default_value: PlugValue::Int(3),
                     flags: store,
                     enum_names: WORLD_UP_TYPES.iter().map(|s| s.to_string()).collect(),
                     doc: "What up means: the scene's, towards an object, an object's rotation of worldUpVector, worldUpVector itself, or the curve's normal.".into(),
@@ -889,8 +893,8 @@ pub fn register_types() {
                 },
                 vec3_attr("worldUpVector", "wu", DVec3::Y, store, "The up direction for the vector and object rotation types."),
                 hidden_matrix("worldUpMatrix", "wum", "The up object's world matrix."),
-                axis("frontAxis", "fa", 0, "The object's axis along the path."),
-                axis("upAxis", "ua", 1, "The object's axis towards up."),
+                axis("frontAxis", "fa", 1, "The object's axis along the path."),
+                axis("upAxis", "ua", 2, "The object's axis towards up."),
                 boolean("inverseFront", "if", false, "The front axis points back along the path."),
                 boolean("inverseUp", "iu", false, "The up axis points away from up."),
                 boolean("bank", "b", false, "Lean into turns."),

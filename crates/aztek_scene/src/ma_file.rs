@@ -3895,6 +3895,7 @@ fn build(s: &mut Session, doc: &Doc, import: bool) -> Vec<String> {
         }
     }
     crate::hik::after_load(&mut b.s.graph);
+    crate::scripted::link_geom_matrices(&mut b.s.graph);
     b.replay_post_edits();
     // Keys on a joint an IK handle drives: on the joint in the file, on the solver's FK rotate here.
     for c in &doc.conns {
@@ -5519,6 +5520,10 @@ impl Writer<'_> {
         for (dst, src) in list {
             let g = &self.s.graph;
             let (Some(dn), Some(sn)) = (g.node(dst.node), g.node(src.node)) else { continue };
+            // A plug-in deformer's world matrix is linked here; the reference hands it over without a connection.
+            if crate::scripted::linked_geom_attr(g, dst.node) == Some(dst.attr as usize) {
+                continue;
+            }
             // Keys on a joint an IK solver drives live on the solver's FK rotate here; in the file they go on the
             // joint, as the reference keeps them.
             if dn.ty().name == "ikSolve" {

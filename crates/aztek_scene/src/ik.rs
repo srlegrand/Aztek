@@ -494,6 +494,8 @@ struct SolveInput<'a> {
 ///
 /// - RP: onto the start to handle line, with the bend side toward the pole vector and `twist` degrees about the line.
 /// - SC: by the handle's rotation, then the shortest way onto the line. The pole vector and twist have no part in it.
+///   The chain's turn is the handle's alone: the parent's rotation, which the rest frames already carry, is taken
+///   back out, so a rig turned as a whole turns its single chains once.
 fn solve_plane(input: &SolveInput) -> Vec<DVec3> {
     let js = input.joints;
     let n = js.len();
@@ -514,7 +516,7 @@ fn solve_plane(input: &SolveInput) -> Vec<DVec3> {
     let x1 = if to.length() > 1e-9 { to.normalize() } else { x0 };
     let q = match input.kind {
         SolverKind::SingleChain => {
-            let h = rot3(&input.handle) * input.rest_turn;
+            let h = rot3(&input.handle) * input.rest_turn * rot3(&input.parent).transpose();
             arc(h * x0, x1) * h
         }
         _ => {
@@ -909,7 +911,7 @@ pub(crate) fn set_rest_turn(g: &mut Graph, handle: NodeId, start_rotate: DVec3) 
     let h = rot3(&n.matrix(IK_HANDLE));
     // The chain's turn from its preferred pose, which is what solve_plane turns.
     let want = rot3(&(parent * j.local(start_rotate))) * rot3(&(parent * j.local(j.pa))).transpose();
-    let turn = h.transpose() * want;
+    let turn = h.transpose() * want * rot3(&parent);
     let _ = g.set_value(plug(sv, IK_REST_TURN), PlugValue::Matrix(DMat4::from_mat3(turn)));
 }
 
@@ -1294,6 +1296,12 @@ fn create_handle(g: &mut Graph, name: &str, start: NodeId, end: NodeId, solver_n
     g.connect(&plug(system, SYSTEM_SOLVE), &plug(sv, IK_GLOBAL), false)?;
     wire_chain(g, h, sv, eff, &chain, end)?;
     set_default_pole(g, h, sv)?;
+    if SolverKind::from_index(kind as i64) == SolverKind::SingleChain {
+        // A new single chain handle holds the chain as it is.
+        g.evaluate();
+        let r = g.node(chain[0]).map(|n| n.data().vec3(Transform::ROTATE)).unwrap_or(DVec3::ZERO);
+        set_rest_turn(g, h, r);
+    }
     Ok((h, eff))
 }
 
