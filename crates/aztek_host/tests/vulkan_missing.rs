@@ -1,7 +1,7 @@
 //! A machine with no Vulkan driver (#315): the viewport fails once, says why once, and hands the reason to the panels.
 //! Needs an X display (run it under xvfb-run); without one it checks only what it can.
 
-use std::ffi::{c_char, c_void, CStr};
+use std::ffi::{c_void, CStr};
 
 use aztek_host::{aztek_free, aztek_take_log, aztek_view_create, aztek_view_error};
 
@@ -25,8 +25,17 @@ fn view_error() -> Option<String> {
     Some(s)
 }
 
-/// An xcb connection to $DISPLAY through the system's libxcb, or None.
+/// An xcb connection to $DISPLAY through the system's libxcb, or None. Unix only: libc, which opens it, is a Unix
+/// dependency, so on Windows the test checks only what needs no display.
+#[cfg(not(unix))]
 fn xcb_connection() -> Option<*mut c_void> {
+    None
+}
+
+/// An xcb connection to $DISPLAY through the system's libxcb, or None.
+#[cfg(unix)]
+fn xcb_connection() -> Option<*mut c_void> {
+    use std::ffi::c_char;
     std::env::var_os("DISPLAY")?;
     unsafe {
         let lib = libc::dlopen(c"libxcb.so.1".as_ptr(), libc::RTLD_NOW);
