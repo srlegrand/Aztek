@@ -219,7 +219,7 @@ QJsonArray ShelfBar::defaults() {
         sculpt.append(o);
     }
     QJsonArray rig{
-        item("Create Joints", "joint", "JointTool;"), item("IK Handle", "ik", "ikHandle;"), item("Bind Skin", "skin", "skinCluster;"), item("Paint Weights", "paintSkin", "ArtPaintSkinWeightsToolOptions;"),
+        item("Create Joints", "joint", "JointTool;"), item("IK Handle", "ik", "IKHandleTool;"), item("Bind Skin", "skin", "skinCluster;"), item("Paint Weights", "paintSkin", "ArtPaintSkinWeightsToolOptions;"),
         item("Parent", "parentCon", "parentConstraint -maintainOffset;"), item("Point", "pointCon", "pointConstraint;"), item("Orient", "orientCon", "orientConstraint;"),
         item("Scale", "scaleCon", "scaleConstraint;"), item("Aim", "aimCon", "aimConstraint;"), item("Locator", "locator", "spaceLocator;"), item("Group", "group", "group;"),
         item("Cluster", "cluster", "cluster;"), item("Blend Shape", "blendShape", "blendShape;")};

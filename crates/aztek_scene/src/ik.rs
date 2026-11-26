@@ -121,6 +121,22 @@ const IK_REST_TURN: usize = 14;
 const IK_ADVANCED: usize = 15;
 const ADVANCED_TWIST: [&str; 12] = ["dTwistControlEnable", "dWorldUpType", "dForwardAxis", "dWorldUpAxis", "dWorldUpVector", "dWorldUpVectorEnd", "dWorldUpMatrix", "dWorldUpMatrixEnd", "dTwistValueType", "dTwistStart", "dTwistEnd", "dTwistRampMult"];
 const IK_RAMP: usize = IK_ADVANCED + 12;
+const IK_ROOT_TWIST: usize = IK_RAMP + 1;
+const IK_TWIST_TYPE: usize = IK_RAMP + 2;
+/// Spline IK's twistType, as the menu and the attribute have them; the command takes the names in TWIST_TYPE_FLAGS.
+const TWIST_TYPES: [&str; 4] = ["Linear", "Ease In", "Ease Out", "Ease In Out"];
+const TWIST_TYPE_FLAGS: [&str; 4] = ["linear", "easeIn", "easeOut", "easeInOut"];
+
+/// How much of the twist a joint at this fraction of the chain gets: Ease In gathers it toward the end, Ease Out toward
+/// the start, Ease In Out in the middle.
+fn twist_share(kind: i64, t: f64) -> f64 {
+    match kind {
+        1 => t * t,
+        2 => 1.0 - (1.0 - t) * (1.0 - t),
+        3 => t * t * (3.0 - 2.0 * t),
+        _ => t,
+    }
+}
 
 const SYSTEM_SOLVE: usize = 0;
 const SYSTEM_SNAP: usize = 1;
@@ -487,6 +503,10 @@ struct SolveInput<'a> {
     kind: SolverKind,
     curve: Option<&'a aztek_geo::nurbs::NurbsCurve>,
     root_on_curve: bool,
+    /// Spline IK: the twist starts at the start joint rather than after it.
+    root_twist: bool,
+    /// Spline IK: the index into TWIST_TYPES.
+    twist_type: i64,
 }
 
 /// The rotation plane and single chain solvers. The chain bends in its rest plane until its end is the right distance
@@ -644,7 +664,8 @@ fn solve_spline(input: &SolveInput) -> (Vec<DVec3>, Option<DVec3>) {
             turn = DQuat::from_rotation_arc(have, want) * turn;
         }
         // Twist grows up the chain; roll turns all of it.
-        let t = if n > 1 { i as f64 / (n - 1) as f64 } else { 1.0 };
+        let t = if input.root_twist { (i + 1) as f64 / n as f64 } else if n > 1 { i as f64 / (n - 1) as f64 } else { 1.0 };
+        let share = twist_share(input.twist_type, t);
         let w = match &input.advanced {
             Some(a) => {
                 let spin = DQuat::from_axis_angle(want, a.twist_at(t, input.twist, input.roll));
@@ -652,7 +673,7 @@ fn solve_spline(input: &SolveInput) -> (Vec<DVec3>, Option<DVec3>) {
                 DMat3::from_quat(spin) * a.frame(f, want, a.up_at(t, targets[i]))
             }
             None => {
-                let spin = DQuat::from_axis_angle(want, input.roll + input.twist * t);
+                let spin = DQuat::from_axis_angle(want, input.roll + input.twist * share);
                 DMat3::from_quat(spin * turn) * rot3(&worlds[i])
             }
         };
@@ -718,6 +739,8 @@ impl NodeBehavior for IkSolve {
                 kind: SolverKind::from_index(d.int(IK_TYPE)),
                 curve: curve.as_ref(),
                 root_on_curve,
+                root_twist: d.bool(IK_ROOT_TWIST),
+                twist_type: d.int(IK_TWIST_TYPE),
             };
             if input.kind == SolverKind::Spline {
                 root_at = solve_spline(&input).1;
@@ -785,6 +808,8 @@ pub(crate) fn register_types() {
             float_attr_short("dTwistEnd", "dten", 0.0, "Spline IK: twist at the end, degrees.", None, None),
             AttrDef { child_short: ["dtrr".into(), "dtrg".into(), "dtrb".into()], ..vec3_attr("dTwistRamp", "dtra", DVec3::ZERO, store | flags::HIDDEN, "Spline IK: a texture's colour, its red a twist along the chain.") },
             float_attr_short("dTwistRampMult", "dtrm", 90.0, "Spline IK: what the ramp's value is multiplied by.", None, None),
+            AttrDef { short_name: "rtm".into(), ..bool_attr("rootTwistMode", false, "Spline IK: the twist starts at the start joint, so it turns a little too (off: it stays put).") },
+            AttrDef { short_name: "twt".into(), ..enum_attr("twistType", &TWIST_TYPES, 0, "Spline IK: how the twist spreads along the chain.") },
         ],
         create: Some(Arc::new(|| Box::new(IkHandle))),
         ..Default::default()
@@ -843,6 +868,8 @@ pub(crate) fn register_types() {
             AttrDef { flags: flags::INPUT | flags::HIDDEN, ..float_attr_short("dTwistEnd", "dten", 0.0, "From the handle.", None, None) },
             AttrDef { flags: flags::INPUT | flags::HIDDEN, ..float_attr_short("dTwistRampMult", "dtrm", 90.0, "From the handle.", None, None) },
             data_attr("dTwistRampKeys", "dtrk", "The ramp's entries, from the texture on the handle's dTwistRamp."),
+            AttrDef { short_name: "rtm".into(), flags: flags::INPUT | flags::HIDDEN, ..bool_attr("rootTwistMode", false, "From the handle.") },
+            AttrDef { name: "twistType".into(), short_name: "twt".into(), ty: PlugType::Int, default_value: PlugValue::Int(0), flags: flags::INPUT | flags::HIDDEN, ..Default::default() },
         ],
         create: Some(Arc::new(|| Box::new(IkSolve))),
         ..Default::default()
@@ -1287,6 +1314,11 @@ fn create_handle(g: &mut Graph, name: &str, start: NodeId, end: NodeId, solver_n
     g.connect(&plug(h, IkHandle::IK_BLEND), &plug(sv, IK_BLEND), false)?;
     g.connect(&plug(h, IkHandle::SOLVER_ENABLE), &plug(sv, IK_ENABLE), false)?;
     g.connect(&plug(h, IkHandle::SOLVER_TYPE), &plug(sv, IK_TYPE), false)?;
+    for (name, to) in [("rootTwistMode", IK_ROOT_TWIST), ("twistType", IK_TWIST_TYPE)] {
+        if let Some(a) = g.node(h).and_then(|n| n.ty().attr_index(name)) {
+            g.connect(&plug(h, a), &plug(sv, to), false)?;
+        }
+    }
     for (k, name) in ADVANCED_TWIST.iter().enumerate() {
         if let Some(a) = g.node(h).and_then(|n| n.ty().attr_index(name)) {
             g.connect(&plug(h, a), &plug(sv, IK_ADVANCED + k), false)?;
@@ -1442,6 +1474,14 @@ fn apply_handle_flags(g: &mut Graph, h: NodeId, a: &Args) -> CmdResult<()> {
     if a.has("numSpans") {
         g.set_value(plug(h, IkHandle::NUM_SPANS), PlugValue::Int(a.int("numSpans", 1)))?;
     }
+    if a.has("rootTwistMode") {
+        set_handle_attr(g, h, "rootTwistMode", PlugValue::Bool(a.bool("rootTwistMode")))?;
+    }
+    if a.has("twistType") {
+        let v = a.string("twistType", "linear");
+        let Some(k) = TWIST_TYPE_FLAGS.iter().position(|t| *t == v) else { fail!("ikHandle: -twistType takes linear, easeIn, easeOut or easeInOut") };
+        set_handle_attr(g, h, "twistType", PlugValue::Int(k as i64))?;
+    }
     if a.bool("snapHandleToEffector") {
         if let Some(end) = end_of(g, h) {
             let at = world(g, end).w_axis.truncate();
@@ -1451,6 +1491,16 @@ fn apply_handle_flags(g: &mut Graph, h: NodeId, a: &Args) -> CmdResult<()> {
         }
     }
     Ok(())
+}
+
+fn set_handle_attr(g: &mut Graph, h: NodeId, name: &str, v: PlugValue) -> CmdResult<()> {
+    let Some(a) = g.node(h).and_then(|n| n.ty().attr_index(name)) else { return Ok(()) };
+    g.set_value(plug(h, a), v)?;
+    Ok(())
+}
+
+fn handle_attr(g: &Graph, h: NodeId, name: &str) -> PlugValue {
+    g.node(h).and_then(|n| n.ty().attr_index(name).map(|a| n.data().value(a).clone())).unwrap_or(PlugValue::Int(0))
 }
 
 fn handle_query(g: &mut Graph, h: NodeId, a: &Args) -> CmdResult {
@@ -1476,7 +1526,13 @@ fn handle_query(g: &mut Graph, h: NodeId, a: &Args) -> CmdResult {
         "numSpans" => json!(n.int(IkHandle::NUM_SPANS)),
         "disableHandles" => json!(n.float(IkHandle::IK_BLEND) <= 0.0),
         "enableHandles" => json!(n.float(IkHandle::IK_BLEND) >= 1.0),
-        "createCurve" | "parentCurve" | "snapCurve" | "autoPriority" => json!(false),
+        "rootTwistMode" => json!(matches!(handle_attr(g, h, "rootTwistMode"), PlugValue::Bool(true))),
+        "twistType" => json!(match handle_attr(g, h, "twistType") {
+            PlugValue::Int(k) => TWIST_TYPE_FLAGS.get(k as usize).copied().unwrap_or("linear"),
+            _ => "linear",
+        }),
+        "rootOnCurve" => json!(solver.is_some_and(|sv| json_of(g.node(sv).unwrap().data(), IK_CHAIN).get("rootOnCurve").and_then(Value::as_bool).unwrap_or(false))),
+        "createCurve" | "parentCurve" | "snapCurve" | "simplifyCurve" | "autoPriority" => json!(false),
         other => fail!("ikHandle: can't query -{other}"),
     })
 }
@@ -1648,20 +1704,40 @@ fn freeze_joints_curve(g: &mut Graph, h: NodeId) -> CmdResult<()> {
     fit_curve_to_chain(g, h, src.node)
 }
 
+/// Moves a curve's transform so the curve starts where the chain's start joint is.
+fn snap_curve_to_root(g: &mut Graph, sv: NodeId, shape: NodeId) -> CmdResult<()> {
+    let Some(&start) = joints_of(g, sv).first() else { return Ok(()) };
+    g.evaluate();
+    let Some(c) = crate::curves::local_curve(g, shape) else { return Ok(()) };
+    let Some(&first) = c.cvs.first() else { return Ok(()) };
+    let tr = crate::dag::transform_of(g, shape);
+    let at = world(g, tr).transform_point3(first);
+    let want = world(g, start).w_axis.truncate();
+    let parent = g.parent(tr);
+    let pw = if parent == NO_NODE { DMat4::IDENTITY } else { world(g, parent) };
+    let t = g.node(tr).map(|n| n.data().vec3(Transform::TRANSLATE)).unwrap_or(DVec3::ZERO);
+    set_vec3(g, tr, Transform::TRANSLATE, t + pw.inverse().transform_vector3(want - at))?;
+    g.evaluate();
+    Ok(())
+}
+
 /// Spline IK's curve: the one given with -c, or (-ccv, the default) a new one through the joints with -ns spans. Returns its
 /// transform.
 fn setup_spline(g: &mut Graph, h: NodeId, a: &Args) -> CmdResult<NodeId> {
     let Some(sv) = solver_of(g, h) else { fail!("ikHandle: the handle has no chain") };
+    let off = |flag: &str| a.get(flag).is_some_and(|v| v == &json!(false) || v == &json!(0));
     let shape = match a.get("curve").and_then(Value::as_str) {
         Some(n) => {
             let id = find(g, n, "ikHandle")?;
-            match crate::curves::as_curve(g, id) {
-                Some(s) => s,
-                None => fail!("ikHandle: {n} is not a curve"),
+            let Some(shape) = crate::curves::as_curve(g, id) else { fail!("ikHandle: {n} is not a curve") };
+            // -snapCurve (off by default): the curve moves so that it starts at the start joint.
+            if a.bool("snapCurve") && !a.bool("freezeJoints") {
+                snap_curve_to_root(g, sv, shape)?;
             }
+            shape
         }
         None => {
-            if a.get("createCurve").is_some_and(|v| v == &json!(false)) {
+            if off("createCurve") {
                 fail!("ikHandle: ikSplineSolver needs -c, or -ccv on");
             }
             g.evaluate();
@@ -1669,9 +1745,20 @@ fn setup_spline(g: &mut Graph, h: NodeId, a: &Args) -> CmdResult<NodeId> {
             if let Some(e) = end_of(g, h) {
                 pts.push(world(g, e).w_axis.truncate());
             }
-            let spans = a.int("numSpans", 4).max(1) as usize;
-            let c = aztek_geo::nurbs::NurbsCurve::through(3, &pts).rebuilt(spans, 3);
+            // -simplifyCurve (on): a cubic of -numSpans spans (1 by default); off, a curve through every joint.
+            let c = aztek_geo::nurbs::NurbsCurve::through(3, &pts);
+            let c = if off("simplifyCurve") { c } else { c.rebuilt(a.int("numSpans", 1).max(1) as usize, 3) };
             let (_, sh) = crate::curves::create_curve_node(g, "curve1", c)?;
+            // -parentCurve (on): the new curve goes under the start joint's parent, keeping its place.
+            if !off("parentCurve") {
+                if let Some(&start) = joints_of(g, sv).first() {
+                    let parent = g.parent(start);
+                    if parent != NO_NODE {
+                        let tr = crate::dag::transform_of(g, sh);
+                        g.set_parent(tr, parent, true, usize::MAX)?;
+                    }
+                }
+            }
             sh
         }
     };
@@ -1698,11 +1785,11 @@ pub fn register(c: &mut Commands<Session>) {
         .positional("start and end joints (the selection when -sj/-ee are not given), or the handle to query or edit")
         .flag(f("curve", "c", ArgType::String, "Spline IK: the curve to follow. Queried, the curve."))
         .flag(f("createCurve", "ccv", ArgType::Bool, "Spline IK: make a curve through the joints (the default)."))
-        .flag(f("parentCurve", "pcv", ArgType::Bool, "Accepted for existing scripts: the curve drives in world space."))
+        .flag(f("parentCurve", "pcv", ArgType::Bool, "Spline IK: the created curve goes under the start joint's parent (on)."))
         .flag(f("rootOnCurve", "roc", ArgType::Bool, "Spline IK: the start joint goes to the curve's start (on by default)."))
-        .flag(f("simplifyCurve", "scv", ArgType::Bool, "Accepted for existing scripts."))
-        .flag(f("rootTwistMode", "rtm", ArgType::Bool, "Accepted for existing scripts."))
-        .flag(f("twistType", "tws", ArgType::String, "Accepted for existing scripts (linear)."))
+        .flag(f("simplifyCurve", "scv", ArgType::Bool, "Spline IK: the created curve is a cubic of -numSpans spans (on); off, it passes through every joint."))
+        .flag(f("rootTwistMode", "rtm", ArgType::Bool, "Spline IK: twist turns the start joint a little too (off)."))
+        .flag(f("twistType", "tws", ArgType::String, "Spline IK: linear (the default), easeIn, easeOut or easeInOut."))
         .flag(f("startJoint", "sj", ArgType::String, "First joint of the chain."))
         .flag(f("endEffector", "ee", ArgType::String, "Last joint of the chain. Queried, the effector."))
         .flag(f("solver", "sol", ArgType::String, "ikRPsolver (default), ikSCsolver or a solver node's name."))
@@ -1714,10 +1801,8 @@ pub fn register(c: &mut Commands<Session>) {
         .flag(f("roll", "rl", ArgType::Float, "Turn of the chain's start, degrees."))
         .flag(f("offset", "ofs", ArgType::Float, "Slide along the curve (spline IK)."))
         .flag(f("autoPriority", "ap", ArgType::Bool, "Set the priority from the chain's depth in the hierarchy."))
-        .flag(f("createCurve", "ccv", ArgType::Bool, "Spline IK: create a curve. Accepted for the solver to come."))
-        .flag(f("parentCurve", "pcv", ArgType::Bool, "Spline IK: parent the curve. Accepted for the solver to come."))
-        .flag(f("snapCurve", "snc", ArgType::Bool, "Spline IK: snap the curve. Accepted for the solver to come."))
-        .flag(f("numSpans", "ns", ArgType::Int, "Spline IK: spans of the curve."))
+        .flag(f("snapCurve", "snc", ArgType::Bool, "Spline IK with -c: the curve moves to start at the start joint (off)."))
+        .flag(f("numSpans", "ns", ArgType::Int, "Spline IK: spans of the created curve (1)."))
         .flag(f("disableHandles", "dh", ArgType::Bool, "Set the handles to full FK: ikBlend 0."))
         .flag(f("enableHandles", "eh", ArgType::Bool, "Set the handles to full IK: ikBlend 1."))
         .flag(f("jointList", "jl", ArgType::Bool, "Query: the joints the handle drives."))

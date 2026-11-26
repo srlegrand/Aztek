@@ -1341,10 +1341,13 @@ fn tool_contexts() {
     let reqs = aztek_host::take_ui_requests_for_tests();
     let has = |t: &str| reqs.as_array().unwrap().iter().any(|r| r == t);
     assert!(has("setTool|multiCut") && has("setTool|createPolygon") && has("setTool|targetWeld") && has("setTool|shortestPath") && has("setTool|curveEp") && has("setTool|insertJoint") && has("setTool|paintSelect"), "{reqs}");
+    // The IK Handle and IK Spline Handle tools are in the views since #317.
+    assert!(has("setTool|ikHandle") && has("setTool|ikSplineHandle"), "{reqs}");
     // No tool yet: one warning per kind.
     let warnings: Vec<String> = c.take_log().as_array().unwrap().iter().filter(|l| l["kind"] == 4).map(|l| l["text"].as_str().unwrap().to_string()).collect();
-    assert_eq!(warnings.iter().filter(|w| w.contains("ikHandleCtx")).count(), 1, "{warnings:?}");
-    ok(&mut c, "setToolTo ikHandleCtxMine;");
+    assert_eq!(warnings.iter().filter(|w| w.contains("curveSketchCtx")).count(), 1, "{warnings:?}");
+    assert!(!warnings.iter().any(|w| w.contains("ikHandleCtx")), "{warnings:?}");
+    ok(&mut c, "setToolTo curveSketchCtxMine;");
     let warnings: Vec<String> = c.take_log().as_array().unwrap().iter().filter(|l| l["kind"] == 4).map(|l| l["text"].as_str().unwrap().to_string()).collect();
     assert!(warnings.is_empty(), "{warnings:?}");
     assert!(c.mel_checked("setToolTo nothingLikeIt;").is_err());

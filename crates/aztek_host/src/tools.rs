@@ -77,6 +77,9 @@ pub struct ToolState {
     /// picked points, with where it last stepped.
     pub normal_drag: Option<crate::tools_quad::NormalDrag>,
     pub relax_picked: Option<DVec2>,
+    /// IK Handle and IK Spline Handle tools: the start joint clicked, then the end joint.
+    pub ik_start: Option<NodeId>,
+    pub ik_end: Option<NodeId>,
 }
 
 /// Screen-space hit on any drawn mesh.
@@ -154,6 +157,63 @@ pub fn ring_preview(m: &Mesh, e: Index, t: f64) -> Vec<(DVec3, DVec3)> {
     out
 }
 
+/// The ikHandle call the IK Handle Tool (spline: the IK Spline Handle Tool) makes from a start joint to an end joint, with
+/// the tool context's settings; `curve` is the one clicked when the spline tool doesn't make its own.
+pub fn ik_handle_call(start: &str, end: &str, curve: Option<&str>, spline: bool) -> Value {
+    let ctx = if spline { "ikSplineHandleContext" } else { "ikHandleContext" };
+    let setting = |k: &str| crate::ctx_cmds::prop(ctx, k);
+    let mut call = json!({"startJoint": start, "endEffector": end});
+    let number = |v: Value| v.as_f64().or_else(|| v.as_str().and_then(|t| t.trim().parse().ok()));
+    let flag = |v: Value| v.as_bool().or_else(|| v.as_str().map(|t| t == "true" || t == "1")).or_else(|| v.as_i64().map(|k| k != 0));
+    if let Some(sol) = setting("solverTypeH").as_str().filter(|t| !t.is_empty()) {
+        call["solver"] = json!(if spline { "ikSplineSolver" } else { sol });
+    }
+    if let Some(v) = number(setting("priorityH")) {
+        call["priority"] = json!(v as i64);
+    }
+    for (k, to) in [("weightH", "weight"), ("poWeightH", "positionWeight")] {
+        if let Some(v) = number(setting(k)) {
+            call[to] = json!(v);
+        }
+    }
+    for (k, to) in [("snapHandleH", "snapHandleFlagToggle"), ("forceSolverH", "forceSolver")] {
+        if let Some(v) = flag(setting(k)) {
+            call[to] = json!(v);
+        }
+    }
+    if flag(setting("autoPriorityH")) == Some(true) {
+        call["autoPriority"] = json!(true);
+    }
+    if let Some(v) = setting("stickyH").as_str().filter(|t| *t == "off" || *t == "sticky") {
+        call["sticky"] = json!(v);
+    }
+    if spline {
+        for k in ["rootOnCurve", "parentCurve", "createCurve", "simplifyCurve", "rootTwistMode"] {
+            if let Some(v) = flag(setting(k)) {
+                call[k] = json!(v);
+            }
+        }
+        // Auto create root axis can only be on with Root on curve off, as the reference greys it.
+        if flag(setting("createRootAxis")) == Some(true) && flag(setting("rootOnCurve")) == Some(false) {
+            call["createRootAxis"] = json!(true);
+        }
+        if let Some(v) = number(setting("numSpans")) {
+            call["numSpans"] = json!((v as i64).max(1));
+        }
+        if let Some(v) = setting("twistType").as_str() {
+            call["twistType"] = json!(v);
+        }
+        if let Some(c) = curve {
+            call["curve"] = json!(c);
+            call["createCurve"] = json!(false);
+            if let Some(v) = flag(setting("snapCurve")) {
+                call["snapCurve"] = json!(v);
+            }
+        }
+    }
+    call
+}
+
 impl View {
     pub(crate) fn tool_preview_clear(&mut self) {
         self.vp.tool_lines.clear();
@@ -184,6 +244,8 @@ impl View {
     pub fn tool_mouse(&mut self, core: &mut Core, kind: i32, button: i32, px: DVec2, mods: i32, items: &[DrawItem]) -> Option<bool> {
         match self.vp.tool {
             Tool::InsertJoint => Some(self.insert_joint(core, kind, button, px)),
+            Tool::IkHandle => Some(self.ik_handle_tool(core, kind, button, px, items, false)),
+            Tool::IkSplineHandle => Some(self.ik_handle_tool(core, kind, button, px, items, true)),
             Tool::MultiCut => Some(self.multi_cut(core, kind, button, px, mods, items)),
             Tool::InsertLoop => Some(self.insert_loop(core, kind, button, px, items)),
             Tool::OffsetLoop => Some(self.offset_loop(core, kind, button, px, items)),
@@ -252,6 +314,54 @@ impl View {
         self.ts.cut_world.pop();
         self.ts.dots.pop();
         self.tool_preview_clear();
+    }
+
+    /// IK Handle Tool and IK Spline Handle Tool (#317): a click on the start joint, then one on the end joint makes the
+    /// handle with the tool's settings, as the reference does. The spline tool with Auto create curve off waits for a
+    /// click on the curve as well. The tool stays on for the next handle.
+    fn ik_handle_tool(&mut self, core: &mut Core, kind: i32, button: i32, px: DVec2, items: &[DrawItem], spline: bool) -> bool {
+        if kind != 0 || button != 1 {
+            return false;
+        }
+        let ctx = if spline { "ikSplineHandleContext" } else { "ikHandleContext" };
+        let setting = |k: &str| crate::ctx_cmds::prop(ctx, k);
+        // A joint picked earlier that an undo took away starts the tool over.
+        let alive = |core: &Core, id: Option<NodeId>| id.filter(|&j| core.s.graph.node(j).is_some());
+        self.ts.ik_start = alive(core, self.ts.ik_start);
+        self.ts.ik_end = alive(core, self.ts.ik_end);
+        let joint = self.vp.pick_rig(&core.s.graph, px).filter(|&j| aztek_scene::rig::is_joint(&core.s.graph, j));
+        let mut curve = None;
+        match (self.ts.ik_start, self.ts.ik_end) {
+            (None, _) => {
+                let Some(j) = joint else { return false };
+                self.ts.ik_start = Some(j);
+                let _ = core.exec("select", json!({"args": [core.s.graph.path(j)], "replace": true}));
+                return true;
+            }
+            (Some(start), None) => {
+                let Some(j) = joint.filter(|&j| j != start) else { return false };
+                self.ts.ik_end = Some(j);
+                let wait = spline && !setting("createCurve").as_bool().unwrap_or(true);
+                if wait {
+                    let names = [core.s.graph.path(start), core.s.graph.path(j)];
+                    let _ = core.exec("select", json!({"args": names, "replace": true}));
+                    return true;
+                }
+            }
+            (Some(_), Some(_)) => {
+                let names = self.vp.pick(&core.s, items, px);
+                let g = &core.s.graph;
+                curve = names.iter().find(|n| g.find(n).ok().flatten().and_then(|id| aztek_scene::curves::as_curve(g, id)).is_some()).cloned();
+                if curve.is_none() {
+                    return false;
+                }
+            }
+        }
+        let (Some(start), Some(end)) = (self.ts.ik_start.take(), self.ts.ik_end.take()) else { return false };
+        let g = &core.s.graph;
+        let call = ik_handle_call(&g.path(start), &g.path(end), curve.as_deref(), spline);
+        let _ = core.exec("ikHandle", call);
+        true
     }
 
     /// Insert Joint Tool: a drag from a joint places a new one on the way to its child, sliding along the bone.

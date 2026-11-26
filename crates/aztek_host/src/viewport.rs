@@ -390,6 +390,10 @@ pub enum Tool {
     /// The Interactive Groom tools on hair descriptions.
     Groom,
     InsertJoint,
+    /// IK Handle Tool: click the start joint, then the end joint.
+    IkHandle,
+    /// IK Spline Handle Tool: the start joint, the end joint, then the curve when the tool doesn't make one.
+    IkSplineHandle,
     MultiCut,
     InsertLoop,
     OffsetLoop,

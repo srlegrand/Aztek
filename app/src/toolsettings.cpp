@@ -93,6 +93,10 @@ ToolSettings::ToolSettings(QWidget* parent) : Panel(parent) {
     stack_->addWidget(transform_page_);
     stack_->addWidget(paint_page_);
     stack_->addWidget(joint_page_);
+    ik_page_ = build_ik_page(false);
+    stack_->addWidget(ik_page_);
+    ik_spline_page_ = build_ik_page(true);
+    stack_->addWidget(ik_spline_page_);
     attr_page_ = build_attr_page();
     stack_->addWidget(attr_page_);
     member_page_ = build_member_page();
@@ -557,6 +561,114 @@ QWidget* ToolSettings::build_joint_page() {
     }
     page->addStretch(1);
     push_joint_settings();
+    return scroll;
+}
+
+// The IK Handle Tool's and IK Spline Handle Tool's settings (#317), laid out as the reference's, kept between sessions
+// and handed to the tool's context whenever the tool is chosen.
+static QString ik_group(bool spline) { return spline ? "tools/ikSplineHandle" : "tools/ikHandle"; }
+static QString ik_ctx(bool spline) { return spline ? "ikSplineHandleContext" : "ikHandleContext"; }
+static QString ik_ctx_cmd(bool spline) { return spline ? "ikSplineHandleCtx" : "ikHandleCtx"; }
+
+void ToolSettings::push_ik_settings(bool spline) {
+    QSettings st;
+    st.beginGroup(ik_group(spline));
+    QJsonObject c{{"edit", true}, {"args", QJsonArray{ik_ctx(spline)}}};
+    for (const QString& k : st.childKeys()) {
+        const QVariant v = st.value(k);
+        if (v.typeId() == QMetaType::Bool || v.toString() == "true" || v.toString() == "false") c[k] = v.toBool();
+        else if (v.typeId() == QMetaType::Int || v.typeId() == QMetaType::Double) c[k] = v.toDouble();
+        else c[k] = v.toString();
+    }
+    exec_quiet(ik_ctx_cmd(spline), c);
+}
+
+QWidget* ToolSettings::build_ik_page(bool spline) {
+    auto* scroll = new QScrollArea(this);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    auto* w = new QWidget(scroll);
+    scroll->setWidget(w);
+    auto* page = new QVBoxLayout(w);
+    page->setContentsMargins(0, 0, 0, 0);
+    page->setSpacing(2);
+    auto value = [spline](const char* k, const QVariant& dflt) { return QSettings().value(ik_group(spline) + "/" + k, dflt); };
+    auto set = [spline](const QString& k, const QVariant& v) {
+        QSettings().setValue(ik_group(spline) + "/" + k, v);
+        QJsonObject c{{"edit", true}, {"args", QJsonArray{ik_ctx(spline)}}};
+        c[k] = QJsonValue::fromVariant(v);
+        exec_quiet(ik_ctx_cmd(spline), c);
+    };
+    QFormLayout* form = nullptr;
+    auto check = [&](const char* flag, const QString& label, bool dflt) {
+        auto* cb = new QCheckBox(label, w);
+        cb->setChecked(value(flag, dflt).toBool());
+        connect(cb, &QCheckBox::toggled, this, [set, flag](bool on) { set(flag, on); });
+        form->addRow("", cb);
+        return cb;
+    };
+    auto number = [&](const char* flag, const QString& label, double dflt, double lo, double hi, int decimals) {
+        auto* sb = new QDoubleSpinBox(w);
+        sb->setRange(lo, hi);
+        sb->setDecimals(decimals);
+        sb->setSingleStep(decimals ? 0.1 : 1.0);
+        sb->setValue(value(flag, dflt).toDouble());
+        connect(sb, &QDoubleSpinBox::valueChanged, this, [set, flag, decimals](double v) { set(flag, decimals ? QVariant(v) : QVariant(int(v))); });
+        form->addRow(label, sb);
+        return sb;
+    };
+    if (!spline) {
+        fold(page, "IK Handle Settings", form);
+        form->setLabelAlignment(Qt::AlignRight);
+        auto* solver = new QComboBox(w);
+        solver->addItem("Rotate-Plane Solver", "ikRPsolver");
+        solver->addItem("Single-Chain Solver", "ikSCsolver");
+        solver->setCurrentIndex(std::max(0, solver->findData(value("solverTypeH", "ikRPsolver").toString())));
+        connect(solver, &QComboBox::currentIndexChanged, this, [set, solver](int) { set("solverTypeH", solver->currentData().toString()); });
+        form->addRow("Current solver:", solver);
+        check("autoPriorityH", "Autopriority", false);
+        check("forceSolverH", "Solver enable", true);
+        check("snapHandleH", "Snap enable", true);
+        auto* sticky = new QCheckBox("Sticky", w);
+        sticky->setChecked(value("stickyH", "off").toString() == "sticky");
+        connect(sticky, &QCheckBox::toggled, this, [set](bool on) { set("stickyH", on ? QString("sticky") : QString("off")); });
+        form->addRow("", sticky);
+        number("priorityH", "Priority:", 1, 0, 1000, 0);
+        number("weightH", "Weight:", 1, 0, 1000, 3);
+        number("poWeightH", "POWeight:", 1, 0, 1, 3);
+    } else {
+        fold(page, "IK Spline Handle Settings", form);
+        form->setLabelAlignment(Qt::AlignRight);
+        QCheckBox* root = check("rootOnCurve", "Root on curve", true);
+        QCheckBox* axis = check("createRootAxis", "Auto create root axis", false);
+        check("parentCurve", "Auto parent curve", true);
+        QCheckBox* snap = check("snapCurve", "Snap curve to root", true);
+        QCheckBox* create = check("createCurve", "Auto create curve", true);
+        QCheckBox* simplify = check("simplifyCurve", "Auto simplify curve", true);
+        QDoubleSpinBox* spans = number("numSpans", "Number of spans:", 1, 1, 1000, 0);
+        check("rootTwistMode", "Root twist mode", false);
+        auto* twist = new QComboBox(w);
+        twist->addItem("Linear", "linear");
+        twist->addItem("Ease In", "easeIn");
+        twist->addItem("Ease Out", "easeOut");
+        twist->addItem("Ease In Out", "easeInOut");
+        twist->setCurrentIndex(std::max(0, twist->findData(value("twistType", "linear").toString())));
+        connect(twist, &QComboBox::currentIndexChanged, this, [set, twist](int) { set("twistType", twist->currentData().toString()); });
+        form->addRow("Twist type:", twist);
+        // What the reference greys: the root axis only with the root off the curve, the snap only for a curve of your
+        // own, simplifying and spans only for a curve the tool makes.
+        auto grey = [root, axis, snap, create, simplify, spans] {
+            axis->setEnabled(!root->isChecked());
+            snap->setEnabled(!create->isChecked());
+            simplify->setEnabled(create->isChecked());
+            spans->setEnabled(create->isChecked() && simplify->isChecked());
+        };
+        for (QCheckBox* cb : {root, create, simplify}) connect(cb, &QCheckBox::toggled, this, grey);
+        grey();
+    }
+    page->addStretch(1);
+    push_ik_settings(spline);
     return scroll;
 }
 
@@ -1100,6 +1212,11 @@ void ToolSettings::set_tool(const QString& tool) {
         title_->setText("Joint Tool");
         stack_->setCurrentWidget(joint_page_);
         push_joint_settings();
+    } else if (tool == "ikHandle" || tool == "ikSplineHandle") {
+        const bool spline = tool == "ikSplineHandle";
+        title_->setText(spline ? "IK Spline Handle Tool" : "IK Handle Tool");
+        stack_->setCurrentWidget(spline ? ik_spline_page_ : ik_page_);
+        push_ik_settings(spline);
     } else if (tool == "curveCv" || tool == "curveEp") {
         title_->setText(tool == "curveCv" ? "CV Curve Tool" : "EP Curve Tool");
         stack_->setCurrentWidget(curve_page_);

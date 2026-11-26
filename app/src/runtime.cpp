@@ -150,6 +150,8 @@ void MainWindow::build_runtime() {
     tool("ShortestEdgePathTool", "shortestPath", "Shortest Edge Path Tool");
     tool("JointTool", "joint", "Joint Tool");
     tool("InsertJointTool", "insertJoint", "Insert Joint Tool");
+    tool("IKHandleTool", "ikHandle", "IK Handle Tool");
+    tool("IKSplineHandleTool", "ikSplineHandle", "IK Spline Handle Tool");
     tool("SculptMeshActivateBrushSculpt", "sculpt", "Sculpt brush");
     tool("MultiCutTool", "multiCut", "Multi-Cut");
     tool("SplitEdgeRingTool", "insertLoop", "Insert Edge Loop");
@@ -173,6 +175,8 @@ void MainWindow::build_runtime() {
     tool("YawPitchTool", "camYawPitch", "Yaw-Pitch Tool");
     r("ArtPaintAttrToolOptions", "Tools", "Paint Attribute and its settings", [this] { set_tool("paintAttr"); show_tool_settings(); });
     r("JointToolOptions", "Skeleton", "Create Joints and its settings", [this] { set_tool("joint"); show_tool_settings(); });
+    r("IKHandleToolOptions", "Skeleton", "Create IK Handle and its settings", [this] { set_tool("ikHandle"); show_tool_settings(); });
+    r("IKSplineHandleToolOptions", "Skeleton", "Create IK Spline Handle and its settings", [this] { set_tool("ikSplineHandle"); show_tool_settings(); });
     r("OrientJoint", "Skeleton", "Orient Joint", [] { orient_selected_joints(); });
     r("OrientJointOptions", "Skeleton", "Orient Joint options", [] { open_orient_joint_options(); });
     r("EditMembershipTool", "Tools", "Edit Membership", [this] { set_tool("editMembership"); show_tool_settings(); });
