@@ -754,17 +754,7 @@ jobs:
             echo "::warning::No APPLE_API_KEY secret: the macOS app is signed but not notarized."
           fi
 
-      # The same script as on a Mac: Aztek.app with Qt, Python, PySide6 and MoltenVK inside, signed (and notarized
-      # when the Signing step found the secrets) and zipped, the examples inside it. build-macos.sh fetches Qt and Python itself.
-      - name: Build and package
-        run: |
-          if [ "${{ inputs.macos_signing_only }}" = true ]; then
-            unset AZTEK_NOTARY_KEY
-          fi
-          tools/ci/retry.sh 3 ./build-macos.sh --package
-
-      - name: Notarize signing test
-        id: notarize
+      - name: Check notarization credentials
         if: inputs.macos_signing_only
         env:
           ALTERNATE_ISSUER: ${{ secrets.APPLE_API_ISSUER_ID }}
@@ -779,11 +769,25 @@ jobs:
               [ -n "$ALTERNATE_ISSUER" ] && [ "$ALTERNATE_ISSUER" != "$AZTEK_NOTARY_ISSUER" ]; then
               export AZTEK_NOTARY_ISSUER="$ALTERNATE_ISSUER"
               check_credentials || { cat "$auth_log" >&2; exit 1; }
+              printf 'AZTEK_NOTARY_ISSUER=%s\n' "$AZTEK_NOTARY_ISSUER" >>"$GITHUB_ENV"
             else
               cat "$auth_log" >&2
               exit 1
             fi
           fi
+
+      # build-macos.sh builds, signs and zips the app. The signing test keeps a ZIP in case Apple rejects the submission.
+      - name: Build and package
+        run: |
+          if [ "${{ inputs.macos_signing_only }}" = true ]; then
+            unset AZTEK_NOTARY_KEY
+          fi
+          tools/ci/retry.sh 3 ./build-macos.sh --package
+
+      - name: Notarize signing test
+        id: notarize
+        if: inputs.macos_signing_only
+        run: |
           packaging/macos/notarize.sh dist/Aztek/Aztek.app
           ditto -c -k --keepParent dist/Aztek "$RUNNER_TEMP/aztek-macos-arm64.zip"
           mv "$RUNNER_TEMP/aztek-macos-arm64.zip" dist/aztek-macos-arm64.zip
