@@ -192,6 +192,9 @@ pub struct View {
     pub want_capture: bool,
     /// Whether this view already said the device cannot draw the Realtime renderer.
     rt_warned: bool,
+    /// A swapchain remake that failed: retry at the next frame rather than every time the window moves.
+    resize_retry: bool,
+    resize_reported: bool,
 }
 
 impl Drop for View {
@@ -260,6 +263,8 @@ impl View {
             capture: None,
             want_capture: false,
             rt_warned: false,
+            resize_retry: false,
+            resize_reported: false,
         }
     }
 
@@ -279,8 +284,20 @@ impl View {
     }
 
     pub fn resize(&mut self, w: u32, h: u32) {
-        if let Err(e) = self.gpu.recreate_swapchain(w, h) {
-            log::error!("viewport resize: {e}");
+        match self.gpu.recreate_swapchain(w, h) {
+            Ok(()) => {
+                self.resize_retry = false;
+                self.resize_reported = false;
+            }
+            Err(e) => {
+                // A remake can fail with a temporary condition (an out-of-date surface, a lost device being reset).
+                // Keep the view alive, say so once, and try again at the next frame instead of dying or repeating.
+                self.resize_retry = true;
+                if !self.resize_reported {
+                    self.resize_reported = true;
+                    log::error!("viewport resize: {e}; retrying at the next frame");
+                }
+            }
         }
         self.needs_redraw = true;
     }
@@ -293,6 +310,19 @@ impl View {
         self.vp.rect = [0.0, 0.0, e.width as f64, e.height as f64];
         let bg = self.background;
         let prof = Prof::start();
+        // A remake that failed last time is tried again here, before anything asks the swapchain for an image.
+        if self.resize_retry {
+            match self.gpu.recreate_swapchain(e.width, e.height) {
+                Ok(()) => {
+                    self.resize_retry = false;
+                    self.resize_reported = false;
+                }
+                Err(_) => {
+                    self.needs_redraw = true;
+                    return;
+                }
+            }
+        }
         let mut frame = self.gpu.begin_frame_deferred();
         prof.mark("  wait for the last frame");
         if frame.is_none() {

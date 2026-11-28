@@ -372,6 +372,10 @@ vec3 planar_at(vec2 c, vec3 p, vec3 n, vec3 r, float rough, out float cover) {
             ivec2 q = clamp(at + ivec2(x, y), ivec2(0), top);
             // Linear filtering, so the mirrored silhouette hands over to the floor without a stepped edge.
             vec4 t = textureLod(sampler2D(t_planar, s_refl), (vec2(q) + 0.5) / pc.size.xy, 0.0);
+            // A mirrored pass can leave a non-finite texel where a projected edge divides by zero; one of those blacked
+            // a whole floor once it reached the composite. Drop it and let the sky stand in.
+            if (!(t.r == t.r && t.g == t.g && t.b == t.b && t.a == t.a)) continue;
+            if (abs(t.r) > 1e30 || abs(t.g) > 1e30 || abs(t.b) > 1e30 || abs(t.a) > 1e30) continue;
             plane += pow(max(t.rgb, vec3(0.0)), vec3(2.2));
             data += t.a;
         }
@@ -522,6 +526,9 @@ void main() {
     // The two tiers are mixed by one weight, so their sum is the one reflection. Both take the same brightness scale
     // and go through the same filtered copy by the surface's roughness.
     refl = mix(refl, planar, planar_cover) * 1.3;
+    // The same guard at the last step: a bad sample in either tier becomes the sky rather than a black surface.
+    if (!(refl.r == refl.r && refl.g == refl.g && refl.b == refl.b)) refl = env_lookup(r, rough);
+    if (abs(refl.r) > 1e30 || abs(refl.g) > 1e30 || abs(refl.b) > 1e30) refl = env_lookup(r, rough);
     sum += refl * coeff;
     o = vec4(sum, 1.0);
 }
