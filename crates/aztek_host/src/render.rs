@@ -477,29 +477,36 @@ float radial_at(float face_distance, vec3 dir) {
 // How much of the light reaches this point from the shadow map, 0 in shadow to 1 lit. Outside the map it is lit.
 float shadow_at(vec3 p, vec3 n) {
     if (lt.shadow.w < 0.5) return 1.0;
-    // A surface is lifted along its normal by a little of the scene's size: a caster does not shadow itself.
-    vec3 q3 = p + n * lt.shadow.x;
+    // Two different quantities keep a surface off its own depth, and they are not interchangeable. The first is a
+    // world-space offset along the normal, about one of the map's texels: it moves the point out of the caster's own
+    // depth. The second is the compared tolerance, the depth a texel spans along the light on this surface, which
+    // grows with the slope. A constant belongs in neither.
     if (lt.shadow.w > 1.5) {
         // The light's position and `p` are view space; the six faces look along the world's axes, so the sampled
         // direction and the depth's distance have to be world space.
-        vec3 to = q3 - lt.shadow_pos.xyz;
-        float reach = length(to);
-        if (reach < 1e-4) return 1.0;
-        vec3 wto = (lt.view_to_world * vec4(to, 0.0)).xyz;
-        vec3 d = normalize(wto);
-        float near = max(lt.shadow_range.x, 0.01);
-        float far = max(lt.shadow_range.y, near + 0.02);
-        if (reach < near || reach > far) return 1.0;
         int li = int(lt.shadow.z);
-        float size = lt.lights[li].pos.w > 3.5 && lt.lights[li].pos.w < 4.5 ? 0.5 * (length(lt.lights[li].a.xyz) + length(lt.lights[li].b.xyz)) : 0.0;
-        // A cube texel covers this much of the face at the receiver's distance, and it stretches along the surface as
-        // the cosine to the light falls. The slack has to follow that stretch: a constant one either acnes on a floor
-        // seen at a grazing angle or detaches the shadow where the surface faces the light.
         vec3 l = lt.lights[li].pos.xyz - p;
         float nl = max(dot(n, normalize(l + vec3(1e-6))), 0.0);
+        float sin_theta = sqrt(max(1.0 - nl * nl, 0.0));
+        float near = max(lt.shadow_range.x, 0.01);
+        float far = max(lt.shadow_range.y, near + 0.02);
+        vec3 to = p - lt.shadow_pos.xyz;
+        float reach = length(to);
+        if (reach < 1e-4) return 1.0;
+        // The offset: a cube face's texel at the receiver, in world units, and a little more as the surface turns
+        // away from the light, where one texel covers more of it.
         float texel_world = reach * 2.0 * lt.shadow.y;
-        float slope = sqrt(max(1.0 - nl * nl, 0.0)) / max(nl, 0.2);
-        float slack = 0.02 + texel_world * (0.5 + 1.5 * slope);
+        vec3 q3 = p + n * (texel_world * (sin_theta + 0.2));
+        to = q3 - lt.shadow_pos.xyz;
+        reach = length(to);
+        vec3 wto = (lt.view_to_world * vec4(to, 0.0)).xyz;
+        vec3 d = normalize(wto);
+        if (reach < near || reach > far) return 1.0;
+        float size = lt.lights[li].pos.w > 3.5 && lt.lights[li].pos.w < 4.5 ? 0.5 * (length(lt.lights[li].a.xyz) + length(lt.lights[li].b.xyz)) : 0.0;
+        // The compared tolerance: the distance along the light that one texel spans on this surface, which is the
+        // texel's footprint over the cosine to the light.
+        float tan_theta = sin_theta / max(nl, 0.15);
+        float tol = texel_world * (0.5 + 1.5 * tan_theta);
         vec3 t1 = normalize(cross(d, abs(d.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
         vec3 t2 = cross(d, t1);
         // A point light gets a stable 4 by 4 grid of bilinear cube taps, at least a texel and a half across. An area
@@ -514,7 +521,7 @@ float shadow_at(vec3 p, vec3 n) {
                 float a = float(i) * 2.39996323;
                 vec3 dir = normalize(d + (t1 * cos(a) + t2 * sin(a)) * r);
                 float stored = radial_at(cube_distance(dir, near, far), dir);
-                if (stored + slack < reach) {
+                if (stored + tol < reach) {
                     blockers += stored;
                     found += 1.0;
                 }
@@ -534,7 +541,7 @@ float shadow_at(vec3 p, vec3 n) {
                     vec2 o = (vec2(float(x), float(y)) + 0.5) * 0.25 - 0.5;
                     vec3 dir = normalize(d + (t1 * o.x + t2 * o.y) * spread);
                     float stored = radial_at(cube_distance(dir, near, far), dir);
-                    lit += reach <= stored + slack ? 1.0 : 0.0;
+                    lit += reach <= stored + tol ? 1.0 : 0.0;
                 }
             }
         } else {
@@ -544,15 +551,26 @@ float shadow_at(vec3 p, vec3 n) {
                 float r = sqrt(t) * spread;
                 vec3 dir = normalize(d + (t1 * cos(a) + t2 * sin(a)) * r);
                 float stored = radial_at(cube_distance(dir, near, far), dir);
-                lit += reach <= stored + slack ? 1.0 : 0.0;
+                lit += reach <= stored + tol ? 1.0 : 0.0;
             }
         }
         return lit / 16.0;
     }
+    // A single map: a directional light's direction is the depth axis, a spot's points from its position.
+    int li = int(lt.shadow.z);
+    vec3 toward = lt.lights[li].pos.w < 1.5 ? -lt.lights[li].dir.xyz : lt.lights[li].pos.xyz - p;
+    float nl = max(dot(n, normalize(toward + vec3(1e-6))), 0.0);
+    float sin_theta = sqrt(max(1.0 - nl * nl, 0.0));
+    float tan_theta = sin_theta / max(nl, 0.15);
+    vec3 q3 = p + n * (lt.shadow.x * (sin_theta + 0.2));
     vec4 sc = lt.shadow_matrix * vec4(q3, 1.0);
     // Clip x and y run -1 to 1, so they go to 0 to 1; Vulkan's clip z already runs 0 to 1 and must not be halved.
     vec3 q = vec3(sc.xy / sc.w * 0.5 + 0.5, sc.z / sc.w);
     if (q.x < 0.0 || q.x > 1.0 || q.y < 0.0 || q.y > 1.0 || q.z > 1.0 || q.z < 0.0) return 1.0;
+    // The tolerance in the map's own depth: where one texel's worth of world distance lands in clip space.
+    float tol_world = lt.shadow.x * (0.5 + 1.5 * tan_theta);
+    vec4 sc2 = lt.shadow_matrix * vec4(q3 - normalize(toward) * tol_world, 1.0);
+    float tol = abs(q.z - sc2.z / sc2.w) + 1e-6;
     float texel = lt.shadow.y;
     float sum = 0.0;
     // A 5 by 5 gather, bilinearly read: the map's edge is chunky at a close view where one texel is many pixels, and
@@ -560,7 +578,7 @@ float shadow_at(vec3 p, vec3 n) {
     for (int y = -2; y <= 2; y += 1) {
         for (int x = -2; x <= 2; x += 1) {
             float d = texture(sampler2D(t_shadow, s_shadow), q.xy + vec2(float(x), float(y)) * texel).r;
-            sum += q.z - 0.0015 <= d ? 1.0 : 0.0;
+            sum += q.z - tol <= d ? 1.0 : 0.0;
         }
     }
     return sum / 25.0;
@@ -1424,8 +1442,14 @@ mod tests {
         assert!(REALTIME_FS.contains("vec3 wto = (lt.view_to_world * vec4(to, 0.0)).xyz;"));
         assert!(REALTIME_FS.contains("float radial_at(float face_distance, vec3 dir)"));
         assert!(REALTIME_FS.contains("float stored = radial_at(cube_distance(dir, near, far), dir);"));
-        assert!(REALTIME_FS.contains("lit += reach <= stored + slack ? 1.0 : 0.0;"));
+        assert!(REALTIME_FS.contains("lit += reach <= stored + tol ? 1.0 : 0.0;"));
         assert!(!REALTIME_FS.contains("axis <= stored"));
+        // The offset and the compared tolerance are separate quantities: a texel-sized world offset along the normal,
+        // and a depth tolerance that grows with the slope. Neither carries a constant floor.
+        assert!(REALTIME_FS.contains("vec3 q3 = p + n * (texel_world * (sin_theta + 0.2));"));
+        assert!(REALTIME_FS.contains("float tol = texel_world * (0.5 + 1.5 * tan_theta);"));
+        assert!(!REALTIME_FS.contains("0.02 +"));
+        assert!(!REALTIME_FS.contains("q.z - 0.0015"));
     }
 
     /// A lit receiver must stay lit when the tap that reads its caster lies in another cube face: the receiver's axis

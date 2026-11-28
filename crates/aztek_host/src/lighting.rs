@@ -98,7 +98,8 @@ pub struct LightBlock {
     pub head: [i32; 4],
     /// The realtime renderer's one shadow map: world to the light's clip space.
     pub shadow_matrix: [f32; 16],
-    /// Shadow bias (a world-space normal offset), one over its size, the light it shadows, and the map's kind.
+    /// One map texel, in world units (0 for a cube, where the shader works it out per receiver); one over the map's
+    /// size, the light it shadows, and the map's kind.
     pub shadow: [f32; 4],
     /// A point light's view-space position; unused by a 2D map.
     pub shadow_pos: [f32; 4],
@@ -262,7 +263,10 @@ pub fn chosen_environment(g: &mut Graph, mode: LightMode, shown: impl Fn(&Graph,
 pub struct ShadowPlan {
     pub light: usize,
     pub camera: ShadowCamera,
+    /// One map texel in world units for a single map; 0 for a cube, where the shader works it out per receiver.
     pub bias: f32,
+    /// One map texel in world units at the scene's middle, for the contact shadow's reach.
+    pub texel: f32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -336,8 +340,8 @@ pub fn shadow_plan(lights: &[SceneLight], items: &[crate::viewport::DrawItem]) -
     let (lo, hi) = scene_bounds(items);
     let center = (lo + hi) * 0.5;
     let radius = ((hi - lo).length() * 0.5).max(1e-3) as f64;
-    let bias = (radius * 0.01).clamp(0.001, 1.0) as f32;
     let axis = (-light.world.z_axis.truncate()).normalize_or_zero();
+    let res = crate::realtime::SHADOW_SIZE as f64;
     match light.kind {
         Kind::Directional => {
             let eye = center - axis * (radius * 3.0 + 1.0);
@@ -345,7 +349,9 @@ pub fn shadow_plan(lights: &[SceneLight], items: &[crate::viewport::DrawItem]) -
             let view = DMat4::look_at_rh(eye, center, up);
             let r = radius * 1.15;
             let proj = DMat4::orthographic_rh(-r, r, -r, r, 0.01, radius * 8.0 + 2.0);
-            Some(ShadowPlan { light: index, camera: ShadowCamera::Map2D(proj * view), bias })
+            // One texel of the orthographic map, in world units.
+            let texel = (2.0 * r / res) as f32;
+            Some(ShadowPlan { light: index, camera: ShadowCamera::Map2D(proj * view), bias: texel, texel })
         }
         Kind::Spot => {
             let eye = light.world.w_axis.truncate();
@@ -358,13 +364,18 @@ pub fn shadow_plan(lights: &[SceneLight], items: &[crate::viewport::DrawItem]) -
             // The near plane as close to the scene as it can be: perspective depth has most of its precision near it, and
             // a far plane far past the scene leaves too little to tell a caster from what it shadows.
             let proj = DMat4::perspective_rh(2.0 * half, 1.0, near.max(0.01), far.max(near + 0.1));
-            Some(ShadowPlan { light: index, camera: ShadowCamera::Map2D(proj * view), bias })
+            // One texel of the perspective map where the scene's middle sits, in world units.
+            let texel = (2.0 * half.tan() * (center - eye).length() / res) as f32;
+            Some(ShadowPlan { light: index, camera: ShadowCamera::Map2D(proj * view), bias: texel, texel })
         }
         Kind::Point | Kind::Area | Kind::Volume => {
             let position = light.world.w_axis.truncate();
             let (near, far) = scene_distance_range(items, position);
             let faces = cube_faces(position, near.max(0.01), far.max(near + 0.1));
-            Some(ShadowPlan { light: index, camera: ShadowCamera::Cube { faces, position, near: near.max(0.01) as f32, far: far.max(near + 0.1) as f32 }, bias })
+            // A cube face's texel grows with the receiver's distance: the shader works it out where it shades. The
+            // scene's middle still gives the contact shadow a reach.
+            let texel = (2.0 * (center - position).length() / res) as f32;
+            Some(ShadowPlan { light: index, camera: ShadowCamera::Cube { faces, position, near: near.max(0.01) as f32, far: far.max(near + 0.1) as f32 }, bias: 0.0, texel })
         }
         Kind::Ambient => None,
     }
