@@ -316,9 +316,12 @@ void main() {
         // share again, and so on. The first pass saw one bounce; the series of the rest is that over one less the share
         // each bounce keeps, the hits' surface colour times how much of the view round about they cover. The second
         // pass met those surfaces with that on them already.
-        // Rays that leave the view meet what it doesn't show, which may be more of the room or open space: taken to be
-        // half as bright as what the others met. Rays that cross open space that the view shows bring nothing.
-        if (hits > 0.5) {
+        // Rays that leave the view meet what it does not show: with a sky dome, the room it lights, taken to be half as
+        // bright as what the others met; without one, nothing. The fill was standing in for a dome even on an open floor
+        // that has none, and invented light there. The whole bounce is multiplied by the receiver's openness where the
+        // picture reads it, so the fill never lifts a contact or the floor behind an object.
+        bool has_sky = pp.env.w > 0.5 || dot(pp.env.rgb, pp.env.rgb) > 0.0;
+        if (has_sky && hits > 0.5) {
             gi += gi / hits * gone * 0.5;
             hit_albedo += hit_albedo / hits * gone * 0.5;
         }
