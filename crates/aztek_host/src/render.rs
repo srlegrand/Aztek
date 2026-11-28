@@ -541,19 +541,19 @@ float shadow_at(vec3 p, vec3 n) {
         float tol = texel_world * (1.0 + 2.0 * tan_theta);
         vec3 t1 = normalize(cross(d, abs(d.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
         vec3 t2 = cross(d, t1);
-        // One small fixed kernel: a 3 by 3 gather of bilinear depths, one texel apart, with the gradient compare. An
-        // area light is not given a penumbra wider than that: a disc spread over the emitter's angular size puts its
-        // taps so far apart that their hit pattern is a fan of hard patches around the shadow, which is the blocky
-        // surround. The edge here is one to two texels, and the shadow's own shape, contact and depth are the map's.
+        // One small fixed kernel: a 5 by 5 gather of bilinear depths, one texel apart, with the gradient compare. The
+        // edge transitions over about two to three texels, smoothly in value, and it never widens with the emitter: a
+        // disc spread over the emitter's angular size puts its taps so far apart that their hit pattern is a fan of hard
+        // patches around the shadow, which is the blocky surround. The shadow's shape, contact and depth are the map's.
         float lit = 0.0;
-        for (int y = -1; y <= 1; ++y) {
-            for (int x = -1; x <= 1; ++x) {
+        for (int y = -2; y <= 2; ++y) {
+            for (int x = -2; x <= 2; ++x) {
                 vec3 dir = normalize(d + (t1 * float(x) + t2 * float(y)) * 2.0 * lt.shadow.y);
                 float stored = radial_at(cube_distance(dir, near, far), dir);
                 lit += smoothstep(-tol, tol, stored + tol - reach);
             }
         }
-        return lit / 9.0;
+        return lit / 25.0;
     }
     // A single map: a directional light's direction is the depth axis, a spot's points from its position.
     int li = int(lt.shadow.z);
@@ -1529,9 +1529,10 @@ mod tests {
         assert!(REALTIME_FS.contains("float tol = texel_world * (1.0 + 2.0 * tan_theta);"));
         assert!(!REALTIME_FS.contains("0.02 +"));
         assert!(!REALTIME_FS.contains("q.z - 0.0015"));
-        // One small fixed kernel for every cube light: no emitter-sized disc, no blocker search, and the single map's
-        // border still fades back to lit.
-        assert!(REALTIME_FS.contains("for (int y = -1; y <= 1; ++y)"));
+        // One small fixed kernel for every cube light: a 5 by 5 gather, no emitter-sized disc, no blocker search, and
+        // the single map's border still fades back to lit.
+        assert!(REALTIME_FS.contains("for (int y = -2; y <= 2; ++y)"));
+        assert!(REALTIME_FS.contains("return lit / 25.0;"));
         assert!(!REALTIME_FS.contains("for (int i = 0; i < 32; ++i)"));
         assert!(!REALTIME_FS.contains("size * (reach - b)"));
         assert!(REALTIME_FS.contains("float border = min(min(q.x, 1.0 - q.x), min(q.y, 1.0 - q.y)) / texel;"));
