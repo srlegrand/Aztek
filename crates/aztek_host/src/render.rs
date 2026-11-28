@@ -535,26 +535,33 @@ float shadow_at(vec3 p, vec3 n) {
         // taps over a few texels: a regular grid has no spiral pattern on a smooth sphere. An area light's penumbra is
         // wider, so it keeps the smoother golden-angle disc.
         float lit = 0.0;
+        float taps = 0.0;
         if (size <= 0.0) {
             for (int y = 0; y < 4; ++y) {
                 for (int x = 0; x < 4; ++x) {
                     vec2 o = (vec2(float(x), float(y)) + 0.5) * 0.25 - 0.5;
                     vec3 dir = normalize(d + (t1 * o.x + t2 * o.y) * spread);
                     float stored = radial_at(cube_distance(dir, near, far), dir);
-                    lit += reach <= stored + tol ? 1.0 : 0.0;
+                    // A gradient over the texel's depth spread: each tap contributes a fraction, so the edge has no
+                    // steps of a sixteenth.
+                    lit += smoothstep(-tol, tol, stored + tol - reach);
+                    taps += 1.0;
                 }
             }
         } else {
-            for (int i = 0; i < 16; ++i) {
-                float t = (float(i) + 0.5) / 16.0;
+            // An area light's penumbra is sampled on one fixed golden-angle disc, over thirty-two taps rather than
+            // sixteen: with the gradient compare the levels and the disc's spokes read as a smooth edge, not a star.
+            for (int i = 0; i < 32; ++i) {
+                float t = (float(i) + 0.5) / 32.0;
                 float a = float(i) * 2.39996323;
                 float r = sqrt(t) * spread;
                 vec3 dir = normalize(d + (t1 * cos(a) + t2 * sin(a)) * r);
                 float stored = radial_at(cube_distance(dir, near, far), dir);
-                lit += reach <= stored + tol ? 1.0 : 0.0;
+                lit += smoothstep(-tol, tol, stored + tol - reach);
+                taps += 1.0;
             }
         }
-        return lit / 16.0;
+        return lit / taps;
     }
     // A single map: a directional light's direction is the depth axis, a spot's points from its position.
     int li = int(lt.shadow.z);
@@ -574,14 +581,17 @@ float shadow_at(vec3 p, vec3 n) {
     float texel = lt.shadow.y;
     float sum = 0.0;
     // A 5 by 5 gather, bilinearly read: the map's edge is chunky at a close view where one texel is many pixels, and
-    // it crawls as the camera moves. The wider filtered kernel turns that into a soft penumbra.
+    // it crawls as the camera moves. The wider filtered kernel turns that into a soft penumbra, and each tap's compare
+    // is a gradient over the tolerance so the edge has no steps.
     for (int y = -2; y <= 2; y += 1) {
         for (int x = -2; x <= 2; x += 1) {
             float d = texture(sampler2D(t_shadow, s_shadow), q.xy + vec2(float(x), float(y)) * texel).r;
-            sum += q.z - tol <= d ? 1.0 : 0.0;
+            sum += smoothstep(-tol, tol, d + tol - q.z);
         }
     }
-    return sum / 25.0;
+    // The map's border is where its coverage ends, not a shadow: fade it back to lit over a few texels.
+    float border = min(min(q.x, 1.0 - q.x), min(q.y, 1.0 - q.y)) / texel;
+    return mix(1.0, sum / 25.0, smoothstep(0.0, 4.0, border));
 }
 // What a rectangle of light sends to a matte surface at x facing n, as its radiance times this: the exact integral of
 // the cosines over the distance squared across it (Lambert's polygon formula). Corners p0..p3 go round it so that
@@ -1442,7 +1452,7 @@ mod tests {
         assert!(REALTIME_FS.contains("vec3 wto = (lt.view_to_world * vec4(to, 0.0)).xyz;"));
         assert!(REALTIME_FS.contains("float radial_at(float face_distance, vec3 dir)"));
         assert!(REALTIME_FS.contains("float stored = radial_at(cube_distance(dir, near, far), dir);"));
-        assert!(REALTIME_FS.contains("lit += reach <= stored + tol ? 1.0 : 0.0;"));
+        assert!(REALTIME_FS.contains("lit += smoothstep(-tol, tol, stored + tol - reach);"));
         assert!(!REALTIME_FS.contains("axis <= stored"));
         // The offset and the compared tolerance are separate quantities: a texel-sized world offset along the normal,
         // and a depth tolerance that grows with the slope. Neither carries a constant floor.
@@ -1450,6 +1460,9 @@ mod tests {
         assert!(REALTIME_FS.contains("float tol = texel_world * (0.5 + 1.5 * tan_theta);"));
         assert!(!REALTIME_FS.contains("0.02 +"));
         assert!(!REALTIME_FS.contains("q.z - 0.0015"));
+        // An area light's disc carries thirty-two taps, and the single map's border fades back to lit.
+        assert!(REALTIME_FS.contains("for (int i = 0; i < 32; ++i)"));
+        assert!(REALTIME_FS.contains("float border = min(min(q.x, 1.0 - q.x), min(q.y, 1.0 - q.y)) / texel;"));
     }
 
     /// A lit receiver must stay lit when the tap that reads its caster lies in another cube face: the receiver's axis
