@@ -1244,6 +1244,8 @@ pub struct PbrParams {
     pub transmission_weight: f32,
     /// Emitted radiance: emission colour times its weight or luminance.
     pub emission: [f32; 3],
+    /// The emission colour is the base picture itself: the shader emits the sample it reads, times the weight.
+    pub emission_map: bool,
 }
 
 impl Default for PbrParams {
@@ -1261,6 +1263,7 @@ impl Default for PbrParams {
             coat_ior: 1.6,
             transmission_weight: 0.0,
             emission: [0.0; 3],
+            emission_map: false,
         }
     }
 }
@@ -1571,7 +1574,22 @@ pub fn draw_material(g: &mut Graph, sg: NodeId, scene: Option<&str>, project: Op
         color = DVec3::new(pic.mean[0] as f64, pic.mean[1] as f64, pic.mean[2] as f64) * weight;
     }
     let specular = draw_specular(g, material, &t.name);
-    let pbr = pbr_of(g, material, &t.name, specular.as_ref());
+    let mut pbr = pbr_of(g, material, &t.name, specular.as_ref());
+    // An emission colour fed by the same picture as the base is that picture, emitted. The connected plug's own value
+    // is the node's default, not the map, so the shader has to emit the base sample it already reads.
+    if let Some(base) = color_map.as_ref() {
+        let weight_attr = if t.name == "openPBRSurface" { "emissionLuminance" } else { "emission" };
+        let weight = value_f(g, material, weight_attr).unwrap_or(0.0);
+        let color_attr = if t.name == "aiStandardSurface" { "emission_color" } else { "emissionColor" };
+        if weight > 0.0 {
+            if let Some(em) = map_feeding(g, material, color_attr, scene, project) {
+                if em.resolved.is_some() && em.resolved == base.resolved {
+                    pbr.emission = [weight as f32; 3];
+                    pbr.emission_map = true;
+                }
+            }
+        }
+    }
     Some(DrawMaterial {
         specular,
         pbr,

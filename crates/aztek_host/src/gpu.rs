@@ -307,6 +307,14 @@ pub struct Gpu {
     pub back_depth_view: vk::ImageView,
     pub back_depth_alloc: Option<Allocation>,
     pub back_framebuffer: vk::Framebuffer,
+    /// The far side of the transmissive bodies: view normal in rgb, view distance in a.
+    pub backface_image: vk::Image,
+    pub backface_view: vk::ImageView,
+    pub backface_alloc: Option<Allocation>,
+    pub backface_depth_image: vk::Image,
+    pub backface_depth_view: vk::ImageView,
+    pub backface_depth_alloc: Option<Allocation>,
+    pub backface_framebuffer: vk::Framebuffer,
     /// The pass that puts the scene on the window, through the post effects.
     pub post_pass: vk::RenderPass,
     /// One per swapchain image, for the post pass.
@@ -463,6 +471,13 @@ impl Gpu {
             planar_framebuffer: vk::Framebuffer::null(),
             back_image: vk::Image::null(),
             back_view: vk::ImageView::null(),
+            backface_image: vk::Image::null(),
+            backface_view: vk::ImageView::null(),
+            backface_alloc: None,
+            backface_depth_image: vk::Image::null(),
+            backface_depth_view: vk::ImageView::null(),
+            backface_depth_alloc: None,
+            backface_framebuffer: vk::Framebuffer::null(),
             back_alloc: None,
             back_depth_image: vk::Image::null(),
             back_depth_view: vk::ImageView::null(),
@@ -550,11 +565,17 @@ impl Gpu {
                 self.device.destroy_framebuffer(self.back_framebuffer, None);
                 self.back_framebuffer = vk::Framebuffer::null();
             }
+            if self.backface_framebuffer != vk::Framebuffer::null() {
+                self.device.destroy_framebuffer(self.backface_framebuffer, None);
+                self.backface_framebuffer = vk::Framebuffer::null();
+            }
             for (view, image, alloc) in [
                 (&mut self.planar_view, self.planar_image, &mut self.planar_alloc),
                 (&mut self.planar_depth_view, self.planar_depth_image, &mut self.planar_depth_alloc),
                 (&mut self.back_view, self.back_image, &mut self.back_alloc),
                 (&mut self.back_depth_view, self.back_depth_image, &mut self.back_depth_alloc),
+                (&mut self.backface_view, self.backface_image, &mut self.backface_alloc),
+                (&mut self.backface_depth_view, self.backface_depth_image, &mut self.backface_depth_alloc),
             ] {
                 if *view != vk::ImageView::null() {
                     self.device.destroy_image_view(*view, None);
@@ -956,6 +977,43 @@ impl Gpu {
             let back_att = [self.back_view, self.back_depth_view];
             self.back_framebuffer = self.device.create_framebuffer(
                 &vk::FramebufferCreateInfo::default().render_pass(self.planar_pass).attachments(&back_att).width(extent.width).height(extent.height).layers(1),
+                None,
+            )?;
+            // The far side of the transmissive bodies, for glass's second interface.
+            let (image, view, alloc) = self.color_image("back faces", AO_FORMAT, vk::SampleCountFlags::TYPE_1, vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::SAMPLED, extent)?;
+            (self.backface_image, self.backface_view, self.backface_alloc) = (image, view, Some(alloc));
+            self.backface_depth_image = self.device.create_image(
+                &vk::ImageCreateInfo::default()
+                    .image_type(vk::ImageType::TYPE_2D)
+                    .format(DEPTH_FORMAT)
+                    .extent(vk::Extent3D { width: extent.width, height: extent.height, depth: 1 })
+                    .mip_levels(1)
+                    .array_layers(1)
+                    .samples(vk::SampleCountFlags::TYPE_1)
+                    .usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT),
+                None,
+            )?;
+            let req = self.device.get_image_memory_requirements(self.backface_depth_image);
+            let alloc = self.shared.allocator.lock().unwrap().allocate(&AllocationCreateDesc {
+                name: "back faces depth",
+                requirements: req,
+                location: MemoryLocation::GpuOnly,
+                linear: false,
+                allocation_scheme: AllocationScheme::GpuAllocatorManaged,
+            })?;
+            self.device.bind_image_memory(self.backface_depth_image, alloc.memory(), alloc.offset())?;
+            self.backface_depth_alloc = Some(alloc);
+            self.backface_depth_view = self.device.create_image_view(
+                &vk::ImageViewCreateInfo::default()
+                    .image(self.backface_depth_image)
+                    .view_type(vk::ImageViewType::TYPE_2D)
+                    .format(DEPTH_FORMAT)
+                    .subresource_range(vk::ImageSubresourceRange::default().aspect_mask(vk::ImageAspectFlags::DEPTH).level_count(1).layer_count(1)),
+                None,
+            )?;
+            let att = [self.backface_view, self.backface_depth_view];
+            self.backface_framebuffer = self.device.create_framebuffer(
+                &vk::FramebufferCreateInfo::default().render_pass(self.planar_pass).attachments(&att).width(extent.width).height(extent.height).layers(1),
                 None,
             )?;
             for &v in &self.views {
@@ -1426,6 +1484,30 @@ impl Gpu {
 
     /// Ends the behind-glass pass.
     pub fn end_back(&mut self) {
+        unsafe { self.device.cmd_end_render_pass(self.cmd) };
+    }
+
+    /// Begins the pass that records the far side of the transmissive bodies.
+    pub fn begin_backface(&mut self) {
+        unsafe {
+            // The scene's pass is still open: it ends here, and this pass is ended by whichever pass begins next.
+            self.device.cmd_end_render_pass(self.cmd);
+            self.device.cmd_begin_render_pass(
+                self.cmd,
+                &vk::RenderPassBeginInfo::default()
+                    .render_pass(self.planar_pass)
+                    .framebuffer(self.backface_framebuffer)
+                    .render_area(vk::Rect2D { offset: vk::Offset2D::default(), extent: self.extent })
+                    .clear_values(&[vk::ClearValue { color: vk::ClearColorValue { float32: [0.0; 4] } }, vk::ClearValue { depth_stencil: vk::ClearDepthStencilValue { depth: 0.0, stencil: 0 } }]),
+                vk::SubpassContents::INLINE,
+            );
+            self.device.cmd_set_viewport(self.cmd, 0, &[vk::Viewport { x: 0.0, y: 0.0, width: self.extent.width as f32, height: self.extent.height as f32, min_depth: 0.0, max_depth: 1.0 }]);
+            self.device.cmd_set_scissor(self.cmd, 0, &[vk::Rect2D { offset: vk::Offset2D::default(), extent: self.extent }]);
+        }
+    }
+
+    /// Ends the far-side pass.
+    pub fn end_backface(&mut self) {
         unsafe { self.device.cmd_end_render_pass(self.cmd) };
     }
 

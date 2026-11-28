@@ -22,6 +22,17 @@ void main() {
 /// The parts both fragment shaders share. DEPTH_TEXTURE and DEPTH_FETCH are filled in for a multisampled depth or a
 /// plain one.
 const POST_HEAD: &str = r#"#version 450
+
+// The sRGB transfer the final renderer writes its images with: one curve on both paths, so a radiance is the same
+// number whichever renderer shows it.
+vec3 to_srgb(vec3 c) {
+    c = clamp(c, 0.0, 1.0);
+    return mix(12.92 * c, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c));
+}
+vec3 to_linear(vec3 c) {
+    c = clamp(c, 0.0, 1.0);
+    return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
+}
 layout(location = 0) in vec2 uv;
 layout(location = 0) out vec4 o;
 layout(set = 0, binding = 0) uniform texture2D t_scene;
@@ -43,6 +54,8 @@ layout(set = 0, binding = 11) uniform texture2D t_back;
 // The reflection image low-passed over a few pixels, so one bright texel does not speckle (#302).
 layout(set = 0, binding = 12) uniform texture2D t_refl_soft;
 layout(set = 0, binding = 13) uniform sampler s_refl;
+// The far side of the transmissive bodies: view normal in rgb, view distance in a.
+layout(set = 0, binding = 14) uniform texture2D t_backface;
 // The view's sky dome, which reflections fall back on where the view shows nothing to reflect.
 layout(set = 1, binding = 0) uniform texture2D t_env;
 layout(set = 1, binding = 1) uniform sampler s_env;
@@ -79,6 +92,8 @@ layout(set = 0, binding = 4, std140) uniform Params {
     vec4 env_rot;
     // x: 1 with a ground plane's reflection, yzw: the world's up.
     vec4 extra;
+    // The scene's sky dome as the view's background: colour in rgb, w 0 none, 1 colour, 2 image.
+    vec4 bg_env;
 } pp;
 
 float depth_at(vec2 px) {
@@ -186,31 +201,39 @@ void main() {
         float f = max(1.0 - vv / (r * r), 0.0);
         sum += f * f * f * max(vn, 0.0) * r / (vv + 0.0001 * r * r);
     }
-    // Contact shadows: march from the point towards the light and see whether the surface stands in the way. This is the
-    // short-range shadow a shadow map's texels are too coarse for, as EEVEE's contact shadows are.
+    // Contact shadows: march a few of the map's texels into the scene from the point towards its light, for the one
+    // band at a caster's base that the map's own texels are too coarse for.
     float contact = 1.0;
     if (pp.contact.x > 0.0 && pp.contact_dir.w > 0.0) {
         vec3 dir = normalize(pp.contact_dir.xyz);
         float far = pp.contact_dir.w;
-        float step_len = far / 16.0;
-        float t = step_len;
-        for (int i = 0; i < 16; ++i) {
-            vec4 clip = pp.proj * vec4(p + dir * t, 1.0);
+        // Start clear of the surface, and take only a surface that is clearly between the marched point and the eye:
+        // a floor seen at a grazing angle stands a hair in front of its own ray, and too thin a threshold read that as
+        // a dark patch over the whole floor.
+        float start = max(0.05 * far, 0.5 * per_px);
+        float step_len = (far - start) / 12.0;
+        float thick = max(0.15 * far, 1.2 * per_px);
+        float t = start + step_len;
+        float strength = 0.0;
+        for (int i = 0; i < 12; ++i) {
+            vec3 at = p + dir * t;
+            vec4 clip = pp.proj * vec4(at, 1.0);
             if (clip.w <= 0.0) break;
             vec2 sx = clip.xy / clip.w * 0.5 + 0.5;
             if (sx.x < 0.0 || sx.x > 1.0 || sx.y < 0.0 || sx.y > 1.0) break;
             vec2 q = floor(sx * pc.size.xy) + 0.5;
             float dq = depth_at(q);
             if (dq > 0.0) {
-                float zq = point_at(q, dq).z;
-                float zr = (p + dir * t).z;
-                if (zq - zr > far * 0.02 && zq - zr < far * 0.75) {
-                    contact = 1.0 - pp.contact.x;
+                float diff = point_at(q, dq).z - at.z;
+                if (diff > thick && diff < 0.9 * far) {
+                    strength = 1.0 - smoothstep(0.6 * far, far, t);
                     break;
                 }
             }
             t += step_len;
         }
+        // A surface turned away from the light takes no extra darkening: the shadow map owns that side.
+        contact = 1.0 - pp.contact.x * strength * clamp(dot(n, dir), 0.0, 1.0);
     }
     float open = pc.ao.z > 0.5 ? clamp(1.0 - pc.ao.y * sum / float(taps), 0.0, 1.0) : 1.0;
     if (second) {
@@ -277,7 +300,7 @@ void main() {
                         // A ray that lands on a specular highlight must not carry it back as a bright texel: one such
                         // hit would light a whole square of the filter's footprint. The offline path clamps its
                         // indirect samples for the same reason.
-                        gi += min(pow(max(texelFetch(sampler2D(t_scene, s_point), q, 0).rgb, vec3(0.0)), vec3(2.2)), vec3(4.0));
+                        gi += min(to_linear(max(texelFetch(sampler2D(t_scene, s_point), q, 0).rgb, vec3(0.0))), vec3(4.0));
                         // The second time round, the surface met also sends back what the first bounce brought it.
                         if (second) gi += min(hit_colour * texelFetch(sampler2D(t_open, s_point), q, 0).rgb, vec3(4.0));
                         hit_albedo += hit_colour;
@@ -293,9 +316,12 @@ void main() {
         // share again, and so on. The first pass saw one bounce; the series of the rest is that over one less the share
         // each bounce keeps, the hits' surface colour times how much of the view round about they cover. The second
         // pass met those surfaces with that on them already.
-        // Rays that leave the view meet what it doesn't show, which may be more of the room or open space: taken to be
-        // half as bright as what the others met. Rays that cross open space that the view shows bring nothing.
-        if (hits > 0.5) {
+        // Rays that leave the view meet what it does not show: with a sky dome, the room it lights, taken to be half as
+        // bright as what the others met; without one, nothing. The fill was standing in for a dome even on an open floor
+        // that has none, and invented light there. The whole bounce is multiplied by the receiver's openness where the
+        // picture reads it, so the fill never lifts a contact or the floor behind an object.
+        bool has_sky = pp.env.w > 0.5 || dot(pp.env.rgb, pp.env.rgb) > 0.0;
+        if (has_sky && hits > 0.5) {
             gi += gi / hits * gone * 0.5;
             hit_albedo += hit_albedo / hits * gone * 0.5;
         }
@@ -372,7 +398,11 @@ vec3 planar_at(vec2 c, vec3 p, vec3 n, vec3 r, float rough, out float cover) {
             ivec2 q = clamp(at + ivec2(x, y), ivec2(0), top);
             // Linear filtering, so the mirrored silhouette hands over to the floor without a stepped edge.
             vec4 t = textureLod(sampler2D(t_planar, s_refl), (vec2(q) + 0.5) / pc.size.xy, 0.0);
-            plane += pow(max(t.rgb, vec3(0.0)), vec3(2.2));
+            // A mirrored pass can leave a non-finite texel where a projected edge divides by zero; one of those blacked
+            // a whole floor once it reached the composite. Drop it and let the sky stand in.
+            if (!(t.r == t.r && t.g == t.g && t.b == t.b && t.a == t.a)) continue;
+            if (abs(t.r) > 1e30 || abs(t.g) > 1e30 || abs(t.b) > 1e30 || abs(t.a) > 1e30) continue;
+            plane += to_linear(max(t.rgb, vec3(0.0)));
             data += t.a;
         }
     }
@@ -438,7 +468,7 @@ bool scene_hit(vec3 from, vec3 dir, float jitter, out vec3 colour, out float tra
                 vec2 hs = hc.xy / hc.w * 0.5 + 0.5;
                 ivec2 hat = clamp(ivec2(hs * pc.size.xy), ivec2(0), top);
                 if (texelFetch(sampler2D(t_mat_aux, s_point), hat, 0).r <= 0.5) {
-                    colour = pow(texelFetch(sampler2D(t_scene, s_point), hat, 0).rgb, vec3(2.2));
+                    colour = to_linear(texelFetch(sampler2D(t_scene, s_point), hat, 0).rgb);
                     travelled = hi;
                     return true;
                 }
@@ -473,37 +503,48 @@ void main() {
     vec3 coeff = max(m.rgb, vec3(0.0));
     vec3 sum = vec3(0.0);
     float lift = 0.01 * length(p) + 0.002;
-    // Glass: the scene behind it, bent by the IOR and tinted by its transmission colour, falling off with the distance
-    // through it (#302). The view has no colour behind the glass itself, so the lookup moves out to what it shows round
-    // about: the background is seen through the glass, bent, as a lens does. Aztek has no transmission depth, so the
-    // distance the lookup travels stands in for it.
+    // Glass: the two interfaces it really has. A solid body bends the ray at its front, carries it to its far side, and
+    // bends it again there (or reflects it, at a grazing exit): the second bend is what inverts and magnifies what is
+    // behind. A pane's interfaces are parallel, so the ray leaves along the way it came and the picture behind it is
+    // only displaced. Where the view has nothing behind the glass, the dome stands in; glass is never black.
     if (transmission > 0.5) {
-        vec3 dir = refract(v, n, 1.0 / ior);
-        if (dot(dir, dir) < 1e-6) dir = reflect(v, n);
-        // A lens: the image bends out towards the rim, where the surface turns away from the eye.
-        vec2 radial = vec2(n.x, -n.y);
-        float edge = 1.0 - clamp(abs(n.z), 0.0, 1.0);
-        vec2 offs = normalize(radial + vec2(0.0001)) * (edge * edge * 200.0);
-        vec2 q = clamp(c + offs, vec2(1.0), pc.size.xy - 2.0);
-        // The background behind the glass, drawn without it, seen through the bend and tinted. A few taps smooth the
-        // edge the bend crosses.
-        vec3 behind = vec3(0.0);
-        for (int y = -1; y <= 1; ++y) {
-            for (int x = -1; x <= 1; ++x) {
-                ivec2 qi = clamp(ivec2(q) + ivec2(x, y), ivec2(0), ivec2(pc.size.xy) - 1);
-                behind += pow(max(texelFetch(sampler2D(t_back, s_point), qi, 0).rgb, vec3(0.0)), vec3(2.2));
-            }
-        }
-        behind /= 9.0;
-        float travelled = length(offs);
         vec3 tint = texelFetch(sampler2D(t_albedo, s_point), at, 0).rgb;
-        // The tint the glass gives what it lets through; the bend's length shades it a little. A dark background
-        // behind the glass must not swallow it whole: keep its own transmission colour as a floor, so it never reads
-        // blacker than the background it lets through.
-        vec3 through = behind * tint * 1.4 * exp(-travelled * 0.005);
-        float through_lum = dot(through, vec3(0.2126, 0.7152, 0.0722));
-        through = max(through, tint * (0.3 * (1.0 - smoothstep(0.04, 0.30, through_lum))));
-        sum += through;
+        vec3 dir_in = refract(v, n, 1.0 / ior);
+        if (dot(dir_in, dir_in) < 1e-6) dir_in = reflect(v, n);
+        // The far side of the body, from the pass that drew its back faces: where the ray leaves it, and which way that
+        // surface faces. The second bend there is the one that inverts and magnifies what lies behind.
+        vec4 far_side = texelFetch(sampler2D(t_backface, s_point), at, 0);
+        vec3 hit;
+        float travelled;
+        if (far_side.a > 0.0) {
+            vec3 exit_n = normalize(far_side.xyz);
+            // The far side sits on the same pixel ray; lay it at its own view distance.
+            vec3 exit_p = p * (far_side.a / max(-p.z, 1e-6));
+            float path = length(exit_p - p);
+            vec3 dir_out = refract(dir_in, -exit_n, ior);
+            if (dot(dir_out, dir_out) < 1e-6) dir_out = reflect(dir_in, -exit_n);
+            vec3 seen = scene_hit(p + n * lift, dir_out, 0.5, hit, travelled) ? hit : env_lookup(dir_out, rough);
+            // The tint deepens with the path through the body.
+            sum += seen * tint * exp(-path * 0.06);
+        } else {
+            // A single-faced pane: sample the view's own picture behind it, bent out towards the rim where the surface
+            // turns away from the eye, and let the dome stand in where that picture is the empty background.
+            vec2 radial = vec2(n.x, -n.y);
+            float edge = 1.0 - clamp(abs(n.z), 0.0, 1.0);
+            vec2 offs = normalize(radial + vec2(0.0001)) * (edge * edge * 200.0);
+            vec2 q = clamp(c + offs, vec2(1.0), pc.size.xy - 2.0);
+            vec3 behind = vec3(0.0);
+            for (int y = -1; y <= 1; ++y) {
+                for (int x = -1; x <= 1; ++x) {
+                    ivec2 qi = clamp(ivec2(q) + ivec2(x, y), ivec2(0), ivec2(pc.size.xy) - 1);
+                    behind += to_linear(max(texelFetch(sampler2D(t_back, s_point), qi, 0).rgb, vec3(0.0)));
+                }
+            }
+            behind /= 9.0;
+            float behind_lum = dot(behind, vec3(0.2126, 0.7152, 0.0722));
+            behind = mix(env_lookup(reflect(v, n), rough), behind, smoothstep(0.0, 0.02, behind_lum));
+            sum += behind * tint;
+        }
     }
     // The reflection: the scene where the view shows it, the sky where it doesn't. Glossy surfaces are smoothed over
     // the reflection image in the composite, from their roughness.
@@ -522,6 +563,9 @@ void main() {
     // The two tiers are mixed by one weight, so their sum is the one reflection. Both take the same brightness scale
     // and go through the same filtered copy by the surface's roughness.
     refl = mix(refl, planar, planar_cover) * 1.3;
+    // The same guard at the last step: a bad sample in either tier becomes the sky rather than a black surface.
+    if (!(refl.r == refl.r && refl.g == refl.g && refl.b == refl.b)) refl = env_lookup(r, rough);
+    if (abs(refl.r) > 1e30 || abs(refl.g) > 1e30 || abs(refl.b) > 1e30) refl = env_lookup(r, rough);
     sum += refl * coeff;
     o = vec4(sum, 1.0);
 }
@@ -602,6 +646,26 @@ vec3 reflection_at(ivec2 at, float d) {
     return sum / total;
 }
 
+const float SKY_PI = 3.141592653589793;
+vec3 sky_turn(vec4 q, vec3 v) {
+    return v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v);
+}
+// The view direction a pixel looks along: the eye's ray, or the view's forward when the rays are parallel.
+vec3 view_dir(vec2 c) {
+    vec4 a = pc.inv_proj * vec4(c * pc.size.zw * 2.0 - 1.0, 1.0, 1.0);
+    vec4 b = pc.inv_proj * vec4(c * pc.size.zw * 2.0 - 1.0, 0.0, 1.0);
+    vec3 d = a.xyz / a.w - b.xyz / b.w;
+    return normalize(length(d) > 1e-6 ? d : vec3(0.0, 0.0, -1.0));
+}
+// The dome the scene lights with, in that direction: its image, or its own colour.
+vec3 dome_at(vec3 dir_view) {
+    vec3 wd = (pp.view_to_world * vec4(dir_view, 0.0)).xyz;
+    if (pp.bg_env.w < 1.5) return pp.bg_env.rgb;
+    vec3 d = normalize(sky_turn(pp.env_rot, wd));
+    vec2 uv = vec2(atan(d.z, d.x) / (2.0 * SKY_PI) + 0.5, acos(clamp(d.y, -1.0, 1.0)) / SKY_PI);
+    return textureLod(sampler2D(t_env, s_env), uv, 0.0).rgb;
+}
+
 // The scene's colour with the occlusion and bounce light (`got`, rgb bounce and alpha openness) on it, and the screen-
 // space reflections and refraction added in linear light.
 vec3 lit(vec3 color, vec4 got, ivec2 at, float d) {
@@ -610,12 +674,12 @@ vec3 lit(vec3 color, vec4 got, ivec2 at, float d) {
     if (pp.quality.y > 0.0) {
         // The bounce is added in linear light, then the picture goes back to the display's encoding.
         vec3 albedo = texelFetch(sampler2D(t_albedo, s_point), at, 0).rgb;
-        shaded = pow(pow(shaded, vec3(2.2)) + albedo * got.rgb * open, vec3(1.0 / 2.2));
+        shaded = to_srgb(to_linear(shaded) + albedo * got.rgb * open);
     }
     if (pp.quality.z > 0.5) {
         vec3 refl = reflection_at(at, d);
         int dbg = int(pp.quality.w);
-        if (dbg == 1) return pow(max(refl, vec3(0.0)), vec3(1.0 / 2.2));
+        if (dbg == 1) return to_srgb(max(refl, vec3(0.0)));
         if (dbg == 2) return texelFetch(sampler2D(t_mat, s_point), at, 0).rgb;
         if (dbg == 3) return vec3(texelFetch(sampler2D(t_mat, s_point), at, 0).a - 0.002);
         if (dbg == 4) return vec3(texelFetch(sampler2D(t_mat_aux, s_point), at, 0).b);
@@ -627,13 +691,13 @@ vec3 lit(vec3 color, vec4 got, ivec2 at, float d) {
         if (dbg == 14) return texelFetch(sampler2D(t_refl, s_point), at, 0).rgb;
         if (dbg == 15) return reflection_at(at, d);
         if (dbg == 16) return textureLod(sampler2D(t_refl_soft, s_refl), (vec2(at) + 0.5) / pc.size.xy, 3.0).rgb;
-        if (dbg == 20) return pow(max(got.rgb, vec3(0.0)), vec3(1.0 / 2.2));
+        if (dbg == 20) return to_srgb(max(got.rgb, vec3(0.0)));
         if (dbg == 21) return vec3(got.a);
-        if (dbg == 22) return pow(max(texelFetch(sampler2D(t_open, s_point), at, 0).rgb, vec3(0.0)), vec3(1.0 / 2.2));
+        if (dbg == 22) return to_srgb(max(texelFetch(sampler2D(t_open, s_point), at, 0).rgb, vec3(0.0)));
         if (dbg == 23) return vec3(texelFetch(sampler2D(t_open, s_point), at, 0).a);
         if (dbg == 24) return texelFetch(sampler2D(t_back, s_point), at, 0).rgb;
         if (dbg == 25) return vec3(texelFetch(sampler2D(t_mat_aux, s_point), at, 0).r);
-        shaded = pow(pow(shaded, vec3(2.2)) + refl, vec3(1.0 / 2.2));
+        shaded = to_srgb(to_linear(shaded) + refl);
     }
     return shaded;
 }
@@ -642,7 +706,9 @@ vec3 lit(vec3 color, vec4 got, ivec2 at, float d) {
 vec3 picture(vec2 c) {
     vec3 color = display_color(ivec2(c));
     float d = depth_at(c);
-    // Nothing drawn here: the gradient, top of the view to bottom. What was drawn without depth keeps its colour.
+    // Nothing drawn here: the scene's own sky dome, which is what the final render shows; else the display gradient,
+    // top of the view to bottom; else the grey the scene was cleared to. What was drawn without depth keeps its colour.
+    if (pp.bg_env.w > 0.5 && cleared(color, d)) return to_srgb(max(dome_at(view_dir(c)), vec3(0.0)));
     if (pc.bg_top.w > 0.5 && cleared(color, d)) return mix(pc.bg_top.rgb, pc.bg_bottom.rgb, c.y * pc.size.w);
     if (effects_off() || d <= 0.0) return lit(color, vec4(0.0, 0.0, 0.0, 1.0), ivec2(c), d);
     // The bounce was low-passed along both axes before this pass, so one bilinear sample is already smooth: no
@@ -761,6 +827,9 @@ pub struct PostSettings {
     /// world-to-dome rotation.
     pub env: [f32; 4],
     pub env_rot: [f32; 4],
+    /// The scene's sky dome as the view's background: its colour in rgb, and w 0 with none, 1 for a colour, 2 for an
+    /// image.
+    pub bg_env: [f32; 4],
 }
 
 impl Default for PostSettings {
@@ -782,6 +851,7 @@ impl Default for PostSettings {
             view: Mat4::IDENTITY,
             env: [0.0; 4],
             env_rot: [0.0, 0.0, 0.0, 1.0],
+            bg_env: [0.0; 4],
         }
     }
 }
@@ -813,6 +883,8 @@ struct PostParams {
     env_rot: [f32; 4],
     /// x: 1 with a ground plane's reflection, yzw: the world's up.
     extra: [f32; 4],
+    /// The sky dome as the view's background: colour and kind, as `PostSettings::bg_env`.
+    bg_env: [f32; 4],
 }
 
 pub struct Post {
@@ -884,12 +956,13 @@ impl Post {
                 vk::DescriptorSetLayoutBinding::default().binding(11).descriptor_type(vk::DescriptorType::SAMPLED_IMAGE).descriptor_count(1).stage_flags(vk::ShaderStageFlags::FRAGMENT),
                 vk::DescriptorSetLayoutBinding::default().binding(12).descriptor_type(vk::DescriptorType::SAMPLED_IMAGE).descriptor_count(1).stage_flags(vk::ShaderStageFlags::FRAGMENT),
                 vk::DescriptorSetLayoutBinding::default().binding(13).descriptor_type(vk::DescriptorType::SAMPLER).descriptor_count(1).stage_flags(vk::ShaderStageFlags::FRAGMENT),
+                vk::DescriptorSetLayoutBinding::default().binding(14).descriptor_type(vk::DescriptorType::SAMPLED_IMAGE).descriptor_count(1).stage_flags(vk::ShaderStageFlags::FRAGMENT),
             ];
             let set_layout = d.create_descriptor_set_layout(&vk::DescriptorSetLayoutCreateInfo::default().bindings(&bindings), None).unwrap();
             // The sky dome is a texture set of its own, bound at set 1, as the material pipelines bind it.
             let env_layout = crate::textures::set_layout(gpu);
             let sizes = [
-                vk::DescriptorPoolSize::default().ty(vk::DescriptorType::SAMPLED_IMAGE).descriptor_count(56),
+                vk::DescriptorPoolSize::default().ty(vk::DescriptorType::SAMPLED_IMAGE).descriptor_count(64),
                 vk::DescriptorPoolSize::default().ty(vk::DescriptorType::SAMPLER).descriptor_count(10),
                 vk::DescriptorPoolSize::default().ty(vk::DescriptorType::UNIFORM_BUFFER).descriptor_count(5),
             ];
@@ -933,6 +1006,7 @@ impl Post {
                     env: [0.0; 4],
                     env_rot: [0.0, 0.0, 0.0, 1.0],
                     extra: [0.0; 4],
+                    bg_env: [0.0; 4],
                 }],
             );
             let push = [vk::PushConstantRange::default().stage_flags(vk::ShaderStageFlags::FRAGMENT).offset(0).size(std::mem::size_of::<PostPush>() as u32)];
@@ -1031,6 +1105,7 @@ impl Post {
         let back = [vk::DescriptorImageInfo::default().image_view(gpu.back_view).image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)];
         let refl_soft = [vk::DescriptorImageInfo::default().image_view(gpu.refl_chain_view).image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)];
         let refl_sampler = [vk::DescriptorImageInfo::default().sampler(self.refl_sampler)];
+        let backface = [vk::DescriptorImageInfo::default().image_view(gpu.backface_view).image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)];
         let params = [vk::DescriptorBufferInfo::default().buffer(self.params.buffer).offset(0).range(std::mem::size_of::<PostParams>() as u64)];
         let mut writes = Vec::new();
         for (set, last, refl) in [
@@ -1055,6 +1130,7 @@ impl Post {
             writes.push(vk::WriteDescriptorSet::default().dst_set(set).dst_binding(11).descriptor_type(vk::DescriptorType::SAMPLED_IMAGE).image_info(&back));
             writes.push(vk::WriteDescriptorSet::default().dst_set(set).dst_binding(12).descriptor_type(vk::DescriptorType::SAMPLED_IMAGE).image_info(&refl_soft));
             writes.push(vk::WriteDescriptorSet::default().dst_set(set).dst_binding(13).descriptor_type(vk::DescriptorType::SAMPLER).image_info(&refl_sampler));
+            writes.push(vk::WriteDescriptorSet::default().dst_set(set).dst_binding(14).descriptor_type(vk::DescriptorType::SAMPLED_IMAGE).image_info(&backface));
         }
         unsafe { gpu.device.update_descriptor_sets(&writes, &[]) };
     }
@@ -1095,6 +1171,7 @@ impl Post {
             env: s.env,
             env_rot: s.env_rot,
             extra: [if s.planar_reflection { 1.0 } else { 0.0 }, s.up[0], s.up[1], s.up[2]],
+            bg_env: s.bg_env,
         };
         let bytes: &[u8] = bytemuck::bytes_of(&data);
         if let Some(p) = self.params.alloc.as_ref().and_then(|a| a.mapped_ptr()) {
@@ -1248,6 +1325,21 @@ mod tests {
         assert_eq!(dof_params(proj, &PostSettings::default(), 1000.0, 1000.0), [0.0; 4]);
     }
 
+    /// Glass is two interfaces: the entrance and the far side, where the ray bends out again (or reflects at a grazing
+    /// exit), and what the view cannot show is the dome rather than black.
+    #[test]
+    fn glass_refracts_at_both_of_its_interfaces() {
+        assert!(REFLECT_MAIN.contains("vec3 dir_in = refract(v, n, 1.0 / ior);"));
+        assert!(REFLECT_MAIN.contains("vec3 dir_out = refract(dir_in, -exit_n, ior);"));
+        assert!(REFLECT_MAIN.contains("if (dot(dir_out, dir_out) < 1e-6) dir_out = reflect(dir_in, -exit_n);"));
+        assert!(REFLECT_MAIN.contains("env_lookup(dir_out, rough)"));
+        assert!(REFLECT_MAIN.contains("vec4 far_side = texelFetch(sampler2D(t_backface, s_point), at, 0);"));
+        assert!(REFLECT_MAIN.contains("vec3 exit_p = p * (far_side.a / max(-p.z, 1e-6));"));
+        assert!(REFLECT_MAIN.contains("behind = mix(env_lookup(reflect(v, n), rough), behind,"));
+        // The old transmission-colour floor, which kept a dark cap but made the glass read flat, is gone.
+        assert!(!REFLECT_MAIN.contains("tint * (0.3 *"));
+    }
+
     #[test]
     fn the_background_never_reaches_the_bounce_light() {
         // #301: the default gradient's top colour has 0.54 red, which the first occlusion pass took for the flag of the
@@ -1282,7 +1374,7 @@ mod tests {
         assert_eq!(std::mem::size_of::<PostPush>(), 128);
         // The reflection pass reads the material, the planar image and the behind-glass image: they are what the shader
         // declares, and what the post sets bind.
-        for b in [7, 8, 9, 10, 11, 12, 13] {
+        for b in [7, 8, 9, 10, 11, 12, 13, 14] {
             assert!(POST_HEAD.contains(&format!("binding = {b}")), "binding {b}");
         }
         assert!(REFLECT_MAIN.contains("t_mat_aux"));
@@ -1313,7 +1405,7 @@ mod tests {
         let angle = r[0].atan2(-r[2]).abs();
         assert!(angle < std::f32::consts::FRAC_PI_4 - 0.1, "{angle}");
         assert!((r[0] * r[0] + r[1] * r[1] + r[2] * r[2] - 1.0).abs() < 1e-5);
-        assert!(REFLECT_MAIN.contains("vec3 dir = refract(v, n, 1.0 / ior);"));
+        assert!(REFLECT_MAIN.contains("vec3 dir_in = refract(v, n, 1.0 / ior);"));
     }
 
     #[test]

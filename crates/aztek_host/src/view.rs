@@ -185,6 +185,8 @@ pub struct View {
     /// Frame rate for the heads up display.
     frame_times: std::collections::VecDeque<std::time::Instant>,
     pub background: [f32; 4],
+    /// A parity capture: the picture alone, over the Render View's background. Black only when the scene has no dome.
+    parity: bool,
     pub show_grid: bool,
     pub needs_redraw: bool,
     /// Last frame read back on request, as RGB.
@@ -192,6 +194,9 @@ pub struct View {
     pub want_capture: bool,
     /// Whether this view already said the device cannot draw the Realtime renderer.
     rt_warned: bool,
+    /// A swapchain remake that failed: retry at the next frame rather than every time the window moves.
+    resize_retry: bool,
+    resize_reported: bool,
 }
 
 impl Drop for View {
@@ -255,11 +260,14 @@ impl View {
             cam_redo: Vec::new(),
             frame_times: Default::default(),
             background: [0.36, 0.36, 0.36, 1.0],
+            parity: false,
             show_grid: true,
             needs_redraw: true,
             capture: None,
             want_capture: false,
             rt_warned: false,
+            resize_retry: false,
+            resize_reported: false,
         }
     }
 
@@ -279,10 +287,27 @@ impl View {
     }
 
     pub fn resize(&mut self, w: u32, h: u32) {
-        if let Err(e) = self.gpu.recreate_swapchain(w, h) {
-            log::error!("viewport resize: {e}");
+        match self.gpu.recreate_swapchain(w, h) {
+            Ok(()) => {
+                self.resize_retry = false;
+                self.resize_reported = false;
+            }
+            Err(e) => {
+                // A remake can fail with a temporary condition (an out-of-date surface, a lost device being reset).
+                // Keep the view alive, say so once, and try again at the next frame instead of dying or repeating.
+                self.resize_retry = true;
+                if !self.resize_reported {
+                    self.resize_reported = true;
+                    log::error!("viewport resize: {e}; retrying at the next frame");
+                }
+            }
         }
         self.needs_redraw = true;
+    }
+
+    /// Whether the scene has a sky dome: the Render View's background, and so the parity capture's.
+    fn has_dome(&mut self, core: &mut Core) -> bool {
+        crate::lighting::chosen_environment(&mut core.s.graph, crate::lighting::LightMode::All, crate::viewport::visible, core.s.scene_path.as_deref(), None).is_some()
     }
 
     pub fn render(&mut self, core: &mut Core) {
@@ -291,8 +316,27 @@ impl View {
         }
         let e = self.gpu.extent;
         self.vp.rect = [0.0, 0.0, e.width as f64, e.height as f64];
+        // A parity capture is the picture alone, over the Render View's background: the scene's sky dome when it has
+        // one (the view's own background, which is what the window shows), and black when it has none. Forcing black on
+        // a domed scene darkened the capture, and every brightness comparison drawn from it.
+        if self.parity && !self.has_dome(core) {
+            self.background = [0.0, 0.0, 0.0, 1.0];
+        }
         let bg = self.background;
         let prof = Prof::start();
+        // A remake that failed last time is tried again here, before anything asks the swapchain for an image.
+        if self.resize_retry {
+            match self.gpu.recreate_swapchain(e.width, e.height) {
+                Ok(()) => {
+                    self.resize_retry = false;
+                    self.resize_reported = false;
+                }
+                Err(_) => {
+                    self.needs_redraw = true;
+                    return;
+                }
+            }
+        }
         let mut frame = self.gpu.begin_frame_deferred();
         prof.mark("  wait for the last frame");
         if frame.is_none() {
@@ -387,13 +431,14 @@ impl View {
             self.vp.planar = None;
         }
         // The shadow map is drawn before the scene's pass, with the lights read.
+        let mut glass = std::collections::HashSet::new();
         if realtime {
             if self.realtime.is_none() {
                 self.realtime = Some(crate::realtime::Realtime::new(&self.gpu, self.r.rt_shadow_layout));
             }
             // A transmissive shape passes light instead of blocking it: drawing it into the shadow map would put an
             // opaque shadow under the glass and the glass would refract that black floor. Leave it out of the casters.
-            let glass = self.vp.transmissive_shapes(&items);
+            glass = self.vp.transmissive_shapes(&items);
             if let Some(rt) = self.realtime.as_mut() {
                 rt.render(&mut self.gpu, &items, self.vp.shadow, &glass);
             }
@@ -405,6 +450,11 @@ impl View {
         }
         self.gpu.begin_scene([bg[0], bg[1], bg[2], 1.0]);
         self.vp.draw(&mut self.gpu, &self.r, &mut core.s, &items, self.dpr, realtime);
+        // Glass's far side, for its second interface: drawn now that the scene's own meshes are built.
+        if realtime {
+            self.gpu.begin_backface();
+            self.vp.draw_backfaces(&mut self.gpu, &self.r, &items, &glass);
+        }
         prof.mark("  draw");
         if crate::usd_view::busy() {
             core.version += 1;
@@ -445,6 +495,11 @@ impl View {
             view: self.vp.cam.view().as_mat4(),
             env,
             env_rot,
+            bg_env: match &self.vp.environment {
+                Some(e) if e.image.is_some() => [1.0, 1.0, 1.0, 2.0],
+                Some(e) => [e.color[0], e.color[1], e.color[2], 1.0],
+                None => [0.0; 4],
+            },
         };
         // Reflections and refraction, from the scene's colour, depth and material, before the picture is put together.
         self.gpu.begin_reflection();
@@ -2638,6 +2693,7 @@ impl View {
                 let g = v.as_f64().unwrap_or(0.36) as f32;
                 self.background = [g, g, g, 1.0];
             }
+            "parity" => self.parity = v.as_bool().unwrap_or(false),
             "manipSize" => self.vp.manip_scale = v.as_f64().unwrap_or(1.0),
             "axisOrientation" => self.vp.axis_mode = v.as_str().unwrap_or("world").to_string(),
             "curveDegree" => self.vp.curve_degree = v.as_i64().unwrap_or(3),

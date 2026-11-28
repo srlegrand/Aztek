@@ -361,11 +361,15 @@ fn realtime_push(mp: &MatPush, m: &DrawMaterial, highlight: f32) -> crate::rende
     if m.pbr.transmission_weight > 0.5 {
         base.color[3] = 1.0;
     }
+    let mut misc = mp.misc;
+    if m.pbr.emission_map {
+        misc[2] += 32.0;
+    }
     crate::render::RtPush {
         base,
         uv: mp.uv,
         frame: [m.pbr.metalness, m.pbr.specular_roughness, m.pbr.diffuse_roughness, m.pbr.specular_weight],
-        misc: mp.misc,
+        misc,
         gain: mp.gain,
         offs: [mp.offs[0], mp.offs[1], mp.offs[2], m.pbr.base_weight],
         ambient: [m.pbr.specular_color[0], m.pbr.specular_color[1], m.pbr.specular_color[2], highlight],
@@ -1211,13 +1215,12 @@ impl Viewport {
         if groups.is_empty() {
             return Default::default();
         }
+        // `members` is keyed by the shape and holds the groups that shade it, not the other way round.
         let member = |node: NodeId| {
-            groups.iter().any(|sg| {
-                self.mats
-                    .members
-                    .get(sg)
-                    .is_some_and(|ms| ms.iter().any(|(m, _)| *m == node))
-            })
+            self.mats
+                .members
+                .get(&node)
+                .is_some_and(|gs| groups.iter().any(|sg| gs.iter().any(|(g, _)| g == sg)))
         };
         items
             .iter()
@@ -1257,11 +1260,28 @@ impl Viewport {
         self.contact = self.shadow.and_then(|p| {
             let l = chosen.get(p.light)?;
             let toward = view.transform_vector3(l.world.z_axis.truncate()).normalize_or_zero();
-            let reach = (self.disp.ao_radius * 0.25).clamp(0.01, 2.0) as f32;
+            let reach = (self.shadow.map_or(0.0, |p| p.texel) * 8.0).clamp(0.01, 0.5) as f32;
             Some((toward.as_vec3().to_array(), reach, 0.6))
         });
         // The block carries the shadow camera in view space: a 2D map's matrix, or a cube light's position.
         lit.write_block(mode, &chosen, &view, &proj, self.disp.two_sided, self.cam.orthographic, shadow_plan.map(|p| p.block(&view)));
+    }
+
+    /// The far side of the transmissive bodies, for glass's second interface: back faces only, into the pass's own
+    /// image. The meshes are the ones the scene pass has already built.
+    pub fn draw_backfaces(&mut self, gpu: &mut Gpu, r: &Renderer, items: &[DrawItem], glass: &std::collections::HashSet<NodeId>) {
+        if glass.is_empty() {
+            return;
+        }
+        let view = self.cam.view();
+        let vp = self.cam.proj(self.aspect()) * view;
+        r.bind_backface(gpu);
+        for it in items.iter().filter(|it| glass.contains(&it.shape)) {
+            let Some(entry) = self.meshes.get(&it.shape) else { continue };
+            let Some((vb, ib, n)) = &entry.tris else { continue };
+            r.push(gpu, &push(vp * it.world, it.world, view, [1.0; 4], 0.0, 1.0));
+            r.draw(gpu, vb, Some((ib, *n)), 0);
+        }
     }
 
     /// This frame's lights again, in the planar reflection's own buffer: the same view and lights as the camera's, with
@@ -4982,4 +5002,26 @@ pub fn strand_ribbons(sets: &[aztek_scene::harold::strands::Strands], eye: DVec3
         }
     }
     (verts, idx)
+}
+
+#[cfg(test)]
+mod shadow_cast_tests {
+    use super::*;
+
+    /// Glass lets the light through, so the shadow pass leaves it out: an opaque shadow under a transmissive shape would
+    /// be refracted by the glass and blacken the floor it stands on.
+    #[test]
+    fn a_transmissive_material_keeps_its_shapes_out_of_the_shadow_map() {
+        let mut vp = Viewport::new(CamKind::Persp);
+        let group: NodeId = 1;
+        let glass: NodeId = 2;
+        let mut material = no_material();
+        material.pbr.transmission_weight = 1.0;
+        vp.mats.materials.insert(group, material);
+        vp.mats.members.insert(glass, vec![(group, None)]);
+        let item = |shape: NodeId| DrawItem { shape, xf: 9, world: DMat4::IDENTITY, mesh: Arc::new(Mesh::default()), smooth: 0 };
+        let skip = vp.transmissive_shapes(&[item(glass), item(3)]);
+        assert!(skip.contains(&glass));
+        assert_eq!(skip.len(), 1);
+    }
 }

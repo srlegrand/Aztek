@@ -73,6 +73,17 @@ void main() {
 "#;
 
 const SHADED_FS: &str = r#"#version 450
+
+// The sRGB transfer the final renderer writes its images with: one curve on both paths, so a radiance is the same
+// number whichever renderer shows it.
+vec3 to_srgb(vec3 c) {
+    c = clamp(c, 0.0, 1.0);
+    return mix(12.92 * c, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c));
+}
+vec3 to_linear(vec3 c) {
+    c = clamp(c, 0.0, 1.0);
+    return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
+}
 layout(location = 0) in vec3 v_nrm;
 layout(location = 1) in vec3 v_rot;
 layout(push_constant) uniform PC { mat4 mvp; vec4 n0; vec4 n1; vec4 n2; vec4 color; } pc;
@@ -88,7 +99,7 @@ void main() {
     vec3 f = normalize(vec3(0.6, -0.2, 0.75));
     float d = 0.75 * abs(dot(n, k)) + 0.3 * abs(dot(n, f));
     vec3 lin = pc.color.rgb * (0.12 + 0.95 * d);
-    out_color = vec4(pow(lin, vec3(1.0 / 2.2)), pc.color.a);
+    out_color = vec4(to_srgb(lin), pc.color.a);
 }
 "#;
 
@@ -160,6 +171,17 @@ void main() {
 "#;
 
 const MATERIAL_FS: &str = r#"#version 450
+
+// The sRGB transfer the final renderer writes its images with: one curve on both paths, so a radiance is the same
+// number whichever renderer shows it.
+vec3 to_srgb(vec3 c) {
+    c = clamp(c, 0.0, 1.0);
+    return mix(12.92 * c, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c));
+}
+vec3 to_linear(vec3 c) {
+    c = clamp(c, 0.0, 1.0);
+    return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
+}
 struct Light { vec4 pos; vec4 dir; vec4 color; vec4 params; vec4 a; vec4 b; vec4 c; };
 layout(location = 0) in vec3 v_nrm;
 layout(location = 1) in vec3 v_rot;
@@ -349,7 +371,7 @@ void main() {
         float d = 0.75 * abs(dot(n, k)) + 0.3 * abs(dot(n, f));
         lin = base * pc.offs.w * (0.12 + 0.95 * d) + pc.ambient.rgb * base + pc.incandescence.rgb;
     }
-    out_color = vec4(pow(max(lin, vec3(0.0)), vec3(1.0 / 2.2)), alpha);
+    out_color = vec4(to_srgb(max(lin, vec3(0.0))), alpha);
 }
 "#;
 
@@ -397,6 +419,17 @@ pub(crate) fn scene_blend(albedo: bool, mat: bool) -> [vk::PipelineColorBlendAtt
 }
 
 const REALTIME_FS: &str = r#"#version 450
+
+// The sRGB transfer the final renderer writes its images with: one curve on both paths, so a radiance is the same
+// number whichever renderer shows it.
+vec3 to_srgb(vec3 c) {
+    c = clamp(c, 0.0, 1.0);
+    return mix(12.92 * c, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c));
+}
+vec3 to_linear(vec3 c) {
+    c = clamp(c, 0.0, 1.0);
+    return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
+}
 struct Light { vec4 pos; vec4 dir; vec4 color; vec4 params; vec4 a; vec4 b; vec4 c; };
 layout(location = 0) in vec3 v_nrm;
 layout(location = 1) in vec3 v_rot;
@@ -467,93 +500,90 @@ float cube_distance(vec3 d, float near, float far) {
     float depth = texture(samplerCube(t_shadow_cube, s_shadow_cube), d).r;
     return far * near / (far + depth * (near - far));
 }
+// A face's projection stores the distance along its own axis. Every comparison here is in the distance from the light
+// instead, which is the same number on both sides of a face boundary: a tap that crosses one keeps its metric, and the
+// compare cannot step at the seam. Taking the axis distance of the receiver, of a tap and of a blocker in different
+// faces mixes three axes.
+float radial_at(float face_distance, vec3 dir) {
+    return face_distance / max(max(abs(dir.x), abs(dir.y)), abs(dir.z));
+}
 // How much of the light reaches this point from the shadow map, 0 in shadow to 1 lit. Outside the map it is lit.
 float shadow_at(vec3 p, vec3 n) {
     if (lt.shadow.w < 0.5) return 1.0;
-    // A surface is lifted along its normal by a little of the scene's size: a caster does not shadow itself.
-    vec3 q3 = p + n * lt.shadow.x;
+    // Two different quantities keep a surface off its own depth, and they are not interchangeable. The first is a
+    // world-space offset along the normal, about one of the map's texels: it moves the point out of the caster's own
+    // depth. The second is the compared tolerance, the depth a texel spans along the light on this surface, which
+    // grows with the slope. A constant belongs in neither.
     if (lt.shadow.w > 1.5) {
-        vec3 to = q3 - lt.shadow_pos.xyz;
-        float reach = length(to);
-        if (reach < 1e-4) return 1.0;
-        vec3 d = normalize((lt.view_to_world * vec4(to, 0.0)).xyz);
-        float near = max(lt.shadow_range.x, 0.01);
-        float far = max(lt.shadow_range.y, near + 0.02);
-        // Each face looks a quarter turn from the light: its depth turns back into the distance along the face's axis.
-        float axis = max(abs(to.x), max(abs(to.y), abs(to.z)));
+        // The light's position and `p` are view space; the six faces look along the world's axes, so the sampled
+        // direction and the depth's distance have to be world space.
         int li = int(lt.shadow.z);
-        float size = lt.lights[li].pos.w > 3.5 && lt.lights[li].pos.w < 4.5 ? 0.5 * (length(lt.lights[li].a.xyz) + length(lt.lights[li].b.xyz)) : 0.0;
-        // A cube texel covers this much of the face at the receiver's distance, and it stretches along the surface as
-        // the cosine to the light falls. The slack has to follow that stretch: a constant one either acnes on a floor
-        // seen at a grazing angle or detaches the shadow where the surface faces the light.
         vec3 l = lt.lights[li].pos.xyz - p;
         float nl = max(dot(n, normalize(l + vec3(1e-6))), 0.0);
-        float texel = 2.0 * lt.shadow.y;
-        float slope = sqrt(max(1.0 - nl * nl, 0.0)) / max(nl, 0.2);
-        float slack = 0.02 + axis * texel * (0.5 + 1.5 * slope);
+        float sin_theta = sqrt(max(1.0 - nl * nl, 0.0));
+        float near = max(lt.shadow_range.x, 0.01);
+        float far = max(lt.shadow_range.y, near + 0.02);
+        vec3 to = p - lt.shadow_pos.xyz;
+        float reach = length(to);
+        if (reach < 1e-4) return 1.0;
+        // The offset: a cube face's texel at the receiver, in world units, and a little more as the surface turns
+        // away from the light, where one texel covers more of it.
+        float texel_world = reach * 2.0 * lt.shadow.y;
+        vec3 q3 = p + n * (texel_world * (sin_theta + 0.05));
+        to = q3 - lt.shadow_pos.xyz;
+        reach = length(to);
+        vec3 wto = (lt.view_to_world * vec4(to, 0.0)).xyz;
+        vec3 d = normalize(wto);
+        if (reach < near || reach > far) return 1.0;
+        // The compared tolerance: the distance along the light that one texel spans on this surface, which is the
+        // texel's footprint over the cosine to the light.
+        float tan_theta = sin_theta / max(nl, 0.15);
+        float tol = texel_world * (1.0 + 2.0 * tan_theta);
         vec3 t1 = normalize(cross(d, abs(d.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
         vec3 t2 = cross(d, t1);
-        // A point light gets a stable 4 by 4 grid of bilinear cube taps, at least a texel and a half across. An area
-        // light widens the same grid to its penumbra. Nothing is rotated per pixel or per frame: that is what made
-        // the floor mottled like a dither.
-        float spread = texel * 4.0;
-        if (size > 0.0) {
-            float search = clamp(size / max(axis, 0.001), 0.0, 0.5);
-            float blockers = 0.0, found = 0.0;
-            for (int i = 0; i < 12; ++i) {
-                float r = sqrt((float(i) + 0.5) / 12.0) * search;
-                float a = float(i) * 2.39996323;
-                float stored = cube_distance(normalize(d + (t1 * cos(a) + t2 * sin(a)) * r), near, far);
-                if (stored + slack < axis) {
-                    blockers += stored;
-                    found += 1.0;
-                }
-            }
-            if (found > 0.5) {
-                float b = blockers / found;
-                spread = clamp(size * (axis - b) / max(b * axis, 0.0001), texel * 2.0, 0.5);
-            }
-        }
-        // The taps are fixed, never rotated per pixel or per frame. A point light gets a 4 by 4 grid of bilinear cube
-        // taps over a few texels: a regular grid has no spiral pattern on a smooth sphere. An area light's penumbra is
-        // wider, so it keeps the smoother golden-angle disc.
+        // One small fixed kernel: a 5 by 5 gather of bilinear depths, one texel apart, with the gradient compare. The
+        // edge transitions over about two to three texels, smoothly in value, and it never widens with the emitter: a
+        // disc spread over the emitter's angular size puts its taps so far apart that their hit pattern is a fan of hard
+        // patches around the shadow, which is the blocky surround. The shadow's shape, contact and depth are the map's.
         float lit = 0.0;
-        if (size <= 0.0) {
-            for (int y = 0; y < 4; ++y) {
-                for (int x = 0; x < 4; ++x) {
-                    vec2 o = (vec2(float(x), float(y)) + 0.5) * 0.25 - 0.5;
-                    vec3 dir = normalize(d + (t1 * o.x + t2 * o.y) * spread);
-                    float stored = cube_distance(dir, near, far);
-                    lit += axis <= stored + slack ? 1.0 : 0.0;
-                }
-            }
-        } else {
-            for (int i = 0; i < 16; ++i) {
-                float t = (float(i) + 0.5) / 16.0;
-                float a = float(i) * 2.39996323;
-                float r = sqrt(t) * spread;
-                vec3 dir = normalize(d + (t1 * cos(a) + t2 * sin(a)) * r);
-                float stored = cube_distance(dir, near, far);
-                lit += axis <= stored + slack ? 1.0 : 0.0;
+        for (int y = -2; y <= 2; ++y) {
+            for (int x = -2; x <= 2; ++x) {
+                vec3 dir = normalize(d + (t1 * float(x) + t2 * float(y)) * 2.0 * lt.shadow.y);
+                float stored = radial_at(cube_distance(dir, near, far), dir);
+                lit += smoothstep(-tol, tol, stored + tol - reach);
             }
         }
-        return lit / 16.0;
+        return lit / 25.0;
     }
+    // A single map: a directional light's direction is the depth axis, a spot's points from its position.
+    int li = int(lt.shadow.z);
+    vec3 toward = lt.lights[li].pos.w < 1.5 ? -lt.lights[li].dir.xyz : lt.lights[li].pos.xyz - p;
+    float nl = max(dot(n, normalize(toward + vec3(1e-6))), 0.0);
+    float sin_theta = sqrt(max(1.0 - nl * nl, 0.0));
+    float tan_theta = sin_theta / max(nl, 0.15);
+    vec3 q3 = p + n * (lt.shadow.x * (sin_theta + 0.05));
     vec4 sc = lt.shadow_matrix * vec4(q3, 1.0);
     // Clip x and y run -1 to 1, so they go to 0 to 1; Vulkan's clip z already runs 0 to 1 and must not be halved.
     vec3 q = vec3(sc.xy / sc.w * 0.5 + 0.5, sc.z / sc.w);
     if (q.x < 0.0 || q.x > 1.0 || q.y < 0.0 || q.y > 1.0 || q.z > 1.0 || q.z < 0.0) return 1.0;
+    // The tolerance in the map's own depth: where one texel's worth of world distance lands in clip space.
+    float tol_world = lt.shadow.x * (1.0 + 2.0 * tan_theta);
+    vec4 sc2 = lt.shadow_matrix * vec4(q3 - normalize(toward) * tol_world, 1.0);
+    float tol = abs(q.z - sc2.z / sc2.w) + 1e-6;
     float texel = lt.shadow.y;
     float sum = 0.0;
     // A 5 by 5 gather, bilinearly read: the map's edge is chunky at a close view where one texel is many pixels, and
-    // it crawls as the camera moves. The wider filtered kernel turns that into a soft penumbra.
+    // it crawls as the camera moves. The wider filtered kernel turns that into a soft penumbra, and each tap's compare
+    // is a gradient over the tolerance so the edge has no steps.
     for (int y = -2; y <= 2; y += 1) {
         for (int x = -2; x <= 2; x += 1) {
             float d = texture(sampler2D(t_shadow, s_shadow), q.xy + vec2(float(x), float(y)) * texel).r;
-            sum += q.z - 0.0015 <= d ? 1.0 : 0.0;
+            sum += smoothstep(-tol, tol, d + tol - q.z);
         }
     }
-    return sum / 25.0;
+    // The map's border is where its coverage ends, not a shadow: fade it back to lit over a few texels.
+    float border = min(min(q.x, 1.0 - q.x), min(q.y, 1.0 - q.y)) / texel;
+    return mix(1.0, sum / 25.0, smoothstep(0.0, 4.0, border));
 }
 // What a rectangle of light sends to a matte surface at x facing n, as its radiance times this: the exact integral of
 // the cosines over the distance squared across it (Lambert's polygon formula). Corners p0..p3 go round it so that
@@ -594,6 +624,9 @@ void direct(vec3 base, vec3 n, vec3 v, out vec3 diff, out vec3 spec, out vec3 co
         vec3 l = vec3(0.0, 0.0, 1.0);
         // An area light's diffuse, worked out over its whole rectangle; negative while the light has none.
         vec3 area_diff = vec3(-1.0);
+        // An area light's angular radius at this point. Its highlight is not a point's: the lobe has to carry the
+        // emitter's size, or a large light close to a floor reflects as a small, blown plate at the nearest point.
+        float area_angle = 0.0;
         if (kind < 0.5) {
             vec3 to = pos.xyz - v_view;
             l = normalize(to);
@@ -646,10 +679,13 @@ void direct(vec3 base, vec3 n, vec3 v, out vec3 diff, out vec3 spec, out vec3 co
             vec3 to = q - v_view;
             float d = length(to);
             l = to / max(d, 0.0001);
+            // The emitter's half size over its distance: how wide it looks from here.
+            area_angle = 0.5 * (length(ua.xyz) + length(ub.xyz)) / max(d, 0.0001);
             if (dir.w > 1.5) {
                 // Falling off as the reference renderer's: its radiance (colour, intensity and exposure, normalised over the area, as
                 // Harold's: without the pi the viewport's own lights take) through the rectangle's exact irradiance for
-                // the diffuse, and as a point of the same power at the nearest point for the highlight.
+                // the diffuse, and as a point of the same power at the nearest point for the base of the highlight.
+                // The highlight's lobe is widened by the emitter's angular size below, as a real one is.
                 vec3 radiance = col.rgb * par.x;
                 vec3 su = ua.xyz, sv = ub.xyz;
                 bool flip = dot(cross(su, sv), dir.xyz) > 0.0;
@@ -685,16 +721,21 @@ void direct(vec3 base, vec3 n, vec3 v, out vec3 diff, out vec3 spec, out vec3 co
             diff += c * nl * lit;
         }
         if ((emits & 2) != 0 && nl > 0.0) {
+            // The lobe's width is the surface's own roughness combined with the emitter's angular radius: two widths
+            // add in quadrature. A point light leaves the roughness alone; a broad emitter near the surface widens
+            // the highlight until its peak sits inside the shoulder instead of clipping as a plate.
+            float look_rough = min(sqrt(rough * rough + area_angle * area_angle), 1.0);
+            float look_coat = min(sqrt(coat_rough * coat_rough + area_angle * area_angle), 1.0);
             vec3 h = normalize(l + v);
             float nh = max(dot(n, h), 0.0);
             vec3 f = fresnel(max(dot(h, v), 0.0), f0);
-            float d = distribution_ggx(nh, rough);
-            float g = geometry_smith(nv, nl, rough);
+            float d = distribution_ggx(nh, look_rough);
+            float g = geometry_smith(nv, nl, look_rough);
             spec += c * lit * (d * g * f / max(4.0 * nv * nl, 0.0001)) * nl;
             if (pc.coat.x > 0.0) {
                 vec3 cf = fresnel(max(dot(h, v), 0.0), coat_f0);
-                float cd = distribution_ggx(nh, coat_rough);
-                float cg = geometry_smith(nv, nl, coat_rough);
+                float cd = distribution_ggx(nh, look_coat);
+                float cg = geometry_smith(nv, nl, look_coat);
                 coat_spec += c * lit * pc.coat.x * (cd * cg * cf / max(4.0 * nv * nl, 0.0001)) * nl;
             }
         }
@@ -738,9 +779,9 @@ void main() {
     float alpha = pc.color.a;
     if (pc.misc.w > 1.5) alpha = dot(mask.rgb, vec3(0.3, 0.59, 0.11));
     else if (pc.misc.w > 0.5) alpha = mask.a;
-    vec3 emission = pc.incandescence.rgb;
+    vec3 emission = ((int(pc.misc.z) & 32) != 0) ? base * pc.incandescence.rgb : pc.incandescence.rgb;
     if (pc.gain.w < 0.5) {
-        out_color = vec4(pow(max(base + emission, vec3(0.0)), vec3(1.0 / 2.2)), alpha);
+        out_color = vec4(to_srgb(max(base + emission, vec3(0.0))), alpha);
         out_albedo = vec4(0.0, 0.0, 0.0, alpha);
         out_mat = vec4(0.0);
         out_aux = vec4(0.0);
@@ -799,7 +840,7 @@ void main() {
     }
     out_mat = vec4(coeff, look_rough + 0.002);
     out_aux = vec4(transmission, clamp((ior - 1.0) * 0.5, 0.0, 1.0), metal, 1.0);
-    out_color = vec4(pow(max(lin, vec3(0.0)), vec3(1.0 / 2.2)), alpha);
+    out_color = vec4(to_srgb(max(lin, vec3(0.0))), alpha);
 }
 "#;
 
@@ -878,6 +919,30 @@ void main() {
 }
 "#;
 
+// The far side of a transmissive body: its view-space normal, and how far along the view it sits. Glass bends a ray
+// again on its way out, and the exit is the only place that second interface can be read from.
+const BACKFACE_VS: &str = r#"#version 450
+layout(location = 0) in vec3 a_pos;
+layout(location = 1) in vec3 a_nrm;
+layout(push_constant) uniform PC { mat4 mvp; vec4 n0; vec4 n1; vec4 n2; vec4 color; } pc;
+layout(location = 0) out vec3 v_nrm;
+layout(location = 1) out vec3 v_pos;
+void main() {
+    gl_Position = pc.mvp * vec4(a_pos, 1.0);
+    v_nrm = vec3(dot(pc.n0.xyz, a_nrm), dot(pc.n1.xyz, a_nrm), dot(pc.n2.xyz, a_nrm));
+    v_pos = vec3(dot(pc.n0.xyz, a_pos), dot(pc.n1.xyz, a_pos), dot(pc.n2.xyz, a_pos));
+}
+"#;
+
+const BACKFACE_FS: &str = r#"#version 450
+layout(location = 0) in vec3 v_nrm;
+layout(location = 1) in vec3 v_pos;
+layout(location = 0) out vec4 out_color;
+void main() {
+    out_color = vec4(normalize(v_nrm), -v_pos.z);
+}
+"#;
+
 pub(crate) fn compile(src: &str, stage: naga::ShaderStage) -> Vec<u32> {
     let mut front = naga::front::glsl::Frontend::default();
     let module = front.parse(&naga::front::glsl::Options::from(stage), src).unwrap_or_else(|e| panic!("shader parse: {e:?}"));
@@ -935,6 +1000,8 @@ pub struct Renderer {
     rt_planar_pipelines: Vec<(Kind, vk::Pipeline)>,
     /// The Realtime shadow set: a 2D map, a cube map, and a sampler for each.
     pub rt_shadow_layout: vk::DescriptorSetLayout,
+    /// The far side of the transmissive bodies: back faces, their view normal and view distance.
+    backface_pipeline: vk::Pipeline,
 }
 
 impl Renderer {
@@ -1201,6 +1268,50 @@ impl Renderer {
                 d.destroy_shader_module(vs, None);
                 d.destroy_shader_module(fs, None);
             }
+            let backface_pipeline = {
+                let vs = module(BACKFACE_VS, naga::ShaderStage::Vertex);
+                let fs = module(BACKFACE_FS, naga::ShaderStage::Fragment);
+                let stages = [
+                    vk::PipelineShaderStageCreateInfo::default().stage(vk::ShaderStageFlags::VERTEX).module(vs).name(c"main"),
+                    vk::PipelineShaderStageCreateInfo::default().stage(vk::ShaderStageFlags::FRAGMENT).module(fs).name(c"main"),
+                ];
+                let binding = [vk::VertexInputBindingDescription::default().stride(24).input_rate(vk::VertexInputRate::VERTEX)];
+                let attrs = [
+                    vk::VertexInputAttributeDescription::default().location(0).format(vk::Format::R32G32B32_SFLOAT).offset(0),
+                    vk::VertexInputAttributeDescription::default().location(1).format(vk::Format::R32G32B32_SFLOAT).offset(12),
+                ];
+                let vin = vk::PipelineVertexInputStateCreateInfo::default().vertex_binding_descriptions(&binding).vertex_attribute_descriptions(&attrs);
+                let ia = vk::PipelineInputAssemblyStateCreateInfo::default().topology(vk::PrimitiveTopology::TRIANGLE_LIST);
+                let vp = vk::PipelineViewportStateCreateInfo::default().viewport_count(1).scissor_count(1);
+                let rs = vk::PipelineRasterizationStateCreateInfo::default()
+                    .polygon_mode(vk::PolygonMode::FILL)
+                    .cull_mode(vk::CullModeFlags::FRONT)
+                    .front_face(vk::FrontFace::CLOCKWISE)
+                    .line_width(1.0);
+                let ms = vk::PipelineMultisampleStateCreateInfo::default().rasterization_samples(vk::SampleCountFlags::TYPE_1);
+                let ds = vk::PipelineDepthStencilStateCreateInfo::default().depth_test_enable(true).depth_write_enable(true).depth_compare_op(vk::CompareOp::GREATER_OR_EQUAL);
+                let blend = [vk::PipelineColorBlendAttachmentState::default().blend_enable(false).color_write_mask(vk::ColorComponentFlags::RGBA)];
+                let cb = vk::PipelineColorBlendStateCreateInfo::default().attachments(&blend);
+                let dyns = [vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
+                let dy = vk::PipelineDynamicStateCreateInfo::default().dynamic_states(&dyns);
+                let info = vk::GraphicsPipelineCreateInfo::default()
+                    .stages(&stages)
+                    .vertex_input_state(&vin)
+                    .input_assembly_state(&ia)
+                    .viewport_state(&vp)
+                    .rasterization_state(&rs)
+                    .multisample_state(&ms)
+                    .depth_stencil_state(&ds)
+                    .color_blend_state(&cb)
+                    .dynamic_state(&dy)
+                    .layout(layout)
+                    .render_pass(gpu.planar_pass)
+                    .subpass(0);
+                let p = d.create_graphics_pipelines(vk::PipelineCache::null(), &[info], None).map_err(|e| e.1).unwrap()[0];
+                d.destroy_shader_module(vs, None);
+                d.destroy_shader_module(fs, None);
+                p
+            };
             {
                 let vs = module(SMOOTH_VS, naga::ShaderStage::Vertex);
                 let fs = module(SMOOTH_FS, naga::ShaderStage::Fragment);
@@ -1251,7 +1362,7 @@ impl Renderer {
                 d.destroy_shader_module(vs, None);
                 d.destroy_shader_module(fs, None);
             }
-            Renderer { layout, pipelines, line_width: feats.wide_lines != 0, materials, material_layout, light_layout, realtime: rt_realtime, rt_layout, rt_pipelines, rt_planar_pipelines, rt_shadow_layout }
+            Renderer { layout, pipelines, line_width: feats.wide_lines != 0, materials, material_layout, light_layout, realtime: rt_realtime, rt_layout, rt_pipelines, rt_planar_pipelines, rt_shadow_layout, backface_pipeline }
         }
     }
 
@@ -1295,6 +1406,11 @@ impl Renderer {
             gpu.device.cmd_bind_pipeline(gpu.cmd, vk::PipelineBindPoint::GRAPHICS, p);
             gpu.device.cmd_bind_descriptor_sets(gpu.cmd, vk::PipelineBindPoint::GRAPHICS, self.rt_layout, 0, &[color, alpha, lights, env, shadow], &[]);
         }
+    }
+
+    /// Binds the pass that records the transmissive bodies' far side.
+    pub fn bind_backface(&self, gpu: &Gpu) {
+        unsafe { gpu.device.cmd_bind_pipeline(gpu.cmd, vk::PipelineBindPoint::GRAPHICS, self.backface_pipeline) };
     }
 
     pub fn push_realtime(&self, gpu: &Gpu, p: &RtPush) {
@@ -1379,6 +1495,8 @@ mod tests {
             (REALTIME_FS, naga::ShaderStage::Fragment),
             (SMOOTH_VS, naga::ShaderStage::Vertex),
             (SMOOTH_FS, naga::ShaderStage::Fragment),
+            (BACKFACE_VS, naga::ShaderStage::Vertex),
+            (BACKFACE_FS, naga::ShaderStage::Fragment),
             (crate::realtime::SHADOW_VS, naga::ShaderStage::Vertex),
             (crate::realtime::SHADOW_FS, naga::ShaderStage::Fragment),
         ] {
@@ -1393,6 +1511,61 @@ mod tests {
         // inv_proj, head, shadow_matrix, shadow, shadow_pos, shadow_range, env, env_rot, view_to_world, then lights.
         assert_eq!(std::mem::size_of::<LightBlock>(), 64 + 16 + 64 + 16 + 16 + 16 + 16 + 16 + 64 + 7 * 16 * MAX_LIGHTS);
         assert!(MATERIAL_FS.contains("Light lights[16]") && REALTIME_FS.contains("Light lights[16]") && MAX_LIGHTS == 16);
+    }
+
+    /// The cube shadow samples world-axis directions, and each face's depth image holds the distance along its own
+    /// axis. Every value that is compared is turned back into the distance from the light, which is one number across
+    /// all six faces; the receiver's axis distance is not compared with a tap's.
+    #[test]
+    fn the_cube_shadow_measures_the_distance_in_the_maps_own_space() {
+        assert!(REALTIME_FS.contains("vec3 wto = (lt.view_to_world * vec4(to, 0.0)).xyz;"));
+        assert!(REALTIME_FS.contains("float radial_at(float face_distance, vec3 dir)"));
+        assert!(REALTIME_FS.contains("float stored = radial_at(cube_distance(dir, near, far), dir);"));
+        assert!(REALTIME_FS.contains("lit += smoothstep(-tol, tol, stored + tol - reach);"));
+        assert!(!REALTIME_FS.contains("axis <= stored"));
+        // The offset and the compared tolerance are separate quantities: a texel-sized world offset along the normal,
+        // and a depth tolerance that grows with the slope. Neither carries a constant floor.
+        assert!(REALTIME_FS.contains("vec3 q3 = p + n * (texel_world * (sin_theta + 0.05));"));
+        assert!(REALTIME_FS.contains("float tol = texel_world * (1.0 + 2.0 * tan_theta);"));
+        assert!(!REALTIME_FS.contains("0.02 +"));
+        assert!(!REALTIME_FS.contains("q.z - 0.0015"));
+        // One small fixed kernel for every cube light: a 5 by 5 gather, no emitter-sized disc, no blocker search, and
+        // the single map's border still fades back to lit.
+        assert!(REALTIME_FS.contains("for (int y = -2; y <= 2; ++y)"));
+        assert!(REALTIME_FS.contains("return lit / 25.0;"));
+        assert!(!REALTIME_FS.contains("for (int i = 0; i < 32; ++i)"));
+        assert!(!REALTIME_FS.contains("size * (reach - b)"));
+        assert!(REALTIME_FS.contains("float border = min(min(q.x, 1.0 - q.x), min(q.y, 1.0 - q.y)) / texel;"));
+    }
+
+    /// A lit receiver must stay lit when the tap that reads its caster lies in another cube face: the receiver's axis
+    /// distance and the tap's axis distance are measured along different axes, and comparing them mixes metrics.
+    #[test]
+    fn the_cube_shadow_compares_one_metric_across_its_faces() {
+        let axis_of = |d: glam::DVec3| d.x.abs().max(d.y.abs()).max(d.z.abs());
+        let radial = |face_distance: f64, d: glam::DVec3| face_distance / axis_of(d);
+        // A receiver at 10 units nearly on +X, and a caster at 11 units read through a tap near the x/z boundary, in
+        // the +Z face.
+        let receiver = glam::DVec3::new(1.0, 0.0, 0.1).normalize();
+        let tap = glam::DVec3::new(0.6, 0.0, 0.8).normalize();
+        let (reach, caster) = (10.0, 11.0);
+        let stored_face = caster * axis_of(tap);
+        assert!((radial(stored_face, tap) - caster).abs() < 1e-9);
+        // Axis against axis shadows the lit receiver; distance against distance does not.
+        assert!(reach * axis_of(receiver) > stored_face + 1e-6);
+        assert!(reach <= radial(stored_face, tap) + 1e-6);
+    }
+
+    /// A broad emitter's highlight is broad: the lobe carries the emitter's angular radius, widened in quadrature
+    /// with the surface's roughness. Without it the nearest point acts as a point light of the whole power and the
+    /// floor under an area light clips to a plate.
+    #[test]
+    fn an_area_lights_highlight_widens_with_the_emitter() {
+        assert!(REALTIME_FS.contains("area_angle = 0.5 * (length(ua.xyz) + length(ub.xyz)) / max(d, 0.0001);"));
+        assert!(REALTIME_FS.contains("float look_rough = min(sqrt(rough * rough + area_angle * area_angle), 1.0);"));
+        assert!(REALTIME_FS.contains("float d = distribution_ggx(nh, look_rough);"));
+        assert!(REALTIME_FS.contains("float g = geometry_smith(nv, nl, look_rough);"));
+        assert!(!REALTIME_FS.contains("distribution_ggx(nh, rough)"));
     }
 
     #[test]
