@@ -674,6 +674,28 @@ mod tests {
         assert!(!(0.0..=1.0).contains(&ndc_up.z) || ndc_up.x.abs() > 1.0 || ndc_up.y.abs() > 1.0, "+Y looks away: {ndc_up:?}");
     }
 
+    /// A cube face's depth image holds the distance along its own axis, not the ray's length: that is what the
+    /// shader's `cube_distance` decodes, and what it must compare the receiver against.
+    #[test]
+    fn a_cube_face_stores_its_own_axis_distance() {
+        let eye = DVec3::new(10.0, 18.0, 10.0);
+        let (near, far) = (1.0f64, 100.0f64);
+        let faces = cube_faces(eye, near, far);
+        let at = eye + DVec3::new(5.0, 3.0, 0.0);
+        let clip = faces[0] * at.extend(1.0);
+        let decoded = far * near / (far + (clip.z / clip.w) * (near - far));
+        assert!((decoded - 5.0).abs() < 1e-6, "{decoded}");
+        // The ray is longer than the axis, so comparing against its length would shadow too little.
+        assert!((at - eye).length() > 5.5);
+        // The axis is a world-space maximum. A turned frame changes which component is largest, which is why the
+        // shader must take it from the vector it sampled the cube with, not from the view-space one.
+        let turned = DMat4::from_rotation_y(0.7) * (at - eye).extend(0.0);
+        let (world, view) = (DVec3::new(5.0, 3.0, 0.0), turned.truncate());
+        let axis = |v: DVec3| v.x.abs().max(v.y.abs()).max(v.z.abs());
+        assert!((axis(world) - 5.0).abs() < 1e-6);
+        assert!((axis(view) - 5.0).abs() > 1e-3, "the view-space maximum moved: {}", axis(view));
+    }
+
     #[test]
     fn the_shadow_camera_covers_the_scene_in_vulkans_clip_space() {
         let mut s = aztek_scene::Session::new();

@@ -473,14 +473,19 @@ float shadow_at(vec3 p, vec3 n) {
     // A surface is lifted along its normal by a little of the scene's size: a caster does not shadow itself.
     vec3 q3 = p + n * lt.shadow.x;
     if (lt.shadow.w > 1.5) {
+        // The light's position and `p` are view space; the six faces look along the world's axes, so the sampled
+        // direction and the depth's distance have to be world space. A face's projection stores its own axis
+        // distance: a point at `wto` from the light is at `max(|wto.x|, |wto.y|, |wto.z|)` along the face it falls
+        // on, and that is what the depth image holds. Taking that maximum from the view-space vector instead reads a
+        // different distance than the map was drawn with whenever the view is turned, and its piecewise switch at the
+        // face boundaries cuts a line across what should be a continuous shadow.
         vec3 to = q3 - lt.shadow_pos.xyz;
-        float reach = length(to);
-        if (reach < 1e-4) return 1.0;
-        vec3 d = normalize((lt.view_to_world * vec4(to, 0.0)).xyz);
+        if (length(to) < 1e-4) return 1.0;
+        vec3 wto = (lt.view_to_world * vec4(to, 0.0)).xyz;
+        vec3 d = normalize(wto);
         float near = max(lt.shadow_range.x, 0.01);
         float far = max(lt.shadow_range.y, near + 0.02);
-        // Each face looks a quarter turn from the light: its depth turns back into the distance along the face's axis.
-        float axis = max(abs(to.x), max(abs(to.y), abs(to.z)));
+        float axis = max(abs(wto.x), max(abs(wto.y), abs(wto.z)));
         int li = int(lt.shadow.z);
         float size = lt.lights[li].pos.w > 3.5 && lt.lights[li].pos.w < 4.5 ? 0.5 * (length(lt.lights[li].a.xyz) + length(lt.lights[li].b.xyz)) : 0.0;
         // A cube texel covers this much of the face at the receiver's distance, and it stretches along the surface as
@@ -1393,6 +1398,16 @@ mod tests {
         // inv_proj, head, shadow_matrix, shadow, shadow_pos, shadow_range, env, env_rot, view_to_world, then lights.
         assert_eq!(std::mem::size_of::<LightBlock>(), 64 + 16 + 64 + 16 + 16 + 16 + 16 + 16 + 64 + 7 * 16 * MAX_LIGHTS);
         assert!(MATERIAL_FS.contains("Light lights[16]") && REALTIME_FS.contains("Light lights[16]") && MAX_LIGHTS == 16);
+    }
+
+    /// The cube shadow samples world-axis directions, and its depth image holds the distance along the face's own
+    /// axis. The receiver's distance must therefore be taken from the world-space vector too: the view's maximum
+    /// component is a different number, and it switches at the face boundaries.
+    #[test]
+    fn the_cube_shadow_measures_the_distance_in_the_maps_own_space() {
+        assert!(REALTIME_FS.contains("vec3 wto = (lt.view_to_world * vec4(to, 0.0)).xyz;"));
+        assert!(REALTIME_FS.contains("float axis = max(abs(wto.x), max(abs(wto.y), abs(wto.z)));"));
+        assert!(!REALTIME_FS.contains("max(abs(to.x), max(abs(to.y), abs(to.z)))"));
     }
 
     #[test]
