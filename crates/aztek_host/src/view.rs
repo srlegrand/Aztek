@@ -495,6 +495,11 @@ impl View {
             view: self.vp.cam.view().as_mat4(),
             env,
             env_rot,
+            bg_env: match &self.vp.environment {
+                Some(e) if e.image.is_some() => [1.0, 1.0, 1.0, 2.0],
+                Some(e) => [e.tint[0], e.tint[1], e.tint[2], 1.0],
+                None => [0.0; 4],
+            },
         };
         // Reflections and refraction, from the scene's colour, depth and material, before the picture is put together.
         self.gpu.begin_reflection();

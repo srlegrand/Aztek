@@ -81,6 +81,8 @@ layout(set = 0, binding = 4, std140) uniform Params {
     vec4 env_rot;
     // x: 1 with a ground plane's reflection, yzw: the world's up.
     vec4 extra;
+    // The scene's sky dome as the view's background: colour in rgb, w 0 none, 1 colour, 2 image.
+    vec4 bg_env;
 } pp;
 
 float depth_at(vec2 px) {
@@ -630,6 +632,26 @@ vec3 reflection_at(ivec2 at, float d) {
     return sum / total;
 }
 
+const float SKY_PI = 3.141592653589793;
+vec3 sky_turn(vec4 q, vec3 v) {
+    return v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v);
+}
+// The view direction a pixel looks along: the eye's ray, or the view's forward when the rays are parallel.
+vec3 view_dir(vec2 c) {
+    vec4 a = pc.inv_proj * vec4(c * pc.size.zw * 2.0 - 1.0, 1.0, 1.0);
+    vec4 b = pc.inv_proj * vec4(c * pc.size.zw * 2.0 - 1.0, 0.0, 1.0);
+    vec3 d = a.xyz / a.w - b.xyz / b.w;
+    return normalize(length(d) > 1e-6 ? d : vec3(0.0, 0.0, -1.0));
+}
+// The dome the scene lights with, in that direction: its image, or its own colour.
+vec3 dome_at(vec3 dir_view) {
+    vec3 wd = (pp.view_to_world * vec4(dir_view, 0.0)).xyz;
+    if (pp.bg_env.w < 1.5) return pp.bg_env.rgb;
+    vec3 d = normalize(sky_turn(pp.env_rot, wd));
+    vec2 uv = vec2(atan(d.z, d.x) / (2.0 * SKY_PI) + 0.5, acos(clamp(d.y, -1.0, 1.0)) / SKY_PI);
+    return textureLod(sampler2D(t_env, s_env), uv, 0.0).rgb;
+}
+
 // The scene's colour with the occlusion and bounce light (`got`, rgb bounce and alpha openness) on it, and the screen-
 // space reflections and refraction added in linear light.
 vec3 lit(vec3 color, vec4 got, ivec2 at, float d) {
@@ -670,7 +692,9 @@ vec3 lit(vec3 color, vec4 got, ivec2 at, float d) {
 vec3 picture(vec2 c) {
     vec3 color = display_color(ivec2(c));
     float d = depth_at(c);
-    // Nothing drawn here: the gradient, top of the view to bottom. What was drawn without depth keeps its colour.
+    // Nothing drawn here: the scene's own sky dome, which is what the final render shows; else the display gradient,
+    // top of the view to bottom; else the grey the scene was cleared to. What was drawn without depth keeps its colour.
+    if (pp.bg_env.w > 0.5 && cleared(color, d)) return pow(max(dome_at(view_dir(c)), vec3(0.0)), vec3(1.0 / 2.2));
     if (pc.bg_top.w > 0.5 && cleared(color, d)) return mix(pc.bg_top.rgb, pc.bg_bottom.rgb, c.y * pc.size.w);
     if (effects_off() || d <= 0.0) return lit(color, vec4(0.0, 0.0, 0.0, 1.0), ivec2(c), d);
     // The bounce was low-passed along both axes before this pass, so one bilinear sample is already smooth: no
@@ -789,6 +813,9 @@ pub struct PostSettings {
     /// world-to-dome rotation.
     pub env: [f32; 4],
     pub env_rot: [f32; 4],
+    /// The scene's sky dome as the view's background: its colour in rgb, and w 0 with none, 1 for a colour, 2 for an
+    /// image.
+    pub bg_env: [f32; 4],
 }
 
 impl Default for PostSettings {
@@ -810,6 +837,7 @@ impl Default for PostSettings {
             view: Mat4::IDENTITY,
             env: [0.0; 4],
             env_rot: [0.0, 0.0, 0.0, 1.0],
+            bg_env: [0.0; 4],
         }
     }
 }
@@ -841,6 +869,8 @@ struct PostParams {
     env_rot: [f32; 4],
     /// x: 1 with a ground plane's reflection, yzw: the world's up.
     extra: [f32; 4],
+    /// The sky dome as the view's background: colour and kind, as `PostSettings::bg_env`.
+    bg_env: [f32; 4],
 }
 
 pub struct Post {
@@ -962,6 +992,7 @@ impl Post {
                     env: [0.0; 4],
                     env_rot: [0.0, 0.0, 0.0, 1.0],
                     extra: [0.0; 4],
+                    bg_env: [0.0; 4],
                 }],
             );
             let push = [vk::PushConstantRange::default().stage_flags(vk::ShaderStageFlags::FRAGMENT).offset(0).size(std::mem::size_of::<PostPush>() as u32)];
@@ -1126,6 +1157,7 @@ impl Post {
             env: s.env,
             env_rot: s.env_rot,
             extra: [if s.planar_reflection { 1.0 } else { 0.0 }, s.up[0], s.up[1], s.up[2]],
+            bg_env: s.bg_env,
         };
         let bytes: &[u8] = bytemuck::bytes_of(&data);
         if let Some(p) = self.params.alloc.as_ref().and_then(|a| a.mapped_ptr()) {
