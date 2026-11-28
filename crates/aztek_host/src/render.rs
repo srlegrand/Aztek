@@ -467,6 +467,13 @@ float cube_distance(vec3 d, float near, float far) {
     float depth = texture(samplerCube(t_shadow_cube, s_shadow_cube), d).r;
     return far * near / (far + depth * (near - far));
 }
+// A face's projection stores the distance along its own axis. Every comparison here is in the distance from the light
+// instead, which is the same number on both sides of a face boundary: a tap that crosses one keeps its metric, and the
+// compare cannot step at the seam. Taking the axis distance of the receiver, of a tap and of a blocker in different
+// faces mixes three axes.
+float radial_at(float face_distance, vec3 dir) {
+    return face_distance / max(max(abs(dir.x), abs(dir.y)), abs(dir.z));
+}
 // How much of the light reaches this point from the shadow map, 0 in shadow to 1 lit. Outside the map it is lit.
 float shadow_at(vec3 p, vec3 n) {
     if (lt.shadow.w < 0.5) return 1.0;
@@ -474,18 +481,15 @@ float shadow_at(vec3 p, vec3 n) {
     vec3 q3 = p + n * lt.shadow.x;
     if (lt.shadow.w > 1.5) {
         // The light's position and `p` are view space; the six faces look along the world's axes, so the sampled
-        // direction and the depth's distance have to be world space. A face's projection stores its own axis
-        // distance: a point at `wto` from the light is at `max(|wto.x|, |wto.y|, |wto.z|)` along the face it falls
-        // on, and that is what the depth image holds. Taking that maximum from the view-space vector instead reads a
-        // different distance than the map was drawn with whenever the view is turned, and its piecewise switch at the
-        // face boundaries cuts a line across what should be a continuous shadow.
+        // direction and the depth's distance have to be world space.
         vec3 to = q3 - lt.shadow_pos.xyz;
-        if (length(to) < 1e-4) return 1.0;
+        float reach = length(to);
+        if (reach < 1e-4) return 1.0;
         vec3 wto = (lt.view_to_world * vec4(to, 0.0)).xyz;
         vec3 d = normalize(wto);
         float near = max(lt.shadow_range.x, 0.01);
         float far = max(lt.shadow_range.y, near + 0.02);
-        float axis = max(abs(wto.x), max(abs(wto.y), abs(wto.z)));
+        if (reach < near || reach > far) return 1.0;
         int li = int(lt.shadow.z);
         float size = lt.lights[li].pos.w > 3.5 && lt.lights[li].pos.w < 4.5 ? 0.5 * (length(lt.lights[li].a.xyz) + length(lt.lights[li].b.xyz)) : 0.0;
         // A cube texel covers this much of the face at the receiver's distance, and it stretches along the surface as
@@ -493,30 +497,31 @@ float shadow_at(vec3 p, vec3 n) {
         // seen at a grazing angle or detaches the shadow where the surface faces the light.
         vec3 l = lt.lights[li].pos.xyz - p;
         float nl = max(dot(n, normalize(l + vec3(1e-6))), 0.0);
-        float texel = 2.0 * lt.shadow.y;
+        float texel_world = reach * 2.0 * lt.shadow.y;
         float slope = sqrt(max(1.0 - nl * nl, 0.0)) / max(nl, 0.2);
-        float slack = 0.02 + axis * texel * (0.5 + 1.5 * slope);
+        float slack = 0.02 + texel_world * (0.5 + 1.5 * slope);
         vec3 t1 = normalize(cross(d, abs(d.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
         vec3 t2 = cross(d, t1);
         // A point light gets a stable 4 by 4 grid of bilinear cube taps, at least a texel and a half across. An area
         // light widens the same grid to its penumbra. Nothing is rotated per pixel or per frame: that is what made
         // the floor mottled like a dither.
-        float spread = texel * 4.0;
+        float spread = 2.0 * lt.shadow.y * 4.0;
         if (size > 0.0) {
-            float search = clamp(size / max(axis, 0.001), 0.0, 0.5);
+            float search = clamp(size / max(reach, 0.001), 0.0, 0.5);
             float blockers = 0.0, found = 0.0;
             for (int i = 0; i < 12; ++i) {
                 float r = sqrt((float(i) + 0.5) / 12.0) * search;
                 float a = float(i) * 2.39996323;
-                float stored = cube_distance(normalize(d + (t1 * cos(a) + t2 * sin(a)) * r), near, far);
-                if (stored + slack < axis) {
+                vec3 dir = normalize(d + (t1 * cos(a) + t2 * sin(a)) * r);
+                float stored = radial_at(cube_distance(dir, near, far), dir);
+                if (stored + slack < reach) {
                     blockers += stored;
                     found += 1.0;
                 }
             }
             if (found > 0.5) {
                 float b = blockers / found;
-                spread = clamp(size * (axis - b) / max(b * axis, 0.0001), texel * 2.0, 0.5);
+                spread = clamp(size * (reach - b) / max(b * reach, 0.0001), 2.0 * lt.shadow.y, 0.5);
             }
         }
         // The taps are fixed, never rotated per pixel or per frame. A point light gets a 4 by 4 grid of bilinear cube
@@ -528,8 +533,8 @@ float shadow_at(vec3 p, vec3 n) {
                 for (int x = 0; x < 4; ++x) {
                     vec2 o = (vec2(float(x), float(y)) + 0.5) * 0.25 - 0.5;
                     vec3 dir = normalize(d + (t1 * o.x + t2 * o.y) * spread);
-                    float stored = cube_distance(dir, near, far);
-                    lit += axis <= stored + slack ? 1.0 : 0.0;
+                    float stored = radial_at(cube_distance(dir, near, far), dir);
+                    lit += reach <= stored + slack ? 1.0 : 0.0;
                 }
             }
         } else {
@@ -538,8 +543,8 @@ float shadow_at(vec3 p, vec3 n) {
                 float a = float(i) * 2.39996323;
                 float r = sqrt(t) * spread;
                 vec3 dir = normalize(d + (t1 * cos(a) + t2 * sin(a)) * r);
-                float stored = cube_distance(dir, near, far);
-                lit += axis <= stored + slack ? 1.0 : 0.0;
+                float stored = radial_at(cube_distance(dir, near, far), dir);
+                lit += reach <= stored + slack ? 1.0 : 0.0;
             }
         }
         return lit / 16.0;
@@ -1411,14 +1416,34 @@ mod tests {
         assert!(MATERIAL_FS.contains("Light lights[16]") && REALTIME_FS.contains("Light lights[16]") && MAX_LIGHTS == 16);
     }
 
-    /// The cube shadow samples world-axis directions, and its depth image holds the distance along the face's own
-    /// axis. The receiver's distance must therefore be taken from the world-space vector too: the view's maximum
-    /// component is a different number, and it switches at the face boundaries.
+    /// The cube shadow samples world-axis directions, and each face's depth image holds the distance along its own
+    /// axis. Every value that is compared is turned back into the distance from the light, which is one number across
+    /// all six faces; the receiver's axis distance is not compared with a tap's.
     #[test]
     fn the_cube_shadow_measures_the_distance_in_the_maps_own_space() {
         assert!(REALTIME_FS.contains("vec3 wto = (lt.view_to_world * vec4(to, 0.0)).xyz;"));
-        assert!(REALTIME_FS.contains("float axis = max(abs(wto.x), max(abs(wto.y), abs(wto.z)));"));
-        assert!(!REALTIME_FS.contains("max(abs(to.x), max(abs(to.y), abs(to.z)))"));
+        assert!(REALTIME_FS.contains("float radial_at(float face_distance, vec3 dir)"));
+        assert!(REALTIME_FS.contains("float stored = radial_at(cube_distance(dir, near, far), dir);"));
+        assert!(REALTIME_FS.contains("lit += reach <= stored + slack ? 1.0 : 0.0;"));
+        assert!(!REALTIME_FS.contains("axis <= stored"));
+    }
+
+    /// A lit receiver must stay lit when the tap that reads its caster lies in another cube face: the receiver's axis
+    /// distance and the tap's axis distance are measured along different axes, and comparing them mixes metrics.
+    #[test]
+    fn the_cube_shadow_compares_one_metric_across_its_faces() {
+        let axis_of = |d: glam::DVec3| d.x.abs().max(d.y.abs()).max(d.z.abs());
+        let radial = |face_distance: f64, d: glam::DVec3| face_distance / axis_of(d);
+        // A receiver at 10 units nearly on +X, and a caster at 11 units read through a tap near the x/z boundary, in
+        // the +Z face.
+        let receiver = glam::DVec3::new(1.0, 0.0, 0.1).normalize();
+        let tap = glam::DVec3::new(0.6, 0.0, 0.8).normalize();
+        let (reach, caster) = (10.0, 11.0);
+        let stored_face = caster * axis_of(tap);
+        assert!((radial(stored_face, tap) - caster).abs() < 1e-9);
+        // Axis against axis shadows the lit receiver; distance against distance does not.
+        assert!(reach * axis_of(receiver) > stored_face + 1e-6);
+        assert!(reach <= radial(stored_face, tap) + 1e-6);
     }
 
     /// A broad emitter's highlight is broad: the lobe carries the emitter's angular radius, widened in quadrature
