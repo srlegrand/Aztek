@@ -817,7 +817,7 @@ void main() {
     float alpha = pc.color.a;
     if (pc.misc.w > 1.5) alpha = dot(mask.rgb, vec3(0.3, 0.59, 0.11));
     else if (pc.misc.w > 0.5) alpha = mask.a;
-    vec3 emission = pc.incandescence.rgb;
+    vec3 emission = ((int(pc.misc.z) & 32) != 0) ? base * pc.incandescence.rgb : pc.incandescence.rgb;
     if (pc.gain.w < 0.5) {
         out_color = vec4(to_srgb(max(base + emission, vec3(0.0))), alpha);
         out_albedo = vec4(0.0, 0.0, 0.0, alpha);

@@ -361,11 +361,15 @@ fn realtime_push(mp: &MatPush, m: &DrawMaterial, highlight: f32) -> crate::rende
     if m.pbr.transmission_weight > 0.5 {
         base.color[3] = 1.0;
     }
+    let mut misc = mp.misc;
+    if m.pbr.emission_map {
+        misc[2] += 32.0;
+    }
     crate::render::RtPush {
         base,
         uv: mp.uv,
         frame: [m.pbr.metalness, m.pbr.specular_roughness, m.pbr.diffuse_roughness, m.pbr.specular_weight],
-        misc: mp.misc,
+        misc,
         gain: mp.gain,
         offs: [mp.offs[0], mp.offs[1], mp.offs[2], m.pbr.base_weight],
         ambient: [m.pbr.specular_color[0], m.pbr.specular_color[1], m.pbr.specular_color[2], highlight],
