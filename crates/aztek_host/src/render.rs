@@ -509,40 +509,42 @@ float shadow_at(vec3 p, vec3 n) {
         float tol = texel_world * (1.0 + 2.0 * tan_theta);
         vec3 t1 = normalize(cross(d, abs(d.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
         vec3 t2 = cross(d, t1);
-        // A point light gets a stable 4 by 4 grid of bilinear cube taps, at least a texel and a half across. An area
-        // light widens the same grid to its penumbra. Nothing is rotated per pixel or per frame: that is what made
-        // the floor mottled like a dither.
+        // The penumbra's width follows the nearest blocker in the emitter's cone, and the disc that samples it is held
+        // to a texel budget: taps spread over a large disc are so far apart that their hit pattern is a fan of hard
+        // patches, which is what the floor showed as clouds. The nearest blocker is one number, so its distance does
+        // not step as taps enter and leave the cone.
         float spread = 2.0 * lt.shadow.y * 4.0;
         if (size > 0.0) {
-            float search = clamp(size / max(reach, 0.001), 0.0, 0.5);
-            float blockers = 0.0, found = 0.0;
+            float search = clamp(size / max(reach, 0.001), 0.0, 2.0 * lt.shadow.y * 48.0);
+            float blocker = 1e20;
             for (int i = 0; i < 12; ++i) {
                 float r = sqrt((float(i) + 0.5) / 12.0) * search;
                 float a = float(i) * 2.39996323;
                 vec3 dir = normalize(d + (t1 * cos(a) + t2 * sin(a)) * r);
                 float stored = radial_at(cube_distance(dir, near, far), dir);
                 if (stored + tol < reach) {
-                    blockers += stored;
-                    found += 1.0;
+                    blocker = min(blocker, stored);
                 }
             }
-            if (found > 0.5) {
-                float b = blockers / found;
-                spread = clamp(size * (reach - b) / max(b * reach, 0.0001), 2.0 * lt.shadow.y, 0.5);
+            if (blocker < 1e19) {
+                float b = blocker;
+                spread = clamp(size * (reach - b) / max(b * reach, 0.0001), 2.0 * lt.shadow.y, 2.0 * lt.shadow.y * 24.0);
             }
         }
-        // The taps are fixed, never rotated per pixel or per frame. A point light gets a 4 by 4 grid of bilinear cube
-        // taps over a few texels: a regular grid has no spiral pattern on a smooth sphere. An area light's penumbra is
-        // wider, so it keeps the smoother golden-angle disc.
+        // The taps are fixed, never rotated per pixel or per frame.
         float lit = 0.0;
         float taps = 0.0;
         if (size <= 0.0) {
-            // A point light has no size: its shadow is as hard as the map. One bilinear fetch is already a 2 by 2
-            // filtered depth, and the gradient compare takes the step out of it; a grid of taps would only soften the
-            // contact the map can resolve.
-            float stored = radial_at(cube_distance(d, near, far), d);
-            lit = smoothstep(-tol, tol, stored + tol - reach);
-            taps = 1.0;
+            // A point light has no size: its edge is the map's. A 3 by 3 gather of bilinear depths, one texel apart,
+            // with the gradient compare, gives a continuous edge instead of the single fetch's texel-sized steps.
+            for (int y = -1; y <= 1; ++y) {
+                for (int x = -1; x <= 1; ++x) {
+                    vec3 dir = normalize(d + (t1 * float(x) + t2 * float(y)) * 2.0 * lt.shadow.y);
+                    float stored = radial_at(cube_distance(dir, near, far), dir);
+                    lit += smoothstep(-tol, tol, stored + tol - reach);
+                    taps += 1.0;
+                }
+            }
         } else {
             // An area light's penumbra is sampled on one fixed golden-angle disc, over thirty-two taps rather than
             // sixteen: with the gradient compare the levels and the disc's spokes read as a smooth edge, not a star.
