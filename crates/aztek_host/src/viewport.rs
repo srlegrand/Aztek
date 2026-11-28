@@ -1257,7 +1257,7 @@ impl Viewport {
         self.contact = self.shadow.and_then(|p| {
             let l = chosen.get(p.light)?;
             let toward = view.transform_vector3(l.world.z_axis.truncate()).normalize_or_zero();
-            let reach = (self.disp.ao_radius * 0.25).clamp(0.01, 2.0) as f32;
+            let reach = (self.shadow.map_or(0.0, |p| p.texel) * 8.0).clamp(0.01, 0.5) as f32;
             Some((toward.as_vec3().to_array(), reach, 0.6))
         });
         // The block carries the shadow camera in view space: a 2D map's matrix, or a cube light's position.

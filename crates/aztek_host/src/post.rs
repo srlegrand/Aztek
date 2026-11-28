@@ -186,31 +186,39 @@ void main() {
         float f = max(1.0 - vv / (r * r), 0.0);
         sum += f * f * f * max(vn, 0.0) * r / (vv + 0.0001 * r * r);
     }
-    // Contact shadows: march from the point towards the light and see whether the surface stands in the way. This is the
-    // short-range shadow a shadow map's texels are too coarse for, as EEVEE's contact shadows are.
+    // Contact shadows: march a few of the map's texels into the scene from the point towards its light, for the one
+    // band at a caster's base that the map's own texels are too coarse for.
     float contact = 1.0;
     if (pp.contact.x > 0.0 && pp.contact_dir.w > 0.0) {
         vec3 dir = normalize(pp.contact_dir.xyz);
         float far = pp.contact_dir.w;
-        float step_len = far / 16.0;
-        float t = step_len;
-        for (int i = 0; i < 16; ++i) {
-            vec4 clip = pp.proj * vec4(p + dir * t, 1.0);
+        // Start clear of the surface, and take only a surface that is clearly between the marched point and the eye:
+        // a floor seen at a grazing angle stands a hair in front of its own ray, and too thin a threshold read that as
+        // a dark patch over the whole floor.
+        float start = max(0.05 * far, 0.5 * per_px);
+        float step_len = (far - start) / 12.0;
+        float thick = max(0.15 * far, 1.2 * per_px);
+        float t = start + step_len;
+        float strength = 0.0;
+        for (int i = 0; i < 12; ++i) {
+            vec3 at = p + dir * t;
+            vec4 clip = pp.proj * vec4(at, 1.0);
             if (clip.w <= 0.0) break;
             vec2 sx = clip.xy / clip.w * 0.5 + 0.5;
             if (sx.x < 0.0 || sx.x > 1.0 || sx.y < 0.0 || sx.y > 1.0) break;
             vec2 q = floor(sx * pc.size.xy) + 0.5;
             float dq = depth_at(q);
             if (dq > 0.0) {
-                float zq = point_at(q, dq).z;
-                float zr = (p + dir * t).z;
-                if (zq - zr > far * 0.02 && zq - zr < far * 0.75) {
-                    contact = 1.0 - pp.contact.x;
+                float diff = point_at(q, dq).z - at.z;
+                if (diff > thick && diff < 0.9 * far) {
+                    strength = 1.0 - smoothstep(0.6 * far, far, t);
                     break;
                 }
             }
             t += step_len;
         }
+        // A surface turned away from the light takes no extra darkening: the shadow map owns that side.
+        contact = 1.0 - pp.contact.x * strength * clamp(dot(n, dir), 0.0, 1.0);
     }
     float open = pc.ao.z > 0.5 ? clamp(1.0 - pc.ao.y * sum / float(taps), 0.0, 1.0) : 1.0;
     if (second) {
