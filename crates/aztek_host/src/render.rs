@@ -535,63 +535,25 @@ float shadow_at(vec3 p, vec3 n) {
         vec3 wto = (lt.view_to_world * vec4(to, 0.0)).xyz;
         vec3 d = normalize(wto);
         if (reach < near || reach > far) return 1.0;
-        float size = lt.lights[li].pos.w > 3.5 && lt.lights[li].pos.w < 4.5 ? 0.5 * (length(lt.lights[li].a.xyz) + length(lt.lights[li].b.xyz)) : 0.0;
         // The compared tolerance: the distance along the light that one texel spans on this surface, which is the
         // texel's footprint over the cosine to the light.
         float tan_theta = sin_theta / max(nl, 0.15);
         float tol = texel_world * (1.0 + 2.0 * tan_theta);
         vec3 t1 = normalize(cross(d, abs(d.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
         vec3 t2 = cross(d, t1);
-        // The penumbra's width follows the nearest blocker in the emitter's cone, and the disc that samples it is held
-        // to a texel budget: taps spread over a large disc are so far apart that their hit pattern is a fan of hard
-        // patches, which is what the floor showed as clouds. The nearest blocker is one number, so its distance does
-        // not step as taps enter and leave the cone.
-        float spread = 2.0 * lt.shadow.y * 4.0;
-        if (size > 0.0) {
-            float search = clamp(size / max(reach, 0.001), 0.0, 2.0 * lt.shadow.y * 48.0);
-            float blocker = 1e20;
-            for (int i = 0; i < 12; ++i) {
-                float r = sqrt((float(i) + 0.5) / 12.0) * search;
-                float a = float(i) * 2.39996323;
-                vec3 dir = normalize(d + (t1 * cos(a) + t2 * sin(a)) * r);
-                float stored = radial_at(cube_distance(dir, near, far), dir);
-                if (stored + tol < reach) {
-                    blocker = min(blocker, stored);
-                }
-            }
-            if (blocker < 1e19) {
-                float b = blocker;
-                spread = clamp(size * (reach - b) / max(b * reach, 0.0001), 2.0 * lt.shadow.y, 2.0 * lt.shadow.y * 24.0);
-            }
-        }
-        // The taps are fixed, never rotated per pixel or per frame.
+        // One small fixed kernel: a 3 by 3 gather of bilinear depths, one texel apart, with the gradient compare. An
+        // area light is not given a penumbra wider than that: a disc spread over the emitter's angular size puts its
+        // taps so far apart that their hit pattern is a fan of hard patches around the shadow, which is the blocky
+        // surround. The edge here is one to two texels, and the shadow's own shape, contact and depth are the map's.
         float lit = 0.0;
-        float taps = 0.0;
-        if (size <= 0.0) {
-            // A point light has no size: its edge is the map's. A 3 by 3 gather of bilinear depths, one texel apart,
-            // with the gradient compare, gives a continuous edge instead of the single fetch's texel-sized steps.
-            for (int y = -1; y <= 1; ++y) {
-                for (int x = -1; x <= 1; ++x) {
-                    vec3 dir = normalize(d + (t1 * float(x) + t2 * float(y)) * 2.0 * lt.shadow.y);
-                    float stored = radial_at(cube_distance(dir, near, far), dir);
-                    lit += smoothstep(-tol, tol, stored + tol - reach);
-                    taps += 1.0;
-                }
-            }
-        } else {
-            // An area light's penumbra is sampled on one fixed golden-angle disc, over thirty-two taps rather than
-            // sixteen: with the gradient compare the levels and the disc's spokes read as a smooth edge, not a star.
-            for (int i = 0; i < 32; ++i) {
-                float t = (float(i) + 0.5) / 32.0;
-                float a = float(i) * 2.39996323;
-                float r = sqrt(t) * spread;
-                vec3 dir = normalize(d + (t1 * cos(a) + t2 * sin(a)) * r);
+        for (int y = -1; y <= 1; ++y) {
+            for (int x = -1; x <= 1; ++x) {
+                vec3 dir = normalize(d + (t1 * float(x) + t2 * float(y)) * 2.0 * lt.shadow.y);
                 float stored = radial_at(cube_distance(dir, near, far), dir);
                 lit += smoothstep(-tol, tol, stored + tol - reach);
-                taps += 1.0;
             }
         }
-        return lit / taps;
+        return lit / 9.0;
     }
     // A single map: a directional light's direction is the depth axis, a spot's points from its position.
     int li = int(lt.shadow.z);
@@ -1567,8 +1529,11 @@ mod tests {
         assert!(REALTIME_FS.contains("float tol = texel_world * (1.0 + 2.0 * tan_theta);"));
         assert!(!REALTIME_FS.contains("0.02 +"));
         assert!(!REALTIME_FS.contains("q.z - 0.0015"));
-        // An area light's disc carries thirty-two taps, and the single map's border fades back to lit.
-        assert!(REALTIME_FS.contains("for (int i = 0; i < 32; ++i)"));
+        // One small fixed kernel for every cube light: no emitter-sized disc, no blocker search, and the single map's
+        // border still fades back to lit.
+        assert!(REALTIME_FS.contains("for (int y = -1; y <= 1; ++y)"));
+        assert!(!REALTIME_FS.contains("for (int i = 0; i < 32; ++i)"));
+        assert!(!REALTIME_FS.contains("size * (reach - b)"));
         assert!(REALTIME_FS.contains("float border = min(min(q.x, 1.0 - q.x), min(q.y, 1.0 - q.y)) / texel;"));
     }
 
