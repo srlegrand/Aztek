@@ -496,7 +496,7 @@ float shadow_at(vec3 p, vec3 n) {
         // The offset: a cube face's texel at the receiver, in world units, and a little more as the surface turns
         // away from the light, where one texel covers more of it.
         float texel_world = reach * 2.0 * lt.shadow.y;
-        vec3 q3 = p + n * (texel_world * (sin_theta + 0.2));
+        vec3 q3 = p + n * (texel_world * (sin_theta + 0.05));
         to = q3 - lt.shadow_pos.xyz;
         reach = length(to);
         vec3 wto = (lt.view_to_world * vec4(to, 0.0)).xyz;
@@ -506,7 +506,7 @@ float shadow_at(vec3 p, vec3 n) {
         // The compared tolerance: the distance along the light that one texel spans on this surface, which is the
         // texel's footprint over the cosine to the light.
         float tan_theta = sin_theta / max(nl, 0.15);
-        float tol = texel_world * (0.5 + 1.5 * tan_theta);
+        float tol = texel_world * (1.0 + 2.0 * tan_theta);
         vec3 t1 = normalize(cross(d, abs(d.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
         vec3 t2 = cross(d, t1);
         // A point light gets a stable 4 by 4 grid of bilinear cube taps, at least a texel and a half across. An area
@@ -537,17 +537,12 @@ float shadow_at(vec3 p, vec3 n) {
         float lit = 0.0;
         float taps = 0.0;
         if (size <= 0.0) {
-            for (int y = 0; y < 4; ++y) {
-                for (int x = 0; x < 4; ++x) {
-                    vec2 o = (vec2(float(x), float(y)) + 0.5) * 0.25 - 0.5;
-                    vec3 dir = normalize(d + (t1 * o.x + t2 * o.y) * spread);
-                    float stored = radial_at(cube_distance(dir, near, far), dir);
-                    // A gradient over the texel's depth spread: each tap contributes a fraction, so the edge has no
-                    // steps of a sixteenth.
-                    lit += smoothstep(-tol, tol, stored + tol - reach);
-                    taps += 1.0;
-                }
-            }
+            // A point light has no size: its shadow is as hard as the map. One bilinear fetch is already a 2 by 2
+            // filtered depth, and the gradient compare takes the step out of it; a grid of taps would only soften the
+            // contact the map can resolve.
+            float stored = radial_at(cube_distance(d, near, far), d);
+            lit = smoothstep(-tol, tol, stored + tol - reach);
+            taps = 1.0;
         } else {
             // An area light's penumbra is sampled on one fixed golden-angle disc, over thirty-two taps rather than
             // sixteen: with the gradient compare the levels and the disc's spokes read as a smooth edge, not a star.
@@ -569,13 +564,13 @@ float shadow_at(vec3 p, vec3 n) {
     float nl = max(dot(n, normalize(toward + vec3(1e-6))), 0.0);
     float sin_theta = sqrt(max(1.0 - nl * nl, 0.0));
     float tan_theta = sin_theta / max(nl, 0.15);
-    vec3 q3 = p + n * (lt.shadow.x * (sin_theta + 0.2));
+    vec3 q3 = p + n * (lt.shadow.x * (sin_theta + 0.05));
     vec4 sc = lt.shadow_matrix * vec4(q3, 1.0);
     // Clip x and y run -1 to 1, so they go to 0 to 1; Vulkan's clip z already runs 0 to 1 and must not be halved.
     vec3 q = vec3(sc.xy / sc.w * 0.5 + 0.5, sc.z / sc.w);
     if (q.x < 0.0 || q.x > 1.0 || q.y < 0.0 || q.y > 1.0 || q.z > 1.0 || q.z < 0.0) return 1.0;
     // The tolerance in the map's own depth: where one texel's worth of world distance lands in clip space.
-    float tol_world = lt.shadow.x * (0.5 + 1.5 * tan_theta);
+    float tol_world = lt.shadow.x * (1.0 + 2.0 * tan_theta);
     vec4 sc2 = lt.shadow_matrix * vec4(q3 - normalize(toward) * tol_world, 1.0);
     float tol = abs(q.z - sc2.z / sc2.w) + 1e-6;
     float texel = lt.shadow.y;
@@ -1456,8 +1451,8 @@ mod tests {
         assert!(!REALTIME_FS.contains("axis <= stored"));
         // The offset and the compared tolerance are separate quantities: a texel-sized world offset along the normal,
         // and a depth tolerance that grows with the slope. Neither carries a constant floor.
-        assert!(REALTIME_FS.contains("vec3 q3 = p + n * (texel_world * (sin_theta + 0.2));"));
-        assert!(REALTIME_FS.contains("float tol = texel_world * (0.5 + 1.5 * tan_theta);"));
+        assert!(REALTIME_FS.contains("vec3 q3 = p + n * (texel_world * (sin_theta + 0.05));"));
+        assert!(REALTIME_FS.contains("float tol = texel_world * (1.0 + 2.0 * tan_theta);"));
         assert!(!REALTIME_FS.contains("0.02 +"));
         assert!(!REALTIME_FS.contains("q.z - 0.0015"));
         // An area light's disc carries thirty-two taps, and the single map's border fades back to lit.

@@ -4983,3 +4983,25 @@ pub fn strand_ribbons(sets: &[aztek_scene::harold::strands::Strands], eye: DVec3
     }
     (verts, idx)
 }
+
+#[cfg(test)]
+mod shadow_cast_tests {
+    use super::*;
+
+    /// Glass lets the light through, so the shadow pass leaves it out: an opaque shadow under a transmissive shape would
+    /// be refracted by the glass and blacken the floor it stands on.
+    #[test]
+    fn a_transmissive_material_keeps_its_shapes_out_of_the_shadow_map() {
+        let mut vp = Viewport::new(CamKind::Persp);
+        let group: NodeId = 1;
+        let glass: NodeId = 2;
+        let mut material = no_material();
+        material.pbr.transmission_weight = 1.0;
+        vp.mats.materials.insert(group, material);
+        vp.mats.members.insert(group, vec![(glass, None)]);
+        let item = |shape: NodeId| DrawItem { shape, xf: 9, world: DMat4::IDENTITY, mesh: Arc::new(Mesh::default()), smooth: 0 };
+        let skip = vp.transmissive_shapes(&[item(glass), item(3)]);
+        assert!(skip.contains(&glass));
+        assert_eq!(skip.len(), 1);
+    }
+}
