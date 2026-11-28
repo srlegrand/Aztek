@@ -1211,13 +1211,12 @@ impl Viewport {
         if groups.is_empty() {
             return Default::default();
         }
+        // `members` is keyed by the shape and holds the groups that shade it, not the other way round.
         let member = |node: NodeId| {
-            groups.iter().any(|sg| {
-                self.mats
-                    .members
-                    .get(sg)
-                    .is_some_and(|ms| ms.iter().any(|(m, _)| *m == node))
-            })
+            self.mats
+                .members
+                .get(&node)
+                .is_some_and(|gs| groups.iter().any(|sg| gs.iter().any(|(g, _)| g == sg)))
         };
         items
             .iter()
@@ -1262,6 +1261,23 @@ impl Viewport {
         });
         // The block carries the shadow camera in view space: a 2D map's matrix, or a cube light's position.
         lit.write_block(mode, &chosen, &view, &proj, self.disp.two_sided, self.cam.orthographic, shadow_plan.map(|p| p.block(&view)));
+    }
+
+    /// The far side of the transmissive bodies, for glass's second interface: back faces only, into the pass's own
+    /// image. The meshes are the ones the scene pass has already built.
+    pub fn draw_backfaces(&mut self, gpu: &mut Gpu, r: &Renderer, items: &[DrawItem], glass: &std::collections::HashSet<NodeId>) {
+        if glass.is_empty() {
+            return;
+        }
+        let view = self.cam.view();
+        let vp = self.cam.proj(self.aspect()) * view;
+        r.bind_backface(gpu);
+        for it in items.iter().filter(|it| glass.contains(&it.shape)) {
+            let Some(entry) = self.meshes.get(&it.shape) else { continue };
+            let Some((vb, ib, n)) = &entry.tris else { continue };
+            r.push(gpu, &push(vp * it.world, it.world, view, [1.0; 4], 0.0, 1.0));
+            r.draw(gpu, vb, Some((ib, *n)), 0);
+        }
     }
 
     /// This frame's lights again, in the planar reflection's own buffer: the same view and lights as the camera's, with
@@ -4998,7 +5014,7 @@ mod shadow_cast_tests {
         let mut material = no_material();
         material.pbr.transmission_weight = 1.0;
         vp.mats.materials.insert(group, material);
-        vp.mats.members.insert(group, vec![(glass, None)]);
+        vp.mats.members.insert(glass, vec![(group, None)]);
         let item = |shape: NodeId| DrawItem { shape, xf: 9, world: DMat4::IDENTITY, mesh: Arc::new(Mesh::default()), smooth: 0 };
         let skip = vp.transmissive_shapes(&[item(glass), item(3)]);
         assert!(skip.contains(&glass));

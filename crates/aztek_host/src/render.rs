@@ -924,6 +924,30 @@ void main() {
 }
 "#;
 
+// The far side of a transmissive body: its view-space normal, and how far along the view it sits. Glass bends a ray
+// again on its way out, and the exit is the only place that second interface can be read from.
+const BACKFACE_VS: &str = r#"#version 450
+layout(location = 0) in vec3 a_pos;
+layout(location = 1) in vec3 a_nrm;
+layout(push_constant) uniform PC { mat4 mvp; vec4 n0; vec4 n1; vec4 n2; vec4 color; } pc;
+layout(location = 0) out vec3 v_nrm;
+layout(location = 1) out vec3 v_pos;
+void main() {
+    gl_Position = pc.mvp * vec4(a_pos, 1.0);
+    v_nrm = vec3(dot(pc.n0.xyz, a_nrm), dot(pc.n1.xyz, a_nrm), dot(pc.n2.xyz, a_nrm));
+    v_pos = vec3(dot(pc.n0.xyz, a_pos), dot(pc.n1.xyz, a_pos), dot(pc.n2.xyz, a_pos));
+}
+"#;
+
+const BACKFACE_FS: &str = r#"#version 450
+layout(location = 0) in vec3 v_nrm;
+layout(location = 1) in vec3 v_pos;
+layout(location = 0) out vec4 out_color;
+void main() {
+    out_color = vec4(normalize(v_nrm), -v_pos.z);
+}
+"#;
+
 pub(crate) fn compile(src: &str, stage: naga::ShaderStage) -> Vec<u32> {
     let mut front = naga::front::glsl::Frontend::default();
     let module = front.parse(&naga::front::glsl::Options::from(stage), src).unwrap_or_else(|e| panic!("shader parse: {e:?}"));
@@ -981,6 +1005,8 @@ pub struct Renderer {
     rt_planar_pipelines: Vec<(Kind, vk::Pipeline)>,
     /// The Realtime shadow set: a 2D map, a cube map, and a sampler for each.
     pub rt_shadow_layout: vk::DescriptorSetLayout,
+    /// The far side of the transmissive bodies: back faces, their view normal and view distance.
+    backface_pipeline: vk::Pipeline,
 }
 
 impl Renderer {
@@ -1247,6 +1273,50 @@ impl Renderer {
                 d.destroy_shader_module(vs, None);
                 d.destroy_shader_module(fs, None);
             }
+            let backface_pipeline = {
+                let vs = module(BACKFACE_VS, naga::ShaderStage::Vertex);
+                let fs = module(BACKFACE_FS, naga::ShaderStage::Fragment);
+                let stages = [
+                    vk::PipelineShaderStageCreateInfo::default().stage(vk::ShaderStageFlags::VERTEX).module(vs).name(c"main"),
+                    vk::PipelineShaderStageCreateInfo::default().stage(vk::ShaderStageFlags::FRAGMENT).module(fs).name(c"main"),
+                ];
+                let binding = [vk::VertexInputBindingDescription::default().stride(24).input_rate(vk::VertexInputRate::VERTEX)];
+                let attrs = [
+                    vk::VertexInputAttributeDescription::default().location(0).format(vk::Format::R32G32B32_SFLOAT).offset(0),
+                    vk::VertexInputAttributeDescription::default().location(1).format(vk::Format::R32G32B32_SFLOAT).offset(12),
+                ];
+                let vin = vk::PipelineVertexInputStateCreateInfo::default().vertex_binding_descriptions(&binding).vertex_attribute_descriptions(&attrs);
+                let ia = vk::PipelineInputAssemblyStateCreateInfo::default().topology(vk::PrimitiveTopology::TRIANGLE_LIST);
+                let vp = vk::PipelineViewportStateCreateInfo::default().viewport_count(1).scissor_count(1);
+                let rs = vk::PipelineRasterizationStateCreateInfo::default()
+                    .polygon_mode(vk::PolygonMode::FILL)
+                    .cull_mode(vk::CullModeFlags::FRONT)
+                    .front_face(vk::FrontFace::CLOCKWISE)
+                    .line_width(1.0);
+                let ms = vk::PipelineMultisampleStateCreateInfo::default().rasterization_samples(vk::SampleCountFlags::TYPE_1);
+                let ds = vk::PipelineDepthStencilStateCreateInfo::default().depth_test_enable(true).depth_write_enable(true).depth_compare_op(vk::CompareOp::GREATER_OR_EQUAL);
+                let blend = [vk::PipelineColorBlendAttachmentState::default().blend_enable(false).color_write_mask(vk::ColorComponentFlags::RGBA)];
+                let cb = vk::PipelineColorBlendStateCreateInfo::default().attachments(&blend);
+                let dyns = [vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
+                let dy = vk::PipelineDynamicStateCreateInfo::default().dynamic_states(&dyns);
+                let info = vk::GraphicsPipelineCreateInfo::default()
+                    .stages(&stages)
+                    .vertex_input_state(&vin)
+                    .input_assembly_state(&ia)
+                    .viewport_state(&vp)
+                    .rasterization_state(&rs)
+                    .multisample_state(&ms)
+                    .depth_stencil_state(&ds)
+                    .color_blend_state(&cb)
+                    .dynamic_state(&dy)
+                    .layout(layout)
+                    .render_pass(gpu.planar_pass)
+                    .subpass(0);
+                let p = d.create_graphics_pipelines(vk::PipelineCache::null(), &[info], None).map_err(|e| e.1).unwrap()[0];
+                d.destroy_shader_module(vs, None);
+                d.destroy_shader_module(fs, None);
+                p
+            };
             {
                 let vs = module(SMOOTH_VS, naga::ShaderStage::Vertex);
                 let fs = module(SMOOTH_FS, naga::ShaderStage::Fragment);
@@ -1297,7 +1367,7 @@ impl Renderer {
                 d.destroy_shader_module(vs, None);
                 d.destroy_shader_module(fs, None);
             }
-            Renderer { layout, pipelines, line_width: feats.wide_lines != 0, materials, material_layout, light_layout, realtime: rt_realtime, rt_layout, rt_pipelines, rt_planar_pipelines, rt_shadow_layout }
+            Renderer { layout, pipelines, line_width: feats.wide_lines != 0, materials, material_layout, light_layout, realtime: rt_realtime, rt_layout, rt_pipelines, rt_planar_pipelines, rt_shadow_layout, backface_pipeline }
         }
     }
 
@@ -1341,6 +1411,11 @@ impl Renderer {
             gpu.device.cmd_bind_pipeline(gpu.cmd, vk::PipelineBindPoint::GRAPHICS, p);
             gpu.device.cmd_bind_descriptor_sets(gpu.cmd, vk::PipelineBindPoint::GRAPHICS, self.rt_layout, 0, &[color, alpha, lights, env, shadow], &[]);
         }
+    }
+
+    /// Binds the pass that records the transmissive bodies' far side.
+    pub fn bind_backface(&self, gpu: &Gpu) {
+        unsafe { gpu.device.cmd_bind_pipeline(gpu.cmd, vk::PipelineBindPoint::GRAPHICS, self.backface_pipeline) };
     }
 
     pub fn push_realtime(&self, gpu: &Gpu, p: &RtPush) {
@@ -1425,6 +1500,8 @@ mod tests {
             (REALTIME_FS, naga::ShaderStage::Fragment),
             (SMOOTH_VS, naga::ShaderStage::Vertex),
             (SMOOTH_FS, naga::ShaderStage::Fragment),
+            (BACKFACE_VS, naga::ShaderStage::Vertex),
+            (BACKFACE_FS, naga::ShaderStage::Fragment),
             (crate::realtime::SHADOW_VS, naga::ShaderStage::Vertex),
             (crate::realtime::SHADOW_FS, naga::ShaderStage::Fragment),
         ] {

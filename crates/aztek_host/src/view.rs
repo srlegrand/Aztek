@@ -417,13 +417,14 @@ impl View {
             self.vp.planar = None;
         }
         // The shadow map is drawn before the scene's pass, with the lights read.
+        let mut glass = std::collections::HashSet::new();
         if realtime {
             if self.realtime.is_none() {
                 self.realtime = Some(crate::realtime::Realtime::new(&self.gpu, self.r.rt_shadow_layout));
             }
             // A transmissive shape passes light instead of blocking it: drawing it into the shadow map would put an
             // opaque shadow under the glass and the glass would refract that black floor. Leave it out of the casters.
-            let glass = self.vp.transmissive_shapes(&items);
+            glass = self.vp.transmissive_shapes(&items);
             if let Some(rt) = self.realtime.as_mut() {
                 rt.render(&mut self.gpu, &items, self.vp.shadow, &glass);
             }
@@ -435,6 +436,11 @@ impl View {
         }
         self.gpu.begin_scene([bg[0], bg[1], bg[2], 1.0]);
         self.vp.draw(&mut self.gpu, &self.r, &mut core.s, &items, self.dpr, realtime);
+        // Glass's far side, for its second interface: drawn now that the scene's own meshes are built.
+        if realtime {
+            self.gpu.begin_backface();
+            self.vp.draw_backfaces(&mut self.gpu, &self.r, &items, &glass);
+        }
         prof.mark("  draw");
         if crate::usd_view::busy() {
             core.version += 1;

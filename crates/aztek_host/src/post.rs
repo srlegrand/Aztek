@@ -43,6 +43,8 @@ layout(set = 0, binding = 11) uniform texture2D t_back;
 // The reflection image low-passed over a few pixels, so one bright texel does not speckle (#302).
 layout(set = 0, binding = 12) uniform texture2D t_refl_soft;
 layout(set = 0, binding = 13) uniform sampler s_refl;
+// The far side of the transmissive bodies: view normal in rgb, view distance in a.
+layout(set = 0, binding = 14) uniform texture2D t_backface;
 // The view's sky dome, which reflections fall back on where the view shows nothing to reflect.
 layout(set = 1, binding = 0) uniform texture2D t_env;
 layout(set = 1, binding = 1) uniform sampler s_env;
@@ -485,37 +487,48 @@ void main() {
     vec3 coeff = max(m.rgb, vec3(0.0));
     vec3 sum = vec3(0.0);
     float lift = 0.01 * length(p) + 0.002;
-    // Glass: the scene behind it, bent by the IOR and tinted by its transmission colour, falling off with the distance
-    // through it (#302). The view has no colour behind the glass itself, so the lookup moves out to what it shows round
-    // about: the background is seen through the glass, bent, as a lens does. Aztek has no transmission depth, so the
-    // distance the lookup travels stands in for it.
+    // Glass: the two interfaces it really has. A solid body bends the ray at its front, carries it to its far side, and
+    // bends it again there (or reflects it, at a grazing exit): the second bend is what inverts and magnifies what is
+    // behind. A pane's interfaces are parallel, so the ray leaves along the way it came and the picture behind it is
+    // only displaced. Where the view has nothing behind the glass, the dome stands in; glass is never black.
     if (transmission > 0.5) {
-        vec3 dir = refract(v, n, 1.0 / ior);
-        if (dot(dir, dir) < 1e-6) dir = reflect(v, n);
-        // A lens: the image bends out towards the rim, where the surface turns away from the eye.
-        vec2 radial = vec2(n.x, -n.y);
-        float edge = 1.0 - clamp(abs(n.z), 0.0, 1.0);
-        vec2 offs = normalize(radial + vec2(0.0001)) * (edge * edge * 200.0);
-        vec2 q = clamp(c + offs, vec2(1.0), pc.size.xy - 2.0);
-        // The background behind the glass, drawn without it, seen through the bend and tinted. A few taps smooth the
-        // edge the bend crosses.
-        vec3 behind = vec3(0.0);
-        for (int y = -1; y <= 1; ++y) {
-            for (int x = -1; x <= 1; ++x) {
-                ivec2 qi = clamp(ivec2(q) + ivec2(x, y), ivec2(0), ivec2(pc.size.xy) - 1);
-                behind += pow(max(texelFetch(sampler2D(t_back, s_point), qi, 0).rgb, vec3(0.0)), vec3(2.2));
-            }
-        }
-        behind /= 9.0;
-        float travelled = length(offs);
         vec3 tint = texelFetch(sampler2D(t_albedo, s_point), at, 0).rgb;
-        // The tint the glass gives what it lets through; the bend's length shades it a little. A dark background
-        // behind the glass must not swallow it whole: keep its own transmission colour as a floor, so it never reads
-        // blacker than the background it lets through.
-        vec3 through = behind * tint * 1.4 * exp(-travelled * 0.005);
-        float through_lum = dot(through, vec3(0.2126, 0.7152, 0.0722));
-        through = max(through, tint * (0.3 * (1.0 - smoothstep(0.04, 0.30, through_lum))));
-        sum += through;
+        vec3 dir_in = refract(v, n, 1.0 / ior);
+        if (dot(dir_in, dir_in) < 1e-6) dir_in = reflect(v, n);
+        // The far side of the body, from the pass that drew its back faces: where the ray leaves it, and which way that
+        // surface faces. The second bend there is the one that inverts and magnifies what lies behind.
+        vec4 far_side = texelFetch(sampler2D(t_backface, s_point), at, 0);
+        vec3 hit;
+        float travelled;
+        if (far_side.a > 0.0) {
+            vec3 exit_n = normalize(far_side.xyz);
+            // The far side sits on the same pixel ray; lay it at its own view distance.
+            vec3 exit_p = p * (far_side.a / max(-p.z, 1e-6));
+            float path = length(exit_p - p);
+            vec3 dir_out = refract(dir_in, -exit_n, ior);
+            if (dot(dir_out, dir_out) < 1e-6) dir_out = reflect(dir_in, -exit_n);
+            vec3 seen = scene_hit(p + n * lift, dir_out, 0.5, hit, travelled) ? hit : env_lookup(dir_out, rough);
+            // The tint deepens with the path through the body.
+            sum += seen * tint * exp(-path * 0.06);
+        } else {
+            // A single-faced pane: sample the view's own picture behind it, bent out towards the rim where the surface
+            // turns away from the eye, and let the dome stand in where that picture is the empty background.
+            vec2 radial = vec2(n.x, -n.y);
+            float edge = 1.0 - clamp(abs(n.z), 0.0, 1.0);
+            vec2 offs = normalize(radial + vec2(0.0001)) * (edge * edge * 200.0);
+            vec2 q = clamp(c + offs, vec2(1.0), pc.size.xy - 2.0);
+            vec3 behind = vec3(0.0);
+            for (int y = -1; y <= 1; ++y) {
+                for (int x = -1; x <= 1; ++x) {
+                    ivec2 qi = clamp(ivec2(q) + ivec2(x, y), ivec2(0), ivec2(pc.size.xy) - 1);
+                    behind += pow(max(texelFetch(sampler2D(t_back, s_point), qi, 0).rgb, vec3(0.0)), vec3(2.2));
+                }
+            }
+            behind /= 9.0;
+            float behind_lum = dot(behind, vec3(0.2126, 0.7152, 0.0722));
+            behind = mix(env_lookup(reflect(v, n), rough), behind, smoothstep(0.0, 0.02, behind_lum));
+            sum += behind * tint;
+        }
     }
     // The reflection: the scene where the view shows it, the sky where it doesn't. Glossy surfaces are smoothed over
     // the reflection image in the composite, from their roughness.
@@ -899,12 +912,13 @@ impl Post {
                 vk::DescriptorSetLayoutBinding::default().binding(11).descriptor_type(vk::DescriptorType::SAMPLED_IMAGE).descriptor_count(1).stage_flags(vk::ShaderStageFlags::FRAGMENT),
                 vk::DescriptorSetLayoutBinding::default().binding(12).descriptor_type(vk::DescriptorType::SAMPLED_IMAGE).descriptor_count(1).stage_flags(vk::ShaderStageFlags::FRAGMENT),
                 vk::DescriptorSetLayoutBinding::default().binding(13).descriptor_type(vk::DescriptorType::SAMPLER).descriptor_count(1).stage_flags(vk::ShaderStageFlags::FRAGMENT),
+                vk::DescriptorSetLayoutBinding::default().binding(14).descriptor_type(vk::DescriptorType::SAMPLED_IMAGE).descriptor_count(1).stage_flags(vk::ShaderStageFlags::FRAGMENT),
             ];
             let set_layout = d.create_descriptor_set_layout(&vk::DescriptorSetLayoutCreateInfo::default().bindings(&bindings), None).unwrap();
             // The sky dome is a texture set of its own, bound at set 1, as the material pipelines bind it.
             let env_layout = crate::textures::set_layout(gpu);
             let sizes = [
-                vk::DescriptorPoolSize::default().ty(vk::DescriptorType::SAMPLED_IMAGE).descriptor_count(56),
+                vk::DescriptorPoolSize::default().ty(vk::DescriptorType::SAMPLED_IMAGE).descriptor_count(64),
                 vk::DescriptorPoolSize::default().ty(vk::DescriptorType::SAMPLER).descriptor_count(10),
                 vk::DescriptorPoolSize::default().ty(vk::DescriptorType::UNIFORM_BUFFER).descriptor_count(5),
             ];
@@ -1046,6 +1060,7 @@ impl Post {
         let back = [vk::DescriptorImageInfo::default().image_view(gpu.back_view).image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)];
         let refl_soft = [vk::DescriptorImageInfo::default().image_view(gpu.refl_chain_view).image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)];
         let refl_sampler = [vk::DescriptorImageInfo::default().sampler(self.refl_sampler)];
+        let backface = [vk::DescriptorImageInfo::default().image_view(gpu.backface_view).image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)];
         let params = [vk::DescriptorBufferInfo::default().buffer(self.params.buffer).offset(0).range(std::mem::size_of::<PostParams>() as u64)];
         let mut writes = Vec::new();
         for (set, last, refl) in [
@@ -1070,6 +1085,7 @@ impl Post {
             writes.push(vk::WriteDescriptorSet::default().dst_set(set).dst_binding(11).descriptor_type(vk::DescriptorType::SAMPLED_IMAGE).image_info(&back));
             writes.push(vk::WriteDescriptorSet::default().dst_set(set).dst_binding(12).descriptor_type(vk::DescriptorType::SAMPLED_IMAGE).image_info(&refl_soft));
             writes.push(vk::WriteDescriptorSet::default().dst_set(set).dst_binding(13).descriptor_type(vk::DescriptorType::SAMPLER).image_info(&refl_sampler));
+            writes.push(vk::WriteDescriptorSet::default().dst_set(set).dst_binding(14).descriptor_type(vk::DescriptorType::SAMPLED_IMAGE).image_info(&backface));
         }
         unsafe { gpu.device.update_descriptor_sets(&writes, &[]) };
     }
@@ -1263,6 +1279,21 @@ mod tests {
         assert_eq!(dof_params(proj, &PostSettings::default(), 1000.0, 1000.0), [0.0; 4]);
     }
 
+    /// Glass is two interfaces: the entrance and the far side, where the ray bends out again (or reflects at a grazing
+    /// exit), and what the view cannot show is the dome rather than black.
+    #[test]
+    fn glass_refracts_at_both_of_its_interfaces() {
+        assert!(REFLECT_MAIN.contains("vec3 dir_in = refract(v, n, 1.0 / ior);"));
+        assert!(REFLECT_MAIN.contains("vec3 dir_out = refract(dir_in, -exit_n, ior);"));
+        assert!(REFLECT_MAIN.contains("if (dot(dir_out, dir_out) < 1e-6) dir_out = reflect(dir_in, -exit_n);"));
+        assert!(REFLECT_MAIN.contains("env_lookup(dir_out, rough)"));
+        assert!(REFLECT_MAIN.contains("vec4 far_side = texelFetch(sampler2D(t_backface, s_point), at, 0);"));
+        assert!(REFLECT_MAIN.contains("vec3 exit_p = p * (far_side.a / max(-p.z, 1e-6));"));
+        assert!(REFLECT_MAIN.contains("behind = mix(env_lookup(reflect(v, n), rough), behind,"));
+        // The old transmission-colour floor, which kept a dark cap but made the glass read flat, is gone.
+        assert!(!REFLECT_MAIN.contains("tint * (0.3 *"));
+    }
+
     #[test]
     fn the_background_never_reaches_the_bounce_light() {
         // #301: the default gradient's top colour has 0.54 red, which the first occlusion pass took for the flag of the
@@ -1297,7 +1328,7 @@ mod tests {
         assert_eq!(std::mem::size_of::<PostPush>(), 128);
         // The reflection pass reads the material, the planar image and the behind-glass image: they are what the shader
         // declares, and what the post sets bind.
-        for b in [7, 8, 9, 10, 11, 12, 13] {
+        for b in [7, 8, 9, 10, 11, 12, 13, 14] {
             assert!(POST_HEAD.contains(&format!("binding = {b}")), "binding {b}");
         }
         assert!(REFLECT_MAIN.contains("t_mat_aux"));
@@ -1328,7 +1359,7 @@ mod tests {
         let angle = r[0].atan2(-r[2]).abs();
         assert!(angle < std::f32::consts::FRAC_PI_4 - 0.1, "{angle}");
         assert!((r[0] * r[0] + r[1] * r[1] + r[2] * r[2] - 1.0).abs() < 1e-5);
-        assert!(REFLECT_MAIN.contains("vec3 dir = refract(v, n, 1.0 / ior);"));
+        assert!(REFLECT_MAIN.contains("vec3 dir_in = refract(v, n, 1.0 / ior);"));
     }
 
     #[test]
