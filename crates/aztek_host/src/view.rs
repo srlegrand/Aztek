@@ -185,6 +185,8 @@ pub struct View {
     /// Frame rate for the heads up display.
     frame_times: std::collections::VecDeque<std::time::Instant>,
     pub background: [f32; 4],
+    /// A parity capture: the picture alone, over the Render View's background. Black only when the scene has no dome.
+    parity: bool,
     pub show_grid: bool,
     pub needs_redraw: bool,
     /// Last frame read back on request, as RGB.
@@ -258,6 +260,7 @@ impl View {
             cam_redo: Vec::new(),
             frame_times: Default::default(),
             background: [0.36, 0.36, 0.36, 1.0],
+            parity: false,
             show_grid: true,
             needs_redraw: true,
             capture: None,
@@ -302,12 +305,23 @@ impl View {
         self.needs_redraw = true;
     }
 
+    /// Whether the scene has a sky dome: the Render View's background, and so the parity capture's.
+    fn has_dome(&mut self, core: &mut Core) -> bool {
+        crate::lighting::chosen_environment(&mut core.s.graph, crate::lighting::LightMode::All, crate::viewport::visible, core.s.scene_path.as_deref(), None).is_some()
+    }
+
     pub fn render(&mut self, core: &mut Core) {
         if self.vp.tool == Tool::MultiCut {
             self.sync_multi_cut_scene(core);
         }
         let e = self.gpu.extent;
         self.vp.rect = [0.0, 0.0, e.width as f64, e.height as f64];
+        // A parity capture is the picture alone, over the Render View's background: the scene's sky dome when it has
+        // one (the view's own background, which is what the window shows), and black when it has none. Forcing black on
+        // a domed scene darkened the capture, and every brightness comparison drawn from it.
+        if self.parity && !self.has_dome(core) {
+            self.background = [0.0, 0.0, 0.0, 1.0];
+        }
         let bg = self.background;
         let prof = Prof::start();
         // A remake that failed last time is tried again here, before anything asks the swapchain for an image.
@@ -2674,6 +2688,7 @@ impl View {
                 let g = v.as_f64().unwrap_or(0.36) as f32;
                 self.background = [g, g, g, 1.0];
             }
+            "parity" => self.parity = v.as_bool().unwrap_or(false),
             "manipSize" => self.vp.manip_scale = v.as_f64().unwrap_or(1.0),
             "axisOrientation" => self.vp.axis_mode = v.as_str().unwrap_or("world").to_string(),
             "curveDegree" => self.vp.curve_degree = v.as_i64().unwrap_or(3),

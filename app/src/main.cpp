@@ -195,9 +195,10 @@ int main(int argc, char** argv) {
                 // The picture alone: no light or camera icons, handles or selection highlights over it. Textures show,
                 // as the Render View draws them.
                 v->set("disp", "{\"lights\":false,\"cameras\":false,\"manipulators\":false,\"highlight\":false,\"filmGate\":false,\"resGate\":false,\"safeAction\":false,\"textured\":true,\"depthOfField\":true}");
-                // The Render View clears to black; the viewport's own background is grey, so a parity capture clears to
-                // black too.
-                v->set("background", "0.0");
+                // The Render View's background is the scene's sky dome when it has one and black when it has none; the
+                // viewport shows its own background for the dome, so the capture leaves it and forces black only
+                // without a dome.
+                v->set("parity", "true");
                 // The host writes a PPM; the picture is kept as the format the path names.
                 QString tmp = path + ".ppm";
                 if (v->capture(tmp)) {
