@@ -599,6 +599,9 @@ void direct(vec3 base, vec3 n, vec3 v, out vec3 diff, out vec3 spec, out vec3 co
         vec3 l = vec3(0.0, 0.0, 1.0);
         // An area light's diffuse, worked out over its whole rectangle; negative while the light has none.
         vec3 area_diff = vec3(-1.0);
+        // An area light's angular radius at this point. Its highlight is not a point's: the lobe has to carry the
+        // emitter's size, or a large light close to a floor reflects as a small, blown plate at the nearest point.
+        float area_angle = 0.0;
         if (kind < 0.5) {
             vec3 to = pos.xyz - v_view;
             l = normalize(to);
@@ -651,10 +654,13 @@ void direct(vec3 base, vec3 n, vec3 v, out vec3 diff, out vec3 spec, out vec3 co
             vec3 to = q - v_view;
             float d = length(to);
             l = to / max(d, 0.0001);
+            // The emitter's half size over its distance: how wide it looks from here.
+            area_angle = 0.5 * (length(ua.xyz) + length(ub.xyz)) / max(d, 0.0001);
             if (dir.w > 1.5) {
                 // Falling off as the reference renderer's: its radiance (colour, intensity and exposure, normalised over the area, as
                 // Harold's: without the pi the viewport's own lights take) through the rectangle's exact irradiance for
-                // the diffuse, and as a point of the same power at the nearest point for the highlight.
+                // the diffuse, and as a point of the same power at the nearest point for the base of the highlight.
+                // The highlight's lobe is widened by the emitter's angular size below, as a real one is.
                 vec3 radiance = col.rgb * par.x;
                 vec3 su = ua.xyz, sv = ub.xyz;
                 bool flip = dot(cross(su, sv), dir.xyz) > 0.0;
@@ -690,16 +696,21 @@ void direct(vec3 base, vec3 n, vec3 v, out vec3 diff, out vec3 spec, out vec3 co
             diff += c * nl * lit;
         }
         if ((emits & 2) != 0 && nl > 0.0) {
+            // The lobe's width is the surface's own roughness combined with the emitter's angular radius: two widths
+            // add in quadrature. A point light leaves the roughness alone; a broad emitter near the surface widens
+            // the highlight until its peak sits inside the shoulder instead of clipping as a plate.
+            float look_rough = min(sqrt(rough * rough + area_angle * area_angle), 1.0);
+            float look_coat = min(sqrt(coat_rough * coat_rough + area_angle * area_angle), 1.0);
             vec3 h = normalize(l + v);
             float nh = max(dot(n, h), 0.0);
             vec3 f = fresnel(max(dot(h, v), 0.0), f0);
-            float d = distribution_ggx(nh, rough);
-            float g = geometry_smith(nv, nl, rough);
+            float d = distribution_ggx(nh, look_rough);
+            float g = geometry_smith(nv, nl, look_rough);
             spec += c * lit * (d * g * f / max(4.0 * nv * nl, 0.0001)) * nl;
             if (pc.coat.x > 0.0) {
                 vec3 cf = fresnel(max(dot(h, v), 0.0), coat_f0);
-                float cd = distribution_ggx(nh, coat_rough);
-                float cg = geometry_smith(nv, nl, coat_rough);
+                float cd = distribution_ggx(nh, look_coat);
+                float cg = geometry_smith(nv, nl, look_coat);
                 coat_spec += c * lit * pc.coat.x * (cd * cg * cf / max(4.0 * nv * nl, 0.0001)) * nl;
             }
         }
@@ -1408,6 +1419,18 @@ mod tests {
         assert!(REALTIME_FS.contains("vec3 wto = (lt.view_to_world * vec4(to, 0.0)).xyz;"));
         assert!(REALTIME_FS.contains("float axis = max(abs(wto.x), max(abs(wto.y), abs(wto.z)));"));
         assert!(!REALTIME_FS.contains("max(abs(to.x), max(abs(to.y), abs(to.z)))"));
+    }
+
+    /// A broad emitter's highlight is broad: the lobe carries the emitter's angular radius, widened in quadrature
+    /// with the surface's roughness. Without it the nearest point acts as a point light of the whole power and the
+    /// floor under an area light clips to a plate.
+    #[test]
+    fn an_area_lights_highlight_widens_with_the_emitter() {
+        assert!(REALTIME_FS.contains("area_angle = 0.5 * (length(ua.xyz) + length(ub.xyz)) / max(d, 0.0001);"));
+        assert!(REALTIME_FS.contains("float look_rough = min(sqrt(rough * rough + area_angle * area_angle), 1.0);"));
+        assert!(REALTIME_FS.contains("float d = distribution_ggx(nh, look_rough);"));
+        assert!(REALTIME_FS.contains("float g = geometry_smith(nv, nl, look_rough);"));
+        assert!(!REALTIME_FS.contains("distribution_ggx(nh, rough)"));
     }
 
     #[test]
