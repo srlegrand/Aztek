@@ -73,6 +73,18 @@ layout(location = 1) in vec2 v_uv;
 layout(location = 2) in vec4 v_col;
 layout(set = 0, binding = 0) uniform texture2D t_color;
 layout(set = 0, binding = 1) uniform sampler s_color;
+
+// The sRGB transfer the final renderer writes its images with: one curve on both paths, so a radiance is the same
+// number whichever renderer shows it.
+vec3 to_srgb(vec3 c) {
+    c = clamp(c, 0.0, 1.0);
+    return mix(12.92 * c, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c));
+}
+vec3 to_linear(vec3 c) {
+    c = clamp(c, 0.0, 1.0);
+    return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
+}
+
 layout(location = 0) out vec4 out_color;
 void main() {
     vec3 n = normalize(v_nrm);
@@ -81,7 +93,7 @@ void main() {
     float d = 0.75 * abs(dot(n, k)) + 0.3 * abs(dot(n, f));
     vec4 tex = texture(sampler2D(t_color, s_color), vec2(v_uv.x, 1.0 - v_uv.y));
     vec3 lin = v_col.rgb * tex.rgb * (0.12 + 0.95 * d);
-    out_color = vec4(pow(lin, vec3(1.0 / 2.2)), v_col.a * tex.a);
+    out_color = vec4(to_srgb(lin), v_col.a * tex.a);
 }
 "#;
 

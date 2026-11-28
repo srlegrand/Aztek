@@ -473,8 +473,6 @@ pub fn scene_light(g: &mut Graph, shape: NodeId) -> Option<SceneLight> {
 pub struct EnvironmentLight {
     pub shape: NodeId,
     pub color: [f32; 3],
-    /// The dome's own colour as the view shows it: its colour attribute, without the intensity that scales its light.
-    pub tint: [f32; 3],
     /// World to the dome's own space, for a latlong image.
     pub rotation: glam::DQuat,
     pub image: Option<crate::shading::TextureRef>,
@@ -491,9 +489,8 @@ pub fn environment_of(g: &mut Graph, sh: NodeId, scene: Option<&str>, project: O
     let gain = read_f(g, sh, "intensity", 1.0) * 2f64.powf(read_f(g, sh, "aiExposure", 0.0));
     // An image is its own radiance, as Harold reads it: the dome's colour is then just intensity and exposure. Reading
     // the connected input can give the file node's default rather than the light it carries.
-    let raw = read_c(g, sh, "color");
-    let color = if image.is_some() { DVec3::splat(gain) } else { raw * gain };
-    Some(EnvironmentLight { shape: sh, color: color.as_vec3().to_array(), tint: raw.as_vec3().to_array(), rotation, image })
+    let color = if image.is_some() { DVec3::splat(gain) } else { read_c(g, sh, "color") * gain };
+    Some(EnvironmentLight { shape: sh, color: color.as_vec3().to_array(), rotation, image })
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

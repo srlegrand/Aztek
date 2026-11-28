@@ -73,6 +73,17 @@ void main() {
 "#;
 
 const SHADED_FS: &str = r#"#version 450
+
+// The sRGB transfer the final renderer writes its images with: one curve on both paths, so a radiance is the same
+// number whichever renderer shows it.
+vec3 to_srgb(vec3 c) {
+    c = clamp(c, 0.0, 1.0);
+    return mix(12.92 * c, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c));
+}
+vec3 to_linear(vec3 c) {
+    c = clamp(c, 0.0, 1.0);
+    return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
+}
 layout(location = 0) in vec3 v_nrm;
 layout(location = 1) in vec3 v_rot;
 layout(push_constant) uniform PC { mat4 mvp; vec4 n0; vec4 n1; vec4 n2; vec4 color; } pc;
@@ -88,7 +99,7 @@ void main() {
     vec3 f = normalize(vec3(0.6, -0.2, 0.75));
     float d = 0.75 * abs(dot(n, k)) + 0.3 * abs(dot(n, f));
     vec3 lin = pc.color.rgb * (0.12 + 0.95 * d);
-    out_color = vec4(pow(lin, vec3(1.0 / 2.2)), pc.color.a);
+    out_color = vec4(to_srgb(lin), pc.color.a);
 }
 "#;
 
@@ -160,6 +171,17 @@ void main() {
 "#;
 
 const MATERIAL_FS: &str = r#"#version 450
+
+// The sRGB transfer the final renderer writes its images with: one curve on both paths, so a radiance is the same
+// number whichever renderer shows it.
+vec3 to_srgb(vec3 c) {
+    c = clamp(c, 0.0, 1.0);
+    return mix(12.92 * c, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c));
+}
+vec3 to_linear(vec3 c) {
+    c = clamp(c, 0.0, 1.0);
+    return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
+}
 struct Light { vec4 pos; vec4 dir; vec4 color; vec4 params; vec4 a; vec4 b; vec4 c; };
 layout(location = 0) in vec3 v_nrm;
 layout(location = 1) in vec3 v_rot;
@@ -349,7 +371,7 @@ void main() {
         float d = 0.75 * abs(dot(n, k)) + 0.3 * abs(dot(n, f));
         lin = base * pc.offs.w * (0.12 + 0.95 * d) + pc.ambient.rgb * base + pc.incandescence.rgb;
     }
-    out_color = vec4(pow(max(lin, vec3(0.0)), vec3(1.0 / 2.2)), alpha);
+    out_color = vec4(to_srgb(max(lin, vec3(0.0))), alpha);
 }
 "#;
 
@@ -397,6 +419,17 @@ pub(crate) fn scene_blend(albedo: bool, mat: bool) -> [vk::PipelineColorBlendAtt
 }
 
 const REALTIME_FS: &str = r#"#version 450
+
+// The sRGB transfer the final renderer writes its images with: one curve on both paths, so a radiance is the same
+// number whichever renderer shows it.
+vec3 to_srgb(vec3 c) {
+    c = clamp(c, 0.0, 1.0);
+    return mix(12.92 * c, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c));
+}
+vec3 to_linear(vec3 c) {
+    c = clamp(c, 0.0, 1.0);
+    return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
+}
 struct Light { vec4 pos; vec4 dir; vec4 color; vec4 params; vec4 a; vec4 b; vec4 c; };
 layout(location = 0) in vec3 v_nrm;
 layout(location = 1) in vec3 v_rot;
@@ -786,7 +819,7 @@ void main() {
     else if (pc.misc.w > 0.5) alpha = mask.a;
     vec3 emission = pc.incandescence.rgb;
     if (pc.gain.w < 0.5) {
-        out_color = vec4(pow(max(base + emission, vec3(0.0)), vec3(1.0 / 2.2)), alpha);
+        out_color = vec4(to_srgb(max(base + emission, vec3(0.0))), alpha);
         out_albedo = vec4(0.0, 0.0, 0.0, alpha);
         out_mat = vec4(0.0);
         out_aux = vec4(0.0);
@@ -845,7 +878,7 @@ void main() {
     }
     out_mat = vec4(coeff, look_rough + 0.002);
     out_aux = vec4(transmission, clamp((ior - 1.0) * 0.5, 0.0, 1.0), metal, 1.0);
-    out_color = vec4(pow(max(lin, vec3(0.0)), vec3(1.0 / 2.2)), alpha);
+    out_color = vec4(to_srgb(max(lin, vec3(0.0))), alpha);
 }
 "#;
 

@@ -22,6 +22,17 @@ void main() {
 /// The parts both fragment shaders share. DEPTH_TEXTURE and DEPTH_FETCH are filled in for a multisampled depth or a
 /// plain one.
 const POST_HEAD: &str = r#"#version 450
+
+// The sRGB transfer the final renderer writes its images with: one curve on both paths, so a radiance is the same
+// number whichever renderer shows it.
+vec3 to_srgb(vec3 c) {
+    c = clamp(c, 0.0, 1.0);
+    return mix(12.92 * c, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c));
+}
+vec3 to_linear(vec3 c) {
+    c = clamp(c, 0.0, 1.0);
+    return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
+}
 layout(location = 0) in vec2 uv;
 layout(location = 0) out vec4 o;
 layout(set = 0, binding = 0) uniform texture2D t_scene;
@@ -289,7 +300,7 @@ void main() {
                         // A ray that lands on a specular highlight must not carry it back as a bright texel: one such
                         // hit would light a whole square of the filter's footprint. The offline path clamps its
                         // indirect samples for the same reason.
-                        gi += min(pow(max(texelFetch(sampler2D(t_scene, s_point), q, 0).rgb, vec3(0.0)), vec3(2.2)), vec3(4.0));
+                        gi += min(to_linear(max(texelFetch(sampler2D(t_scene, s_point), q, 0).rgb, vec3(0.0))), vec3(4.0));
                         // The second time round, the surface met also sends back what the first bounce brought it.
                         if (second) gi += min(hit_colour * texelFetch(sampler2D(t_open, s_point), q, 0).rgb, vec3(4.0));
                         hit_albedo += hit_colour;
@@ -388,7 +399,7 @@ vec3 planar_at(vec2 c, vec3 p, vec3 n, vec3 r, float rough, out float cover) {
             // a whole floor once it reached the composite. Drop it and let the sky stand in.
             if (!(t.r == t.r && t.g == t.g && t.b == t.b && t.a == t.a)) continue;
             if (abs(t.r) > 1e30 || abs(t.g) > 1e30 || abs(t.b) > 1e30 || abs(t.a) > 1e30) continue;
-            plane += pow(max(t.rgb, vec3(0.0)), vec3(2.2));
+            plane += to_linear(max(t.rgb, vec3(0.0)));
             data += t.a;
         }
     }
@@ -454,7 +465,7 @@ bool scene_hit(vec3 from, vec3 dir, float jitter, out vec3 colour, out float tra
                 vec2 hs = hc.xy / hc.w * 0.5 + 0.5;
                 ivec2 hat = clamp(ivec2(hs * pc.size.xy), ivec2(0), top);
                 if (texelFetch(sampler2D(t_mat_aux, s_point), hat, 0).r <= 0.5) {
-                    colour = pow(texelFetch(sampler2D(t_scene, s_point), hat, 0).rgb, vec3(2.2));
+                    colour = to_linear(texelFetch(sampler2D(t_scene, s_point), hat, 0).rgb);
                     travelled = hi;
                     return true;
                 }
@@ -523,7 +534,7 @@ void main() {
             for (int y = -1; y <= 1; ++y) {
                 for (int x = -1; x <= 1; ++x) {
                     ivec2 qi = clamp(ivec2(q) + ivec2(x, y), ivec2(0), ivec2(pc.size.xy) - 1);
-                    behind += pow(max(texelFetch(sampler2D(t_back, s_point), qi, 0).rgb, vec3(0.0)), vec3(2.2));
+                    behind += to_linear(max(texelFetch(sampler2D(t_back, s_point), qi, 0).rgb, vec3(0.0)));
                 }
             }
             behind /= 9.0;
@@ -660,12 +671,12 @@ vec3 lit(vec3 color, vec4 got, ivec2 at, float d) {
     if (pp.quality.y > 0.0) {
         // The bounce is added in linear light, then the picture goes back to the display's encoding.
         vec3 albedo = texelFetch(sampler2D(t_albedo, s_point), at, 0).rgb;
-        shaded = pow(pow(shaded, vec3(2.2)) + albedo * got.rgb * open, vec3(1.0 / 2.2));
+        shaded = to_srgb(to_linear(shaded) + albedo * got.rgb * open);
     }
     if (pp.quality.z > 0.5) {
         vec3 refl = reflection_at(at, d);
         int dbg = int(pp.quality.w);
-        if (dbg == 1) return pow(max(refl, vec3(0.0)), vec3(1.0 / 2.2));
+        if (dbg == 1) return to_srgb(max(refl, vec3(0.0)));
         if (dbg == 2) return texelFetch(sampler2D(t_mat, s_point), at, 0).rgb;
         if (dbg == 3) return vec3(texelFetch(sampler2D(t_mat, s_point), at, 0).a - 0.002);
         if (dbg == 4) return vec3(texelFetch(sampler2D(t_mat_aux, s_point), at, 0).b);
@@ -677,13 +688,13 @@ vec3 lit(vec3 color, vec4 got, ivec2 at, float d) {
         if (dbg == 14) return texelFetch(sampler2D(t_refl, s_point), at, 0).rgb;
         if (dbg == 15) return reflection_at(at, d);
         if (dbg == 16) return textureLod(sampler2D(t_refl_soft, s_refl), (vec2(at) + 0.5) / pc.size.xy, 3.0).rgb;
-        if (dbg == 20) return pow(max(got.rgb, vec3(0.0)), vec3(1.0 / 2.2));
+        if (dbg == 20) return to_srgb(max(got.rgb, vec3(0.0)));
         if (dbg == 21) return vec3(got.a);
-        if (dbg == 22) return pow(max(texelFetch(sampler2D(t_open, s_point), at, 0).rgb, vec3(0.0)), vec3(1.0 / 2.2));
+        if (dbg == 22) return to_srgb(max(texelFetch(sampler2D(t_open, s_point), at, 0).rgb, vec3(0.0)));
         if (dbg == 23) return vec3(texelFetch(sampler2D(t_open, s_point), at, 0).a);
         if (dbg == 24) return texelFetch(sampler2D(t_back, s_point), at, 0).rgb;
         if (dbg == 25) return vec3(texelFetch(sampler2D(t_mat_aux, s_point), at, 0).r);
-        shaded = pow(pow(shaded, vec3(2.2)) + refl, vec3(1.0 / 2.2));
+        shaded = to_srgb(to_linear(shaded) + refl);
     }
     return shaded;
 }
@@ -694,7 +705,7 @@ vec3 picture(vec2 c) {
     float d = depth_at(c);
     // Nothing drawn here: the scene's own sky dome, which is what the final render shows; else the display gradient,
     // top of the view to bottom; else the grey the scene was cleared to. What was drawn without depth keeps its colour.
-    if (pp.bg_env.w > 0.5 && cleared(color, d)) return pow(max(dome_at(view_dir(c)), vec3(0.0)), vec3(1.0 / 2.2));
+    if (pp.bg_env.w > 0.5 && cleared(color, d)) return to_srgb(max(dome_at(view_dir(c)), vec3(0.0)));
     if (pc.bg_top.w > 0.5 && cleared(color, d)) return mix(pc.bg_top.rgb, pc.bg_bottom.rgb, c.y * pc.size.w);
     if (effects_off() || d <= 0.0) return lit(color, vec4(0.0, 0.0, 0.0, 1.0), ivec2(c), d);
     // The bounce was low-passed along both axes before this pass, so one bilinear sample is already smooth: no

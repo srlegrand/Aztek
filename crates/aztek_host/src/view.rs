@@ -497,7 +497,7 @@ impl View {
             env_rot,
             bg_env: match &self.vp.environment {
                 Some(e) if e.image.is_some() => [1.0, 1.0, 1.0, 2.0],
-                Some(e) => [e.tint[0], e.tint[1], e.tint[2], 1.0],
+                Some(e) => [e.color[0], e.color[1], e.color[2], 1.0],
                 None => [0.0; 4],
             },
         };
